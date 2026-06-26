@@ -107,7 +107,13 @@
     "outOfStock": "Out of Stock",
     "soldBy": "Sold by",
     "variants": "Variants",
-    "relatedProducts": "Related Products"
+    "relatedProducts": "Related Products",
+    "imageCount": "Image {{current}} of {{total}}",
+    "selectVariant": "Select variant",
+    "specifications": "Specifications",
+    "writeReview": "Write a review",
+    "noReviews": "No reviews yet",
+    "noReviewsSubtitle": "Be the first to review this product"
   },
   "orders": {
     "myOrders": "My Orders",

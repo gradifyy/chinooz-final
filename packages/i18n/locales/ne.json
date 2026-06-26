@@ -107,7 +107,13 @@
     "outOfStock": "स्टकमा छैन",
     "soldBy": "बिक्री गर्ने",
     "variants": "विविधताहरू",
-    "relatedProducts": "सम्बन्धित उत्पादनहरू"
+    "relatedProducts": "सम्बन्धित उत्पादनहरू",
+    "imageCount": "तस्बिर {{current}} को {{total}}",
+    "selectVariant": "विविधता छान्नुहोस्",
+    "specifications": "विनिर्देशहरू",
+    "writeReview": "समीक्षा लेख्नुहोस्",
+    "noReviews": "अझै समीक्षा छैन",
+    "noReviewsSubtitle": "यो उत्पादनको पहिलो समीक्षा लेख्नुहोस्"
   },
   "orders": {
     "myOrders": "मेरा अर्डरहरू",

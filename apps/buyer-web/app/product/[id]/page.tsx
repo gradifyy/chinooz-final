@@ -1,16 +1,36 @@
-'use client'
-
 import { Container, Screen } from '@chinooz/ui-web'
-import { useTranslation } from 'react-i18next'
 import { ProductDetailSkeleton } from '@/components/skeletons'
+import ProductDetailClient from './ProductDetailClient'
+import { getProductById } from '@chinooz/mock-data'
 
-export default function ProductPage({ params }: { params: { id: string } }) {
-  const { t } = useTranslation()
+export async function generateMetadata({ params }: { params: { id: string } }) {
+  const product = await getProductById(params.id)
+  if (!product) return { title: 'Product — Chinooz' }
+  return {
+    title: `${product.name} — Chinooz`,
+    description: product.description.slice(0, 160),
+    openGraph: {
+      title: product.name,
+      description: product.description.slice(0, 160),
+      images: product.images?.[0]?.uri ? [product.images[0].uri] : [],
+    },
+  }
+}
+
+export default async function ProductPage({ params }: { params: { id: string } }) {
+  let product = null
+  try {
+    product = await getProductById(params.id)
+  } catch {}
 
   return (
     <Screen>
       <Container className="py-6">
-        <ProductDetailSkeleton />
+        {product ? (
+          <ProductDetailClient product={product} />
+        ) : (
+          <ProductDetailSkeleton />
+        )}
       </Container>
     </Screen>
   )
