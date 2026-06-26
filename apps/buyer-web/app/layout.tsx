@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import { ErrorBoundary } from '@chinooz/ui-web'
 import { Header } from '@/components/Header'
 import { Footer } from '@/components/Footer'
 import { MobileBottomNav } from '@/components/MobileBottomNav'
@@ -15,14 +16,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="bg-background text-text font-sans antialiased flex flex-col min-h-screen">
-        <QueryProvider>
-          <I18nProvider>
-            <Header />
-            <main className="flex-1 pb-[84px] md:pb-0">{children}</main>
-            <Footer />
-            <MobileBottomNav />
-          </I18nProvider>
-        </QueryProvider>
+        <ErrorBoundary>
+          <QueryProvider>
+            <I18nProvider>
+              <Header />
+              <main className="flex-1 pb-[84px] md:pb-0">{children}</main>
+              <Footer />
+              <MobileBottomNav />
+            </I18nProvider>
+          </QueryProvider>
+        </ErrorBoundary>
       </body>
     </html>
   )
