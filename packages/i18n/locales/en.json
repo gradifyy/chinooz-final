@@ -140,5 +140,16 @@
   },
   "skeleton": {
     "loading": "Loading content..."
+  },
+  "onboarding": {
+    "skip": "Skip",
+    "next": "Next",
+    "getStarted": "Get Started",
+    "slide1Title": "Shop Local",
+    "slide1Subtitle": "Everything from Nepali sellers in one place. Discover authentic products from thousands of local shops.",
+    "slide2Title": "Fast Delivery",
+    "slide2Subtitle": "Same-day delivery in the Valley. Track your order in real-time from shop to doorstep.",
+    "slide3Title": "Secure Payments",
+    "slide3Subtitle": "Pay with Khalti, eSewa, or Cash on Delivery. Every seller is verified for your trust."
   }
 }
