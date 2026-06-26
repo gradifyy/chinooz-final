@@ -15,6 +15,7 @@
     "@chinooz/ui": "workspace:*",
     "@chinooz/utils": "workspace:*",
     "@chinooz/validation": "workspace:*",
+    "@react-native-community/netinfo": "^11.0.0",
     "@expo/metro-runtime": "^6.1.2",
     "expo": "~54.0.0",
     "expo-constants": "~18.0.13",

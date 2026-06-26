@@ -41,7 +41,9 @@
     "trendingNow": "Trending Now",
     "nearYou": "Near You",
     "noProducts": "No products found",
-    "loadMore": "Load more"
+    "loadMore": "Load more",
+    "connectionLost": "Connection lost — tap to retry",
+    "connectionRestored": "Back online"
   },
   "categories": {
     "title": "Categories",

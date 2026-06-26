@@ -41,7 +41,9 @@
     "trendingNow": "अहिले ट्रेन्डिङमा",
     "nearYou": "तपाईंको नजिकमा",
     "noProducts": "कुनै उत्पादन भेटिएन",
-    "loadMore": "थप लोड गर्नुहोस्"
+    "loadMore": "थप लोड गर्नुहोस्",
+    "connectionLost": "जडान टुट्यो — पुन: प्रयास गर्न ट्याप गर्नुहोस्",
+    "connectionRestored": "अनलाइन भयो"
   },
   "categories": {
     "title": "श्रेणीहरू",
