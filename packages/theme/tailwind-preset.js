@@ -1,6 +1,30 @@
 /** @type {import('tailwindcss').Config} */
 const tailwindPreset = {
   theme: {
+    screens: {
+      sm: '640px',
+      md: '768px',
+      lg: '1024px',
+      xl: '1280px',
+      '2xl': '1536px',
+    },
+    container: {
+      center: true,
+      padding: {
+        DEFAULT: '16px',
+        sm: '16px',
+        md: '24px',
+        lg: '32px',
+        xl: '32px',
+      },
+      screens: {
+        sm: '640px',
+        md: '768px',
+        lg: '1024px',
+        xl: '1280px',
+        '2xl': '1280px',
+      },
+    },
     extend: {
       colors: {
         primary: '#8A1B57',

@@ -2,6 +2,23 @@ import { View, Text, TouchableOpacity } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useCartStore } from '@chinooz/state'
+import { Screen, Skeleton, Stack, Row, Divider } from '@chinooz/ui'
+
+function CartItemSkeleton() {
+  return (
+    <Row gap={12} align="flex-start">
+      <Skeleton width={80} height={80} borderRadius={12} />
+      <Stack gap={8} style={{ flex: 1 }}>
+        <Skeleton width="80%" height={14} />
+        <Skeleton width="40%" height={12} />
+        <Row justify="space-between" align="center">
+          <Skeleton width={90} height={32} borderRadius={8} />
+          <Skeleton width={60} height={16} />
+        </Row>
+      </Stack>
+    </Row>
+  )
+}
 
 export default function CartScreen() {
   const router = useRouter()
@@ -11,27 +28,52 @@ export default function CartScreen() {
   const decrement = useCartStore(s => s.decrement)
 
   return (
-    <View className="flex-1 bg-background" style={{ paddingTop: insets.top }}>
-      <View className="flex-row items-center px-4 py-3 bg-white border-b border-border">
-        <TouchableOpacity onPress={() => router.back()} className="mr-3">
-          <Text className="text-lg text-primary font-semibold">Back</Text>
-        </TouchableOpacity>
-        <Text className="text-lg font-semibold text-text">Cart ({count})</Text>
-      </View>
-      <View className="flex-1 items-center justify-center px-6">
-        <Text className="text-xl font-bold text-text">Your Cart</Text>
-        <Text className="text-sm text-text-muted mt-2">{count} item{count !== 1 ? 's' : ''} in cart</Text>
-        <View className="flex-row items-center mt-6 gap-4">
-          <TouchableOpacity onPress={decrement} className="bg-border rounded-xl w-12 h-12 items-center justify-center">
-            <Text className="text-xl font-bold text-text">−</Text>
+    <Screen safeArea={false}>
+      <View style={{ paddingTop: insets.top, backgroundColor: '#FFFFFF' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#E5E5E5' }}>
+          <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 12 }}>
+            <Text style={{ fontSize: 18, color: '#8A1B57', fontWeight: '600' }}>Back</Text>
           </TouchableOpacity>
-          <Text className="text-2xl font-bold text-text">{count}</Text>
-          <TouchableOpacity onPress={increment} className="bg-primary rounded-xl w-12 h-12 items-center justify-center">
-            <Text className="text-xl font-bold text-white">+</Text>
+          <Text style={{ fontSize: 18, fontWeight: '600', color: '#1F2937' }}>Cart ({count})</Text>
+        </View>
+      </View>
+      <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
+        <Stack gap={16}>
+          <Skeleton width="40%" height={22} />
+          {Array.from({ length: 3 }).map((_, i) => (
+            <View key={i}>
+              <CartItemSkeleton />
+              {i < 2 && <Divider />}
+            </View>
+          ))}
+          <Divider />
+          <Stack gap={8}>
+            <Row justify="space-between">
+              <Skeleton width="25%" height={14} />
+              <Skeleton width="20%" height={14} />
+            </Row>
+            <Row justify="space-between">
+              <Skeleton width="20%" height={14} />
+              <Skeleton width="15%" height={14} />
+            </Row>
+            <Row justify="space-between">
+              <Skeleton width="15%" height={18} />
+              <Skeleton width="25%" height={18} />
+            </Row>
+          </Stack>
+          <Skeleton width="100%" height={52} borderRadius={12} />
+        </Stack>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 24, gap: 16, paddingBottom: 32 }}>
+          <TouchableOpacity onPress={decrement} style={{ backgroundColor: '#E5E5E5', borderRadius: 12, width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#1F2937' }}>−</Text>
+          </TouchableOpacity>
+          <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#1F2937' }}>{count}</Text>
+          <TouchableOpacity onPress={increment} style={{ backgroundColor: '#8A1B57', borderRadius: 12, width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#FFFFFF' }}>+</Text>
           </TouchableOpacity>
         </View>
-        <Text className="text-xs text-text-muted mt-4">Use +/- to test the live badge count</Text>
+        <Text style={{ fontSize: 12, color: '#6B7280', textAlign: 'center', paddingBottom: 16 }}>Use +/- to test the live badge count</Text>
       </View>
-    </View>
+    </Screen>
   )
 }

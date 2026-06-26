@@ -25,6 +25,9 @@ import { duration as _duration } from './motion'
 export { duration, easing } from './motion'
 export type { DurationToken, EasingToken } from './motion'
 
+export { breakpoints, containerMaxWidth } from './breakpoints'
+export type { BreakpointToken } from './breakpoints'
+
 export function color(token: keyof typeof _colors): string {
   return _colors[token]
 }
