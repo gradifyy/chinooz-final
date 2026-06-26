@@ -70,6 +70,14 @@ export const reviewSchema = z.object({
   body: z.string().min(10, 'Review must be at least 10 characters').max(2000),
 })
 
+export const createProfileSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters').max(100),
+  email: z.string().email('Please enter a valid email').optional().or(z.literal('')),
+  language: z.enum(['en', 'ne']),
+})
+
+export type CreateProfileInput = z.infer<typeof createProfileSchema>
+
 export type SearchInput = z.infer<typeof searchSchema>
 export type ProfileInput = z.infer<typeof profileSchema>
 export type AddressInput = z.infer<typeof addressSchema>

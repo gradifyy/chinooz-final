@@ -176,5 +176,22 @@
     "devBanner": "DEV MODE — use OTP 123456",
     "successTitle": "Verified!",
     "successSubtitle": "Your number has been confirmed."
+  },
+  "createProfile": {
+    "title": "Create your profile",
+    "subtitle": "Tell us a bit about yourself to personalize your experience.",
+    "finishPrompt": "Finish setting up your profile.",
+    "fullName": "Full name",
+    "fullNamePlaceholder": "Enter your full name",
+    "email": "Email (optional)",
+    "emailPlaceholder": "your@email.com",
+    "language": "Preferred language",
+    "avatar": "Profile photo",
+    "changePhoto": "Change photo",
+    "addPhoto": "Add photo",
+    "save": "Save & Continue",
+    "saving": "Saving...",
+    "skip": "Skip for now",
+    "nameRequired": "Name is required to continue"
   }
 }

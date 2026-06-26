@@ -18,6 +18,7 @@ export default function SplashScreen() {
 
   const onboardingSeen = useSessionStore(s => s.onboardingSeen)
   const isLoggedIn = useSessionStore(s => s.isLoggedIn)
+  const profileComplete = useSessionStore(s => s.profileComplete)
 
   const navigate = useCallback(() => {
     try {
@@ -25,13 +26,15 @@ export default function SplashScreen() {
         router.replace('/onboarding')
       } else if (!isLoggedIn) {
         router.replace('/phone-entry')
+      } else if (!profileComplete) {
+        router.replace('/create-profile')
       } else {
         router.replace('/(tabs)')
       }
     } catch {
       router.replace('/onboarding')
     }
-  }, [onboardingSeen, isLoggedIn, router])
+  }, [onboardingSeen, isLoggedIn, profileComplete, router])
 
   useEffect(() => {
     const delay = reduced ? REDUCED_DELAY : MIN_DELAY

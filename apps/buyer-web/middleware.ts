@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-const PUBLIC_PATHS = ['/onboarding', '/phone-entry', '/api']
+const PUBLIC_PATHS = ['/onboarding', '/phone-entry', '/otp', '/create-profile', '/api']
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -16,6 +16,7 @@ export function middleware(request: NextRequest) {
 
   const onboardingSeen = request.cookies.get('chinooz-onboarding-seen')?.value
   const isLoggedIn = request.cookies.get('chinooz-logged-in')?.value
+  const profileComplete = request.cookies.get('chinooz-profile-complete')?.value
 
   if (!onboardingSeen) {
     return NextResponse.redirect(new URL('/onboarding', request.url))
@@ -23,6 +24,10 @@ export function middleware(request: NextRequest) {
 
   if (!isLoggedIn) {
     return NextResponse.redirect(new URL('/phone-entry', request.url))
+  }
+
+  if (!profileComplete) {
+    return NextResponse.redirect(new URL('/create-profile', request.url))
   }
 
   return NextResponse.next()

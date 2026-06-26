@@ -50,7 +50,7 @@ export default function OtpPage() {
         setSuccess(true)
         login(result.userId || 'user-1', 'Ayush Chaudhary')
         document.cookie = 'chinooz-logged-in=1; path=/; max-age=31536000'
-        setTimeout(() => router.push('/'), 800)
+        setTimeout(() => router.push('/create-profile'), 800)
       } else {
         setError(result.error || t('otp.invalidCode'))
         setAutoSubmitFailed(true)
