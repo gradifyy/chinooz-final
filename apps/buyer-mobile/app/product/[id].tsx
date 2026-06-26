@@ -1,11 +1,10 @@
-import React, { useState, useCallback, useRef } from 'react'
+import React, { useState, useCallback } from 'react'
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   Dimensions,
-  FlatList,
 } from 'react-native'
 import Animated, {
   useSharedValue,
@@ -16,6 +15,7 @@ import Animated, {
   withSpring,
   withSequence,
 } from 'react-native-reanimated'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
@@ -25,6 +25,7 @@ import { formatNPR } from '@chinooz/utils'
 import { useProductById, useReviews, useProducts, usePrefetchProduct } from '@chinooz/hooks'
 import { useCartStore } from '@chinooz/state'
 import { Skeleton, ProductCard } from '@chinooz/ui'
+import ImageGallery from '../../components/ImageGallery'
 import type { Product } from '@chinooz/types'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
@@ -222,40 +223,15 @@ export default function ProductDetailScreen() {
         </View>
       </Animated.View>
 
-      <Animated.ScrollView
-        onScroll={scrollHandler}
-        scrollEventThrottle={16}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
-      >
-        {/* Image Gallery */}
-        <View style={{ width: SCREEN_WIDTH, height: IMAGE_HEIGHT, backgroundColor: colors.shimmer }}>
-          <FlatList
-            data={product.images}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onMomentumScrollEnd={(e) => {
-              const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH)
-              setImageIndex(idx)
-            }}
-            keyExtractor={(item, i) => i.toString()}
-            renderItem={({ item, index }) => (
-              <View style={{ width: SCREEN_WIDTH, height: IMAGE_HEIGHT }}>
-                <View style={{ flex: 1, backgroundColor: colors.border, alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ fontSize: 48 }}>📦</Text>
-                </View>
-              </View>
-            )}
-          />
-          {product.images.length > 1 && (
-            <View style={{ position: 'absolute', bottom: 12, alignSelf: 'center', backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: radii.full }}>
-              <Text style={{ color: colors.white, fontSize: 12, fontWeight: '500' }}>
-                {t('product.imageCount', { current: imageIndex + 1, total: product.images.length })}
-              </Text>
-            </View>
-          )}
-        </View>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <Animated.ScrollView
+          onScroll={scrollHandler}
+          scrollEventThrottle={16}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
+        >
+          {/* Image Gallery */}
+          <ImageGallery images={product.images} onIndexChange={setImageIndex} />
 
         {/* Info Block */}
         <View style={{ padding: spacing[4], gap: spacing[3] }}>
@@ -437,6 +413,7 @@ export default function ProductDetailScreen() {
           <Text style={{ fontSize: 14, fontWeight: '600', color: colors.white }}>{t('product.buyNow')}</Text>
         </TouchableOpacity>
       </Animated.View>
+      </GestureHandlerRootView>
     </View>
   )
 }

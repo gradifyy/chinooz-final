@@ -8,6 +8,7 @@ import { formatNPR } from '@chinooz/utils'
 import { useReducedMotion, ProductCard } from '@chinooz/ui-web'
 import { useCartStore } from '@chinooz/state'
 import { useReviews, useProducts, usePrefetchProduct } from '@chinooz/hooks'
+import ImageGallery from '@/components/ImageGallery'
 import type { Product } from '@chinooz/types'
 
 function StarRating({ rating, size = 14 }: { rating: number; size?: number }) {
@@ -72,34 +73,8 @@ export default function ProductDetailClient({ product }: { product: Product }) {
       {/* Two-column layout: gallery + info */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Gallery (sticky on md+) */}
-        <div className="md:sticky md:top-24 md:self-start">
-          <div className="relative aspect-square bg-border rounded-2xl overflow-hidden">
-            <div className="w-full h-full flex items-center justify-center">
-              <span className="text-6xl">📦</span>
-            </div>
-            {product.images.length > 1 && (
-              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/50 text-white text-xs font-medium px-3 py-1 rounded-full">
-                {t('product.imageCount', { current: imageIndex + 1, total: product.images.length })}
-              </div>
-            )}
-          </div>
-          {product.images.length > 1 && (
-            <div className="flex gap-2 mt-3">
-              {product.images.map((img, i) => (
-                <button
-                  key={i}
-                  onClick={() => setImageIndex(i)}
-                  className={`w-16 h-16 rounded-lg overflow-hidden border-2 transition-colors ${
-                    i === imageIndex ? 'border-primary' : 'border-transparent'
-                  }`}
-                >
-                  <div className="w-full h-full bg-border flex items-center justify-center">
-                    <span className="text-lg">📦</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
+        <div className="md:sticky md:top-24 md:self-start relative">
+          <ImageGallery images={product.images} onIndexChange={setImageIndex} />
         </div>
 
         {/* Info */}
