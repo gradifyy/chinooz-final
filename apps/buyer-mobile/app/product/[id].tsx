@@ -27,6 +27,7 @@ import { useCartStore } from '@chinooz/state'
 import { Skeleton, ProductCard } from '@chinooz/ui'
 import ImageGallery from '../../components/ImageGallery'
 import ProductInfo from '../../components/ProductInfo'
+import VariantSelector from '../../components/VariantSelector'
 import type { Product } from '@chinooz/types'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
@@ -61,40 +62,6 @@ function StockBadge({ stock }: { stock: string }) {
   )
 }
 
-function VariantSelector({ variants, selectedId, onSelect }: { variants: any[]; selectedId: string; onSelect: (id: string) => void }) {
-  const { t } = useTranslation()
-  if (!variants.length) return null
-  return (
-    <View style={{ gap: spacing[2] }}>
-      <Text style={{ fontSize: 15, fontWeight: '600', color: colors.text }}>{t('product.selectVariant')}</Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        {variants.map(v => {
-          const active = v.id === selectedId
-          return (
-            <TouchableOpacity
-              key={v.id}
-              onPress={() => onSelect(v.id)}
-              style={{
-                paddingHorizontal: 14,
-                paddingVertical: 8,
-                borderRadius: radii.full,
-                borderWidth: 1.5,
-                borderColor: active ? colors.primary : colors.border,
-                backgroundColor: active ? colors.primary50 : colors.surface,
-              }}
-              activeOpacity={0.7}
-            >
-              <Text style={{ fontSize: 13, fontWeight: active ? '600' : '400', color: active ? colors.primary : colors.text }}>
-                {v.name}
-              </Text>
-            </TouchableOpacity>
-          )
-        })}
-      </View>
-    </View>
-  )
-}
-
 export default function ProductDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const router = useRouter()
@@ -110,12 +77,14 @@ export default function ProductDetailScreen() {
 
   const [selectedVariant, setSelectedVariant] = useState<string>('')
   const [imageIndex, setImageIndex] = useState(0)
+  const [promptError, setPromptError] = useState<string | null>(null)
   const cartScale = useSharedValue(1)
 
   const activeVariant = product?.variants.find(v => v.id === selectedVariant)
   const displayPrice = activeVariant?.price ?? product?.price ?? 0
   const displayCompare = activeVariant?.compareAtPrice ?? product?.compareAtPrice
-  const isOOS = product?.stock === 'out_of_stock'
+  const isOOS = (activeVariant?.stock ?? product?.stock) === 'out_of_stock'
+  const needsVariant = product && product.variants.length > 0 && !selectedVariant
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
@@ -136,6 +105,12 @@ export default function ProductDetailScreen() {
 
   const handleAddToCart = useCallback(() => {
     if (!product) return
+    if (needsVariant) {
+      setPromptError(t('product.pleaseSelect', { variant: product.variants[0]?.attributes ? Object.keys(product.variants[0].attributes)[0] : 'option' }))
+      try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning) } catch {}
+      return
+    }
+    setPromptError(null)
     cartScale.value = withSequence(
       withSpring(1.1, { damping: 12, stiffness: 400 }),
       withSpring(1, { damping: 15, stiffness: 300 }),
@@ -151,7 +126,7 @@ export default function ProductDetailScreen() {
       quantity: 1,
       maxQuantity: 10,
     })
-  }, [product, selectedVariant, activeVariant, displayPrice, addItem])
+  }, [product, selectedVariant, activeVariant, displayPrice, addItem, needsVariant, t])
 
   const handleBuyNow = useCallback(() => {
     handleAddToCart()
@@ -249,7 +224,8 @@ export default function ProductDetailScreen() {
             <VariantSelector
               variants={product.variants}
               selectedId={selectedVariant || product.variants[0]?.id}
-              onSelect={setSelectedVariant}
+              onSelect={(id) => { setSelectedVariant(id); setPromptError(null) }}
+              promptError={promptError}
             />
           </View>
         )}

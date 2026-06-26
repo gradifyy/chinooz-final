@@ -10,6 +10,7 @@ import { useCartStore } from '@chinooz/state'
 import { useReviews, useProducts, usePrefetchProduct } from '@chinooz/hooks'
 import ImageGallery from '@/components/ImageGallery'
 import ProductInfo from '@/components/ProductInfo'
+import VariantSelector from '@/components/VariantSelector'
 import type { Product } from '@chinooz/types'
 
 function StarRating({ rating, size = 14 }: { rating: number; size?: number }) {
@@ -45,13 +46,20 @@ export default function ProductDetailClient({ product }: { product: Product }) {
 
   const [selectedVariant, setSelectedVariant] = useState(product.variants[0]?.id || '')
   const [imageIndex, setImageIndex] = useState(0)
+  const [promptError, setPromptError] = useState<string | null>(null)
 
   const activeVariant = product.variants.find(v => v.id === selectedVariant)
   const displayPrice = activeVariant?.price ?? product.price
   const displayCompare = activeVariant?.compareAtPrice ?? product.compareAtPrice
-  const isOOS = product.stock === 'out_of_stock'
+  const isOOS = (activeVariant?.stock ?? product.stock) === 'out_of_stock'
+  const needsVariant = product.variants.length > 0 && !selectedVariant
 
   const handleAddToCart = useCallback(() => {
+    if (needsVariant) {
+      setPromptError(t('product.pleaseSelect', { variant: product.variants[0]?.attributes ? Object.keys(product.variants[0].attributes)[0] : 'option' }))
+      return
+    }
+    setPromptError(null)
     addItem({
       id: `ci-${product.id}-${selectedVariant || 'default'}`,
       productId: product.id,
@@ -62,7 +70,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
       quantity: 1,
       maxQuantity: 10,
     })
-  }, [product, selectedVariant, activeVariant, displayPrice, addItem])
+  }, [product, selectedVariant, activeVariant, displayPrice, addItem, needsVariant, t])
 
   const handleBuyNow = useCallback(() => {
     handleAddToCart()
@@ -90,27 +98,12 @@ export default function ProductDetailClient({ product }: { product: Product }) {
 
           {/* Variants */}
           {product.variants.length > 0 && (
-            <div className="space-y-2">
-              <h3 className="text-base font-semibold text-text">{t('product.selectVariant')}</h3>
-              <div className="flex flex-wrap gap-2">
-                {product.variants.map(v => {
-                  const active = v.id === selectedVariant
-                  return (
-                    <button
-                      key={v.id}
-                      onClick={() => setSelectedVariant(v.id)}
-                      className={`px-3.5 py-2 rounded-full text-sm font-medium border transition-colors ${
-                        active
-                          ? 'border-primary bg-primary-50 text-primary font-semibold'
-                          : 'border-border bg-surface text-text hover:border-primary/30'
-                      }`}
-                    >
-                      {v.name}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
+            <VariantSelector
+              variants={product.variants}
+              selectedId={selectedVariant}
+              onSelect={(id) => { setSelectedVariant(id); setPromptError(null) }}
+              promptError={promptError}
+            />
           )}
 
           {/* Description */}
