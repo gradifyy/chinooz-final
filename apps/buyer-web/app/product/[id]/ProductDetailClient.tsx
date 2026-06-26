@@ -11,6 +11,10 @@ import { useReviews, useProducts, usePrefetchProduct } from '@chinooz/hooks'
 import ImageGallery from '@/components/ImageGallery'
 import ProductInfo from '@/components/ProductInfo'
 import VariantSelector from '@/components/VariantSelector'
+import Accordion from '@/components/Accordion'
+import DescriptionSection from '@/components/DescriptionSection'
+import SpecsTable from '@/components/SpecsTable'
+import DeliverySection from '@/components/DeliverySection'
 import Snackbar from '@/components/Snackbar'
 import type { Product } from '@chinooz/types'
 
@@ -151,10 +155,19 @@ export default function ProductDetailClient({ product }: { product: Product }) {
           </div>
 
           {/* Description */}
-          <div className="space-y-2">
-            <h3 className="text-base font-semibold text-text">{t('product.description')}</h3>
-            <p className="text-sm text-text-secondary leading-relaxed">{product.description}</p>
-          </div>
+          <Accordion title={t('product.description')} defaultOpen>
+            <DescriptionSection description={product.description} />
+          </Accordion>
+
+          {/* Specifications */}
+          <Accordion title={t('product.specifications')}>
+            <SpecsTable product={product} />
+          </Accordion>
+
+          {/* Delivery & Returns */}
+          <Accordion title={t('product.delivery')}>
+            <DeliverySection sellerName={product.sellerName} stock={product.stock} />
+          </Accordion>
 
           {/* Desktop inline actions */}
           <div className="hidden md:flex gap-3 sticky top-24">

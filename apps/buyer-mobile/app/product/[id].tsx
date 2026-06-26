@@ -30,6 +30,10 @@ import { Skeleton, ProductCard, QuantityStepper } from '@chinooz/ui'
 import ImageGallery from '../../components/ImageGallery'
 import ProductInfo from '../../components/ProductInfo'
 import VariantSelector from '../../components/VariantSelector'
+import Accordion from '../../components/Accordion'
+import DescriptionSection from '../../components/DescriptionSection'
+import SpecsTable from '../../components/SpecsTable'
+import DeliverySection from '../../components/DeliverySection'
 import Snackbar from '../../components/Snackbar'
 import type { Product } from '@chinooz/types'
 
@@ -243,10 +247,19 @@ export default function ProductDetailScreen() {
           )}
 
           {/* Description */}
-          <View style={{ paddingHorizontal: spacing[4], paddingBottom: spacing[4], gap: spacing[2] }}>
-            <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text }}>{t('product.description')}</Text>
-            <Text style={{ fontSize: 14, color: colors.textSecondary, lineHeight: 22 }}>{product.description}</Text>
-          </View>
+          <Accordion title={t('product.description')} defaultOpen>
+            <DescriptionSection description={product.description} />
+          </Accordion>
+
+          {/* Specifications */}
+          <Accordion title={t('product.specifications')}>
+            <SpecsTable product={product} />
+          </Accordion>
+
+          {/* Delivery & Returns */}
+          <Accordion title={t('product.delivery')}>
+            <DeliverySection sellerName={product.sellerName} stock={product.stock} />
+          </Accordion>
 
           {/* Reviews */}
           <View style={{ paddingHorizontal: spacing[4], paddingBottom: spacing[4], gap: spacing[3] }}>
