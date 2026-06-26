@@ -29,6 +29,8 @@ export type {
   QuantityStepperProps,
   EmptyStateProps,
   IconButtonProps,
+  ProductCardVariant,
+  ProductCardProps,
 } from './components'
 
 export type {

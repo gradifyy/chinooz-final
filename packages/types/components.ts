@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import type { Product, StockStatus } from './entities'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'destructive'
 export type ButtonSize = 'sm' | 'md' | 'lg'
@@ -179,4 +180,15 @@ export interface IconButtonProps extends BaseProps {
   variant?: 'primary' | 'ghost' | 'outline'
   disabled?: boolean
   accessibilityLabel: string
+}
+
+export type ProductCardVariant = 'default' | 'compact'
+
+export interface ProductCardProps extends BaseProps {
+  product: Product
+  variant?: ProductCardVariant
+  wishlisted?: boolean
+  onPress?: (product: Product) => void
+  onToggleWishlist?: (product: Product) => void
+  onAddToCart?: (product: Product) => void
 }
