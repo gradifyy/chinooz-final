@@ -12,6 +12,8 @@ import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
 import { getHomeScrollHandlers } from './_layout'
 import FlashDeals from '../../components/FlashDeals'
 import RecommendedGrid from '../../components/RecommendedGrid'
+import ProductRail from '../../components/ProductRail'
+import { useTrendingProducts, useNewestProducts, useNearbyProducts } from '@chinooz/hooks'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 const EDGE_PADDING = 16
@@ -64,6 +66,9 @@ export default function HomeScreen() {
   const scrollViewRef = useRef<any>(null)
 
   const { setScrollToTop } = getHomeScrollHandlers()
+  const trending = useTrendingProducts()
+  const newest = useNewestProducts()
+  const nearby = useNearbyProducts()
 
   useEffect(() => {
     setScrollToTop(() => {
@@ -117,6 +122,24 @@ export default function HomeScreen() {
 
       <FlashDeals />
 
+      <ProductRail
+        titleKey="home.trendingNow"
+        seeAllHref="/search?sort=trending"
+        products={trending.data}
+        isLoading={trending.isLoading}
+        isError={trending.isError}
+        onRetry={() => trending.refetch()}
+      />
+
+      <ProductRail
+        titleKey="home.newArrivals"
+        seeAllHref="/search?sort=newest"
+        products={newest.data}
+        isLoading={newest.isLoading}
+        isError={newest.isError}
+        onRetry={() => newest.refetch()}
+      />
+
       <View>
         <SectionHeader title={t('categories.title')} />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 16 }}>
@@ -126,29 +149,16 @@ export default function HomeScreen() {
         </ScrollView>
       </View>
 
-      <View>
-        <SectionHeader title={t('home.popularNearYou')} />
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-          {Array.from({ length: 4 }).map((_, i) => (
-            <ProductCardSkeleton key={i} />
-          ))}
-        </View>
-      </View>
+      <ProductRail
+        titleKey="home.nearYou"
+        seeAllHref="/search?filter=nearby"
+        products={nearby.data}
+        isLoading={nearby.isLoading}
+        isError={nearby.isError}
+        onRetry={() => nearby.refetch()}
+      />
 
       <RecommendedGrid />
-
-      <View>
-        <SectionHeader title={t('home.trendingNow')} />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
-          {Array.from({ length: 4 }).map((_, i) => (
-            <View key={i} style={{ width: 140, gap: 6 }}>
-              <View style={{ width: 140, height: 140, borderRadius: 12, backgroundColor: colors.border }} />
-              <View style={{ width: '100%', height: 12, borderRadius: 6, backgroundColor: colors.border }} />
-              <View style={{ width: '50%', height: 14, borderRadius: 6, backgroundColor: colors.border }} />
-            </View>
-          ))}
-        </ScrollView>
-      </View>
     </Animated.ScrollView>
   )
 }

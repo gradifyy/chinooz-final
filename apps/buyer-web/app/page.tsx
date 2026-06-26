@@ -8,6 +8,8 @@ import { motion } from 'framer-motion'
 import { useReducedMotion } from '@chinooz/ui-web'
 import FlashDeals from '@/components/FlashDeals'
 import RecommendedGrid from '@/components/RecommendedGrid'
+import ProductRail from '@/components/ProductRail'
+import { useTrendingProducts, useNewestProducts, useNearbyProducts } from '@chinooz/hooks'
 
 function HeroSkeleton() {
   return <Skeleton width="100%" height={220} borderRadius={16} />
@@ -38,6 +40,9 @@ export default function Home() {
   const queryClient = useQueryClient()
   const reduced = useReducedMotion()
   const [refreshing, setRefreshing] = useState(false)
+  const trending = useTrendingProducts()
+  const newest = useNewestProducts()
+  const nearby = useNearbyProducts()
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true)
@@ -77,6 +82,36 @@ export default function Home() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: reduced ? 0 : 0.4, delay: reduced ? 0 : 0.15 }}
           >
+            <ProductRail
+              titleKey="home.trendingNow"
+              seeAllHref="/search?sort=trending"
+              products={trending.data}
+              isLoading={trending.isLoading}
+              isError={trending.isError}
+              onRetry={() => trending.refetch()}
+            />
+          </motion.div>
+
+          <motion.div
+            initial={reduced ? false : { opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: reduced ? 0 : 0.4, delay: reduced ? 0 : 0.17 }}
+          >
+            <ProductRail
+              titleKey="home.newArrivals"
+              seeAllHref="/search?sort=newest"
+              products={newest.data}
+              isLoading={newest.isLoading}
+              isError={newest.isError}
+              onRetry={() => newest.refetch()}
+            />
+          </motion.div>
+
+          <motion.div
+            initial={reduced ? false : { opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: reduced ? 0 : 0.4, delay: reduced ? 0 : 0.2 }}
+          >
             <Section title={t('categories.title')}>
               <div className="flex gap-4 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-none">
                 {Array.from({ length: 8 }).map((_, i) => (
@@ -89,15 +124,16 @@ export default function Home() {
           <motion.div
             initial={reduced ? false : { opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: reduced ? 0 : 0.4, delay: reduced ? 0 : 0.2 }}
+            transition={{ duration: reduced ? 0 : 0.4, delay: reduced ? 0 : 0.22 }}
           >
-            <Section title={t('home.popularNearYou')}>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <ProductCardSkeleton key={i} />
-                ))}
-              </div>
-            </Section>
+            <ProductRail
+              titleKey="home.nearYou"
+              seeAllHref="/search?filter=nearby"
+              products={nearby.data}
+              isLoading={nearby.isLoading}
+              isError={nearby.isError}
+              onRetry={() => nearby.refetch()}
+            />
           </motion.div>
 
           <motion.div
@@ -106,24 +142,6 @@ export default function Home() {
             transition={{ duration: reduced ? 0 : 0.4, delay: reduced ? 0 : 0.25 }}
           >
             <RecommendedGrid />
-          </motion.div>
-
-          <motion.div
-            initial={reduced ? false : { opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: reduced ? 0 : 0.4, delay: reduced ? 0 : 0.3 }}
-          >
-            <Section title={t('home.trendingNow')}>
-              <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-none">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="shrink-0 w-[160px] flex flex-col gap-2">
-                    <Skeleton height={160} borderRadius={12} />
-                    <Skeleton width="100%" height={12} />
-                    <Skeleton width="50%" height={14} />
-                  </div>
-                ))}
-              </div>
-            </Section>
           </motion.div>
 
           {refreshing && (

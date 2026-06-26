@@ -143,6 +143,21 @@ export async function getRecommendedProducts(userId?: string): Promise<Product[]
   return [...products].sort(() => Math.random() - 0.5).slice(0, 6)
 }
 
+export async function getTrendingProducts(): Promise<Product[]> {
+  await randomDelay(200, 500)
+  return [...products].sort((a, b) => b.reviewCount - a.reviewCount).slice(0, 8)
+}
+
+export async function getNewestProducts(): Promise<Product[]> {
+  await randomDelay(200, 500)
+  return [...products].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 8)
+}
+
+export async function getNearbyProducts(): Promise<Product[]> {
+  await randomDelay(200, 500)
+  return [...products].sort(() => Math.random() - 0.5).slice(0, 8)
+}
+
 // --- Auth ---
 
 export const __DEV_OTP__ = '123456'

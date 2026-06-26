@@ -139,3 +139,24 @@ export function useRecommendedProducts() {
     queryFn: () => api.getRecommendedProducts(),
   })
 }
+
+export function useTrendingProducts() {
+  return useQuery({
+    queryKey: ['products', 'trending'],
+    queryFn: () => api.getTrendingProducts(),
+  })
+}
+
+export function useNewestProducts() {
+  return useQuery({
+    queryKey: ['products', 'newest'],
+    queryFn: () => api.getNewestProducts(),
+  })
+}
+
+export function useNearbyProducts() {
+  return useQuery({
+    queryKey: ['products', 'nearby'],
+    queryFn: () => api.getNearbyProducts(),
+  })
+}

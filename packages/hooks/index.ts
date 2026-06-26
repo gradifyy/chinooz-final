@@ -17,4 +17,7 @@ export {
   useSearchProducts,
   usePopularProducts,
   useRecommendedProducts,
+  useTrendingProducts,
+  useNewestProducts,
+  useNearbyProducts,
 } from './useProducts'
