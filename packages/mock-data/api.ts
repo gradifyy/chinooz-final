@@ -167,6 +167,13 @@ export async function getRecommendedProducts(userId?: string): Promise<Product[]
   return [...products].sort(() => Math.random() - 0.5).slice(0, 6)
 }
 
+export async function getSimilarProducts(categoryId: string, excludeId?: string): Promise<Product[]> {
+  await randomDelay(200, 500)
+  return products
+    .filter(p => p.categoryId === categoryId && p.id !== excludeId)
+    .slice(0, 10)
+}
+
 export async function getTrendingProducts(): Promise<Product[]> {
   await randomDelay(200, 500)
   return [...products].sort((a, b) => b.reviewCount - a.reviewCount).slice(0, 8)

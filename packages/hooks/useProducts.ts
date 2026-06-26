@@ -178,6 +178,15 @@ export function useRecommendedProducts() {
   })
 }
 
+export function useSimilarProducts(categoryId: string, excludeId?: string) {
+  return useQuery({
+    queryKey: ['products', 'similar', categoryId, excludeId],
+    queryFn: () => api.getSimilarProducts(categoryId, excludeId),
+    enabled: !!categoryId,
+    staleTime: STALE_PRODUCTS,
+  })
+}
+
 export function useTrendingProducts() {
   return useQuery({
     queryKey: ['products', 'trending'],

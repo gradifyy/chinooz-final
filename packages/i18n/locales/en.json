@@ -115,6 +115,8 @@
     "verified": "Verified",
     "variants": "Variants",
     "relatedProducts": "Related Products",
+    "youMayAlsoLike": "You may also like",
+    "similarItems": "Similar items",
     "imageCount": "Image {{current}} of {{total}}",
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",

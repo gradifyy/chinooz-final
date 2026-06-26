@@ -5,9 +5,9 @@ import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { formatNPR } from '@chinooz/utils'
-import { useReducedMotion, ProductCard, QuantityStepper } from '@chinooz/ui-web'
+import { useReducedMotion, QuantityStepper } from '@chinooz/ui-web'
 import { useCartStore } from '@chinooz/state'
-import { useReviews, useProducts, usePrefetchProduct } from '@chinooz/hooks'
+import { useReviews } from '@chinooz/hooks'
 import ImageGallery from '@/components/ImageGallery'
 import ProductInfo from '@/components/ProductInfo'
 import VariantSelector from '@/components/VariantSelector'
@@ -17,6 +17,7 @@ import SpecsTable from '@/components/SpecsTable'
 import DeliverySection from '@/components/DeliverySection'
 import ReviewsSection from '@/components/ReviewsSection'
 import WriteReviewModal from '@/components/WriteReviewModal'
+import RelatedProducts from '@/components/RelatedProducts'
 import Snackbar from '@/components/Snackbar'
 import type { Product } from '@chinooz/types'
 
@@ -40,10 +41,8 @@ export default function ProductDetailClient({ product }: { product: Product }) {
   const reduced = useReducedMotion()
   const addItem = useCartStore(s => s.addItem)
   const removeItem = useCartStore(s => s.removeItem)
-  const prefetchProduct = usePrefetchProduct()
 
   const { data: reviews } = useReviews(product.id)
-  const { data: related } = useProducts({ limit: 6 })
 
   const [selectedVariant, setSelectedVariant] = useState(product.variants[0]?.id || '')
   const [imageIndex, setImageIndex] = useState(0)
@@ -212,23 +211,8 @@ export default function ProductDetailClient({ product }: { product: Product }) {
         onSuccess={() => {}}
       />
 
-      {/* Related Products — full width */}
-      {related && related.items.length > 0 && (
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-text">{t('product.relatedProducts')}</h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
-            {related.items.map(p => (
-              <ProductCard
-                key={p.id}
-                product={p}
-                variant="compact"
-                onPress={(prod) => router.push(`/product/${prod.id}`)}
-                onLongPress={(prod) => prefetchProduct(prod.id)}
-              />
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Related Products */}
+      <RelatedProducts categoryId={product.categoryId} productId={product.id} />
 
       {/* Mobile sticky bottom bar */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-surface border-t border-border px-4 pt-3 pb-[env(safe-area-inset-bottom)] shadow-[0_-2px_8px_rgba(0,0,0,0.06)] z-40">

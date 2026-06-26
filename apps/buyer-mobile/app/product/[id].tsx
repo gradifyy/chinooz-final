@@ -24,7 +24,7 @@ import { useTranslation } from 'react-i18next'
 import * as Haptics from 'expo-haptics'
 import { colors, spacing, radii } from '@chinooz/theme'
 import { formatNPR } from '@chinooz/utils'
-import { useProductById, useReviews, useProducts, usePrefetchProduct } from '@chinooz/hooks'
+import { useProductById, useReviews, usePrefetchProduct } from '@chinooz/hooks'
 import { useCartStore } from '@chinooz/state'
 import { Skeleton, ProductCard, QuantityStepper } from '@chinooz/ui'
 import ImageGallery from '../../components/ImageGallery'
@@ -36,8 +36,8 @@ import SpecsTable from '../../components/SpecsTable'
 import DeliverySection from '../../components/DeliverySection'
 import ReviewsSection from '../../components/ReviewsSection'
 import WriteReviewSheet from '../../components/WriteReviewSheet'
+import RelatedProducts from '../../components/RelatedProducts'
 import Snackbar from '../../components/Snackbar'
-import type { Product } from '@chinooz/types'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 const IMAGE_HEIGHT = SCREEN_WIDTH
@@ -55,7 +55,6 @@ export default function ProductDetailScreen() {
 
   const { data: product, isLoading } = useProductById(id || '')
   const { data: reviews } = useReviews(id || '')
-  const { data: related } = useProducts({ limit: 6 })
 
   const [selectedVariant, setSelectedVariant] = useState<string>('')
   const [imageIndex, setImageIndex] = useState(0)
@@ -149,11 +148,6 @@ export default function ProductDetailScreen() {
     }
     setSnackVisible(false)
   }, [lastAddedId, removeItem])
-
-  const handleRelatedPress = useCallback((p: Product) => {
-    prefetchProduct(p.id)
-    router.push({ pathname: '/product/[id]', params: { id: p.id } })
-  }, [router, prefetchProduct])
 
   const btnAnimStyle = useAnimatedStyle(() => ({
     transform: [{ scale: btnScale.value }],
@@ -279,31 +273,7 @@ export default function ProductDetailScreen() {
           />
 
           {/* Related Products */}
-          {related && related.items.length > 0 && (
-            <View style={{ paddingVertical: spacing[4], gap: spacing[3] }}>
-              <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text, paddingHorizontal: spacing[4] }}>
-                {t('product.relatedProducts')}
-              </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingHorizontal: spacing[4] }}>
-                {related.items.map(p => (
-                  <TouchableOpacity
-                    key={p.id}
-                    onPress={() => handleRelatedPress(p)}
-                    style={{ width: 160 }}
-                    activeOpacity={0.9}
-                  >
-                    <View style={{ backgroundColor: colors.surface, borderRadius: radii.lg, overflow: 'hidden' }}>
-                      <View style={{ width: 160, height: 160, backgroundColor: colors.border }} />
-                      <View style={{ padding: 10, gap: 4 }}>
-                        <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text }} numberOfLines={1}>{p.name}</Text>
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{formatNPR(p.price)}</Text>
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-          )}
+          <RelatedProducts categoryId={product.categoryId} productId={product.id} />
         </Animated.ScrollView>
       </GestureHandlerRootView>
 

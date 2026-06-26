@@ -19,6 +19,7 @@ export {
   useSearchProducts,
   usePopularProducts,
   useRecommendedProducts,
+  useSimilarProducts,
   useTrendingProducts,
   useNewestProducts,
   useNearbyProducts,
