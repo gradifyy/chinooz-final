@@ -1,0 +1,15 @@
+{
+  "name": "@chinooz/ui-web",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "types": "index.ts",
+  "peerDependencies": {
+    "react": "*",
+    "next": "*"
+  },
+  "dependencies": {
+    "@chinooz/types": "workspace:*",
+    "@chinooz/utils": "workspace:*",
+    "@chinooz/theme": "workspace:*"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "@chinooz/ui",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "types": "index.ts",
+  "peerDependencies": {
+    "react": "*",
+    "react-native": "*"
+  },
+  "dependencies": {
+    "@chinooz/types": "workspace:*",
+    "@chinooz/theme": "workspace:*",
+    "@chinooz/utils": "workspace:*",
+    "nativewind": "^4.0.0"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "@chinooz/i18n",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "types": "index.ts",
+  "dependencies": {
+    "@chinooz/types": "workspace:*"
+  }
+}
