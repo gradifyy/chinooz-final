@@ -16,6 +16,10 @@
         "backgroundColor": "#8A1B57"
       }
     },
-    "plugins": ["expo-router", "react-native-reanimated"]
+    "plugins": ["expo-router"],
+    "newArchEnabled": true,
+    "experiments": {
+      "autolinkingModuleResolution": true
+    }
   }
 }

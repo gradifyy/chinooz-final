@@ -9,5 +9,8 @@
   },
   "peerDependencies": {
     "react": "*"
+  },
+  "devDependencies": {
+    "react": "19.1.0"
   }
 }

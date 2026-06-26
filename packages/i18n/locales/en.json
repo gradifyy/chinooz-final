@@ -170,7 +170,11 @@
     "verifying": "Verifying...",
     "resend": "Resend code",
     "resendIn": "Resend in {{seconds}}s",
-    "invalidCode": "Invalid code. Please try again.",
-    "changeNumber": "Change number"
+    "invalidCode": "Invalid code. Try again.",
+    "changeNumber": "Change number",
+    "codeSent": "Code sent!",
+    "devBanner": "DEV MODE — use OTP 123456",
+    "successTitle": "Verified!",
+    "successSubtitle": "Your number has been confirmed."
   }
 }
