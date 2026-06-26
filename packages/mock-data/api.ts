@@ -145,24 +145,26 @@ export async function getRecommendedProducts(userId?: string): Promise<Product[]
 
 // --- Auth ---
 
+export const __DEV_OTP__ = '123456'
+export const __IS_DEV__ = process.env.NODE_ENV !== 'production'
+
 const otpStore = new Map<string, { sentAt: number; code: string }>()
 
-export async function requestOtp(phone: string): Promise<{ success: boolean; message: string }> {
+export async function requestOtp(phone: string): Promise<{ success: boolean; message: string; alreadySent?: boolean }> {
   await randomDelay(600, 1200)
   const existing = otpStore.get(phone)
   if (existing && Date.now() - existing.sentAt < 60_000) {
-    return { success: true, message: 'Code already sent — check your messages' }
+    return { success: true, message: 'Code already sent — check your messages', alreadySent: true }
   }
-  otpStore.set(phone, { sentAt: Date.now(), code: '123456' })
+  otpStore.set(phone, { sentAt: Date.now(), code: __DEV_OTP__ })
   return { success: true, message: 'OTP sent' }
 }
 
-export async function verifyOtp(phone: string, code: string): Promise<{ success: boolean; userId?: string }> {
+export async function verifyOtp(phone: string, code: string): Promise<{ success: boolean; userId?: string; error?: string }> {
   await randomDelay(400, 800)
-  const entry = otpStore.get(phone)
-  if (entry && entry.code === code) {
+  if (code === __DEV_OTP__) {
     otpStore.delete(phone)
     return { success: true, userId: 'user-1' }
   }
-  return { success: false }
+  return { success: false, error: 'Invalid code. Try again.' }
 }

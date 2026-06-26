@@ -171,6 +171,10 @@
     "resend": "कोड पुन: पठाउनुहोस्",
     "resendIn": "{{seconds}}s मा पुन: पठाउनुहोस्",
     "invalidCode": "गलत कोड। फेरि प्रयास गर्नुहोस्।",
-    "changeNumber": "नम्बर परिवर्तन गर्नुहोस्"
+    "changeNumber": "नम्बर परिवर्तन गर्नुहोस्",
+    "codeSent": "कोड पठाइयो!",
+    "devBanner": "DEV MODE — OTP 123456 प्रयोग गर्नुहोस्",
+    "successTitle": "प्रमाणित भयो!",
+    "successSubtitle": "तपाईंको नम्बर पुष्टि भएको छ।"
   }
 }
