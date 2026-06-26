@@ -1,24 +1,15 @@
 'use client'
 
-import { Container, Screen, Skeleton, Section, Row } from '@chinooz/ui-web'
+import { Container, Screen, Skeleton, Section } from '@chinooz/ui-web'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
 import { useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { useReducedMotion } from '@chinooz/ui-web'
+import FlashDeals from '@/components/FlashDeals'
 
 function HeroSkeleton() {
   return <Skeleton width="100%" height={220} borderRadius={16} />
-}
-
-function DealCardSkeleton() {
-  return (
-    <div className="flex flex-col gap-2 shrink-0 w-[160px]">
-      <Skeleton height={160} borderRadius={12} />
-      <Skeleton width="100%" height={12} />
-      <Skeleton width="50%" height={14} />
-    </div>
-  )
 }
 
 function CategoryCircleSkeleton() {
@@ -77,13 +68,7 @@ export default function Home() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: reduced ? 0 : 0.4, delay: reduced ? 0 : 0.1 }}
           >
-            <Section title={t('home.flashDeals')} action={{ label: t('common.seeAll') }}>
-              <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-none">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <DealCardSkeleton key={i} />
-                ))}
-              </div>
-            </Section>
+            <FlashDeals />
           </motion.div>
 
           <motion.div
@@ -136,7 +121,11 @@ export default function Home() {
             <Section title={t('home.trendingNow')}>
               <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-none">
                 {Array.from({ length: 6 }).map((_, i) => (
-                  <DealCardSkeleton key={i} />
+                  <div key={i} className="shrink-0 w-[160px] flex flex-col gap-2">
+                    <Skeleton height={160} borderRadius={12} />
+                    <Skeleton width="100%" height={12} />
+                    <Skeleton width="50%" height={14} />
+                  </div>
                 ))}
               </div>
             </Section>

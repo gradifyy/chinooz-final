@@ -1,12 +1,8 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react'
-import { View, Text, ScrollView, RefreshControl, Dimensions, FlatList } from 'react-native'
+import { View, Text, ScrollView, RefreshControl, Dimensions } from 'react-native'
 import Animated, {
   useSharedValue,
   useAnimatedScrollHandler,
-  useAnimatedStyle,
-  withTiming,
-  Easing,
-  scrollTo,
 } from 'react-native-reanimated'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
@@ -14,6 +10,7 @@ import { colors, spacing } from '@chinooz/theme'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
 import { getHomeScrollHandlers } from './_layout'
+import FlashDeals from '../../components/FlashDeals'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 const EDGE_PADDING = 16
@@ -22,16 +19,6 @@ function HeroSkeleton() {
   return (
     <View style={{ width: SCREEN_WIDTH - EDGE_PADDING * 2, height: 180, borderRadius: 16, backgroundColor: colors.border, overflow: 'hidden' }}>
       <View style={{ flex: 1, backgroundColor: colors.shimmer }} />
-    </View>
-  )
-}
-
-function DealCardSkeleton() {
-  return (
-    <View style={{ width: 140, gap: 6 }}>
-      <View style={{ width: 140, height: 140, borderRadius: 12, backgroundColor: colors.border }} />
-      <View style={{ width: '100%', height: 12, borderRadius: 6, backgroundColor: colors.border }} />
-      <View style={{ width: '50%', height: 14, borderRadius: 6, backgroundColor: colors.border }} />
     </View>
   )
 }
@@ -127,14 +114,7 @@ export default function HomeScreen() {
     >
       <HeroSkeleton />
 
-      <View>
-        <SectionHeader title={t('home.flashDeals')} action={t('common.seeAll')} />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
-          {Array.from({ length: 4 }).map((_, i) => (
-            <DealCardSkeleton key={i} />
-          ))}
-        </ScrollView>
-      </View>
+      <FlashDeals />
 
       <View>
         <SectionHeader title={t('categories.title')} />
@@ -167,7 +147,11 @@ export default function HomeScreen() {
         <SectionHeader title={t('home.trendingNow')} />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
           {Array.from({ length: 4 }).map((_, i) => (
-            <DealCardSkeleton key={i} />
+            <View key={i} style={{ width: 140, gap: 6 }}>
+              <View style={{ width: 140, height: 140, borderRadius: 12, backgroundColor: colors.border }} />
+              <View style={{ width: '100%', height: 12, borderRadius: 6, backgroundColor: colors.border }} />
+              <View style={{ width: '50%', height: 14, borderRadius: 6, backgroundColor: colors.border }} />
+            </View>
           ))}
         </ScrollView>
       </View>
