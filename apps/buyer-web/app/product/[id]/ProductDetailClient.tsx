@@ -5,13 +5,16 @@ import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { formatNPR } from '@chinooz/utils'
-import { useReducedMotion, ProductCard } from '@chinooz/ui-web'
+import { useReducedMotion, ProductCard, QuantityStepper } from '@chinooz/ui-web'
 import { useCartStore } from '@chinooz/state'
 import { useReviews, useProducts, usePrefetchProduct } from '@chinooz/hooks'
 import ImageGallery from '@/components/ImageGallery'
 import ProductInfo from '@/components/ProductInfo'
 import VariantSelector from '@/components/VariantSelector'
+import Snackbar from '@/components/Snackbar'
 import type { Product } from '@chinooz/types'
+
+const MAX_QTY = 10
 
 function StarRating({ rating, size = 14 }: { rating: number; size?: number }) {
   return (
@@ -25,20 +28,12 @@ function StarRating({ rating, size = 14 }: { rating: number; size?: number }) {
   )
 }
 
-function StockBadge({ stock }: { stock: string }) {
-  const { t } = useTranslation()
-  if (stock === 'in_stock') return null
-  if (stock === 'low_stock') {
-    return <span className="inline-block bg-warning-light text-[#92400E] text-xs font-semibold px-2.5 py-1 rounded-full">{t('product.onlyAFewLeft')}</span>
-  }
-  return <span className="inline-block bg-error-light text-error text-xs font-semibold px-2.5 py-1 rounded-full">{t('product.outOfStock')}</span>
-}
-
 export default function ProductDetailClient({ product }: { product: Product }) {
   const { t } = useTranslation()
   const router = useRouter()
   const reduced = useReducedMotion()
   const addItem = useCartStore(s => s.addItem)
+  const removeItem = useCartStore(s => s.removeItem)
   const prefetchProduct = usePrefetchProduct()
 
   const { data: reviews } = useReviews(product.id)
@@ -47,41 +42,73 @@ export default function ProductDetailClient({ product }: { product: Product }) {
   const [selectedVariant, setSelectedVariant] = useState(product.variants[0]?.id || '')
   const [imageIndex, setImageIndex] = useState(0)
   const [promptError, setPromptError] = useState<string | null>(null)
+  const [quantity, setQuantity] = useState(1)
+  const [snackVisible, setSnackVisible] = useState(false)
+  const [lastAddedId, setLastAddedId] = useState<string | null>(null)
 
   const activeVariant = product.variants.find(v => v.id === selectedVariant)
   const displayPrice = activeVariant?.price ?? product.price
   const displayCompare = activeVariant?.compareAtPrice ?? product.compareAtPrice
-  const isOOS = (activeVariant?.stock ?? product.stock) === 'out_of_stock'
+  const stockStatus = activeVariant?.stock ?? product.stock
+  const isOOS = stockStatus === 'out_of_stock'
   const needsVariant = product.variants.length > 0 && !selectedVariant
+  const maxQty = Math.min(MAX_QTY, 10)
 
   const handleAddToCart = useCallback(() => {
     if (needsVariant) {
-      setPromptError(t('product.pleaseSelect', { variant: product.variants[0]?.attributes ? Object.keys(product.variants[0].attributes)[0] : 'option' }))
+      setPromptError(t('product.selectFirst', { variant: Object.keys(product.variants[0]?.attributes || {})[0] || 'option' }))
       return
     }
     setPromptError(null)
+    const itemId = `ci-${product.id}-${selectedVariant || 'default'}`
+    setLastAddedId(itemId)
     addItem({
-      id: `ci-${product.id}-${selectedVariant || 'default'}`,
+      id: itemId,
       productId: product.id,
       variantId: selectedVariant || undefined,
       name: activeVariant ? `${product.name} — ${activeVariant.name}` : product.name,
       image: product.images?.[0]?.uri ?? '',
       price: displayPrice,
-      quantity: 1,
-      maxQuantity: 10,
+      quantity,
+      maxQuantity: maxQty,
     })
-  }, [product, selectedVariant, activeVariant, displayPrice, addItem, needsVariant, t])
+    setSnackVisible(true)
+    setQuantity(1)
+  }, [product, selectedVariant, activeVariant, displayPrice, quantity, addItem, needsVariant, t, maxQty])
 
   const handleBuyNow = useCallback(() => {
-    handleAddToCart()
+    if (needsVariant) {
+      setPromptError(t('product.selectFirst', { variant: Object.keys(product.variants[0]?.attributes || {})[0] || 'option' }))
+      return
+    }
+    setPromptError(null)
+    const itemId = `ci-${product.id}-${selectedVariant || 'default'}`
+    addItem({
+      id: itemId,
+      productId: product.id,
+      variantId: selectedVariant || undefined,
+      name: activeVariant ? `${product.name} — ${activeVariant.name}` : product.name,
+      image: product.images?.[0]?.uri ?? '',
+      price: displayPrice,
+      quantity,
+      maxQuantity: maxQty,
+    })
     router.push('/cart')
-  }, [handleAddToCart, router])
+  }, [product, selectedVariant, activeVariant, displayPrice, quantity, addItem, needsVariant, t, maxQty, router])
+
+  const handleUndo = useCallback(() => {
+    if (lastAddedId) {
+      removeItem(lastAddedId)
+      setLastAddedId(null)
+    }
+    setSnackVisible(false)
+  }, [lastAddedId, removeItem])
 
   return (
     <div className="flex flex-col gap-8">
-      {/* Two-column layout: gallery + info */}
+      {/* Two-column layout */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {/* Gallery (sticky on md+) */}
+        {/* Gallery */}
         <div className="md:sticky md:top-24 md:self-start relative">
           <ImageGallery images={product.images} onIndexChange={setImageIndex} />
         </div>
@@ -106,6 +133,23 @@ export default function ProductDetailClient({ product }: { product: Product }) {
             />
           )}
 
+          {/* Quantity */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-text-muted">Qty</p>
+              <QuantityStepper
+                value={quantity}
+                min={1}
+                max={maxQty}
+                onChange={setQuantity}
+                disabled={isOOS}
+              />
+            </div>
+            {quantity >= maxQty && (
+              <p className="text-xs font-medium text-text-muted">{t('product.maxReached')}</p>
+            )}
+          </div>
+
           {/* Description */}
           <div className="space-y-2">
             <h3 className="text-base font-semibold text-text">{t('product.description')}</h3>
@@ -120,9 +164,9 @@ export default function ProductDetailClient({ product }: { product: Product }) {
               whileHover={reduced ? {} : { scale: 1.02 }}
               whileTap={reduced ? {} : { scale: 0.97 }}
               className="flex-1 bg-primary text-white h-13 rounded-xl font-bold text-base disabled:opacity-50 hover:bg-primary-dark transition-colors"
-              aria-label={t('product.addToCart')}
+              aria-label={`${t('product.addToCart')}, ${formatNPR(displayPrice * quantity)}`}
             >
-              {t('product.addToCart')}
+              {t('product.addToCart')} · {formatNPR(displayPrice * quantity)}
             </motion.button>
             <motion.button
               onClick={handleBuyNow}
@@ -191,30 +235,62 @@ export default function ProductDetailClient({ product }: { product: Product }) {
       )}
 
       {/* Mobile sticky bottom bar */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-surface border-t border-border px-4 pt-3 pb-[env(safe-area-inset-bottom)] flex items-center gap-3 shadow-[0_-2px_8px_rgba(0,0,0,0.06)] z-40">
-        <div className="flex-1">
-          <p className="text-[11px] text-text-muted">{t('product.addToCart')}</p>
-          <p className="text-xl font-bold text-text tabular-nums" aria-label={`${formatNPR(displayPrice)}, add to cart`}>
-            {formatNPR(displayPrice)}
-          </p>
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-surface border-t border-border px-4 pt-3 pb-[env(safe-area-inset-bottom)] shadow-[0_-2px_8px_rgba(0,0,0,0.06)] z-40">
+        {/* Quantity + Price */}
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <p className="text-[11px] text-text-muted">{t('product.addToCart')}</p>
+            <p className="text-xl font-bold text-text tabular-nums" aria-label={`${formatNPR(displayPrice * quantity)}, add to cart`}>
+              {formatNPR(displayPrice * quantity)}
+            </p>
+          </div>
+          <div className="flex flex-col items-end gap-0.5">
+            <QuantityStepper
+              value={quantity}
+              min={1}
+              max={maxQty}
+              onChange={setQuantity}
+              disabled={isOOS}
+            />
+            {quantity >= maxQty && (
+              <p className="text-[12px] font-medium text-text-muted">{t('product.maxReached')}</p>
+            )}
+          </div>
         </div>
-        <button
-          onClick={handleAddToCart}
-          disabled={isOOS}
-          className="bg-primary text-white px-5 py-3 rounded-xl font-semibold text-sm disabled:opacity-50 hover:bg-primary-dark transition-colors"
-          aria-label={t('product.addToCart')}
-        >
-          {t('product.addToCart')}
-        </button>
-        <button
-          onClick={handleBuyNow}
-          disabled={isOOS}
-          className="bg-gold text-white px-5 py-3 rounded-xl font-semibold text-sm disabled:opacity-50 hover:opacity-90 transition-opacity"
-          aria-label={t('product.buyNow')}
-        >
-          {t('product.buyNow')}
-        </button>
+
+        {/* Buttons */}
+        <div className="flex gap-2">
+          <motion.button
+            onClick={handleAddToCart}
+            disabled={isOOS}
+            whileHover={reduced ? {} : { scale: 1.02 }}
+            whileTap={reduced ? {} : { scale: 0.97 }}
+            className="flex-1 bg-primary text-white py-3 rounded-xl font-bold text-sm disabled:opacity-50 hover:bg-primary-dark transition-colors"
+            aria-label={t('product.addToCart')}
+          >
+            {t('product.addToCart')}
+          </motion.button>
+          <motion.button
+            onClick={handleBuyNow}
+            disabled={isOOS}
+            whileHover={reduced ? {} : { scale: 1.02 }}
+            whileTap={reduced ? {} : { scale: 0.97 }}
+            className="flex-1 bg-gold text-white py-3 rounded-xl font-bold text-sm disabled:opacity-50 hover:opacity-90 transition-opacity"
+            aria-label={t('product.buyNow')}
+          >
+            {t('product.buyNow')}
+          </motion.button>
+        </div>
       </div>
+
+      {/* Snackbar */}
+      <Snackbar
+        visible={snackVisible}
+        message={t('product.addedToCart')}
+        actionLabel={t('product.undo')}
+        onAction={handleUndo}
+        onDismiss={() => setSnackVisible(false)}
+      />
     </div>
   )
 }
