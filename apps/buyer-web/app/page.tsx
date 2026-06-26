@@ -3,8 +3,8 @@
 import { Container, Screen } from '@chinooz/ui-web'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
-import { useState, useCallback, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useState, useCallback, useEffect, useRef } from 'react'
+import { motion, AnimatePresence, useInView } from 'framer-motion'
 import { useReducedMotion } from '@chinooz/ui-web'
 import FlashDeals from '@/components/FlashDeals'
 import RecommendedGrid from '@/components/RecommendedGrid'
@@ -12,6 +12,27 @@ import ProductRail from '@/components/ProductRail'
 import OfflineBanner from '@/components/OfflineBanner'
 import HomeSkeleton from '@/components/HomeSkeleton'
 import { useTrendingProducts, useNewestProducts, useNearbyProducts } from '@chinooz/hooks'
+
+function SectionReveal({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const isInView = useInView(ref, { once: true, margin: '-40px' })
+  const reduced = useReducedMotion()
+
+  return (
+    <motion.div
+      ref={ref}
+      initial={reduced ? false : { opacity: 0, y: 8 }}
+      animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
+      transition={{
+        duration: reduced ? 0 : 0.25,
+        ease: [0.16, 1, 0.3, 1],
+        delay: reduced ? 0 : delay,
+      }}
+    >
+      {children}
+    </motion.div>
+  )
+}
 
 export default function Home() {
   const { t } = useTranslation()
@@ -71,27 +92,32 @@ export default function Home() {
               transition={{ duration: reduced ? 0 : 0.25 }}
               className="flex flex-col gap-6"
             >
-              <motion.div
-                initial={reduced ? false : { opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: reduced ? 0 : 0.4 }}
-              >
-                <HomeSkeleton />
-              </motion.div>
+              <SectionReveal delay={0}>
+                <div className="w-full h-[220px] rounded-2xl bg-primary-50 overflow-hidden relative">
+                  <motion.div
+                    className="absolute inset-0"
+                    style={{ y: 0 }}
+                    whileInView={{ y: -20 }}
+                    transition={{ duration: 0.6, ease: 'easeOut' }}
+                  >
+                    <div className="w-full h-[260px] bg-primary-50 flex items-center justify-center">
+                      <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
+                        <div className="w-8 h-8 rounded-full bg-primary/15" />
+                      </div>
+                    </div>
+                  </motion.div>
+                  <div className="absolute bottom-4 left-4">
+                    <div className="w-40 h-3.5 bg-white/30 rounded mb-1.5" />
+                    <div className="w-24 h-2.5 bg-white/20 rounded" />
+                  </div>
+                </div>
+              </SectionReveal>
 
-              <motion.div
-                initial={reduced ? false : { opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: reduced ? 0 : 0.4, delay: reduced ? 0 : 0.1 }}
-              >
+              <SectionReveal delay={0.05}>
                 <FlashDeals />
-              </motion.div>
+              </SectionReveal>
 
-              <motion.div
-                initial={reduced ? false : { opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: reduced ? 0 : 0.4, delay: reduced ? 0 : 0.15 }}
-              >
+              <SectionReveal delay={0.08}>
                 <ProductRail
                   titleKey="home.trendingNow"
                   seeAllHref="/search?sort=trending"
@@ -100,13 +126,9 @@ export default function Home() {
                   isError={trending.isError}
                   onRetry={() => trending.refetch()}
                 />
-              </motion.div>
+              </SectionReveal>
 
-              <motion.div
-                initial={reduced ? false : { opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: reduced ? 0 : 0.4, delay: reduced ? 0 : 0.17 }}
-              >
+              <SectionReveal delay={0.1}>
                 <ProductRail
                   titleKey="home.newArrivals"
                   seeAllHref="/search?sort=newest"
@@ -115,13 +137,9 @@ export default function Home() {
                   isError={newest.isError}
                   onRetry={() => newest.refetch()}
                 />
-              </motion.div>
+              </SectionReveal>
 
-              <motion.div
-                initial={reduced ? false : { opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: reduced ? 0 : 0.4, delay: reduced ? 0 : 0.2 }}
-              >
+              <SectionReveal delay={0.12}>
                 <div className="flex flex-col gap-3">
                   <h3 className="text-lg font-semibold text-text">{t('categories.title')}</h3>
                   <div className="flex gap-4 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-none">
@@ -133,13 +151,9 @@ export default function Home() {
                     ))}
                   </div>
                 </div>
-              </motion.div>
+              </SectionReveal>
 
-              <motion.div
-                initial={reduced ? false : { opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: reduced ? 0 : 0.4, delay: reduced ? 0 : 0.22 }}
-              >
+              <SectionReveal delay={0.14}>
                 <ProductRail
                   titleKey="home.nearYou"
                   seeAllHref="/search?filter=nearby"
@@ -148,15 +162,11 @@ export default function Home() {
                   isError={nearby.isError}
                   onRetry={() => nearby.refetch()}
                 />
-              </motion.div>
+              </SectionReveal>
 
-              <motion.div
-                initial={reduced ? false : { opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: reduced ? 0 : 0.4, delay: reduced ? 0 : 0.25 }}
-              >
+              <SectionReveal delay={0.16}>
                 <RecommendedGrid />
-              </motion.div>
+              </SectionReveal>
 
               <div className="flex justify-center py-4">
                 <button

@@ -47,6 +47,7 @@ export default function ProductCard({
   const isOOS = product.stock === 'out_of_stock'
   const hasDiscount = product.compareAtPrice && product.compareAtPrice > product.price
   const imageUri = product.images?.[0]?.uri
+  const sharedId = `product-image-${product.id}`
 
   const handleWishlist = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
@@ -68,14 +69,14 @@ export default function ProductCard({
         className={`w-[160px] bg-surface rounded-xl overflow-hidden shadow-sm text-left shrink-0 ${className}`}
         aria-label={product.name}
       >
-        <div className="relative w-[160px] h-[160px]">
+        <motion.div layoutId={sharedId} className="relative w-[160px] h-[160px]">
           <SafeImage
             src={imageUri}
             alt={product.name}
             className={`w-full h-full object-cover ${isOOS ? 'opacity-50' : ''}`}
           />
           <StockBadge stock={product.stock} />
-        </div>
+        </motion.div>
         <div className="p-2.5 space-y-1">
           <p className="text-[13px] font-medium text-text truncate">{product.name}</p>
           <p className="text-[14px] font-semibold text-text tabular-nums">{formatNPR(product.price)}</p>
@@ -95,7 +96,7 @@ export default function ProductCard({
         className="w-full text-left"
         aria-label={product.name}
       >
-        <div className="relative w-full aspect-square">
+        <motion.div layoutId={sharedId} className="relative w-full aspect-square">
           <SafeImage
             src={imageUri}
             alt={product.name}
@@ -117,7 +118,7 @@ export default function ProductCard({
               {wishlisted ? '♥' : '♡'}
             </span>
           </motion.button>
-        </div>
+        </motion.div>
 
         <div className="p-3 space-y-1.5">
           <p className="text-sm text-text leading-5 line-clamp-2 min-h-[40px]">{product.name}</p>

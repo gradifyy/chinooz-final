@@ -4,20 +4,20 @@ import Animated, {
   useSharedValue,
   useAnimatedScrollHandler,
   FadeIn,
-  FadeOut,
 } from 'react-native-reanimated'
 import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
 import { colors, spacing } from '@chinooz/theme'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
-import { EmptyState } from '@chinooz/ui'
 import { getHomeScrollHandlers } from './_layout'
 import FlashDeals from '../../components/FlashDeals'
 import RecommendedGrid from '../../components/RecommendedGrid'
 import ProductRail from '../../components/ProductRail'
 import OfflineBanner from '../../components/OfflineBanner'
 import HomeSkeleton from '../../components/HomeSkeleton'
+import HeroParallax from '../../components/HeroParallax'
+import SectionReveal from '../../components/SectionReveal'
 import { useTrendingProducts, useNewestProducts, useNearbyProducts } from '@chinooz/hooks'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
@@ -27,24 +27,11 @@ function ShimmerBar({ w, h, r = 6 }: { w: number | `${number}%`; h: number; r?: 
   return <View style={{ width: w as any, height: h, borderRadius: r, backgroundColor: colors.border }} />
 }
 
-function HeroSkeleton() {
-  return <ShimmerBar w={SCREEN_WIDTH - EDGE_PADDING * 2} h={180} r={16} />
-}
-
 function CategoryCircleSkeleton() {
   return (
     <View style={{ alignItems: 'center', gap: 6 }}>
       <ShimmerBar w={64} h={64} r={32} />
       <ShimmerBar w={48} h={10} />
-    </View>
-  )
-}
-
-function SectionHeader({ title, action }: { title: string; action?: string }) {
-  return (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing[3] }}>
-      <Text style={{ fontSize: 18, fontWeight: '600', color: colors.text }}>{title}</Text>
-      {action && <Text style={{ fontSize: 13, fontWeight: '600', color: colors.primary }}>{action}</Text>}
     </View>
   )
 }
@@ -141,15 +128,15 @@ export default function HomeScreen() {
           />
         }
       >
-        <Animated.View entering={FadeIn.duration(reduced ? 0 : 250)}>
-          <HeroSkeleton />
-        </Animated.View>
+        <SectionReveal delay={reduced ? 0 : 0}>
+          <HeroParallax scrollY={scrollY} />
+        </SectionReveal>
 
-        <Animated.View entering={FadeIn.duration(reduced ? 0 : 250).delay(reduced ? 0 : 50)}>
+        <SectionReveal delay={reduced ? 0 : 50}>
           <FlashDeals />
-        </Animated.View>
+        </SectionReveal>
 
-        <Animated.View entering={FadeIn.duration(reduced ? 0 : 250).delay(reduced ? 0 : 100)}>
+        <SectionReveal delay={reduced ? 0 : 100}>
           <ProductRail
             titleKey="home.trendingNow"
             seeAllHref="/search?sort=trending"
@@ -158,9 +145,9 @@ export default function HomeScreen() {
             isError={trending.isError}
             onRetry={() => trending.refetch()}
           />
-        </Animated.View>
+        </SectionReveal>
 
-        <Animated.View entering={FadeIn.duration(reduced ? 0 : 250).delay(reduced ? 0 : 120)}>
+        <SectionReveal delay={reduced ? 0 : 120}>
           <ProductRail
             titleKey="home.newArrivals"
             seeAllHref="/search?sort=newest"
@@ -169,20 +156,22 @@ export default function HomeScreen() {
             isError={newest.isError}
             onRetry={() => newest.refetch()}
           />
-        </Animated.View>
+        </SectionReveal>
 
-        <Animated.View entering={FadeIn.duration(reduced ? 0 : 250).delay(reduced ? 0 : 140)}>
+        <SectionReveal delay={reduced ? 0 : 140}>
           <View>
-            <SectionHeader title={t('categories.title')} />
+            <Text style={{ fontSize: 18, fontWeight: '600', color: colors.text, marginBottom: spacing[3] }}>
+              {t('categories.title')}
+            </Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 16 }}>
               {Array.from({ length: 6 }).map((_, i) => (
                 <CategoryCircleSkeleton key={i} />
               ))}
             </ScrollView>
           </View>
-        </Animated.View>
+        </SectionReveal>
 
-        <Animated.View entering={FadeIn.duration(reduced ? 0 : 250).delay(reduced ? 0 : 160)}>
+        <SectionReveal delay={reduced ? 0 : 160}>
           <ProductRail
             titleKey="home.nearYou"
             seeAllHref="/search?filter=nearby"
@@ -191,11 +180,11 @@ export default function HomeScreen() {
             isError={nearby.isError}
             onRetry={() => nearby.refetch()}
           />
-        </Animated.View>
+        </SectionReveal>
 
-        <Animated.View entering={FadeIn.duration(reduced ? 0 : 250).delay(reduced ? 0 : 180)}>
+        <SectionReveal delay={reduced ? 0 : 180}>
           <RecommendedGrid />
-        </Animated.View>
+        </SectionReveal>
       </Animated.ScrollView>
     </View>
   )
