@@ -4,10 +4,10 @@
   "main": "index.ts",
   "types": "index.ts",
   "peerDependencies": {
-    "react": "*",
-    "react-native": "*"
+    "react": "*"
   },
-  "devDependencies": {
-    "@types/react": "^18.3.0"
+  "scripts": {
+    "lint": "echo ok",
+    "type-check": "tsc --noEmit"
   }
 }

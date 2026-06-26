@@ -1,6 +1,16 @@
 {
   "name": "@chinooz/config",
   "version": "1.0.0",
-  "main": "index.ts",
-  "types": "index.ts"
+  "private": true,
+  "files": [
+    "eslint-preset.js",
+    "tsconfig.base.json",
+    "tsconfig.nextjs.json",
+    "tsconfig.expo.json",
+    "tailwind-preset.js"
+  ],
+  "scripts": {
+    "lint": "echo ok",
+    "type-check": "tsc --noEmit"
+  }
 }

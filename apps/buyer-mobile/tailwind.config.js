@@ -1,35 +1,15 @@
-const { colors } = require('../../packages/theme/colors')
-
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: [
-    './app/**/*.{js,jsx,ts,tsx}',
-    '../../packages/ui/**/*.{js,jsx,ts,tsx}',
-  ],
+  content: ['./app/**/*.{js,jsx,ts,tsx}'],
   presets: [require('nativewind/preset')],
   theme: {
     extend: {
       colors: {
-        primary: colors.primary,
-        'primary-dark': colors.primaryDark,
-        'primary-light': colors.primaryLight,
-        'primary-50': colors.primary50,
-        gold: colors.gold,
-        background: colors.background,
-        surface: colors.surface,
-        border: colors.border,
-        text: colors.text,
-        'text-muted': colors.textMuted,
-      },
-      fontFamily: {
-        sans: ['Inter'],
-        'sans-bold': ['Inter-Bold'],
-        'sans-semibold': ['Inter-SemiBold'],
-        devanagari: ['NotoSansDevanagari'],
-      },
-      borderRadius: {
-        xl: '12px',
-        '2xl': '16px',
+        primary: '#8A1B57',
+        'primary-dark': '#6E1545',
+        'primary-light': '#B23C7E',
+        'primary-50': '#F8EAF1',
+        gold: '#E0A93B',
       },
     },
   },

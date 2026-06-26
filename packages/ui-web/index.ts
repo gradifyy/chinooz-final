@@ -1,10 +1,1 @@
-export { default as ProductCardWeb } from './ProductCardWeb'
-export { default as CategoryCardWeb } from './CategoryCardWeb'
-export { default as DealCardWeb } from './DealCardWeb'
-export { default as SearchBarWeb } from './SearchBarWeb'
-export { default as SectionHeaderWeb } from './SectionHeaderWeb'
-export { default as StarRatingWeb } from './StarRatingWeb'
-export { default as PriceTagWeb } from './PriceTagWeb'
-export { default as CartBadgeWeb } from './CartBadgeWeb'
-export { default as ShimmerWeb } from './ShimmerWeb'
-export { default as EmptyStateWeb } from './EmptyStateWeb'
+export {}

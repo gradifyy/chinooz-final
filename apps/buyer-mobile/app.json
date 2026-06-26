@@ -4,12 +4,8 @@
     "slug": "chinooz",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "scheme": "chinooz",
     "userInterfaceStyle": "light",
-    "splash": {
-      "backgroundColor": "#8A1B57"
-    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.chinooz.buyer"
@@ -20,6 +16,6 @@
         "backgroundColor": "#8A1B57"
       }
     },
-    "plugins": ["expo-router", "expo-font"]
+    "plugins": ["expo-router"]
   }
 }

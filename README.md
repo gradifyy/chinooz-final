@@ -1,34 +1,38 @@
 # Chinooz Monorepo
 
-This is the monorepo for Chinooz, featuring Expo for mobile and Next.js for web.
+Nepal's online marketplace — buyer app, front-end only.
 
-## Project Structure
+## Structure
 
-| Path | Description |
-| :--- | :--- |
-| `apps/buyer-mobile` | Expo app (iOS + Android) |
-| `apps/buyer-web` | Next.js website |
-| `packages/theme` | Shared design tokens |
-| `packages/ui` | Shared cross-platform components |
-| `packages/ui-web` | Web-specific components |
-| `packages/hooks` | Shared React hooks |
-| `packages/i18n` | Internationalization (EN / नेपाली) |
-| `packages/mock-data` | Shared mock data and API stubs |
-| `packages/state` | Shared Zustand stores |
-| `packages/validation` | Shared Zod schemas |
-| `packages/utils` | Shared utility functions |
-| `packages/analytics` | Event-tracking stub |
-| `packages/types` | Shared TypeScript types |
-| `packages/config` | Shared configuration (ESLint, TSConfig, Tailwind) |
+```
+apps/
+  buyer-mobile/    Expo + Expo Router + NativeWind
+  buyer-web/       Next.js (App Router) + Tailwind CSS
+packages/
+  theme/           Design tokens
+  ui/              React Native component library
+  ui-web/          Web component library
+  hooks/           Shared React hooks
+  i18n/            EN + नेपाली
+  mock-data/       Typed fixtures
+  state/           Zustand stores
+  validation/      Zod schemas
+  utils/           Helpers (NPR format, etc.)
+  analytics/       Stub
+  types/           Shared TS types
+  config/          ESLint, TSConfig, Tailwind presets
+```
 
-## Tech Stack
+## Commands
 
-| Category | Technology |
-| :--- | :--- |
-| Monorepo Management | Turborepo + pnpm |
-| Mobile | Expo + Expo Router + NativeWind |
-| Web | Next.js + Tailwind CSS |
-| State Management | Zustand |
-| Validation | Zod |
-| Styling | Tailwind CSS / NativeWind |
-| Language | TypeScript |
+```bash
+pnpm install              # install all deps
+pnpm dev                  # run all apps in dev mode
+pnpm build                # build all apps
+pnpm lint                 # lint all packages
+pnpm typecheck            # type-check all packages
+
+# per-app
+pnpm --filter buyer-web dev
+pnpm --filter buyer-mobile dev
+```

@@ -1,9 +1,10 @@
 {
   "name": "@chinooz/mock-data",
   "version": "1.0.0",
-  "main": "api.ts",
-  "types": "api.ts",
-  "dependencies": {
-    "@chinooz/types": "workspace:*"
+  "main": "index.ts",
+  "types": "index.ts",
+  "scripts": {
+    "lint": "echo ok",
+    "type-check": "tsc --noEmit"
   }
 }

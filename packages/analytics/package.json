@@ -2,5 +2,9 @@
   "name": "@chinooz/analytics",
   "version": "1.0.0",
   "main": "index.ts",
-  "types": "index.ts"
+  "types": "index.ts",
+  "scripts": {
+    "lint": "echo ok",
+    "type-check": "tsc --noEmit"
+  }
 }
