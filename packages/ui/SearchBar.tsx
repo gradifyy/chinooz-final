@@ -1,36 +1,44 @@
 import React from 'react'
 import { View, TextInput, TouchableOpacity, Text } from 'react-native'
-
-interface SearchBarProps {
-  value: string
-  onChangeText: (text: string) => void
-  onSubmit?: () => void
-  placeholder?: string
-  onClear?: () => void
-}
+import { colors, radii, spacing } from '@chinooz/theme'
+import type { SearchBarProps } from '@chinooz/types/components'
 
 export default function SearchBar({
   value,
   onChangeText,
   onSubmit,
-  placeholder = 'Search products, brands & more...',
+  placeholder = 'Search...',
   onClear,
+  testID,
 }: SearchBarProps) {
   return (
-    <View className="flex-row items-center bg-gray-100 rounded-xl px-4 h-10">
-      <Text className="text-gray-400 mr-2 text-lg">⌕</Text>
+    <View
+      testID={testID}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.background,
+        borderRadius: radii.lg,
+        paddingHorizontal: spacing[3],
+        height: 44,
+        borderWidth: 1,
+        borderColor: colors.border,
+      }}
+    >
+      <Text style={{ fontSize: 16, color: colors.textMuted, marginRight: spacing[2] }}>⌕</Text>
       <TextInput
-        className="flex-1 text-sm text-gray-900 h-full"
+        style={{ flex: 1, fontSize: 14, color: colors.text, height: '100%' }}
         value={value}
         onChangeText={onChangeText}
         onSubmitEditing={onSubmit}
         placeholder={placeholder}
-        placeholderTextColor="#9CA3AF"
+        placeholderTextColor={colors.textTertiary}
         returnKeyType="search"
+        accessibilityLabel={placeholder}
       />
       {value.length > 0 && (
-        <TouchableOpacity onPress={onClear} className="ml-2">
-          <Text className="text-gray-400 text-lg">✕</Text>
+        <TouchableOpacity onPress={onClear} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Text style={{ fontSize: 14, color: colors.textMuted }}>✕</Text>
         </TouchableOpacity>
       )}
     </View>

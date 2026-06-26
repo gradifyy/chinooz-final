@@ -6,5 +6,8 @@
   "scripts": {
     "lint": "echo ok",
     "type-check": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "react": "*"
   }
 }

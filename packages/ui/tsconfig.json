@@ -1,4 +1,9 @@
 {
   "extends": "@chinooz/config/tsconfig.base.json",
-  "include": ["index.ts"]
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["ES2020"]
+  },
+  "include": ["**/*.ts", "**/*.tsx"],
+  "exclude": ["node_modules"]
 }

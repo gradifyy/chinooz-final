@@ -3,12 +3,19 @@
   "version": "1.0.0",
   "main": "index.ts",
   "types": "index.ts",
-  "peerDependencies": {
-    "react": "*",
-    "next": "*"
-  },
   "scripts": {
     "lint": "echo ok",
     "type-check": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "react": "*",
+    "react-dom": "*"
+  },
+  "dependencies": {
+    "@chinooz/theme": "workspace:*",
+    "@chinooz/types": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.0"
   }
 }
