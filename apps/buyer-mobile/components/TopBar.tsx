@@ -7,7 +7,8 @@ import { useCartStore } from '@chinooz/state'
 export default function TopBar() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const count = useCartStore(s => s.count)
+  const items = useCartStore(s => s.items)
+  const count = items.reduce((sum, i) => sum + i.quantity, 0)
 
   return (
     <View

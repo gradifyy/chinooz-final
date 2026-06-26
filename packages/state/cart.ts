@@ -1,15 +1,66 @@
 import { create } from 'zustand'
+import { persist, createJSONStorage } from 'zustand/middleware'
+import type { CartItem } from '@chinooz/types'
 
-interface CartState {
-  count: number
-  increment: () => void
-  decrement: () => void
-  setCount: (n: number) => void
+function getStorage() {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    return createJSONStorage(() => localStorage)
+  }
+  return createJSONStorage(() => ({
+    getItem: () => null,
+    setItem: () => {},
+    removeItem: () => {},
+  }))
 }
 
-export const useCartStore = create<CartState>(set => ({
-  count: 3,
-  increment: () => set(s => ({ count: s.count + 1 })),
-  decrement: () => set(s => ({ count: Math.max(0, s.count - 1) })),
-  setCount: n => set({ count: n }),
-}))
+interface CartState {
+  items: CartItem[]
+  addItem: (item: CartItem) => void
+  removeItem: (id: string) => void
+  updateQuantity: (id: string, quantity: number) => void
+  clearCart: () => void
+  count: () => number
+  total: () => number
+}
+
+export const useCartStore = create<CartState>()(
+  persist(
+    (set, get) => ({
+      items: [],
+
+      addItem: item =>
+        set(state => {
+          const existing = state.items.find(i => i.id === item.id)
+          if (existing) {
+            return {
+              items: state.items.map(i =>
+                i.id === item.id ? { ...i, quantity: Math.min(i.quantity + item.quantity, i.maxQuantity) } : i,
+              ),
+            }
+          }
+          return { items: [...state.items, item] }
+        }),
+
+      removeItem: id =>
+        set(state => ({ items: state.items.filter(i => i.id !== id) })),
+
+      updateQuantity: (id, quantity) =>
+        set(state => ({
+          items: state.items.map(i =>
+            i.id === id ? { ...i, quantity: Math.max(1, Math.min(quantity, i.maxQuantity)) } : i,
+          ),
+        })),
+
+      clearCart: () => set({ items: [] }),
+
+      count: () => get().items.reduce((sum, i) => sum + i.quantity, 0),
+
+      total: () => get().items.reduce((sum, i) => sum + i.price * i.quantity, 0),
+    }),
+    {
+      name: 'chinooz-cart',
+      storage: getStorage(),
+      partialize: state => ({ items: state.items }),
+    },
+  ),
+)

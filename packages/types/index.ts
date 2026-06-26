@@ -30,3 +30,24 @@ export type {
   EmptyStateProps,
   IconButtonProps,
 } from './components'
+
+export type {
+  ProductImage,
+  ProductVariant,
+  StockStatus,
+  Product,
+  Category,
+  Deal,
+  Banner,
+  Review,
+  CartItem,
+  OrderStatus,
+  OrderStatusEntry,
+  Order,
+  Address,
+  NotificationType,
+  Notification,
+  Message,
+  Conversation,
+  UserProfile,
+} from './entities'

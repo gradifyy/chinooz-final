@@ -6,6 +6,11 @@
   "peerDependencies": {
     "react": "*"
   },
+  "dependencies": {
+    "@chinooz/mock-data": "workspace:*",
+    "@chinooz/types": "workspace:*",
+    "@tanstack/react-query": "^5.50.0"
+  },
   "scripts": {
     "lint": "echo ok",
     "type-check": "tsc --noEmit"

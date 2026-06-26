@@ -23,9 +23,8 @@ function CartItemSkeleton() {
 export default function CartScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const count = useCartStore(s => s.count)
-  const increment = useCartStore(s => s.increment)
-  const decrement = useCartStore(s => s.decrement)
+  const items = useCartStore(s => s.items)
+  const count = items.reduce((sum, i) => sum + i.quantity, 0)
 
   return (
     <Screen safeArea={false}>
@@ -63,16 +62,9 @@ export default function CartScreen() {
           </Stack>
           <Skeleton width="100%" height={52} borderRadius={12} />
         </Stack>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 24, gap: 16, paddingBottom: 32 }}>
-          <TouchableOpacity onPress={decrement} style={{ backgroundColor: '#E5E5E5', borderRadius: 12, width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#1F2937' }}>−</Text>
-          </TouchableOpacity>
-          <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#1F2937' }}>{count}</Text>
-          <TouchableOpacity onPress={increment} style={{ backgroundColor: '#8A1B57', borderRadius: 12, width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#FFFFFF' }}>+</Text>
-          </TouchableOpacity>
-        </View>
-        <Text style={{ fontSize: 12, color: '#6B7280', textAlign: 'center', paddingBottom: 16 }}>Use +/- to test the live badge count</Text>
+        <Text style={{ fontSize: 12, color: '#6B7280', textAlign: 'center', paddingVertical: 16 }}>
+          Cart has {count} item{count !== 1 ? 's' : ''} — badge is live across the app
+        </Text>
       </View>
     </Screen>
   )
