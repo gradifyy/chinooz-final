@@ -1,8 +1,8 @@
 'use client'
 
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { motion } from 'framer-motion'
+import { motion, useInView } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { formatNPR } from '@chinooz/utils'
 import { useReducedMotion, QuantityStepper } from '@chinooz/ui-web'
@@ -33,6 +33,27 @@ function StarRating({ rating, size = 14 }: { rating: number; size?: number }) {
         </span>
       ))}
     </div>
+  )
+}
+
+function SectionReveal({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const isInView = useInView(ref, { once: true, margin: '-40px' })
+  const reduced = useReducedMotion()
+
+  return (
+    <motion.div
+      ref={ref}
+      initial={reduced ? false : { opacity: 0, y: 8 }}
+      animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
+      transition={{
+        duration: reduced ? 0 : 0.25,
+        ease: [0.16, 1, 0.3, 1],
+        delay: reduced ? 0 : delay,
+      }}
+    >
+      {children}
+    </motion.div>
   )
 }
 
@@ -119,63 +140,76 @@ export default function ProductDetailClient({ product }: { product: Product }) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Gallery */}
         <div className="md:sticky md:top-24 md:self-start relative">
-          <ImageGallery images={product.images} onIndexChange={setImageIndex} />
+          <ImageGallery images={product.images} onIndexChange={setImageIndex} productId={product.id} />
         </div>
 
         {/* Info */}
         <div className="flex flex-col gap-5">
-          <ProductInfo
-            product={product}
-            displayPrice={displayPrice}
-            displayCompare={displayCompare}
-            onPressReviews={() => {}}
-            onPressSeller={() => {}}
-          />
+          <SectionReveal delay={0}>
+            <ProductInfo
+              product={product}
+              displayPrice={displayPrice}
+              displayCompare={displayCompare}
+              onPressReviews={() => {}}
+              onPressSeller={() => {}}
+            />
+          </SectionReveal>
 
           {/* Variants */}
           {product.variants.length > 0 && (
-            <VariantSelector
-              variants={product.variants}
-              selectedId={selectedVariant}
-              onSelect={(id) => { setSelectedVariant(id); setPromptError(null) }}
-              promptError={promptError}
-            />
+            <SectionReveal delay={0.05}>
+              <VariantSelector
+                variants={product.variants}
+                selectedId={selectedVariant}
+                onSelect={(id) => { setSelectedVariant(id); setPromptError(null) }}
+                promptError={promptError}
+              />
+            </SectionReveal>
           )}
 
           {/* Quantity */}
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-text-muted">Qty</p>
-              <QuantityStepper
-                value={quantity}
-                min={1}
-                max={maxQty}
-                onChange={setQuantity}
-                disabled={isOOS}
-              />
+          <SectionReveal delay={0.08}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-text-muted">Qty</p>
+                <QuantityStepper
+                  value={quantity}
+                  min={1}
+                  max={maxQty}
+                  onChange={setQuantity}
+                  disabled={isOOS}
+                />
+              </div>
+              {quantity >= maxQty && (
+                <p className="text-xs font-medium text-text-muted">{t('product.maxReached')}</p>
+              )}
             </div>
-            {quantity >= maxQty && (
-              <p className="text-xs font-medium text-text-muted">{t('product.maxReached')}</p>
-            )}
-          </div>
+          </SectionReveal>
 
           {/* Description */}
-          <Accordion title={t('product.description')} defaultOpen>
-            <DescriptionSection description={product.description} />
-          </Accordion>
+          <SectionReveal delay={0.1}>
+            <Accordion title={t('product.description')} defaultOpen>
+              <DescriptionSection description={product.description} />
+            </Accordion>
+          </SectionReveal>
 
           {/* Specifications */}
-          <Accordion title={t('product.specifications')}>
-            <SpecsTable product={product} />
-          </Accordion>
+          <SectionReveal delay={0.12}>
+            <Accordion title={t('product.specifications')}>
+              <SpecsTable product={product} />
+            </Accordion>
+          </SectionReveal>
 
           {/* Delivery & Returns */}
-          <Accordion title={t('product.delivery')}>
-            <DeliverySection sellerName={product.sellerName} stock={product.stock} />
-          </Accordion>
+          <SectionReveal delay={0.14}>
+            <Accordion title={t('product.delivery')}>
+              <DeliverySection sellerName={product.sellerName} stock={product.stock} />
+            </Accordion>
+          </SectionReveal>
 
           {/* Desktop inline actions */}
-          <div className="hidden md:flex gap-3 sticky top-24">
+          <SectionReveal delay={0.16}>
+            <div className="hidden md:flex gap-3 sticky top-24">
             <motion.button
               onClick={handleAddToCart}
               disabled={isOOS}
@@ -197,13 +231,15 @@ export default function ProductDetailClient({ product }: { product: Product }) {
               {t('product.buyNow')}
             </motion.button>
           </div>
+          </SectionReveal>
         </div>
       </div>
 
       {/* Reviews — full width */}
-      <ReviewsSection
-        reviews={reviews}
-        onWriteReview={() => setWriteReviewVisible(true)}
+      <SectionReveal delay={0.18}>
+        <ReviewsSection
+          reviews={reviews}
+          onWriteReview={() => setWriteReviewVisible(true)}
       />
 
       {/* Write Review Modal */}
@@ -213,9 +249,12 @@ export default function ProductDetailClient({ product }: { product: Product }) {
         onClose={() => setWriteReviewVisible(false)}
         onSuccess={() => {}}
       />
+      </SectionReveal>
 
       {/* Related Products */}
-      <RelatedProducts categoryId={product.categoryId} productId={product.id} />
+      <SectionReveal delay={0.2}>
+        <RelatedProducts categoryId={product.categoryId} productId={product.id} />
+      </SectionReveal>
 
       {/* Mobile sticky bottom bar */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-surface border-t border-border px-4 pt-3 pb-[env(safe-area-inset-bottom)] shadow-[0_-2px_8px_rgba(0,0,0,0.06)] z-40">

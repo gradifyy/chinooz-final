@@ -11,9 +11,10 @@ const SPRING = { type: 'spring' as const, damping: 20, stiffness: 300, mass: 0.8
 interface ImageGalleryProps {
   images: ProductImage[]
   onIndexChange?: (index: number) => void
+  productId?: string
 }
 
-export default function ImageGallery({ images, onIndexChange }: ImageGalleryProps) {
+export default function ImageGallery({ images, onIndexChange, productId }: ImageGalleryProps) {
   const { t } = useTranslation()
   const reduced = useReducedMotion()
   const [activeIndex, setActiveIndex] = useState(0)
@@ -54,6 +55,8 @@ export default function ImageGallery({ images, onIndexChange }: ImageGalleryProp
     return () => window.removeEventListener('keydown', handler)
   }, [lightboxOpen, closeLightbox, handlePrev, handleNext])
 
+  const sharedId = productId ? `product-image-${productId}` : undefined
+
   if (!images.length) {
     return (
       <div className="aspect-square bg-border rounded-2xl flex items-center justify-center">
@@ -67,21 +70,26 @@ export default function ImageGallery({ images, onIndexChange }: ImageGalleryProp
       {/* Main gallery */}
       <div className="relative">
         <div className="aspect-square bg-border rounded-2xl overflow-hidden relative">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeIndex}
-              initial={reduced ? false : { opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={reduced ? undefined : { opacity: 0, x: -20 }}
-              transition={reduced ? { duration: 0 } : SPRING}
-              className="absolute inset-0 flex items-center justify-center cursor-zoom-in"
-              onClick={openLightbox}
-            >
-              <div className="w-full h-full flex items-center justify-center">
-                <span className="text-6xl">📦</span>
-              </div>
-            </motion.div>
-          </AnimatePresence>
+          <motion.div
+            layoutId={sharedId}
+            className="w-full h-full"
+          >
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeIndex}
+                initial={reduced ? false : { opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={reduced ? undefined : { opacity: 0, x: -20 }}
+                transition={reduced ? { duration: 0 } : SPRING}
+                className="absolute inset-0 flex items-center justify-center cursor-zoom-in"
+                onClick={openLightbox}
+              >
+                <div className="w-full h-full flex items-center justify-center">
+                  <span className="text-6xl">📦</span>
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          </motion.div>
 
           {/* Navigation arrows */}
           {images.length > 1 && (

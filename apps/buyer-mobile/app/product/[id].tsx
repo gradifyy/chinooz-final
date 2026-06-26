@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import {
   View,
   Text,
@@ -27,6 +27,7 @@ import { formatNPR } from '@chinooz/utils'
 import { useProductById, useReviews, usePrefetchProduct } from '@chinooz/hooks'
 import { useCartStore } from '@chinooz/state'
 import { Skeleton, ProductCard, QuantityStepper, EmptyState } from '@chinooz/ui'
+import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
 import ImageGallery from '../../components/ImageGallery'
 import ProductInfo from '../../components/ProductInfo'
 import VariantSelector from '../../components/VariantSelector'
@@ -38,6 +39,7 @@ import ReviewsSection from '../../components/ReviewsSection'
 import WriteReviewSheet from '../../components/WriteReviewSheet'
 import RelatedProducts from '../../components/RelatedProducts'
 import ProductDetailSkeleton from '../../components/ProductDetailSkeleton'
+import SectionReveal from '../../components/SectionReveal'
 import OfflineBanner from '../../components/OfflineBanner'
 import Snackbar from '../../components/Snackbar'
 
@@ -67,6 +69,16 @@ export default function ProductDetailScreen() {
   const [writeReviewVisible, setWriteReviewVisible] = useState(false)
   const cartScale = useSharedValue(1)
   const btnScale = useSharedValue(1)
+  const stickyBarY = useSharedValue(100)
+  const reduced = useReducedMotion()
+
+  useEffect(() => {
+    stickyBarY.value = withSpring(0, {
+      damping: reduced ? 100 : 20,
+      stiffness: reduced ? 1000 : 300,
+      mass: 0.8,
+    })
+  }, [])
 
   const activeVariant = product?.variants.find(v => v.id === selectedVariant)
   const displayPrice = activeVariant?.price ?? product?.price ?? 0
@@ -153,6 +165,10 @@ export default function ProductDetailScreen() {
 
   const btnAnimStyle = useAnimatedStyle(() => ({
     transform: [{ scale: btnScale.value }],
+  }))
+
+  const stickyBarStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: stickyBarY.value }],
   }))
 
   if (isLoading) {
@@ -249,46 +265,58 @@ export default function ProductDetailScreen() {
         >
           <ImageGallery images={product.images} onIndexChange={setImageIndex} />
 
-          <ProductInfo
-            product={product}
-            displayPrice={displayPrice}
-            displayCompare={displayCompare}
-            onPressReviews={() => {}}
-            onPressSeller={() => {}}
-          />
+          <SectionReveal delay={0}>
+            <ProductInfo
+              product={product}
+              displayPrice={displayPrice}
+              displayCompare={displayCompare}
+              onPressReviews={() => {}}
+              onPressSeller={() => {}}
+            />
+          </SectionReveal>
 
           {/* Variants */}
           {product.variants.length > 0 && (
-            <View style={{ paddingHorizontal: spacing[4], paddingBottom: spacing[4] }}>
-              <VariantSelector
-                variants={product.variants}
-                selectedId={selectedVariant || product.variants[0]?.id}
-                onSelect={(id) => { setSelectedVariant(id); setPromptError(null) }}
-                promptError={promptError}
-              />
-            </View>
+            <SectionReveal delay={50}>
+              <View style={{ paddingHorizontal: spacing[4], paddingBottom: spacing[4] }}>
+                <VariantSelector
+                  variants={product.variants}
+                  selectedId={selectedVariant || product.variants[0]?.id}
+                  onSelect={(id) => { setSelectedVariant(id); setPromptError(null) }}
+                  promptError={promptError}
+                />
+              </View>
+            </SectionReveal>
           )}
 
           {/* Description */}
-          <Accordion title={t('product.description')} defaultOpen>
-            <DescriptionSection description={product.description} />
-          </Accordion>
+          <SectionReveal delay={100}>
+            <Accordion title={t('product.description')} defaultOpen>
+              <DescriptionSection description={product.description} />
+            </Accordion>
+          </SectionReveal>
 
           {/* Specifications */}
-          <Accordion title={t('product.specifications')}>
-            <SpecsTable product={product} />
-          </Accordion>
+          <SectionReveal delay={120}>
+            <Accordion title={t('product.specifications')}>
+              <SpecsTable product={product} />
+            </Accordion>
+          </SectionReveal>
 
           {/* Delivery & Returns */}
-          <Accordion title={t('product.delivery')}>
-            <DeliverySection sellerName={product.sellerName} stock={product.stock} />
-          </Accordion>
+          <SectionReveal delay={140}>
+            <Accordion title={t('product.delivery')}>
+              <DeliverySection sellerName={product.sellerName} stock={product.stock} />
+            </Accordion>
+          </SectionReveal>
 
           {/* Reviews */}
-          <ReviewsSection
-            reviews={reviews}
-            onWriteReview={() => setWriteReviewVisible(true)}
-          />
+          <SectionReveal delay={160}>
+            <ReviewsSection
+              reviews={reviews}
+              onWriteReview={() => setWriteReviewVisible(true)}
+            />
+          </SectionReveal>
 
           {/* Write Review Sheet */}
           <WriteReviewSheet
@@ -299,13 +327,15 @@ export default function ProductDetailScreen() {
           />
 
           {/* Related Products */}
-          <RelatedProducts categoryId={product.categoryId} productId={product.id} />
+          <SectionReveal delay={180}>
+            <RelatedProducts categoryId={product.categoryId} productId={product.id} />
+          </SectionReveal>
         </Animated.ScrollView>
       </GestureHandlerRootView>
 
       {/* Sticky Bottom Bar */}
       <Animated.View
-        style={{
+        style={[{
           position: 'absolute',
           bottom: 0,
           left: 0,
@@ -323,8 +353,10 @@ export default function ProductDetailScreen() {
           shadowOpacity: 0.06,
           shadowRadius: 8,
           elevation: 4,
-        }}
-      >
+        },
+        stickyBarStyle,
+      ]}
+    >
         {/* Quantity + Price row */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <View>
