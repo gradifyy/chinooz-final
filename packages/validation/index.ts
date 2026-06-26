@@ -1,4 +1,6 @@
 export {
+  nepaliPhoneSchema,
+  otpSchema,
   searchSchema,
   profileSchema,
   addressSchema,
@@ -8,6 +10,8 @@ export {
 } from './schemas'
 
 export type {
+  NepaliPhoneInput,
+  OtpInput,
   SearchInput,
   ProfileInput,
   AddressInput,

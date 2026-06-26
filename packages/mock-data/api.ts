@@ -142,3 +142,27 @@ export async function getRecommendedProducts(userId?: string): Promise<Product[]
   await randomDelay(250, 600)
   return [...products].sort(() => Math.random() - 0.5).slice(0, 6)
 }
+
+// --- Auth ---
+
+const otpStore = new Map<string, { sentAt: number; code: string }>()
+
+export async function requestOtp(phone: string): Promise<{ success: boolean; message: string }> {
+  await randomDelay(600, 1200)
+  const existing = otpStore.get(phone)
+  if (existing && Date.now() - existing.sentAt < 60_000) {
+    return { success: true, message: 'Code already sent — check your messages' }
+  }
+  otpStore.set(phone, { sentAt: Date.now(), code: '123456' })
+  return { success: true, message: 'OTP sent' }
+}
+
+export async function verifyOtp(phone: string, code: string): Promise<{ success: boolean; userId?: string }> {
+  await randomDelay(400, 800)
+  const entry = otpStore.get(phone)
+  if (entry && entry.code === code) {
+    otpStore.delete(phone)
+    return { success: true, userId: 'user-1' }
+  }
+  return { success: false }
+}

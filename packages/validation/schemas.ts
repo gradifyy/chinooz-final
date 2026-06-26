@@ -1,5 +1,30 @@
 import { z } from 'zod'
 
+export const nepaliPhoneSchema = z.object({
+  phone: z
+    .string()
+    .min(1, 'Please enter your phone number')
+    .regex(/^\d{10}$/, 'Phone number must be 10 digits')
+    .refine(val => val.startsWith('97') || val.startsWith('98'), {
+      message: 'Please enter a mobile number starting with 97 or 98',
+    })
+    .refine(val => !val.startsWith('01') && !val.startsWith('02') && !val.startsWith('03') && !val.startsWith('04') && !val.startsWith('05'), {
+      message: 'Please enter a mobile number, not a landline',
+    }),
+})
+
+export type NepaliPhoneInput = z.infer<typeof nepaliPhoneSchema>
+
+export const otpSchema = z.object({
+  otp: z
+    .string()
+    .min(6, 'OTP must be 6 digits')
+    .max(6, 'OTP must be 6 digits')
+    .regex(/^\d{6}$/, 'OTP must contain only numbers'),
+})
+
+export type OtpInput = z.infer<typeof otpSchema>
+
 export const searchSchema = z.object({
   query: z.string().min(2, 'Search must be at least 2 characters').max(200),
 })
