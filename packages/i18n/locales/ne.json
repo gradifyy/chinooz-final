@@ -141,7 +141,11 @@
     "seeAllReviews": "सबै समीक्षाहरू हेर्नुहोस्",
     "ratingDistribution": "मूल्याङ्कन वितरण",
     "noReviews": "अझै समीक्षा छैन",
-    "noReviewsSubtitle": "यो उत्पादनको पहिलो समीक्षा लेख्नुहोस्"
+    "noReviewsSubtitle": "यो उत्पादनको पहिलो समीक्षा लेख्नुहोस्",
+    "productUnavailable": "यो उत्पादन अब उपलब्ध छैन",
+    "productUnavailableSubtitle": "तपाईंले खोज्दै हुनुभएको वस्तु हटाइएको वा अस्थायी रूपमा उपलब्ध नभएको हुन सक्छ।",
+    "browseSimilar": "समान ब्राउज गर्नुहोस्",
+    "backToHome": "गृहपृष्ठमा फर्कनुहोस्"
   },
   "orders": {
     "myOrders": "मेरा अर्डरहरू",

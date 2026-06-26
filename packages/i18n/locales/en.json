@@ -141,7 +141,11 @@
     "seeAllReviews": "See all reviews",
     "ratingDistribution": "Rating distribution",
     "noReviews": "No reviews yet",
-    "noReviewsSubtitle": "Be the first to review this product"
+    "noReviewsSubtitle": "Be the first to review this product",
+    "productUnavailable": "This product is no longer available",
+    "productUnavailableSubtitle": "The item you're looking for may have been removed or is temporarily unavailable.",
+    "browseSimilar": "Browse similar",
+    "backToHome": "Back to Home"
   },
   "orders": {
     "myOrders": "My Orders",

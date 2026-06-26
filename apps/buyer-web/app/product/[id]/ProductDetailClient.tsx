@@ -18,6 +18,7 @@ import DeliverySection from '@/components/DeliverySection'
 import ReviewsSection from '@/components/ReviewsSection'
 import WriteReviewModal from '@/components/WriteReviewModal'
 import RelatedProducts from '@/components/RelatedProducts'
+import OfflineBanner from '@/components/OfflineBanner'
 import Snackbar from '@/components/Snackbar'
 import type { Product } from '@chinooz/types'
 
@@ -111,7 +112,9 @@ export default function ProductDetailClient({ product }: { product: Product }) {
   }, [lastAddedId, removeItem])
 
   return (
-    <div className="flex flex-col gap-8">
+    <>
+      <OfflineBanner />
+      <div className="flex flex-col gap-8">
       {/* Two-column layout */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Gallery */}
@@ -272,5 +275,6 @@ export default function ProductDetailClient({ product }: { product: Product }) {
         onDismiss={() => setSnackVisible(false)}
       />
     </div>
+    </>
   )
 }

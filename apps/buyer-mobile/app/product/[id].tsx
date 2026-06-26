@@ -26,7 +26,7 @@ import { colors, spacing, radii } from '@chinooz/theme'
 import { formatNPR } from '@chinooz/utils'
 import { useProductById, useReviews, usePrefetchProduct } from '@chinooz/hooks'
 import { useCartStore } from '@chinooz/state'
-import { Skeleton, ProductCard, QuantityStepper } from '@chinooz/ui'
+import { Skeleton, ProductCard, QuantityStepper, EmptyState } from '@chinooz/ui'
 import ImageGallery from '../../components/ImageGallery'
 import ProductInfo from '../../components/ProductInfo'
 import VariantSelector from '../../components/VariantSelector'
@@ -37,6 +37,8 @@ import DeliverySection from '../../components/DeliverySection'
 import ReviewsSection from '../../components/ReviewsSection'
 import WriteReviewSheet from '../../components/WriteReviewSheet'
 import RelatedProducts from '../../components/RelatedProducts'
+import ProductDetailSkeleton from '../../components/ProductDetailSkeleton'
+import OfflineBanner from '../../components/OfflineBanner'
 import Snackbar from '../../components/Snackbar'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
@@ -53,7 +55,7 @@ export default function ProductDetailScreen() {
   const removeItem = useCartStore(s => s.removeItem)
   const prefetchProduct = usePrefetchProduct()
 
-  const { data: product, isLoading } = useProductById(id || '')
+  const { data: product, isLoading, isError } = useProductById(id || '')
   const { data: reviews } = useReviews(id || '')
 
   const [selectedVariant, setSelectedVariant] = useState<string>('')
@@ -153,23 +155,47 @@ export default function ProductDetailScreen() {
     transform: [{ scale: btnScale.value }],
   }))
 
-  if (isLoading || !product) {
+  if (isLoading) {
+    return <ProductDetailSkeleton />
+  }
+
+  if (isError) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>
-        <Skeleton width="100%" height={IMAGE_HEIGHT} borderRadius={0} />
-        <View style={{ padding: spacing[4], gap: spacing[3] }}>
-          <Skeleton width="80%" height={22} />
-          <Skeleton width="40%" height={16} />
-          <Skeleton width="100%" height={14} />
-          <Skeleton width="100%" height={14} />
-          <Skeleton width="60%" height={14} />
-        </View>
+        <OfflineBanner />
+        <EmptyState
+          icon={<Text style={{ fontSize: 48 }}>😕</Text>}
+          title={t('common.error')}
+          subtitle="Something went wrong loading this product."
+          action={{ label: t('common.retry'), onPress: () => router.replace({ pathname: '/product/[id]', params: { id: id || '' } }) }}
+        />
+      </View>
+    )
+  }
+
+  if (!product) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>
+        <EmptyState
+          icon={<Text style={{ fontSize: 48 }}>📭</Text>}
+          title={t('product.productUnavailable')}
+          subtitle={t('product.productUnavailableSubtitle')}
+          action={{ label: t('product.browseSimilar'), onPress: () => router.push('/search') }}
+        />
+        <TouchableOpacity
+          onPress={() => router.replace('/(tabs)')}
+          style={{ alignItems: 'center', paddingVertical: spacing[3] }}
+          activeOpacity={0.7}
+        >
+          <Text style={{ fontSize: 14, fontWeight: '600', color: colors.primary }}>{t('product.backToHome')}</Text>
+        </TouchableOpacity>
       </View>
     )
   }
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <OfflineBanner />
       {/* Translucent App Bar */}
       <Animated.View
         style={[
