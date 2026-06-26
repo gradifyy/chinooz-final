@@ -26,6 +26,7 @@ import { useProductById, useReviews, useProducts, usePrefetchProduct } from '@ch
 import { useCartStore } from '@chinooz/state'
 import { Skeleton, ProductCard } from '@chinooz/ui'
 import ImageGallery from '../../components/ImageGallery'
+import ProductInfo from '../../components/ProductInfo'
 import type { Product } from '@chinooz/types'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
@@ -233,45 +234,14 @@ export default function ProductDetailScreen() {
           {/* Image Gallery */}
           <ImageGallery images={product.images} onIndexChange={setImageIndex} />
 
-        {/* Info Block */}
-        <View style={{ padding: spacing[4], gap: spacing[3] }}>
-          <Text style={{ fontSize: 22, fontWeight: '700', color: colors.text }}>{product.name}</Text>
-
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[2] }}>
-            <StarRating rating={product.rating} size={16} />
-            <Text style={{ fontSize: 13, color: colors.textMuted }}>({product.reviewCount})</Text>
-            <StockBadge stock={product.stock} />
-          </View>
-
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing[2] }}>
-            <Text style={{ fontSize: 24, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] }}>
-              {formatNPR(displayPrice)}
-            </Text>
-            {displayCompare && displayCompare > displayPrice && (
-              <>
-                <Text style={{ fontSize: 16, color: colors.textMuted, textDecorationLine: 'line-through' }}>
-                  {formatNPR(displayCompare)}
-                </Text>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: colors.success }}>
-                  {Math.round((1 - displayPrice / displayCompare) * 100)}% OFF
-                </Text>
-              </>
-            )}
-          </View>
-
-          <Text style={{ fontSize: 13, color: colors.textMuted }}>
-            {t('product.soldBy')} <Text style={{ fontWeight: '600', color: colors.text }}>{product.sellerName}</Text>
-          </Text>
-
-          {/* Tags */}
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-            {product.tags.map(tag => (
-              <View key={tag} style={{ backgroundColor: colors.primary50, paddingHorizontal: 10, paddingVertical: 4, borderRadius: radii.full }}>
-                <Text style={{ fontSize: 11, fontWeight: '600', color: colors.primary }}>{tag}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
+          {/* Info Block */}
+          <ProductInfo
+            product={product}
+            displayPrice={displayPrice}
+            displayCompare={displayCompare}
+            onPressReviews={() => {}}
+            onPressSeller={() => {}}
+          />
 
         {/* Variants */}
         {product.variants.length > 0 && (

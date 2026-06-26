@@ -9,6 +9,7 @@ import { useReducedMotion, ProductCard } from '@chinooz/ui-web'
 import { useCartStore } from '@chinooz/state'
 import { useReviews, useProducts, usePrefetchProduct } from '@chinooz/hooks'
 import ImageGallery from '@/components/ImageGallery'
+import ProductInfo from '@/components/ProductInfo'
 import type { Product } from '@chinooz/types'
 
 function StarRating({ rating, size = 14 }: { rating: number; size?: number }) {
@@ -79,46 +80,13 @@ export default function ProductDetailClient({ product }: { product: Product }) {
 
         {/* Info */}
         <div className="flex flex-col gap-5">
-          <div>
-            <h1 className="text-2xl font-bold text-text">{product.name}</h1>
-            <div className="flex items-center gap-2 mt-2">
-              <StarRating rating={product.rating} size={16} />
-              <span className="text-sm text-text-muted">({product.reviewCount})</span>
-              <StockBadge stock={product.stock} />
-            </div>
-          </div>
-
-          {/* Price */}
-          <div className="flex items-baseline gap-2">
-            <span
-              className="text-2xl font-bold text-text tabular-nums"
-              aria-label={`${formatNPR(displayPrice)}, add to cart`}
-            >
-              {formatNPR(displayPrice)}
-            </span>
-            {displayCompare && displayCompare > displayPrice && (
-              <>
-                <span className="text-base text-text-muted line-through">{formatNPR(displayCompare)}</span>
-                <span className="text-sm font-semibold text-success">
-                  {Math.round((1 - displayPrice / displayCompare) * 100)}% OFF
-                </span>
-              </>
-            )}
-          </div>
-
-          {/* Seller */}
-          <p className="text-sm text-text-muted">
-            {t('product.soldBy')} <span className="font-semibold text-text">{product.sellerName}</span>
-          </p>
-
-          {/* Tags */}
-          <div className="flex flex-wrap gap-1.5">
-            {product.tags.map(tag => (
-              <span key={tag} className="inline-block bg-primary-50 text-primary text-[11px] font-semibold px-2.5 py-1 rounded-full">
-                {tag}
-              </span>
-            ))}
-          </div>
+          <ProductInfo
+            product={product}
+            displayPrice={displayPrice}
+            displayCompare={displayCompare}
+            onPressReviews={() => {}}
+            onPressSeller={() => {}}
+          />
 
           {/* Variants */}
           {product.variants.length > 0 && (
