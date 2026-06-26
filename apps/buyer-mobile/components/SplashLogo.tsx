@@ -58,6 +58,10 @@ export default function SplashLogo({ onAnimationDone }: SplashLogoProps) {
     opacity: shimmer.value * 0.12,
   }))
 
+  const textStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }))
+
   return (
     <View style={styles.container}>
       <Animated.View style={[styles.logoWrapper, logoStyle]}>
@@ -69,14 +73,10 @@ export default function SplashLogo({ onAnimationDone }: SplashLogoProps) {
           accessibilityLabel="Chinooz logo"
         />
       </Animated.View>
-      <Animated.Text
-        style={[styles.brandText, { opacity: opacity.value }]}
-      >
+      <Animated.Text style={[styles.brandText, textStyle]}>
         Chinooz
       </Animated.Text>
-      <Animated.Text
-        style={[styles.tagline, { opacity: opacity.value }]}
-      >
+      <Animated.Text style={[styles.tagline, textStyle]}>
         Nepal's Marketplace
       </Animated.Text>
     </View>

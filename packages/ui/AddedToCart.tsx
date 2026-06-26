@@ -5,9 +5,7 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
   withSpring,
-  withSequence,
   withDelay,
-  runOnJS,
 } from 'react-native-reanimated'
 import { colors, spacing } from '@chinooz/theme'
 import { useReducedMotion } from './hooks/useReducedMotion'

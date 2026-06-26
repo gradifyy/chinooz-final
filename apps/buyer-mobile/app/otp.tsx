@@ -15,9 +15,6 @@ import Animated, {
   withSpring,
   withTiming,
   withSequence,
-  withDelay,
-  Easing,
-  runOnJS,
 } from 'react-native-reanimated'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -82,7 +79,7 @@ export default function OtpScreen() {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
         } catch {}
         login(result.userId || 'user-1', 'Ayush Chaudhary')
-        setTimeout(() => router.replace('/(tabs)'), 800)
+        setTimeout(() => router.replace('/create-profile'), 800)
       } else {
         setError(result.error || t('otp.invalidCode'))
         setAutoSubmitFailed(true)
