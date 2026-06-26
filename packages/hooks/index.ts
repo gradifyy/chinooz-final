@@ -1,5 +1,6 @@
 export {
   useProducts,
+  useInfiniteProducts,
   useProductById,
   useProductBySlug,
   useCategories,

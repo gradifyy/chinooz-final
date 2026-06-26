@@ -38,7 +38,9 @@
     "popularNearYou": "Popular Near You",
     "recommended": "Recommended",
     "newArrivals": "New Arrivals",
-    "trendingNow": "Trending Now"
+    "trendingNow": "Trending Now",
+    "noProducts": "No products found",
+    "loadMore": "Load more"
   },
   "categories": {
     "title": "Categories",

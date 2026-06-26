@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
 import { getHomeScrollHandlers } from './_layout'
 import FlashDeals from '../../components/FlashDeals'
+import RecommendedGrid from '../../components/RecommendedGrid'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 const EDGE_PADDING = 16
@@ -134,14 +135,7 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      <View>
-        <SectionHeader title={t('home.recommended')} />
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-          {Array.from({ length: 4 }).map((_, i) => (
-            <ProductCardSkeleton key={i} />
-          ))}
-        </View>
-      </View>
+      <RecommendedGrid />
 
       <View>
         <SectionHeader title={t('home.trendingNow')} />

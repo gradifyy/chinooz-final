@@ -7,6 +7,7 @@ import { useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { useReducedMotion } from '@chinooz/ui-web'
 import FlashDeals from '@/components/FlashDeals'
+import RecommendedGrid from '@/components/RecommendedGrid'
 
 function HeroSkeleton() {
   return <Skeleton width="100%" height={220} borderRadius={16} />
@@ -104,13 +105,7 @@ export default function Home() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: reduced ? 0 : 0.4, delay: reduced ? 0 : 0.25 }}
           >
-            <Section title={t('home.recommended')}>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <ProductCardSkeleton key={i} />
-                ))}
-              </div>
-            </Section>
+            <RecommendedGrid />
           </motion.div>
 
           <motion.div

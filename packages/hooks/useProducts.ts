@@ -1,10 +1,23 @@
-import { useQuery, useSuspenseQuery } from '@tanstack/react-query'
+import { useQuery, useSuspenseQuery, useInfiniteQuery } from '@tanstack/react-query'
 import * as api from '@chinooz/mock-data'
 
 export function useProducts(params?: { categoryId?: string; limit?: number; offset?: number }) {
   return useQuery({
     queryKey: ['products', params],
     queryFn: () => api.getProducts(params),
+  })
+}
+
+export function useInfiniteProducts(params?: { categoryId?: string; limit?: number }) {
+  const limit = params?.limit ?? 10
+  return useInfiniteQuery({
+    queryKey: ['products', 'infinite', { ...params, limit }],
+    queryFn: ({ pageParam = 0 }) => api.getProducts({ ...params, limit, offset: pageParam * limit }),
+    getNextPageParam: (lastPage, allPages) => {
+      const loaded = allPages.reduce((sum, page) => sum + page.items.length, 0)
+      return loaded < lastPage.total ? allPages.length : undefined
+    },
+    initialPageParam: 0,
   })
 }
 
