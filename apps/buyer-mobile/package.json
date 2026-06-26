@@ -10,6 +10,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@chinooz/state": "workspace:*",
     "@chinooz/ui": "workspace:*",
     "expo": "~52.0.0",
     "expo-router": "~4.0.0",
