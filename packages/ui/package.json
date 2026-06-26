@@ -11,6 +11,10 @@
     "@chinooz/types": "workspace:*",
     "@chinooz/theme": "workspace:*",
     "@chinooz/utils": "workspace:*",
+    "@chinooz/state": "workspace:*",
     "nativewind": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.0"
   }
 }

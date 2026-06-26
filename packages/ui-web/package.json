@@ -10,6 +10,11 @@
   "dependencies": {
     "@chinooz/types": "workspace:*",
     "@chinooz/utils": "workspace:*",
-    "@chinooz/theme": "workspace:*"
+    "@chinooz/theme": "workspace:*",
+    "@chinooz/state": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0"
   }
 }
