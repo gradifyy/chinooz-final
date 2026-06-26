@@ -53,6 +53,9 @@ importers:
       '@expo/metro-runtime':
         specifier: ^6.1.2
         version: 6.1.2(expo@54.0.35)(react-dom@18.3.1(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
+      '@react-native-community/netinfo':
+        specifier: ^11.0.0
+        version: 11.5.2(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       expo:
         specifier: ~54.0.0
         version: 54.0.35(@babel/core@7.29.7)(@expo/metro-runtime@6.1.2)(expo-router@6.0.24)(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)(typescript@5.9.3)
@@ -2086,6 +2089,12 @@ packages:
 
   '@radix-ui/rect@1.0.1':
     resolution: {integrity: sha512-fyrgCaedtvMg9NK3en0pnOYJdtfwxUcNolezkNPUsoX57X8oQk+NkqcvzHXD2uKNij6GXmWU9NDru2IWjrO4BQ==}
+
+  '@react-native-community/netinfo@11.5.2':
+    resolution: {integrity: sha512-/g0m65BtX9HU+bPiCH2517bOHpEIUsGrWFXDzi1a5nNKn5KujQgm04WhL7/OSXWKHyrT8VVtUoJA0XKRxueBpQ==}
+    peerDependencies:
+      react: '*'
+      react-native: '>=0.59'
 
   '@react-native/assets-registry@0.81.5':
     resolution: {integrity: sha512-705B6x/5Kxm1RKRvSv0ADYWm5JOnoiQ1ufW7h8uu2E6G9Of/eE6hP/Ivw3U5jI16ERqZxiKQwk34VJbB0niX9w==}
@@ -9760,6 +9769,11 @@ snapshots:
   '@radix-ui/rect@1.0.1':
     dependencies:
       '@babel/runtime': 7.29.7
+
+  '@react-native-community/netinfo@11.5.2(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)':
+    dependencies:
+      react: 19.1.0
+      react-native: 0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0)
 
   '@react-native/assets-registry@0.81.5': {}
 
