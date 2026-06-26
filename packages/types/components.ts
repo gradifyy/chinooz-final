@@ -191,4 +191,5 @@ export interface ProductCardProps extends BaseProps {
   onPress?: (product: Product) => void
   onToggleWishlist?: (product: Product) => void
   onAddToCart?: (product: Product) => void
+  onLongPress?: (product: Product) => void
 }

@@ -3,6 +3,7 @@ export {
   useInfiniteProducts,
   useProductById,
   useProductBySlug,
+  usePrefetchProduct,
   useCategories,
   useDeals,
   useBanners,

@@ -6,7 +6,7 @@ import Animated, {
 } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
 import { useTranslation } from 'react-i18next'
-import { useInfiniteProducts } from '@chinooz/hooks'
+import { useInfiniteProducts, usePrefetchProduct } from '@chinooz/hooks'
 import { useCartStore } from '@chinooz/state'
 import { colors, spacing, radii } from '@chinooz/theme'
 import { ProductCard, ProductCardSkeleton } from '@chinooz/ui'
@@ -30,6 +30,7 @@ export default function RecommendedGrid() {
   const { t } = useTranslation()
   const router = useRouter()
   const addItem = useCartStore(s => s.addItem)
+  const prefetchProduct = usePrefetchProduct()
 
   const {
     data,
@@ -64,6 +65,10 @@ export default function RecommendedGrid() {
       maxQuantity: 10,
     })
   }, [addItem])
+
+  const handleLongPress = useCallback((product: Product) => {
+    prefetchProduct(product.id)
+  }, [prefetchProduct])
 
   const handleEndReached = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) {
@@ -122,6 +127,7 @@ export default function RecommendedGrid() {
               product={product}
               onPress={handlePress}
               onAddToCart={handleAddToCart}
+              onLongPress={handleLongPress}
             />
           </Animated.View>
         ))}

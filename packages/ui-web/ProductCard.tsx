@@ -1,7 +1,8 @@
 'use client'
 
-import React, { useCallback } from 'react'
+import React, { useCallback, memo } from 'react'
 import { motion } from 'framer-motion'
+import { useTranslation } from 'react-i18next'
 import { formatNPR } from '@chinooz/utils'
 import { useReducedMotion } from './hooks/useReducedMotion'
 import SafeImage from './SafeImage'
@@ -21,27 +22,30 @@ function StarRating({ rating, size = 14 }: { rating: number; size?: number }) {
 }
 
 function StockBadge({ stock }: { stock: string }) {
+  const { t } = useTranslation()
   if (stock === 'in_stock') return null
   if (stock === 'low_stock') {
-    return <p className="text-xs text-warning font-medium">Only a few left — order soon</p>
+    return <p className="text-xs text-warning font-medium">{t('product.onlyAFewLeft')}</p>
   }
   return (
     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-text-muted text-white text-xs font-semibold px-3 py-1 rounded-full">
-      Out of stock
+      {t('product.outOfStock')}
     </div>
   )
 }
 
-export default function ProductCard({
+const ProductCard = memo(function ProductCard({
   product,
   variant = 'default',
   wishlisted = false,
   onPress,
   onToggleWishlist,
   onAddToCart,
+  onLongPress,
   className = '',
   testID,
-}: ProductCardProps) {
+}: ProductCardProps & { onLongPress?: (product: Product) => void }) {
+  const { t } = useTranslation()
   const reduced = useReducedMotion()
   const isCompact = variant === 'compact'
   const isOOS = product.stock === 'out_of_stock'
@@ -64,6 +68,7 @@ export default function ProductCard({
       <motion.button
         data-testid={testID}
         onClick={() => onPress?.(product)}
+        onMouseEnter={() => onLongPress?.(product)}
         whileHover={reduced ? {} : { scale: 1.02 }}
         whileTap={reduced ? {} : { scale: 0.97 }}
         className={`w-[160px] bg-surface rounded-xl overflow-hidden shadow-sm text-left shrink-0 ${className}`}
@@ -93,6 +98,7 @@ export default function ProductCard({
     >
       <button
         onClick={() => onPress?.(product)}
+        onMouseEnter={() => onLongPress?.(product)}
         className="w-full text-left"
         aria-label={product.name}
       >
@@ -146,15 +152,17 @@ export default function ProductCard({
             whileHover={reduced ? {} : { scale: 1.02 }}
             whileTap={reduced ? {} : { scale: 0.97 }}
             className="w-full bg-primary text-white h-10 rounded-xl font-semibold text-sm hover:bg-primary-dark transition-colors"
-            aria-label="Add to cart"
+            aria-label={t('product.addToCart')}
           >
-            Add to Cart
+            {t('product.addToCart')}
           </motion.button>
         </div>
       )}
     </motion.div>
   )
-}
+})
+
+export default ProductCard
 
 export function ProductCardSkeleton({ variant = 'default' }: { variant?: 'default' | 'compact' }) {
   if (variant === 'compact') {

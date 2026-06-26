@@ -1,13 +1,13 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, memo } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
   withSequence,
-  withTiming,
 } from 'react-native-reanimated'
 import * as Haptics from 'expo-haptics'
+import { useTranslation } from 'react-i18next'
 import { colors, spacing, radii } from '@chinooz/theme'
 import { formatNPR } from '@chinooz/utils'
 import type { ProductCardProps, Product } from '@chinooz/types'
@@ -29,26 +29,29 @@ function StarRating({ rating, size = 14 }: { rating: number; size?: number }) {
 }
 
 function StockBadge({ stock }: { stock: string }) {
+  const { t } = useTranslation()
   if (stock === 'in_stock') return null
   if (stock === 'low_stock') {
-    return <Text style={styles.lowStockText}>Only a few left — order soon</Text>
+    return <Text style={styles.lowStockText}>{t('product.onlyAFewLeft')}</Text>
   }
   return (
     <View style={styles.oosBadge}>
-      <Text style={styles.oosBadgeText}>Out of stock</Text>
+      <Text style={styles.oosBadgeText}>{t('product.outOfStock')}</Text>
     </View>
   )
 }
 
-export default function ProductCard({
+const ProductCard = memo(function ProductCard({
   product,
   variant = 'default',
   wishlisted = false,
   onPress,
   onToggleWishlist,
   onAddToCart,
+  onLongPress,
   testID,
-}: ProductCardProps) {
+}: ProductCardProps & { onLongPress?: (product: Product) => void }) {
+  const { t } = useTranslation()
   const isCompact = variant === 'compact'
   const isOOS = product.stock === 'out_of_stock'
   const hasDiscount = product.compareAtPrice && product.compareAtPrice > product.price
@@ -95,6 +98,10 @@ export default function ProductCard({
     onAddToCart?.(product)
   }, [product, onAddToCart])
 
+  const handleLongPress = useCallback(() => {
+    onLongPress?.(product)
+  }, [product, onLongPress])
+
   const imageUri = product.images?.[0]?.uri
 
   if (isCompact) {
@@ -102,9 +109,11 @@ export default function ProductCard({
       <AnimatedTouchable
         testID={testID}
         onPress={() => onPress?.(product)}
+        onLongPress={handleLongPress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         activeOpacity={0.9}
+        delayLongPress={400}
         style={[styles.compactCard, cardStyle]}
         accessibilityLabel={product.name}
         accessibilityRole="button"
@@ -129,9 +138,11 @@ export default function ProductCard({
     <AnimatedTouchable
       testID={testID}
       onPress={() => onPress?.(product)}
+      onLongPress={handleLongPress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       activeOpacity={0.9}
+      delayLongPress={400}
       style={[styles.card, cardStyle]}
       accessibilityLabel={product.name}
       accessibilityRole="button"
@@ -186,16 +197,18 @@ export default function ProductCard({
             disabled={isOOS}
             style={[styles.cartButton, isOOS && styles.cartButtonDisabled, cartStyle]}
             activeOpacity={0.85}
-            accessibilityLabel="Add to cart"
+            accessibilityLabel={t('product.addToCart')}
             accessibilityRole="button"
           >
-            <Text style={styles.cartButtonText}>Add to Cart</Text>
+            <Text style={styles.cartButtonText}>{t('product.addToCart')}</Text>
           </AnimatedTouchable>
         )}
       </View>
     </AnimatedTouchable>
   )
-}
+})
+
+export default ProductCard
 
 export function ProductCardSkeleton({ variant = 'default' }: { variant?: 'default' | 'compact' }) {
   if (variant === 'compact') {

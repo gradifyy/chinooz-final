@@ -103,6 +103,7 @@
     "rating": "Rating",
     "inStock": "In Stock",
     "lowStock": "Low Stock",
+    "onlyAFewLeft": "Only a few left — order soon",
     "outOfStock": "Out of Stock",
     "soldBy": "Sold by",
     "variants": "Variants",

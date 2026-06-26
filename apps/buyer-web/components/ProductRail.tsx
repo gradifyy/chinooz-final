@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
 import { useCartStore } from '@chinooz/state'
+import { usePrefetchProduct } from '@chinooz/hooks'
 import { useReducedMotion } from '@chinooz/ui-web'
 import { ProductCard, ProductCardSkeleton } from '@chinooz/ui-web'
 import type { Product } from '@chinooz/types'
@@ -30,6 +31,7 @@ export default function ProductRail({
   const router = useRouter()
   const reduced = useReducedMotion()
   const addItem = useCartStore(s => s.addItem)
+  const prefetchProduct = usePrefetchProduct()
 
   const handlePress = useCallback((product: Product) => {
     router.push(`/product/${product.id}`)
@@ -46,6 +48,10 @@ export default function ProductRail({
       maxQuantity: 10,
     })
   }, [addItem])
+
+  const handleHover = useCallback((product: Product) => {
+    prefetchProduct(product.id)
+  }, [prefetchProduct])
 
   if (isLoading) {
     return (
@@ -119,6 +125,7 @@ export default function ProductRail({
               variant="compact"
               onPress={handlePress}
               onAddToCart={handleAddToCart}
+              onLongPress={handleHover}
             />
           </motion.div>
         ))}

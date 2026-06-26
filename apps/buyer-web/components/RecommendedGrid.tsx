@@ -4,7 +4,7 @@ import React, { useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
-import { useInfiniteProducts } from '@chinooz/hooks'
+import { useInfiniteProducts, usePrefetchProduct } from '@chinooz/hooks'
 import { useCartStore } from '@chinooz/state'
 import { useReducedMotion } from '@chinooz/ui-web'
 import { ProductCard, ProductCardSkeleton } from '@chinooz/ui-web'
@@ -15,6 +15,7 @@ export default function RecommendedGrid() {
   const router = useRouter()
   const reduced = useReducedMotion()
   const addItem = useCartStore(s => s.addItem)
+  const prefetchProduct = usePrefetchProduct()
 
   const {
     data,
@@ -46,6 +47,10 @@ export default function RecommendedGrid() {
       maxQuantity: 10,
     })
   }, [addItem])
+
+  const handleHover = useCallback((product: Product) => {
+    prefetchProduct(product.id)
+  }, [prefetchProduct])
 
   const handleEndReached = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) {
@@ -115,6 +120,7 @@ export default function RecommendedGrid() {
                 product={product}
                 onPress={handlePress}
                 onAddToCart={handleAddToCart}
+                onLongPress={handleHover}
               />
             </motion.div>
           ))}

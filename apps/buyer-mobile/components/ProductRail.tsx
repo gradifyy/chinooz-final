@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router'
 import { useTranslation } from 'react-i18next'
 import { colors, spacing } from '@chinooz/theme'
 import { useCartStore } from '@chinooz/state'
+import { usePrefetchProduct } from '@chinooz/hooks'
 import { ProductCard, ProductCardSkeleton } from '@chinooz/ui'
 import type { Product } from '@chinooz/types'
 
@@ -34,6 +35,7 @@ export default function ProductRail({
   const { t } = useTranslation()
   const router = useRouter()
   const addItem = useCartStore(s => s.addItem)
+  const prefetchProduct = usePrefetchProduct()
   const scrollRef = useRef<ScrollView>(null)
 
   const handlePress = useCallback((product: Product) => {
@@ -51,6 +53,10 @@ export default function ProductRail({
       maxQuantity: 10,
     })
   }, [addItem])
+
+  const handleLongPress = useCallback((product: Product) => {
+    prefetchProduct(product.id)
+  }, [prefetchProduct])
 
   const handleSeeAll = useCallback(() => {
     router.push(seeAllHref as any)
@@ -116,6 +122,7 @@ export default function ProductRail({
               variant="compact"
               onPress={handlePress}
               onAddToCart={handleAddToCart}
+              onLongPress={handleLongPress}
             />
           </Animated.View>
         ))}
