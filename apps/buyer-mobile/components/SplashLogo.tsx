@@ -7,7 +7,6 @@ import Animated, {
   withTiming,
   withSpring,
   Easing,
-  runOnJS,
 } from 'react-native-reanimated'
 import { colors } from '@chinooz/theme'
 import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
@@ -38,21 +37,16 @@ export default function SplashLogo({ onAnimationDone }: SplashLogoProps) {
 
     scale.value = withDelay(
       100,
-      withSpring(1, {
-        damping: 18,
-        stiffness: 120,
-        mass: 1,
-      }, () => {
-        if (onAnimationDone) {
-          runOnJS(onAnimationDone)()
-        }
-      }),
+      withSpring(1, { damping: 18, stiffness: 120, mass: 1 }),
     )
 
     shimmer.value = withDelay(
       300,
       withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) }),
     )
+
+    const timer = setTimeout(() => onAnimationDone?.(), 1200)
+    return () => clearTimeout(timer)
   }, [])
 
   const logoStyle = useAnimatedStyle(() => ({
