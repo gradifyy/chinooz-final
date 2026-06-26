@@ -101,6 +101,7 @@
     "addedToCart": "कार्टमा थपियो",
     "undo": "पूर्ववत गर्नुहोस्",
     "maxReached": "अधिकतम पुग्यो",
+    "quantity": "मात्रा",
     "selectFirst": "पहिले {{variant}} छान्नुहोस्",
     "description": "विवरण",
     "readMore": "थप पढ्नुहोस्",
@@ -145,7 +146,8 @@
     "productUnavailable": "यो उत्पादन अब उपलब्ध छैन",
     "productUnavailableSubtitle": "तपाईंले खोज्दै हुनुभएको वस्तु हटाइएको वा अस्थायी रूपमा उपलब्ध नभएको हुन सक्छ।",
     "browseSimilar": "समान ब्राउज गर्नुहोस्",
-    "backToHome": "गृहपृष्ठमा फर्कनुहोस्"
+    "backToHome": "गृहपृष्ठमा फर्कनुहोस्",
+    "errorLoading": "यो उत्पादन लोड गर्दा केही गल्ती भयो।"
   },
   "orders": {
     "myOrders": "मेरा अर्डरहरू",

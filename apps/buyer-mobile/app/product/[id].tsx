@@ -182,7 +182,7 @@ export default function ProductDetailScreen() {
         <EmptyState
           icon={<Text style={{ fontSize: 48 }}>😕</Text>}
           title={t('common.error')}
-          subtitle="Something went wrong loading this product."
+          subtitle={t('product.errorLoading')}
           action={{ label: t('common.retry'), onPress: () => router.replace({ pathname: '/product/[id]', params: { id: id || '' } }) }}
         />
       </View>
@@ -234,7 +234,7 @@ export default function ProductDetailScreen() {
         <TouchableOpacity
           onPress={() => router.back()}
           style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.85)', alignItems: 'center', justifyContent: 'center' }}
-          accessibilityLabel="Go back"
+          accessibilityLabel={t('common.back')}
         >
           <Text style={{ fontSize: 18, color: colors.text }}>←</Text>
         </TouchableOpacity>
@@ -242,14 +242,14 @@ export default function ProductDetailScreen() {
           <TouchableOpacity
             onPress={() => router.push('/search')}
             style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.85)', alignItems: 'center', justifyContent: 'center' }}
-            accessibilityLabel="Search"
+            accessibilityLabel={t('common.search')}
           >
             <Text style={{ fontSize: 16 }}>🔍</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => router.push('/cart')}
             style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.85)', alignItems: 'center', justifyContent: 'center' }}
-            accessibilityLabel="Cart"
+            accessibilityLabel={t('nav.cart')}
           >
             <Text style={{ fontSize: 16 }}>🛒</Text>
           </TouchableOpacity>

@@ -171,7 +171,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
           <SectionReveal delay={0.08}>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-text-muted">Qty</p>
+                <p className="text-xs text-text-muted">{t('product.quantity')}</p>
                 <QuantityStepper
                   value={quantity}
                   min={1}
@@ -262,7 +262,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
         <div className="flex items-center justify-between mb-2">
           <div>
             <p className="text-[11px] text-text-muted">{t('product.addToCart')}</p>
-            <p className="text-xl font-bold text-text tabular-nums" aria-label={`${formatNPR(displayPrice * quantity)}, add to cart`}>
+            <p className="text-xl font-bold text-text tabular-nums" aria-label={`${formatNPR(displayPrice * quantity)}, ${t('product.addToCart')}`}>
               {formatNPR(displayPrice * quantity)}
             </p>
           </div>

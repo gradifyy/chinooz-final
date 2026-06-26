@@ -101,6 +101,7 @@
     "addedToCart": "Added to cart",
     "undo": "Undo",
     "maxReached": "Max reached",
+    "quantity": "Qty",
     "selectFirst": "Select a {{variant}} first",
     "description": "Description",
     "readMore": "Read more",
@@ -145,7 +146,8 @@
     "productUnavailable": "This product is no longer available",
     "productUnavailableSubtitle": "The item you're looking for may have been removed or is temporarily unavailable.",
     "browseSimilar": "Browse similar",
-    "backToHome": "Back to Home"
+    "backToHome": "Back to Home",
+    "errorLoading": "Something went wrong loading this product."
   },
   "orders": {
     "myOrders": "My Orders",

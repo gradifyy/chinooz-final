@@ -3,6 +3,8 @@ import * as api from '@chinooz/mock-data'
 import type { Product } from '@chinooz/types'
 
 const STALE_PRODUCTS = 1000 * 30
+const STALE_PRODUCT_DETAIL = 1000 * 60
+const STALE_REVIEWS = 1000 * 30
 const STALE_BANNERS = 1000 * 60
 const STALE_DEALS = 1000 * 30
 const STALE_CATEGORIES = 1000 * 60
@@ -34,7 +36,7 @@ export function useProductById(id: string) {
     queryKey: ['product', id],
     queryFn: () => api.getProductById(id),
     enabled: !!id,
-    staleTime: STALE_PRODUCTS,
+    staleTime: STALE_PRODUCT_DETAIL,
   })
 }
 
@@ -43,7 +45,7 @@ export function useProductBySlug(slug: string) {
     queryKey: ['product', 'slug', slug],
     queryFn: () => api.getProductBySlug(slug),
     enabled: !!slug,
-    staleTime: STALE_PRODUCTS,
+    staleTime: STALE_PRODUCT_DETAIL,
   })
 }
 
@@ -87,7 +89,7 @@ export function useReviews(productId: string) {
     queryKey: ['reviews', productId],
     queryFn: () => api.getReviews(productId),
     enabled: !!productId,
-    staleTime: STALE_PRODUCTS,
+    staleTime: STALE_REVIEWS,
   })
 }
 
