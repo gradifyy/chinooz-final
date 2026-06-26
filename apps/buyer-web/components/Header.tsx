@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
+import { useEffect, useState } from 'react'
 import { CartBadge } from './CartBadge'
 
 const navItems = [
@@ -16,10 +17,21 @@ const navItems = [
 export function Header() {
   const pathname = usePathname()
   const { t } = useTranslation()
+  const [scrolled, setScrolled] = useState(false)
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 10)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   return (
-    <header className="sticky top-0 z-navbar bg-white border-b border-border">
-      <div className="max-w-7xl mx-auto px-4 h-16 flex items-center gap-4">
+    <header
+      className={`sticky top-0 z-navbar bg-white border-b border-border transition-shadow duration-200 ${
+        scrolled ? 'shadow-md' : 'shadow-none'
+      }`}
+    >
+      <div className="max-w-7xl mx-auto px-4 md:px-5 lg:px-6 h-16 flex items-center gap-4">
         <Link href="/" className="text-xl font-bold text-primary shrink-0">
           {t('common.appName')}
         </Link>

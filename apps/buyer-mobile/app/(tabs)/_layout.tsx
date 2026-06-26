@@ -1,4 +1,4 @@
-import { Tabs } from 'expo-router'
+import { Tabs, usePathname, useRouter } from 'expo-router'
 import { View, Text, StyleSheet, Platform } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
@@ -10,9 +10,29 @@ import Animated, {
   withSequence,
   Easing,
 } from 'react-native-reanimated'
-import { useEffect } from 'react'
+import { useEffect, createContext, useContext, useCallback } from 'react'
 import TopBar from '../../components/TopBar'
 import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
+
+export const ScrollContext = createContext<{ scrollY: any; scrollToTop: () => void }>({
+  scrollY: { value: 0 },
+  scrollToTop: () => {},
+})
+
+export function useHomeScroll() {
+  return useContext(ScrollContext)
+}
+
+const homeScrollY = { value: 0 } as any
+let scrollToTopFn: (() => void) | null = null
+
+export function getHomeScrollHandlers() {
+  return {
+    scrollY: homeScrollY,
+    scrollToTop: () => scrollToTopFn?.(),
+    setScrollToTop: (fn: () => void) => { scrollToTopFn = fn },
+  }
+}
 
 const tabKeys: Record<string, string> = {
   Home: 'nav.home',
@@ -88,10 +108,11 @@ function DealsTab({ label, focused, icon, reduced }: { label: string; focused: b
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets()
+  const { scrollY, scrollToTop, setScrollToTop } = getHomeScrollHandlers()
 
   return (
     <>
-      <TopBar />
+      <AnimatedTopBar scrollY={scrollY} />
       <Tabs
         screenOptions={{
           headerShown: false,
@@ -104,6 +125,13 @@ export default function TabsLayout() {
             paddingTop: 6,
           },
           tabBarShowLabel: false,
+        }}
+        screenListeners={{
+          tabPress: (e) => {
+            if (e.target?.startsWith('index')) {
+              setTimeout(() => scrollToTop(), 50)
+            }
+          },
         }}
       >
         <Tabs.Screen
@@ -138,6 +166,20 @@ export default function TabsLayout() {
         />
       </Tabs>
     </>
+  )
+}
+
+function AnimatedTopBar({ scrollY }: { scrollY: any }) {
+  const shadowStyle = useAnimatedStyle(() => ({
+    shadowOpacity: scrollY.value > 10 ? 0.08 : 0,
+    shadowRadius: scrollY.value > 10 ? 8 : 0,
+    elevation: scrollY.value > 10 ? 3 : 0,
+  }))
+
+  return (
+    <Animated.View style={[{ zIndex: 30 }, shadowStyle]}>
+      <TopBar />
+    </Animated.View>
   )
 }
 
