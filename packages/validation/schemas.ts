@@ -76,6 +76,17 @@ export const createProfileSchema = z.object({
   language: z.enum(['en', 'ne']),
 })
 
+export const addressFormSchema = z.object({
+  fullName: z.string().min(2, 'Name must be at least 2 characters').max(100),
+  phone: z.string().regex(/^\d{10}$/, 'Phone must be 10 digits'),
+  street: z.string().min(3, 'Street address is required').max(200),
+  area: z.string().min(2, 'Area is required').max(100),
+  city: z.string().min(2, 'City is required').max(100),
+  label: z.enum(['home', 'work', 'other']),
+})
+
+export type AddressFormInput = z.infer<typeof addressFormSchema>
+
 export type CreateProfileInput = z.infer<typeof createProfileSchema>
 
 export type SearchInput = z.infer<typeof searchSchema>

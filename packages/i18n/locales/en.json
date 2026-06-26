@@ -193,5 +193,28 @@
     "saving": "Saving...",
     "skip": "Skip for now",
     "nameRequired": "Name is required to continue"
+  },
+  "location": {
+    "title": "Enable location",
+    "subtitle": "So we can show nearby sellers and accurate delivery estimates.",
+    "allow": "Allow location",
+    "enterManually": "Enter manually",
+    "skip": "Skip for now",
+    "granting": "Getting your location...",
+    "denied": "Couldn't get your location — enter it manually below.",
+    "manualTitle": "Delivery address",
+    "fullName": "Full name",
+    "phone": "Phone",
+    "street": "Street / Building",
+    "area": "Area / Locality",
+    "city": "City",
+    "label": "Label",
+    "home": "Home",
+    "work": "Work",
+    "other": "Other",
+    "save": "Save address",
+    "saving": "Saving...",
+    "saved": "Address saved!",
+    "reminder": "Set a delivery address for faster checkout."
   }
 }

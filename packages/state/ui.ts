@@ -26,10 +26,12 @@ interface UIState {
   locale: Locale
   theme: ThemeMode
   toasts: ToastMessage[]
+  addressReminderPending: boolean
   setLocale: (locale: Locale) => void
   setTheme: (theme: ThemeMode) => void
   addToast: (toast: Omit<ToastMessage, 'id'>) => void
   removeToast: (id: string) => void
+  setAddressReminderPending: (v: boolean) => void
 }
 
 let toastCounter = 0
@@ -40,6 +42,7 @@ export const useUIStore = create<UIState>()(
       locale: 'en',
       theme: 'light',
       toasts: [],
+      addressReminderPending: false,
 
       setLocale: locale => set({ locale }),
 
@@ -57,11 +60,13 @@ export const useUIStore = create<UIState>()(
 
       removeToast: id =>
         set(state => ({ toasts: state.toasts.filter(t => t.id !== id) })),
+
+      setAddressReminderPending: v => set({ addressReminderPending: v }),
     }),
     {
       name: 'chinooz-ui',
       storage: getStorage(),
-      partialize: state => ({ locale: state.locale, theme: state.theme }),
+      partialize: state => ({ locale: state.locale, theme: state.theme, addressReminderPending: state.addressReminderPending }),
     },
   ),
 )
