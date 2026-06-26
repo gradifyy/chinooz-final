@@ -1,9 +1,6 @@
 import React from 'react'
+import { formatNPR } from '@chinooz/utils'
 import type { PriceTextProps } from '@chinooz/types/components'
-
-function formatPrice(price: number): string {
-  return `₹${price.toLocaleString('en-IN')}`
-}
 
 const sizeClasses: Record<string, string> = {
   sm: 'text-[14px]',
@@ -30,12 +27,12 @@ export default function PriceText({
   return (
     <div data-testid={testID} className={`inline-flex items-baseline gap-2 ${className}`}>
       <span className={`font-bold ${sizeClasses[size]} ${isDeal ? 'text-gold' : 'text-text'}`}>
-        {formatPrice(price)}
+        {formatNPR(price)}
       </span>
       {compareAtPrice && compareAtPrice > price && (
         <>
           <span className={`text-text-muted line-through ${compareSizeClasses[size]}`}>
-            {formatPrice(compareAtPrice)}
+            {formatNPR(compareAtPrice)}
           </span>
           <span className={`font-semibold text-success ${compareSizeClasses[size]}`}>
             {Math.round((1 - price / compareAtPrice) * 100)}% OFF

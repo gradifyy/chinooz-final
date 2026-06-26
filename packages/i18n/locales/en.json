@@ -1,0 +1,144 @@
+{
+  "common": {
+    "appName": "Chinooz",
+    "search": "Search",
+    "searchPlaceholder": "Search products...",
+    "cancel": "Cancel",
+    "back": "Back",
+    "done": "Done",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "close": "Close",
+    "loading": "Loading...",
+    "retry": "Retry",
+    "seeAll": "See All",
+    "viewMore": "View More",
+    "noResults": "No results found",
+    "error": "Something went wrong",
+    "ok": "OK",
+    "yes": "Yes",
+    "no": "No",
+    "off": "OFF"
+  },
+  "nav": {
+    "home": "Home",
+    "categories": "Categories",
+    "deals": "Deals",
+    "inbox": "Inbox",
+    "profile": "Profile",
+    "cart": "Cart",
+    "search": "Search"
+  },
+  "home": {
+    "title": "Home",
+    "subtitle": "Your feed will appear here",
+    "flashDeals": "Flash Deals",
+    "popularNearYou": "Popular Near You",
+    "recommended": "Recommended",
+    "newArrivals": "New Arrivals",
+    "trendingNow": "Trending Now"
+  },
+  "categories": {
+    "title": "Categories",
+    "subtitle": "Browse by category",
+    "browseAll": "Browse All Categories"
+  },
+  "deals": {
+    "title": "Deals",
+    "subtitle": "Today's best deals",
+    "expiringSoon": "Expiring Soon",
+    "limitedTime": "Limited Time"
+  },
+  "inbox": {
+    "title": "Inbox",
+    "subtitle": "Notifications & messages",
+    "notifications": "Notifications",
+    "messages": "Messages",
+    "noNotifications": "No notifications yet",
+    "noMessages": "No messages yet",
+    "markAllRead": "Mark all as read"
+  },
+  "profile": {
+    "title": "Profile",
+    "subtitle": "Account, Orders & Wishlist",
+    "myOrders": "My Orders",
+    "wishlist": "Wishlist",
+    "addresses": "Addresses",
+    "settings": "Settings",
+    "language": "Language",
+    "english": "English",
+    "nepali": "नेपाली",
+    "help": "Help & Support",
+    "logout": "Logout",
+    "login": "Login",
+    "loggedInAs": "Logged in as",
+    "switchToTest": "Switch to test login state"
+  },
+  "cart": {
+    "title": "Cart",
+    "empty": "Your cart is empty",
+    "emptySubtitle": "Add items to get started",
+    "startShopping": "Start Shopping",
+    "subtotal": "Subtotal",
+    "shipping": "Shipping",
+    "total": "Total",
+    "checkout": "Checkout",
+    "remove": "Remove",
+    "itemCount": "{{count}} item",
+    "itemCount_other": "{{count}} items"
+  },
+  "product": {
+    "productDetail": "Product Detail",
+    "addToCart": "Add to Cart",
+    "buyNow": "Buy Now",
+    "description": "Description",
+    "reviews": "Reviews",
+    "rating": "Rating",
+    "inStock": "In Stock",
+    "lowStock": "Low Stock",
+    "outOfStock": "Out of Stock",
+    "soldBy": "Sold by",
+    "variants": "Variants",
+    "relatedProducts": "Related Products"
+  },
+  "orders": {
+    "myOrders": "My Orders",
+    "noOrders": "No orders yet",
+    "orderPlaced": "Order Placed",
+    "confirmed": "Confirmed",
+    "processing": "Processing",
+    "shipped": "Shipped",
+    "delivered": "Delivered",
+    "cancelled": "Cancelled",
+    "returned": "Returned",
+    "trackOrder": "Track Order"
+  },
+  "search": {
+    "title": "Search",
+    "placeholder": "Find anything on Chinooz",
+    "recentSearches": "Recent Searches",
+    "popularSearches": "Popular Searches",
+    "noResults": "No products found",
+    "noResultsSubtitle": "Try different keywords"
+  },
+  "emptyState": {
+    "noItems": "No items found",
+    "noItemsSubtitle": "Try adjusting your search or filter",
+    "cartEmpty": "Your cart is empty",
+    "cartEmptySubtitle": "Looks like you haven't added anything yet. Start shopping to fill it up!",
+    "noOrders": "No orders yet",
+    "noOrdersSubtitle": "Your order history will appear here",
+    "noNotifications": "All caught up!",
+    "noNotificationsSubtitle": "No new notifications",
+    "noMessages": "No messages",
+    "noMessagesSubtitle": "Your conversations will appear here",
+    "noWishlist": "Wishlist is empty",
+    "noWishlistSubtitle": "Save items you love for later",
+    "noReviews": "No reviews yet",
+    "noReviewsSubtitle": "Be the first to review this product"
+  },
+  "skeleton": {
+    "loading": "Loading content..."
+  }
+}

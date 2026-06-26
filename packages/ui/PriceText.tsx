@@ -1,11 +1,8 @@
 import React from 'react'
 import { View, Text } from 'react-native'
 import { colors, spacing } from '@chinooz/theme'
+import { formatNPR } from '@chinooz/utils'
 import type { PriceTextProps } from '@chinooz/types/components'
-
-function formatPrice(price: number): string {
-  return `₹${price.toLocaleString('en-IN')}`
-}
 
 const sizeMap: Record<string, { current: number; compare: number }> = {
   sm: { current: 14, compare: 11 },
@@ -35,7 +32,7 @@ export default function PriceText({
           color: isDeal ? colors.gold : colors.text,
         }}
       >
-        {formatPrice(price)}
+        {formatNPR(price)}
       </Text>
       {compareAtPrice && compareAtPrice > price && (
         <Text
@@ -45,7 +42,7 @@ export default function PriceText({
             textDecorationLine: 'line-through',
           }}
         >
-          {formatPrice(compareAtPrice)}
+          {formatNPR(compareAtPrice)}
         </Text>
       )}
       {compareAtPrice && compareAtPrice > price && (

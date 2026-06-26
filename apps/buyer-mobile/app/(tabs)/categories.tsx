@@ -1,7 +1,10 @@
+import { useTranslation } from 'react-i18next'
 import { Screen, Skeleton, Stack, Grid } from '@chinooz/ui'
 import { View } from 'react-native'
 
 export default function CategoriesScreen() {
+  const { t } = useTranslation()
+
   return (
     <Screen>
       <Stack gap={16}>

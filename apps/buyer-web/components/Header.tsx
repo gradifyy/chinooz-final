@@ -2,28 +2,30 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useTranslation } from 'react-i18next'
 import { CartBadge } from './CartBadge'
 
-const navLinks = [
-  { href: '/', label: 'Home' },
-  { href: '/categories', label: 'Categories' },
-  { href: '/deals', label: 'Deals' },
-  { href: '/inbox', label: 'Inbox' },
-  { href: '/profile', label: 'Profile' },
+const navItems = [
+  { href: '/', labelKey: 'nav.home' },
+  { href: '/categories', labelKey: 'nav.categories' },
+  { href: '/deals', labelKey: 'nav.deals' },
+  { href: '/inbox', labelKey: 'nav.inbox' },
+  { href: '/profile', labelKey: 'nav.profile' },
 ]
 
 export function Header() {
   const pathname = usePathname()
+  const { t } = useTranslation()
 
   return (
     <header className="sticky top-0 z-navbar bg-white border-b border-border">
       <div className="max-w-7xl mx-auto px-4 h-16 flex items-center gap-4">
         <Link href="/" className="text-xl font-bold text-primary shrink-0">
-          Chinooz
+          {t('common.appName')}
         </Link>
 
         <nav className="hidden md:flex items-center gap-1 ml-4">
-          {navLinks.map(link => {
+          {navItems.map(link => {
             const isActive = pathname === link.href
             return (
               <Link
@@ -35,7 +37,7 @@ export function Header() {
                     : 'text-text-secondary hover:bg-background hover:text-text'
                 }`}
               >
-                {link.label}
+                {t(link.labelKey)}
               </Link>
             )
           })}
@@ -46,7 +48,7 @@ export function Header() {
             href="/search"
             className="flex items-center bg-background rounded-xl px-3 h-10 border border-border text-text-muted text-sm hover:border-primary/30 transition-colors"
           >
-            Search products...
+            {t('common.searchPlaceholder')}
           </Link>
         </div>
 

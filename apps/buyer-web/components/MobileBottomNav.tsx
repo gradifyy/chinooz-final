@@ -2,22 +2,24 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useTranslation } from 'react-i18next'
 
-const tabs = [
-  { href: '/', label: 'Home', icon: '🏠' },
-  { href: '/categories', label: 'Categories', icon: '📂' },
-  { href: '/deals', label: 'Deals', icon: '🔥', isCenter: true },
-  { href: '/inbox', label: 'Inbox', icon: '💬' },
-  { href: '/profile', label: 'Profile', icon: '👤' },
+const tabItems = [
+  { href: '/', labelKey: 'nav.home', icon: '🏠' },
+  { href: '/categories', labelKey: 'nav.categories', icon: '📂' },
+  { href: '/deals', labelKey: 'nav.deals', icon: '🔥', isCenter: true },
+  { href: '/inbox', labelKey: 'nav.inbox', icon: '💬' },
+  { href: '/profile', labelKey: 'nav.profile', icon: '👤' },
 ]
 
 export function MobileBottomNav() {
   const pathname = usePathname()
+  const { t } = useTranslation()
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-navbar bg-white border-t border-border">
       <div className="flex items-end justify-around h-[68px] pb-2">
-        {tabs.map(tab => {
+        {tabItems.map(tab => {
           const isActive = pathname === tab.href
 
           if (tab.isCenter) {
@@ -39,7 +41,7 @@ export function MobileBottomNav() {
                     isActive ? 'text-primary' : 'text-text-muted'
                   }`}
                 >
-                  {tab.label}
+                  {t(tab.labelKey)}
                 </span>
               </Link>
             )
@@ -57,7 +59,7 @@ export function MobileBottomNav() {
                   isActive ? 'text-primary font-bold' : 'text-text-muted'
                 }`}
               >
-                {tab.label}
+                {t(tab.labelKey)}
               </span>
             </Link>
           )

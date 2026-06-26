@@ -1,13 +1,16 @@
+import { useTranslation } from 'react-i18next'
 import { Screen, ProductGrid, Skeleton, Stack, Section } from '@chinooz/ui'
 import { View } from 'react-native'
 
 export default function HomeScreen() {
+  const { t } = useTranslation()
+
   return (
     <Screen>
       <Stack gap={24}>
         <Skeleton width="100%" height={180} borderRadius={16} />
 
-        <Section title="Categories">
+        <Section title={t('categories.title')}>
           <View style={{ flexDirection: 'row', gap: 12 }}>
             {Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} width={72} height={72} circle />
@@ -15,7 +18,7 @@ export default function HomeScreen() {
           </View>
         </Section>
 
-        <Section title="Flash Deals" action={{ label: 'See All', onPress: () => {} }}>
+        <Section title={t('home.flashDeals')} action={{ label: t('common.seeAll'), onPress: () => {} }}>
           <View style={{ flexDirection: 'row', gap: 12 }}>
             {Array.from({ length: 3 }).map((_, i) => (
               <View key={i} style={{ width: 140 }}>
@@ -29,11 +32,11 @@ export default function HomeScreen() {
           </View>
         </Section>
 
-        <Section title="Popular Near You">
+        <Section title={t('home.popularNearYou')}>
           <ProductGrid count={4} />
         </Section>
 
-        <Section title="Recommended">
+        <Section title={t('home.recommended')}>
           <ProductGrid count={4} />
         </Section>
       </Stack>

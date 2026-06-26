@@ -4,6 +4,7 @@ import { Header } from '@/components/Header'
 import { Footer } from '@/components/Footer'
 import { MobileBottomNav } from '@/components/MobileBottomNav'
 import { QueryProvider } from '@/components/QueryProvider'
+import { I18nProvider } from '@/components/I18nProvider'
 
 export const metadata: Metadata = {
   title: 'Chinooz',
@@ -15,10 +16,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className="bg-background text-text font-sans antialiased flex flex-col min-h-screen">
         <QueryProvider>
-          <Header />
-          <main className="flex-1 pb-[84px] md:pb-0">{children}</main>
-          <Footer />
-          <MobileBottomNav />
+          <I18nProvider>
+            <Header />
+            <main className="flex-1 pb-[84px] md:pb-0">{children}</main>
+            <Footer />
+            <MobileBottomNav />
+          </I18nProvider>
         </QueryProvider>
       </body>
     </html>

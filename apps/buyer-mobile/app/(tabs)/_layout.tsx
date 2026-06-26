@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router'
 import { View, Text, StyleSheet, Platform } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useTranslation } from 'react-i18next'
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -13,26 +14,36 @@ import { useEffect } from 'react'
 import TopBar from '../../components/TopBar'
 import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
 
+const tabKeys: Record<string, string> = {
+  Home: 'nav.home',
+  Categories: 'nav.categories',
+  Deals: 'nav.deals',
+  Inbox: 'nav.inbox',
+  Profile: 'nav.profile',
+}
+
+const tabIcons: Record<string, string> = {
+  Home: '🏠',
+  Categories: '📂',
+  Deals: '🔥',
+  Inbox: '💬',
+  Profile: '👤',
+}
+
 function TabIcon({ label, focused, isCenter }: { label: string; focused: boolean; isCenter?: boolean }) {
+  const { t } = useTranslation()
   const reduced = useReducedMotion()
-  const icons: Record<string, string> = {
-    Home: '🏠',
-    Categories: '📂',
-    Deals: '🔥',
-    Inbox: '💬',
-    Profile: '👤',
-  }
 
   if (isCenter) {
     return (
-      <DealsTab label={label} focused={focused} icon={icons[label]} reduced={reduced} />
+      <DealsTab label={t(tabKeys[label])} focused={focused} icon={tabIcons[label]} reduced={reduced} />
     )
   }
 
   return (
     <View style={styles.tabItem}>
-      <Text style={[styles.icon, focused && styles.iconActive]}>{icons[label]}</Text>
-      <Text style={[styles.label, focused && styles.labelActive]}>{label}</Text>
+      <Text style={[styles.icon, focused && styles.iconActive]}>{tabIcons[label]}</Text>
+      <Text style={[styles.label, focused && styles.labelActive]}>{t(tabKeys[label])}</Text>
     </View>
   )
 }

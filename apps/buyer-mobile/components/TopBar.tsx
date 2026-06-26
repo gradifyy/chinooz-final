@@ -2,11 +2,13 @@ import React from 'react'
 import { View, Text, TouchableOpacity } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useTranslation } from 'react-i18next'
 import { useCartStore } from '@chinooz/state'
 
 export default function TopBar() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const { t } = useTranslation()
   const items = useCartStore(s => s.items)
   const count = items.reduce((sum, i) => sum + i.quantity, 0)
 
@@ -16,7 +18,7 @@ export default function TopBar() {
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <TouchableOpacity onPress={() => router.replace('/(tabs)')}>
-          <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#8A1B57' }}>Chinooz</Text>
+          <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#8A1B57' }}>{t('common.appName')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -24,7 +26,7 @@ export default function TopBar() {
           style={{ flex: 1, marginHorizontal: 12, backgroundColor: '#FAFAFA', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, flexDirection: 'row', alignItems: 'center' }}
           activeOpacity={0.7}
         >
-          <Text style={{ color: '#9CA3AF', fontSize: 14 }}>Search products...</Text>
+          <Text style={{ color: '#9CA3AF', fontSize: 14 }}>{t('common.searchPlaceholder')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity

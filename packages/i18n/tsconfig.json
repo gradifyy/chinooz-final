@@ -1,4 +1,8 @@
 {
   "extends": "@chinooz/config/tsconfig.base.json",
-  "include": ["index.ts"]
+  "compilerOptions": {
+    "resolveJsonModule": true
+  },
+  "include": ["**/*.ts", "**/*.tsx", "locales/*.json"],
+  "exclude": ["node_modules"]
 }
