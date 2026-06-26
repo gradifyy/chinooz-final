@@ -11,8 +11,11 @@ export default function RootLayout() {
       <QueryProvider>
         <I18nProvider>
           <SafeAreaProvider>
-            <StatusBar style="dark" />
+            <StatusBar style="light" />
             <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="splash" />
+              <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
+              <Stack.Screen name="phone-entry" options={{ animation: 'slide_from_right' }} />
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="search" options={{ presentation: 'modal' }} />
               <Stack.Screen name="product/[id]" />
