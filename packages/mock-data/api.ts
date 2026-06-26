@@ -82,6 +82,30 @@ export async function getReviews(productId: string): Promise<Review[]> {
   return reviews.filter(r => r.productId === productId)
 }
 
+export async function submitReview(data: {
+  productId: string
+  rating: number
+  title?: string
+  body: string
+  photos?: string[]
+}): Promise<{ success: boolean; review: Review }> {
+  await randomDelay(400, 800)
+  const newReview: Review = {
+    id: `rev-${Date.now()}`,
+    productId: data.productId,
+    userId: 'user-1',
+    userName: 'Ayush Chaudhary',
+    rating: data.rating,
+    title: data.title,
+    body: data.body,
+    photos: data.photos,
+    createdAt: new Date().toISOString(),
+    helpful: 0,
+  }
+  reviews.push(newReview)
+  return { success: true, review: newReview }
+}
+
 export async function getOrders(): Promise<Order[]> {
   await randomDelay(300, 700)
   return orders

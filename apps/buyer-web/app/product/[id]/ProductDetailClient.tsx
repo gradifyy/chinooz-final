@@ -15,6 +15,8 @@ import Accordion from '@/components/Accordion'
 import DescriptionSection from '@/components/DescriptionSection'
 import SpecsTable from '@/components/SpecsTable'
 import DeliverySection from '@/components/DeliverySection'
+import ReviewsSection from '@/components/ReviewsSection'
+import WriteReviewModal from '@/components/WriteReviewModal'
 import Snackbar from '@/components/Snackbar'
 import type { Product } from '@chinooz/types'
 
@@ -49,6 +51,7 @@ export default function ProductDetailClient({ product }: { product: Product }) {
   const [quantity, setQuantity] = useState(1)
   const [snackVisible, setSnackVisible] = useState(false)
   const [lastAddedId, setLastAddedId] = useState<string | null>(null)
+  const [writeReviewVisible, setWriteReviewVisible] = useState(false)
 
   const activeVariant = product.variants.find(v => v.id === selectedVariant)
   const displayPrice = activeVariant?.price ?? product.price
@@ -196,38 +199,18 @@ export default function ProductDetailClient({ product }: { product: Product }) {
       </div>
 
       {/* Reviews — full width */}
-      <div className="space-y-4">
-        <h2 className="text-lg font-semibold text-text">
-          {t('product.reviews')} ({product.reviewCount})
-        </h2>
-        {reviews && reviews.length > 0 ? (
-          <div className="space-y-4">
-            {reviews.slice(0, 5).map(review => (
-              <div key={review.id} className="flex flex-col gap-2 py-3 border-b border-border-light">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-primary-50 flex items-center justify-center">
-                    <span className="text-xs font-semibold text-primary">
-                      {review.userName.split(' ').map(s => s[0]).join('').slice(0, 2)}
-                    </span>
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-text">{review.userName}</p>
-                    <StarRating rating={review.rating} size={10} />
-                  </div>
-                </div>
-                {review.title && <p className="text-sm font-semibold text-text">{review.title}</p>}
-                <p className="text-sm text-text-secondary leading-relaxed">{review.body}</p>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="flex flex-col items-center py-10 gap-2">
-            <span className="text-4xl">💬</span>
-            <p className="text-base font-semibold text-text">{t('product.noReviews')}</p>
-            <p className="text-sm text-text-muted">{t('product.noReviewsSubtitle')}</p>
-          </div>
-        )}
-      </div>
+      <ReviewsSection
+        reviews={reviews}
+        onWriteReview={() => setWriteReviewVisible(true)}
+      />
+
+      {/* Write Review Modal */}
+      <WriteReviewModal
+        visible={writeReviewVisible}
+        productId={product.id}
+        onClose={() => setWriteReviewVisible(false)}
+        onSuccess={() => {}}
+      />
 
       {/* Related Products — full width */}
       {related && related.items.length > 0 && (

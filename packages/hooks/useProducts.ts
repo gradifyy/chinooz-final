@@ -1,4 +1,4 @@
-import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useInfiniteQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import * as api from '@chinooz/mock-data'
 import type { Product } from '@chinooz/types'
 
@@ -88,6 +88,16 @@ export function useReviews(productId: string) {
     queryFn: () => api.getReviews(productId),
     enabled: !!productId,
     staleTime: STALE_PRODUCTS,
+  })
+}
+
+export function useSubmitReview() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: api.submitReview,
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['reviews', variables.productId] })
+    },
   })
 }
 

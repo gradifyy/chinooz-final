@@ -34,6 +34,8 @@ import Accordion from '../../components/Accordion'
 import DescriptionSection from '../../components/DescriptionSection'
 import SpecsTable from '../../components/SpecsTable'
 import DeliverySection from '../../components/DeliverySection'
+import ReviewsSection from '../../components/ReviewsSection'
+import WriteReviewSheet from '../../components/WriteReviewSheet'
 import Snackbar from '../../components/Snackbar'
 import type { Product } from '@chinooz/types'
 
@@ -61,6 +63,7 @@ export default function ProductDetailScreen() {
   const [quantity, setQuantity] = useState(1)
   const [snackVisible, setSnackVisible] = useState(false)
   const [lastAddedId, setLastAddedId] = useState<string | null>(null)
+  const [writeReviewVisible, setWriteReviewVisible] = useState(false)
   const cartScale = useSharedValue(1)
   const btnScale = useSharedValue(1)
 
@@ -262,35 +265,18 @@ export default function ProductDetailScreen() {
           </Accordion>
 
           {/* Reviews */}
-          <View style={{ paddingHorizontal: spacing[4], paddingBottom: spacing[4], gap: spacing[3] }}>
-            <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text }}>
-              {t('product.reviews')} ({product.reviewCount})
-            </Text>
-            {reviews && reviews.length > 0 ? (
-              reviews.slice(0, 3).map(review => (
-                <View key={review.id} style={{ gap: spacing[2], paddingVertical: spacing[2], borderBottomWidth: 1, borderBottomColor: colors.borderLight }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[2] }}>
-                    <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.primary50, alignItems: 'center', justifyContent: 'center' }}>
-                      <Text style={{ fontSize: 12, fontWeight: '600', color: colors.primary }}>
-                        {review.userName.split(' ').map(s => s[0]).join('').slice(0, 2)}
-                      </Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>{review.userName}</Text>
-                    </View>
-                  </View>
-                  {review.title && <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>{review.title}</Text>}
-                  <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 18 }}>{review.body}</Text>
-                </View>
-              ))
-            ) : (
-              <View style={{ alignItems: 'center', paddingVertical: spacing[6], gap: spacing[2] }}>
-                <Text style={{ fontSize: 32 }}>💬</Text>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{t('product.noReviews')}</Text>
-                <Text style={{ fontSize: 13, color: colors.textMuted }}>{t('product.noReviewsSubtitle')}</Text>
-              </View>
-            )}
-          </View>
+          <ReviewsSection
+            reviews={reviews}
+            onWriteReview={() => setWriteReviewVisible(true)}
+          />
+
+          {/* Write Review Sheet */}
+          <WriteReviewSheet
+            visible={writeReviewVisible}
+            productId={product.id}
+            onClose={() => setWriteReviewVisible(false)}
+            onSuccess={() => {}}
+          />
 
           {/* Related Products */}
           {related && related.items.length > 0 && (

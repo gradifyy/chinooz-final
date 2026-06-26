@@ -313,11 +313,13 @@ export const banners: Banner[] = [
 ]
 
 export const reviews: Review[] = [
-  { id: 'rev-1', productId: 'prod-1', userId: 'u-1', userName: 'Suman Shrestha', rating: 5, title: 'Best phone for the price', body: 'Camera quality is amazing. Battery lasts 2 days easily. Highly recommend!', createdAt: daysAgo(10), helpful: 24 },
+  { id: 'rev-1', productId: 'prod-1', userId: 'u-1', userName: 'Suman Shrestha', rating: 5, title: 'Best phone for the price', body: 'Camera quality is amazing. Battery lasts 2 days easily. Highly recommend!', photos: ['https://picsum.photos/seed/rev1a/200/200', 'https://picsum.photos/seed/rev1b/200/200'], createdAt: daysAgo(10), helpful: 24 },
   { id: 'rev-2', productId: 'prod-1', userId: 'u-2', userName: 'Anita Gurung', rating: 4, body: 'Good phone but heats up a bit during gaming. Otherwise perfect.', createdAt: daysAgo(8), helpful: 12 },
-  { id: 'rev-3', productId: 'prod-2', userId: 'u-3', userName: 'Ram Bahadur Thapa', rating: 5, title: 'Authentic quality', body: 'My grandfather loved this topi. The weaving is excellent — truly handmade.', createdAt: daysAgo(45), helpful: 31 },
+  { id: 'rev-3', productId: 'prod-2', userId: 'u-3', userName: 'Ram Bahadur Thapa', rating: 5, title: 'Authentic quality', body: 'My grandfather loved this topi. The weaving is excellent — truly handmade.', photos: ['https://picsum.photos/seed/rev3a/200/200'], createdAt: daysAgo(45), helpful: 31 },
   { id: 'rev-4', productId: 'prod-4', userId: 'u-4', userName: 'Priya Maharjan', rating: 5, title: 'So soft!', body: 'Bought as a gift for my mother. She uses it every day. Worth every rupee.', createdAt: daysAgo(20), helpful: 18 },
   { id: 'rev-5', productId: 'prod-6', userId: 'u-5', userName: 'Karma Lama', rating: 4, body: 'Rich flavour. Reminds me of tea from my village. Will order again.', createdAt: daysAgo(15), helpful: 9 },
+  { id: 'rev-6', productId: 'prod-1', userId: 'u-6', userName: 'Deepa Tamang', rating: 3, body: 'Decent phone for the price. Screen is great but speakers could be better.', createdAt: daysAgo(5), helpful: 4 },
+  { id: 'rev-7', productId: 'prod-1', userId: 'u-7', userName: 'Rajesh Shrestha', rating: 5, title: 'Worth every rupee', body: 'Upgraded from A35. Night and day difference. The camera alone is worth it.', photos: ['https://picsum.photos/seed/rev7a/200/200', 'https://picsum.photos/seed/rev7b/200/200', 'https://picsum.photos/seed/rev7c/200/200'], createdAt: daysAgo(3), helpful: 7 },
 ]
 
 export const addresses: Address[] = [

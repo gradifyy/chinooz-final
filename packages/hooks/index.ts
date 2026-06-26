@@ -8,6 +8,7 @@ export {
   useDeals,
   useBanners,
   useReviews,
+  useSubmitReview,
   useOrders,
   useOrderById,
   useNotifications,

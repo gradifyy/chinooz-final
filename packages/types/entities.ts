@@ -75,6 +75,7 @@ export interface Review {
   rating: number
   title?: string
   body: string
+  photos?: string[]
   createdAt: string
   helpful: number
 }
