@@ -1,4 +1,8 @@
+'use client'
+
 import React from 'react'
+import { motion } from 'framer-motion'
+import { useReducedMotion } from './hooks/useReducedMotion'
 import type { ButtonProps } from '@chinooz/types/components'
 
 const variantClasses: Record<string, string> = {
@@ -27,14 +31,19 @@ export default function Button({
   className = '',
   testID,
 }: ButtonProps) {
+  const reduced = useReducedMotion()
+
   return (
-    <button
+    <motion.button
       data-testid={testID}
       onClick={onPress}
       disabled={disabled || loading}
+      whileHover={reduced ? {} : { scale: 1.02 }}
+      whileTap={reduced ? {} : { scale: 0.97 }}
+      transition={{ duration: 0.1 }}
       className={`
         inline-flex items-center justify-center gap-2 rounded-xl font-semibold
-        transition-opacity duration-200
+        transition-colors duration-200
         disabled:opacity-50 disabled:cursor-not-allowed
         ${variantClasses[variant]}
         ${sizeClasses[size]}
@@ -54,6 +63,6 @@ export default function Button({
           {rightIcon}
         </>
       )}
-    </button>
+    </motion.button>
   )
 }

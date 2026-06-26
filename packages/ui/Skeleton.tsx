@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react'
-import { Animated } from 'react-native'
+import { Animated, StyleSheet } from 'react-native'
 import { colors, radii } from '@chinooz/theme'
+import { useReducedMotion } from './hooks/useReducedMotion'
 import type { SkeletonProps } from '@chinooz/types/components'
 
 export default function Skeleton({
@@ -10,19 +11,27 @@ export default function Skeleton({
   circle,
   testID,
 }: SkeletonProps) {
-  const opacity = useRef(new Animated.Value(0.3)).current
+  const reduced = useReducedMotion()
+  const shimmer = useRef(new Animated.Value(0)).current
   const animWidth = typeof width === 'string' ? undefined : width
 
   useEffect(() => {
+    if (reduced) return
     const anim = Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 0.7, duration: 800, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true }),
-      ]),
+      Animated.timing(shimmer, {
+        toValue: 1,
+        duration: 1200,
+        useNativeDriver: true,
+      }),
     )
     anim.start()
     return () => anim.stop()
-  }, [opacity])
+  }, [reduced])
+
+  const translateX = shimmer.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-200, 200],
+  })
 
   return (
     <Animated.View
@@ -32,8 +41,21 @@ export default function Skeleton({
         height,
         borderRadius: circle ? 9999 : borderRadius,
         backgroundColor: colors.border,
-        opacity,
+        overflow: 'hidden',
       }}
-    />
+    >
+      {!reduced && (
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              backgroundColor: colors.shimmerHighlight,
+              opacity: 0.6,
+              transform: [{ translateX }],
+            },
+          ]}
+        />
+      )}
+    </Animated.View>
   )
 }

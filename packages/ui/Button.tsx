@@ -1,6 +1,12 @@
 import React from 'react'
-import { TouchableOpacity, Text, ActivityIndicator } from 'react-native'
+import { Pressable, Text, ActivityIndicator } from 'react-native'
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from 'react-native-reanimated'
 import { colors, radii, spacing } from '@chinooz/theme'
+import { useReducedMotion } from './hooks/useReducedMotion'
 import type { ButtonProps } from '@chinooz/types/components'
 
 const variantStyles: Record<string, { bg: string; text: string }> = {
@@ -16,6 +22,8 @@ const sizeStyles: Record<string, { height: number; px: number; fs: number }> = {
   lg: { height: 52, px: spacing[5], fs: 16 },
 }
 
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable)
+
 export default function Button({
   variant = 'primary',
   size = 'md',
@@ -28,29 +36,44 @@ export default function Button({
   rightIcon,
   testID,
 }: ButtonProps) {
+  const reduced = useReducedMotion()
+  const scale = useSharedValue(1)
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }))
+
   const s = variantStyles[variant]
   const sz = sizeStyles[size]
 
   return (
-    <TouchableOpacity
+    <AnimatedPressable
       testID={testID}
       onPress={onPress}
+      onPressIn={() => {
+        if (!reduced) scale.value = withSpring(0.96, { damping: 15, stiffness: 400 })
+      }}
+      onPressOut={() => {
+        if (!reduced) scale.value = withSpring(1, { damping: 15, stiffness: 400 })
+      }}
       disabled={disabled || loading}
-      activeOpacity={0.8}
       accessibilityRole="button"
       accessibilityState={{ disabled: disabled || loading }}
-      style={{
-        backgroundColor: disabled ? colors.border : s.bg,
-        borderRadius: radii.lg,
-        height: sz.height,
-        paddingHorizontal: sz.px,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: spacing[2],
-        opacity: disabled ? 0.5 : 1,
-        alignSelf: fullWidth ? 'stretch' : undefined,
-      }}
+      style={[
+        animStyle,
+        {
+          backgroundColor: disabled ? colors.border : s.bg,
+          borderRadius: radii.lg,
+          height: sz.height,
+          paddingHorizontal: sz.px,
+          flexDirection: 'row' as const,
+          alignItems: 'center' as const,
+          justifyContent: 'center' as const,
+          gap: spacing[2],
+          opacity: disabled ? 0.5 : 1,
+          alignSelf: fullWidth ? ('stretch' as const) : undefined,
+        },
+      ]}
     >
       {loading ? (
         <ActivityIndicator size="small" color={s.text} />
@@ -69,6 +92,6 @@ export default function Button({
           {rightIcon}
         </>
       )}
-    </TouchableOpacity>
+    </AnimatedPressable>
   )
 }

@@ -1,15 +1,21 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect } from 'react'
 import {
   Modal,
   View,
   Text,
   TouchableWithoutFeedback,
-  Animated,
   Dimensions,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native'
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated'
 import { colors, radii, spacing } from '@chinooz/theme'
+import { useReducedMotion } from './hooks/useReducedMotion'
 import type { BottomSheetProps } from '@chinooz/types/components'
 
 export default function BottomSheet({
@@ -19,25 +25,38 @@ export default function BottomSheet({
   children,
   testID,
 }: BottomSheetProps) {
-  const slideAnim = useRef(new Animated.Value(0)).current
+  const reduced = useReducedMotion()
+  const translateY = useSharedValue(Dimensions.get('window').height)
+  const overlayOpacity = useSharedValue(0)
 
   useEffect(() => {
-    Animated.timing(slideAnim, {
-      toValue: visible ? 1 : 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start()
-  }, [visible, slideAnim])
+    if (visible) {
+      translateY.value = withSpring(0, {
+        damping: reduced ? 100 : 25,
+        stiffness: reduced ? 1000 : 300,
+        mass: 0.8,
+      })
+      overlayOpacity.value = withTiming(1, { duration: reduced ? 0 : 200 })
+    } else {
+      translateY.value = withTiming(Dimensions.get('window').height, {
+        duration: reduced ? 0 : 250,
+      })
+      overlayOpacity.value = withTiming(0, { duration: reduced ? 0 : 200 })
+    }
+  }, [visible])
 
-  const translateY = slideAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [Dimensions.get('window').height, 0],
-  })
+  const sheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }))
+
+  const overlayStyle = useAnimatedStyle(() => ({
+    opacity: overlayOpacity.value,
+  }))
 
   return (
     <Modal transparent visible={visible} animationType="none" onRequestClose={onClose}>
       <TouchableWithoutFeedback onPress={onClose}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' }}>
+        <Animated.View style={[{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' }, overlayStyle]}>
           <TouchableWithoutFeedback>
             <KeyboardAvoidingView
               behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -45,15 +64,17 @@ export default function BottomSheet({
             >
               <Animated.View
                 testID={testID}
-                style={{
-                  backgroundColor: colors.background,
-                  borderTopLeftRadius: radii['2xl'],
-                  borderTopRightRadius: radii['2xl'],
-                  paddingTop: spacing[2],
-                  paddingBottom: spacing[6],
-                  transform: [{ translateY }],
-                  maxHeight: Dimensions.get('window').height * 0.8,
-                }}
+                style={[
+                  sheetStyle,
+                  {
+                    backgroundColor: colors.background,
+                    borderTopLeftRadius: radii['2xl'],
+                    borderTopRightRadius: radii['2xl'],
+                    paddingTop: spacing[2],
+                    paddingBottom: spacing[6],
+                    maxHeight: Dimensions.get('window').height * 0.8,
+                  },
+                ]}
               >
                 <View
                   style={{
@@ -82,7 +103,7 @@ export default function BottomSheet({
               </Animated.View>
             </KeyboardAvoidingView>
           </TouchableWithoutFeedback>
-        </View>
+        </Animated.View>
       </TouchableWithoutFeedback>
     </Modal>
   )

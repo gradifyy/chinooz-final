@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react'
 import { Animated, Text, TouchableOpacity, View } from 'react-native'
 import { colors, spacing } from '@chinooz/theme'
+import { useReducedMotion } from './hooks/useReducedMotion'
 import type { ToastProps } from '@chinooz/types/components'
 
 const variantBg: Record<string, string> = {
@@ -17,15 +18,17 @@ export default function Toast({
   action,
   testID,
 }: ToastProps) {
+  const reduced = useReducedMotion()
   const opacity = useRef(new Animated.Value(0)).current
   const translateY = useRef(new Animated.Value(-20)).current
 
   useEffect(() => {
+    const dur = reduced ? 0 : 250
     Animated.parallel([
-      Animated.timing(opacity, { toValue: visible ? 1 : 0, duration: 250, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: visible ? 0 : -20, duration: 250, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: visible ? 1 : 0, duration: dur, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: visible ? 0 : -20, duration: dur, useNativeDriver: true }),
     ]).start()
-  }, [visible, opacity, translateY])
+  }, [visible, reduced])
 
   if (!visible) return null
 
