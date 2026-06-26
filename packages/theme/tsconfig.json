@@ -1,4 +1,4 @@
 {
   "extends": "@chinooz/config/tsconfig.base.json",
-  "include": ["index.ts"]
+  "include": ["*.ts"]
 }

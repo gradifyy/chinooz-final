@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "main": "index.ts",
   "types": "index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./tailwind-preset": "./tailwind-preset.js"
+  },
   "scripts": {
     "lint": "echo ok",
     "type-check": "tsc --noEmit"
