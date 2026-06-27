@@ -28,6 +28,7 @@ import { useCartStore, useCheckoutStore, useUIStore } from '@chinooz/state'
 import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
 import AddressStep from '../components/AddressStep'
 import DeliveryStep from '../components/DeliveryStep'
+import ReviewStep from '../components/ReviewStep'
 import type { CheckoutStep } from '@chinooz/state'
 
 const STEPS: CheckoutStep[] = ['address', 'delivery', 'payment', 'review']
@@ -307,14 +308,7 @@ function StepContent({ step, onValidChange }: { step: CheckoutStep; onValidChang
         ))}
       </View>
     ),
-    review: (
-      <View style={{ gap: spacing[3] }}>
-        <Text style={{ fontSize: 18, fontWeight: '600', color: colors.text }}>{t('checkout.reviewOrder')}</Text>
-        <View style={{ backgroundColor: colors.surface, borderRadius: radii.lg, padding: spacing[4], gap: spacing[2] }}>
-          <Text style={{ fontSize: 14, color: colors.textMuted }}>Review your order details before placing.</Text>
-        </View>
-      </View>
-    ),
+    review: <ReviewStep onStepChange={(step) => setStep(step)} />,
   }
 
   return <>{content[step]}</>

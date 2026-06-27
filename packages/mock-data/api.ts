@@ -205,6 +205,28 @@ export const SHIPPING_CONFIG = {
   vatRate: 0.13,
 } as const
 
+// --- Place Order ---
+
+export interface PlaceOrderInput {
+  items: { productId: string; variantId?: string; name: string; price: number; quantity: number }[]
+  address: { fullName: string; phone: string; street: string; area: string; city: string }
+  deliveryMethod: 'sameDay' | 'express' | 'scheduled'
+  paymentMethod: 'cod' | 'esewa' | 'khalti'
+}
+
+export async function placeOrder(input: PlaceOrderInput): Promise<{
+  success: boolean
+  orderId?: string
+  error?: string
+}> {
+  await randomDelay(600, 1200)
+  // Simulate 10% failure rate for non-COD payments
+  if (input.paymentMethod !== 'cod' && Math.random() < 0.1) {
+    return { success: false, error: 'Payment failed — try again or pay with cash' }
+  }
+  return { success: true, orderId: `ORD-${Date.now()}` }
+}
+
 export async function getTrendingProducts(): Promise<Product[]> {
   await randomDelay(200, 500)
   return [...products].sort((a, b) => b.reviewCount - a.reviewCount).slice(0, 8)
