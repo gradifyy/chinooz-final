@@ -10,6 +10,7 @@ import {
   AccessibilityInfo,
   Platform,
   ActivityIndicator,
+  Dimensions,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -29,16 +30,79 @@ import {
 } from '@chinooz/hooks'
 import type { SuggestionItem } from '@chinooz/hooks'
 import { colors, radii, spacing } from '@chinooz/theme'
-import { ProductCard, SafeImage } from '@chinooz/ui'
+import { ProductCard, ProductCardSkeleton, SafeImage } from '@chinooz/ui'
 import { formatNPR } from '@chinooz/utils'
+import { useCartStore } from '@chinooz/state'
 import type { Product } from '@chinooz/types'
+import FilterSheet, { type FilterState } from '../components/FilterSheet'
+import SortSheet, { type SortOption } from '../components/SortSheet'
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity)
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window')
+const EDGE_PADDING = 16
+const GAP = 12
 const MAX_RECENT = 8
 const DEBOUNCE_MS = 250
-const STAGGER_CAP = 8
+const STAGGER_CAP = 10
 const STAGGER_DELAY = 50
+
+const SORT_OPTIONS: SortOption[] = [
+  { key: 'relevance', labelKey: 'categories.relevance' },
+  { key: 'priceLow', labelKey: 'categories.priceLowHigh' },
+  { key: 'priceHigh', labelKey: 'categories.priceHighLow' },
+  { key: 'rating', labelKey: 'categories.rating' },
+  { key: 'newest', labelKey: 'categories.newest' },
+  { key: 'popular', labelKey: 'categories.mostPopular' },
+]
+
+const QUICK_FILTERS = [
+  { key: 'onSale', labelKey: 'categories.onSale' },
+  { key: 'topRated', labelKey: 'categories.topRated' },
+  { key: 'inStock', labelKey: 'categories.inStock' },
+]
+
+const DEFAULT_FILTERS: FilterState = {
+  priceMin: 0,
+  priceMax: 999999,
+  minRating: 0,
+  brands: new Set(),
+  inStock: false,
+  onSale: false,
+}
+
+function getGridColumns() {
+  const w = SCREEN_WIDTH - EDGE_PADDING * 2
+  if (w >= 1024) return 5
+  if (w >= 768) return 4
+  if (w >= 640) return 3
+  return 2
+}
+
+function getGridItemWidth(columns: number) {
+  return (SCREEN_WIDTH - EDGE_PADDING * 2 - GAP * (columns - 1)) / columns
+}
+
+function useCountUp(target: number, duration = 200): number {
+  const [display, setDisplay] = useState(0)
+  const raf = useRef<number>(0)
+  useEffect(() => {
+    if (target === 0) { setDisplay(0); return }
+    const start = display
+    const diff = target - start
+    if (diff === 0) return
+    const startTime = Date.now()
+    const tick = () => {
+      const elapsed = Date.now() - startTime
+      const progress = Math.min(elapsed / duration, 1)
+      setDisplay(Math.round(start + diff * progress))
+      if (progress < 1) raf.current = requestAnimationFrame(tick)
+    }
+    raf.current = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf.current)
+  }, [target, duration])
+  return display
+}
 
 const POPULAR_TERMS = ['Headphones', 'Shoes', 'T-shirt', 'Backpack', 'Watch', 'Sunglasses']
 
@@ -92,6 +156,12 @@ export default function SearchScreen() {
   const [recentSearches, setRecentSearches] = useState<string[]>([])
   const [pressedRow, setPressedRow] = useState<string | null>(null)
   const [clearingAll, setClearingAll] = useState(false)
+  const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS)
+  const [sortBy, setSortBy] = useState('relevance')
+  const [showFilterSheet, setShowFilterSheet] = useState(false)
+  const [showSortSheet, setShowSortSheet] = useState(false)
+
+  const addItem = useCartStore(s => s.addItem)
 
   const debouncedQuery = useDebounce(query, DEBOUNCE_MS)
 
@@ -108,6 +178,36 @@ export default function SearchScreen() {
   const isEmpty = !searchEnabled
 
   const showSpinner = suggestionsFetching && isTyping && debouncedQuery.length >= 2
+
+  const filteredProducts = useMemo(() => {
+    if (!searchResults) return []
+    let items = [...searchResults]
+    if (filters.inStock) items = items.filter(p => p.stock !== 'out_of_stock')
+    if (filters.onSale) items = items.filter(p => p.compareAtPrice && p.compareAtPrice > p.price)
+    if (filters.minRating > 0) items = items.filter(p => p.rating >= filters.minRating)
+    if (filters.brands.size > 0) items = items.filter(p => filters.brands.has(p.sellerName))
+    items = items.filter(p => p.price >= filters.priceMin && p.price <= filters.priceMax)
+    if (sortBy === 'priceLow') items.sort((a, b) => a.price - b.price)
+    if (sortBy === 'priceHigh') items.sort((a, b) => b.price - a.price)
+    if (sortBy === 'popular') items.sort((a, b) => b.reviewCount - a.reviewCount)
+    if (sortBy === 'newest') items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    return items
+  }, [searchResults, filters, sortBy])
+
+  const displayCount = useCountUp(filteredProducts.length)
+
+  const activeChipCount = useMemo(() => {
+    let count = 0
+    if (filters.inStock) count++
+    if (filters.onSale) count++
+    if (filters.minRating > 0) count++
+    if (filters.brands.size > 0) count += filters.brands.size
+    if (filters.priceMin > 0 || filters.priceMax < 999999) count++
+    return count
+  }, [filters])
+
+  const gridColumns = getGridColumns()
+  const gridItemWidth = getGridItemWidth(gridColumns)
 
   useEffect(() => {
     setRecentSearches([...inMemoryRecentSearches])
@@ -191,6 +291,21 @@ export default function SearchScreen() {
       router.push(`/product/${product.id}`)
     },
     [prefetch, router],
+  )
+
+  const handleAddToCart = useCallback(
+    (product: Product) => {
+      addItem({
+        id: `ci-${product.id}`,
+        productId: product.id,
+        name: product.name,
+        image: product.images?.[0]?.uri ?? '',
+        price: product.price,
+        quantity: 1,
+        maxQuantity: 10,
+      })
+    },
+    [addItem],
   )
 
   const handleSuggestionPress = useCallback(
@@ -320,15 +435,6 @@ export default function SearchScreen() {
       return null
     },
     [debouncedQuery, handleSuggestionPress, t],
-  )
-
-  const renderResultItem = useCallback(
-    ({ item }: { item: Product }) => (
-      <View style={styles.resultCard}>
-        <ProductCard product={item} onPress={handleProductPress} variant="compact" />
-      </View>
-    ),
-    [handleProductPress],
   )
 
   return (
@@ -541,19 +647,110 @@ export default function SearchScreen() {
         {isResults && (
           <Animated.View entering={FadeIn.duration(200)} style={styles.resultsContainer}>
             {searchLoading ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator size="small" color={colors.primary} />
+              <View style={styles.skeletonGrid} accessibilityState={{ busy: true }}>
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <View key={i} style={{ width: gridItemWidth }}>
+                    <ProductCardSkeleton variant="compact" />
+                  </View>
+                ))}
               </View>
             ) : searchResults && searchResults.length > 0 ? (
               <FlatList
-                data={searchResults}
+                data={filteredProducts}
                 keyExtractor={item => item.id}
-                renderItem={renderResultItem}
-                numColumns={2}
-                columnWrapperStyle={styles.resultsRow}
-                contentContainerStyle={styles.resultsList}
+                numColumns={gridColumns}
+                columnWrapperStyle={gridColumns > 1 ? { paddingHorizontal: EDGE_PADDING, gap: GAP } : undefined}
+                contentContainerStyle={{ paddingTop: spacing[2], paddingBottom: spacing[16] }}
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
+                ListHeaderComponent={
+                  <View>
+                    <View style={styles.resultsHeader}>
+                      <Text style={styles.resultsQuery} numberOfLines={1}>{debouncedQuery}</Text>
+                      <Text style={styles.resultsCount} accessibilityLiveRegion="polite">
+                        {t('categories.results', { count: displayCount })}
+                      </Text>
+                    </View>
+                    <View style={styles.filterBar}>
+                      <TouchableOpacity
+                        style={[styles.filterChip, activeChipCount > 0 && styles.filterChipActive]}
+                        onPress={() => setShowFilterSheet(true)}
+                        activeOpacity={0.7}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('categories.filters')}
+                      >
+                        <Text style={styles.filterChipIcon}>{'\u{1F527}'}</Text>
+                        <Text style={[styles.filterChipText, activeChipCount > 0 && styles.filterChipTextActive]}>
+                          {t('categories.filters')}
+                        </Text>
+                        {activeChipCount > 0 && (
+                          <View style={styles.filterBadge}>
+                            <Text style={styles.filterBadgeText}>{activeChipCount}</Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.sortChip}
+                        onPress={() => setShowSortSheet(true)}
+                        activeOpacity={0.7}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('categories.sortBy')}
+                      >
+                        <Text style={styles.sortChipIcon}>{'\u2195'}</Text>
+                        <Text style={styles.sortChipText}>
+                          {t(SORT_OPTIONS.find(o => o.key === sortBy)?.labelKey || 'categories.relevance')}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.quickFiltersScroll}
+                      contentContainerStyle={styles.quickFiltersContent}
+                    >
+                      {QUICK_FILTERS.map(f => {
+                        const active = f.key === 'onSale' ? filters.onSale
+                          : f.key === 'topRated' ? filters.minRating >= 4
+                          : f.key === 'inStock' ? filters.inStock
+                          : false
+                        return (
+                          <TouchableOpacity
+                            key={f.key}
+                            style={[styles.quickChip, active && styles.quickChipActive]}
+                            onPress={() => {
+                              if (f.key === 'onSale') setFilters(prev => ({ ...prev, onSale: !prev.onSale }))
+                              else if (f.key === 'topRated') setFilters(prev => ({ ...prev, minRating: prev.minRating >= 4 ? 0 : 4 }))
+                              else if (f.key === 'inStock') setFilters(prev => ({ ...prev, inStock: !prev.inStock }))
+                            }}
+                            activeOpacity={0.7}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: active }}
+                          >
+                            <Text style={[styles.quickChipText, active && styles.quickChipTextActive]}>
+                              {t(f.labelKey)}
+                            </Text>
+                          </TouchableOpacity>
+                        )
+                      })}
+                    </ScrollView>
+                  </View>
+                }
+                renderItem={({ item, index }) => (
+                  <Animated.View
+                    entering={FadeInDown.duration(250)
+                      .delay(Math.min(index, 9) * 50)
+                      .springify()
+                      .damping(18)}
+                    style={{ width: gridItemWidth }}
+                  >
+                    <ProductCard
+                      product={item}
+                      onPress={handleProductPress}
+                      onAddToCart={handleAddToCart}
+                      variant="compact"
+                    />
+                  </Animated.View>
+                )}
               />
             ) : (
               <View style={styles.emptyResults}>
@@ -564,6 +761,22 @@ export default function SearchScreen() {
             )}
           </Animated.View>
         )}
+
+        <FilterSheet
+          visible={showFilterSheet}
+          onClose={() => setShowFilterSheet(false)}
+          products={searchResults ?? []}
+          filters={filters}
+          onApply={f => { setFilters(f); setShowFilterSheet(false) }}
+          onReset={() => { setFilters(DEFAULT_FILTERS); setShowFilterSheet(false) }}
+        />
+        <SortSheet
+          visible={showSortSheet}
+          onClose={() => setShowSortSheet(false)}
+          options={SORT_OPTIONS}
+          activeKey={sortBy}
+          onSelect={setSortBy}
+        />
       </View>
     </Animated.View>
   )
@@ -807,16 +1020,126 @@ const styles = StyleSheet.create({
   resultsContainer: {
     flex: 1,
   },
-  resultsRow: {
-    paddingHorizontal: spacing[4],
-    gap: spacing[3],
+  resultsHeader: {
+    paddingHorizontal: EDGE_PADDING,
+    paddingTop: spacing[3],
+    paddingBottom: spacing[2],
   },
-  resultsList: {
+  resultsQuery: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  resultsCount: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  filterBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: EDGE_PADDING,
+    paddingVertical: spacing[2],
+    gap: spacing[2],
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    borderRadius: radii.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  filterChipActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary50,
+  },
+  filterChipIcon: {
+    fontSize: 14,
+  },
+  filterChipText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.text,
+  },
+  filterChipTextActive: {
+    color: colors.primary,
+  },
+  filterBadge: {
+    backgroundColor: colors.primary,
+    borderRadius: 9,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    marginLeft: 2,
+  },
+  filterBadgeText: {
+    color: colors.white,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  sortChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    borderRadius: radii.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  sortChipIcon: {
+    fontSize: 14,
+  },
+  sortChipText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.text,
+  },
+  quickFiltersScroll: {
+    maxHeight: 48,
+  },
+  quickFiltersContent: {
+    paddingHorizontal: EDGE_PADDING,
+    paddingVertical: spacing[2],
+    gap: spacing[2],
+  },
+  quickChip: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: 8,
+    borderRadius: radii.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  quickChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  quickChipText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.text,
+  },
+  quickChipTextActive: {
+    color: colors.white,
+  },
+  skeletonGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: GAP,
+    paddingHorizontal: EDGE_PADDING,
     paddingTop: spacing[4],
-    paddingBottom: spacing[8],
-  },
-  resultCard: {
-    flex: 1,
   },
   emptyResults: {
     flex: 1,

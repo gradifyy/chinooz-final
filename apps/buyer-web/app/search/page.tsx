@@ -1,22 +1,80 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, useMemo, Suspense } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, Suspense, lazy } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSearchProducts, useSearchSuggestions } from '@chinooz/hooks'
 import type { SuggestionItem } from '@chinooz/hooks'
-import { Container } from '@chinooz/ui-web'
+import { Container, useReducedMotion } from '@chinooz/ui-web'
 import ProductCard from '@chinooz/ui-web/ProductCard'
+import { ProductCardSkeleton } from '@chinooz/ui-web/ProductCard'
 import SafeImage from '@chinooz/ui-web/SafeImage'
 import { formatNPR } from '@chinooz/utils'
 import type { Product } from '@chinooz/types'
 
+const FilterPanel = lazy(() => import('@/components/FilterPanel'))
+const SortDropdown = lazy(() => import('@/components/SortDropdown'))
+
 const RECENT_SEARCHES_KEY = 'chinooz_recent_searches'
 const MAX_RECENT = 8
 const DEBOUNCE_MS = 250
-const STAGGER_CAP = 8
+const STAGGER_CAP = 10
 const STAGGER_DELAY = 0.05
+
+const SORT_OPTIONS = [
+  { key: 'relevance', labelKey: 'categories.relevance' },
+  { key: 'priceLow', labelKey: 'categories.priceLowHigh' },
+  { key: 'priceHigh', labelKey: 'categories.priceHighLow' },
+  { key: 'rating', labelKey: 'categories.rating' },
+  { key: 'newest', labelKey: 'categories.newest' },
+  { key: 'popular', labelKey: 'categories.mostPopular' },
+]
+
+const QUICK_FILTERS = [
+  { key: 'onSale', labelKey: 'categories.onSale' },
+  { key: 'topRated', labelKey: 'categories.topRated' },
+  { key: 'inStock', labelKey: 'categories.inStock' },
+]
+
+interface FilterState {
+  priceMin: number
+  priceMax: number
+  minRating: number
+  brands: Set<string>
+  inStock: boolean
+  onSale: boolean
+}
+
+const DEFAULT_FILTERS: FilterState = {
+  priceMin: 0,
+  priceMax: 999999,
+  minRating: 0,
+  brands: new Set(),
+  inStock: false,
+  onSale: false,
+}
+
+function useCountUp(target: number, duration = 200): number {
+  const [display, setDisplay] = useState(0)
+  const raf = useRef(0)
+  useEffect(() => {
+    if (target === 0) { setDisplay(0); return }
+    const start = display
+    const diff = target - start
+    if (diff === 0) return
+    const startTime = Date.now()
+    const tick = () => {
+      const elapsed = Date.now() - startTime
+      const progress = Math.min(elapsed / duration, 1)
+      setDisplay(Math.round(start + diff * progress))
+      if (progress < 1) raf.current = requestAnimationFrame(tick)
+    }
+    raf.current = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf.current)
+  }, [target, duration])
+  return display
+}
 
 const POPULAR_TERMS = ['Headphones', 'Shoes', 'T-shirt', 'Backpack', 'Watch', 'Sunglasses']
 
@@ -100,6 +158,11 @@ function SearchContent() {
   const [recentSearches, setRecentSearches] = useState<string[]>([])
   const [hoveredRow, setHoveredRow] = useState<string | null>(null)
   const [activeIndex, setActiveIndex] = useState(-1)
+  const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS)
+  const [sortBy, setSortBy] = useState('relevance')
+  const [showSort, setShowSort] = useState(false)
+  const [showFilterPanel, setShowFilterPanel] = useState(false)
+  const reduced = useReducedMotion()
 
   const debouncedQuery = useDebounce(query, DEBOUNCE_MS)
 
@@ -116,6 +179,33 @@ function SearchContent() {
   const isEmpty = !searchEnabled
 
   const showSpinner = suggestionsFetching && isTyping && debouncedQuery.length >= 2
+
+  const filteredProducts = useMemo(() => {
+    if (!searchResults) return []
+    let items = [...searchResults]
+    if (filters.inStock) items = items.filter(p => p.stock !== 'out_of_stock')
+    if (filters.onSale) items = items.filter(p => p.compareAtPrice && p.compareAtPrice > p.price)
+    if (filters.minRating > 0) items = items.filter(p => p.rating >= filters.minRating)
+    if (filters.brands.size > 0) items = items.filter(p => filters.brands.has(p.sellerName))
+    items = items.filter(p => p.price >= filters.priceMin && p.price <= filters.priceMax)
+    if (sortBy === 'priceLow') items.sort((a, b) => a.price - b.price)
+    if (sortBy === 'priceHigh') items.sort((a, b) => b.price - a.price)
+    if (sortBy === 'popular') items.sort((a, b) => b.reviewCount - a.reviewCount)
+    if (sortBy === 'newest') items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    return items
+  }, [searchResults, filters, sortBy])
+
+  const displayCount = useCountUp(filteredProducts.length)
+
+  const activeChipCount = useMemo(() => {
+    let count = 0
+    if (filters.inStock) count++
+    if (filters.onSale) count++
+    if (filters.minRating > 0) count++
+    if (filters.brands.size > 0) count += filters.brands.size
+    if (filters.priceMin > 0 || filters.priceMax < 999999) count++
+    return count
+  }, [filters])
 
   const actionableItems = useMemo(
     () => suggestionItems.filter(i => i.type !== 'label'),
@@ -749,36 +839,121 @@ function SearchContent() {
               transition={{ duration: 0.2 }}
             >
               {searchLoading ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div
+                  className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3"
+                  aria-busy="true"
+                >
                   {Array.from({ length: 8 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className="bg-surface rounded-xl overflow-hidden shadow-sm animate-pulse"
-                    >
-                      <div className="aspect-square bg-shimmer" />
-                      <div className="p-3 space-y-2">
-                        <div className="h-4 bg-shimmer rounded w-3/4" />
-                        <div className="h-3 bg-shimmer rounded w-1/2" />
-                        <div className="h-5 bg-shimmer rounded w-1/3" />
-                      </div>
-                    </div>
+                    <ProductCardSkeleton key={i} />
                   ))}
                 </div>
               ) : searchResults && searchResults.length > 0 ? (
-                <>
-                  <p className="text-sm text-text-muted mb-4">
-                    {t('categories.results', { count: searchResults.length })}
-                  </p>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {searchResults.map(product => (
-                      <ProductCard
-                        key={product.id}
-                        product={product}
-                        onPress={handleProductPress}
+                <div>
+                  <div className="mb-4">
+                    <h2 className="text-base font-semibold text-text">{debouncedQuery}</h2>
+                    <p className="text-xs text-text-muted mt-0.5" aria-live="polite">
+                      {t('categories.results', { count: displayCount })}
+                    </p>
+                  </div>
+
+                  <div className="sticky top-16 z-20 bg-surface border-b border-border-light py-2 flex items-center gap-2 mb-3">
+                    <button
+                      onClick={() => setShowFilterPanel(true)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-full border text-sm font-medium transition-colors ${
+                        activeChipCount > 0
+                          ? 'border-primary bg-primary-50 text-primary'
+                          : 'border-border bg-surface text-text'
+                      } hover:border-primary/30`}
+                      aria-haspopup="dialog"
+                    >
+                      <span>{'\u{1F527}'}</span>
+                      <span>{t('categories.filters')}</span>
+                      {activeChipCount > 0 && (
+                        <span className="bg-primary text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                          {activeChipCount}
+                        </span>
+                      )}
+                    </button>
+
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowSort(!showSort)}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full border border-border bg-surface text-sm font-medium text-text hover:border-primary/30 transition-colors"
+                        aria-haspopup="listbox"
+                        aria-expanded={showSort}
+                      >
+                        <span>{'\u2195'}</span>
+                        <span>
+                          {t('categories.sortBy')}:{' '}
+                          {t(SORT_OPTIONS.find(o => o.key === sortBy)?.labelKey || 'categories.relevance')}
+                        </span>
+                      </button>
+                      <SortDropdown
+                        visible={showSort}
+                        onClose={() => setShowSort(false)}
+                        options={SORT_OPTIONS}
+                        activeKey={sortBy}
+                        onSelect={setSortBy}
                       />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 overflow-x-auto scrollbar-none py-1 mb-4">
+                    {QUICK_FILTERS.map(f => {
+                      const active =
+                        f.key === 'onSale'
+                          ? filters.onSale
+                          : f.key === 'topRated'
+                            ? filters.minRating >= 4
+                            : f.key === 'inStock'
+                              ? filters.inStock
+                              : false
+                      return (
+                        <button
+                          key={f.key}
+                          onClick={() => {
+                            if (f.key === 'onSale')
+                              setFilters(prev => ({ ...prev, onSale: !prev.onSale }))
+                            else if (f.key === 'topRated')
+                              setFilters(prev => ({
+                                ...prev,
+                                minRating: prev.minRating >= 4 ? 0 : 4,
+                              }))
+                            else if (f.key === 'inStock')
+                              setFilters(prev => ({ ...prev, inStock: !prev.inStock }))
+                          }}
+                          className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap ${
+                            active
+                              ? 'bg-primary border-primary text-white'
+                              : 'bg-surface border-border text-text'
+                          }`}
+                          aria-pressed={active}
+                        >
+                          {t(f.labelKey)}
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                    {filteredProducts.map((product, i) => (
+                      <motion.div
+                        key={product.id}
+                        initial={reduced ? false : { opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{
+                          duration: reduced ? 0 : 0.25,
+                          delay: reduced ? 0 : Math.min(i, 9) * 0.05,
+                        }}
+                      >
+                        <ProductCard
+                          product={product}
+                          onPress={handleProductPress}
+                        />
+                      </motion.div>
                     ))}
                   </div>
-                </>
+                </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-20">
                   <span className="text-5xl mb-4">{'\u{1F50D}'}</span>
@@ -789,6 +964,17 @@ function SearchContent() {
                     {t('search.noResultsSubtitle')}
                   </p>
                 </div>
+              )}
+
+              {searchResults && searchResults.length > 0 && (
+                <FilterPanel
+                  visible={showFilterPanel}
+                  onClose={() => setShowFilterPanel(false)}
+                  products={searchResults}
+                  filters={filters}
+                  onApply={f => { setFilters(f); setShowFilterPanel(false) }}
+                  onReset={() => { setFilters(DEFAULT_FILTERS); setShowFilterPanel(false) }}
+                />
               )}
             </motion.div>
           )}
