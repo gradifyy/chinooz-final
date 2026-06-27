@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, memo } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native'
 import Animated, {
   useSharedValue,
@@ -32,7 +32,7 @@ interface CartItemProps {
   onSelect?: (id: string) => void
 }
 
-export default function CartItem({
+const CartItem = memo(function CartItem({
   item,
   selected = true,
   stock = 'in_stock',
@@ -172,7 +172,7 @@ export default function CartItem({
       </Swipeable>
     </Animated.View>
   )
-}
+})
 
 const styles = StyleSheet.create({
   card: {
@@ -301,3 +301,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 })
+
+export default CartItem

@@ -13,7 +13,7 @@ export function useStableCallback<T extends (...args: any[]) => any>(fn: T): T {
 }
 
 export function useDeepMemo<T>(factory: () => T, deps: React.DependencyList): T {
-  const ref = React.useRef<{ deps: React.DependencyList; value: T }>()
+  const ref = React.useRef<{ deps: React.DependencyList; value: T }>(undefined)
 
   const depsChanged = !ref.current || deps.some((dep, i) => !Object.is(dep, ref.current!.deps[i]))
 

@@ -1,4 +1,5 @@
 export { formatNPR, formatNPRCompact } from './currency'
+export { calcCartTotals } from './cartTotals'
 export {
   sanitizeString,
   getInitials,

@@ -4,7 +4,7 @@ import React, { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
-import { formatNPR } from '@chinooz/utils'
+import { formatNPR, calcCartTotals } from '@chinooz/utils'
 import { useReducedMotion } from '@chinooz/ui-web'
 import { useCartStore, useCheckoutStore } from '@chinooz/state'
 import { placeOrder, SHIPPING_CONFIG } from '@chinooz/mock-data'
@@ -43,10 +43,8 @@ export default function ReviewStep({ onStepChange }: ReviewStepProps) {
   const [orderIds, setOrderIds] = useState<string[]>([])
   const [subOrders, setSubOrders] = useState<{ sellerName: string; orderId: string; eta: string; total: number; itemCount: number }[]>([])
 
-  const subtotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0)
-  const vat = Math.round(subtotal * SHIPPING_CONFIG.vatRate / (1 + SHIPPING_CONFIG.vatRate))
-  const deliveryFee = checkout.deliveryMethod === 'sameDay' ? 250 : checkout.deliveryMethod === 'express' ? 150 : 100
-  const grandTotal = subtotal + deliveryFee
+  const totals = calcCartTotals(items, null, checkout.deliveryMethod === 'sameDay' ? 'sameDay' : checkout.deliveryMethod === 'express' ? 'express' : 'standard', checkout.paymentMethod)
+  const { subtotal, vatAmount: vat, deliveryFee, grandTotal } = totals
   const sellerGroups = groupBySeller(items)
 
   const toggleSection = useCallback((key: string) => {

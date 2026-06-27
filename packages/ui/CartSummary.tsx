@@ -13,7 +13,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics'
 import { useTranslation } from 'react-i18next'
 import { colors, spacing, radii } from '@chinooz/theme'
-import { formatNPR } from '@chinooz/utils'
+import { formatNPR, calcCartTotals } from '@chinooz/utils'
 import { applyPromoCode, SHIPPING_CONFIG } from '@chinooz/mock-data'
 import type { CartItem } from '@chinooz/types'
 
@@ -40,18 +40,11 @@ export default function CartSummary({ items, sellerGroups }: CartSummaryProps) {
   const checkScale = useSharedValue(0)
   const totalScale = useSharedValue(1)
 
-  const subtotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0)
-  const vatIncluded = Math.round(subtotal * SHIPPING_CONFIG.vatRate / (1 + SHIPPING_CONFIG.vatRate))
-  const deliveryFee = subtotal >= SHIPPING_CONFIG.freeShippingThreshold ? 0 : SHIPPING_CONFIG.deliveryFee
-  const discountAmount = promo
-    ? promo.type === 'percentage'
-      ? Math.round(subtotal * promo.discount / 100)
-      : promo.discount
-    : 0
-  const grandTotal = subtotal - discountAmount + deliveryFee
-  const freeShippingProgress = Math.min(1, subtotal / SHIPPING_CONFIG.freeShippingThreshold)
-  const amountToFreeShipping = Math.max(0, SHIPPING_CONFIG.freeShippingThreshold - subtotal)
-  const freeShippingUnlocked = subtotal >= SHIPPING_CONFIG.freeShippingThreshold
+  const totals = calcCartTotals(
+    items,
+    promo,
+  )
+  const { subtotal, vatAmount, discount: discountAmount, deliveryFee, grandTotal, freeShippingProgress, amountToFreeShipping, freeShippingUnlocked } = totals
 
   const inputShakeStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: inputShakeX.value }],
@@ -179,7 +172,7 @@ export default function CartSummary({ items, sellerGroups }: CartSummaryProps) {
       {/* Breakdown */}
       <View style={styles.breakdown}>
         <SummaryLine label={`${t('cart.subtotal')} (${items.length})`} value={subtotal} />
-        <SummaryLine label={t('cart.vatNote')} value={vatIncluded} muted />
+        <SummaryLine label={t('cart.vatNote')} value={vatAmount} muted />
         <SummaryLine
           label={t('cart.shipping')}
           value={deliveryFee}

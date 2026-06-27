@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
-import { formatNPR } from '@chinooz/utils'
+import { formatNPR, calcCartTotals } from '@chinooz/utils'
 import { applyPromoCode, SHIPPING_CONFIG } from '@chinooz/mock-data'
 import { useReducedMotion } from './hooks/useReducedMotion'
 import type { CartItem } from '@chinooz/types'
@@ -28,18 +28,8 @@ export default function CartSummary({ items, sellerGroups }: CartSummaryProps) {
   const [applying, setApplying] = useState(false)
   const [showSellers, setShowSellers] = useState(false)
 
-  const subtotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0)
-  const vatIncluded = Math.round(subtotal * SHIPPING_CONFIG.vatRate / (1 + SHIPPING_CONFIG.vatRate))
-  const deliveryFee = subtotal >= SHIPPING_CONFIG.freeShippingThreshold ? 0 : SHIPPING_CONFIG.deliveryFee
-  const discountAmount = promo
-    ? promo.type === 'percentage'
-      ? Math.round(subtotal * promo.discount / 100)
-      : promo.discount
-    : 0
-  const grandTotal = subtotal - discountAmount + deliveryFee
-  const freeShippingProgress = Math.min(1, subtotal / SHIPPING_CONFIG.freeShippingThreshold)
-  const amountToFreeShipping = Math.max(0, SHIPPING_CONFIG.freeShippingThreshold - subtotal)
-  const freeShippingUnlocked = subtotal >= SHIPPING_CONFIG.freeShippingThreshold
+  const totals = calcCartTotals(items, promo)
+  const { subtotal, vatAmount, discount: discountAmount, deliveryFee, grandTotal, freeShippingProgress, amountToFreeShipping, freeShippingUnlocked } = totals
 
   const handleApplyPromo = useCallback(async () => {
     if (!promoCode.trim()) return
@@ -153,7 +143,7 @@ export default function CartSummary({ items, sellerGroups }: CartSummaryProps) {
       {/* Breakdown */}
       <div className="space-y-2">
         <SummaryLine label={`${t('cart.subtotal')} (${items.length})`} value={subtotal} />
-        <SummaryLine label={t('cart.vatNote')} value={vatIncluded} muted />
+        <SummaryLine label={t('cart.vatNote')} value={vatAmount} muted />
         <SummaryLine
           label={t('cart.shipping')}
           value={deliveryFee}
