@@ -95,6 +95,74 @@ export function OrderCardSkeleton() {
   )
 }
 
+export function OrderDetailSkeleton() {
+  return (
+    <View style={s.detailContainer}>
+      {/* Header card skeleton */}
+      <View style={s.detailHeaderCard}>
+        <View style={s.detailHeaderRow}>
+          <Skeleton width={120} height={22} borderRadius={radii.md} />
+          <Skeleton width={70} height={22} borderRadius={radii.full} />
+        </View>
+        <Skeleton width={160} height={14} borderRadius={radii.sm} />
+        <Skeleton width={130} height={14} borderRadius={radii.sm} />
+      </View>
+
+      {/* Timeline skeleton - 5 step rows */}
+      <View style={s.detailSection}>
+        <Skeleton width={100} height={18} borderRadius={radii.sm} />
+        <View style={s.timelineSkeleton}>
+          {[0, 1, 2, 3, 4].map(i => (
+            <View key={i} style={s.timelineRow}>
+              <Skeleton width={32} height={32} circle />
+              <View style={s.timelineInfo}>
+                <Skeleton width={80 + (i % 3) * 20} height={14} borderRadius={radii.sm} />
+                <Skeleton width={100} height={12} borderRadius={radii.sm} />
+              </View>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      {/* Items skeleton */}
+      <View style={s.detailSection}>
+        <Skeleton width={90} height={18} borderRadius={radii.sm} />
+        <View style={s.detailCard}>
+          {[0, 1].map(i => (
+            <View key={i} style={s.itemRow}>
+              <Skeleton width={56} height={56} borderRadius={radii.md} />
+              <View style={s.itemInfo}>
+                <Skeleton width="70%" height={16} borderRadius={radii.sm} />
+                <Skeleton width="40%" height={12} borderRadius={radii.sm} />
+                <Skeleton width="30%" height={12} borderRadius={radii.sm} />
+              </View>
+              <Skeleton width={60} height={14} borderRadius={radii.sm} />
+            </View>
+          ))}
+        </View>
+      </View>
+
+      {/* Price breakdown skeleton */}
+      <View style={s.detailSection}>
+        <Skeleton width={120} height={18} borderRadius={radii.sm} />
+        <View style={s.detailCard}>
+          {[0, 1, 2, 3].map(i => (
+            <View key={i} style={s.priceRow}>
+              <Skeleton width={80 + (i % 2) * 30} height={14} borderRadius={radii.sm} />
+              <Skeleton width={60} height={14} borderRadius={radii.sm} />
+            </View>
+          ))}
+          <View style={s.priceDivider} />
+          <View style={s.priceRow}>
+            <Skeleton width={70} height={16} borderRadius={radii.sm} />
+            <Skeleton width={80} height={16} borderRadius={radii.sm} />
+          </View>
+        </View>
+      </View>
+    </View>
+  )
+}
+
 export function WishlistGridSkeleton() {
   return (
     <View style={s.wishlistGrid}>
@@ -212,4 +280,30 @@ const s = StyleSheet.create({
     elevation: 1,
   },
   wishlistBody: { padding: spacing[3], gap: spacing[1] },
+  detailContainer: { padding: spacing[4], gap: spacing[5] },
+  detailHeaderCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    padding: spacing[4],
+    gap: spacing[3],
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  detailHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  detailSection: { gap: spacing[3] },
+  timelineSkeleton: { gap: spacing[3] },
+  timelineRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
+  timelineInfo: { flex: 1, gap: spacing[1] },
+  detailCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    padding: spacing[4],
+    gap: spacing[3],
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  itemRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
+  itemInfo: { flex: 1, gap: spacing[1] },
+  priceRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2 },
+  priceDivider: { height: 1, backgroundColor: colors.borderLight, marginVertical: spacing[1] },
 })

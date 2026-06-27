@@ -7,7 +7,7 @@ import {
   FlatList,
   ScrollView,
   StyleSheet,
-  ActivityIndicator,
+  AppState,
 } from 'react-native'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -20,12 +20,15 @@ import Animated, {
   FadeIn,
   Layout,
 } from 'react-native-reanimated'
+import NetInfo from '@react-native-community/netinfo'
 import { colors, radii, spacing, duration, easing } from '@chinooz/theme'
 import { formatNPR } from '@chinooz/utils'
 import { getOrders } from '@chinooz/mock-data'
 import { useSessionStore } from '@chinooz/state'
+import { useQueryClient } from '@tanstack/react-query'
 import type { Order, OrderStatus } from '@chinooz/types'
 import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
+import EmptyState from '@chinooz/ui/EmptyState'
 import { OrderCardSkeleton } from '../../components/Skeletons'
 
 type TabKey = 'all' | 'to_pay' | 'processing' | 'shipped' | 'delivered' | 'cancelled_returned'
@@ -289,14 +292,7 @@ export default function OrdersScreen() {
   const insets = useSafeAreaInsets()
   const reduced = useReducedMotion()
   const isLoggedIn = useSessionStore(s => s.isLoggedIn)
-
-  useEffect(() => {
-    if (!isLoggedIn) {
-      router.replace('/phone-entry')
-    }
-  }, [isLoggedIn])
-
-  if (!isLoggedIn) return null
+  const queryClient = useQueryClient()
 
   const initialTab: TabKey = (() => {
     const s = params.status
@@ -308,9 +304,28 @@ export default function OrdersScreen() {
   const [searchQuery, setSearchQuery] = useState('')
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
+  const [hasError, setHasError] = useState(false)
+  const [isOffline, setIsOffline] = useState(false)
+
+  // Offline detection
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener(state => {
+      const offline = !(state.isConnected && state.isInternetReachable !== false)
+      setIsOffline(offline)
+    })
+    return () => unsubscribe()
+  }, [])
+
+  // Auto-recover when coming back online
+  useEffect(() => {
+    if (!isOffline && orders.length === 0 && !loading) {
+      fetchOrders()
+    }
+  }, [isOffline])
 
   const fetchOrders = useCallback(async () => {
     setLoading(true)
+    setHasError(false)
     try {
       const statusParam = activeTab === 'all' ? undefined : activeTab
       const searchParam = searchQuery.trim() || undefined
@@ -318,6 +333,7 @@ export default function OrdersScreen() {
       setOrders(data)
     } catch {
       setOrders([])
+      setHasError(true)
     } finally {
       setLoading(false)
     }
@@ -354,6 +370,17 @@ export default function OrdersScreen() {
     return orders.filter(o => tab.statuses.includes(o.status))
   }, [orders, activeTab])
 
+  const getTabEmptyMessage = useCallback(() => {
+    switch (activeTab) {
+      case 'to_pay': return { title: t('orders.noToPayOrders'), subtitle: t('orders.noToPayOrdersNe') }
+      case 'processing': return { title: t('orders.noProcessingOrders'), subtitle: t('orders.noProcessingOrdersNe') }
+      case 'shipped': return { title: t('orders.noShippedOrders'), subtitle: t('orders.noShippedOrdersNe') }
+      case 'delivered': return { title: t('orders.noDeliveredOrders'), subtitle: t('orders.noDeliveredOrdersNe') }
+      case 'cancelled_returned': return { title: t('orders.noCancelledReturnedOrders'), subtitle: t('orders.noCancelledReturnedOrdersNe') }
+      default: return { title: t('orders.noOrders'), subtitle: t('orders.noOrdersSubtitle') }
+    }
+  }, [activeTab, t])
+
   const renderOrder = useCallback(
     ({ item, index }: { item: Order; index: number }) => (
       <Animated.View
@@ -369,8 +396,45 @@ export default function OrdersScreen() {
     [router, reduced],
   )
 
+  // Logged-out state
+  if (!isLoggedIn) {
+    return (
+      <View style={[styles.screen, { paddingTop: insets.top }]}>
+        <View style={styles.topBar}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backButton}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.back')}
+          >
+            <Text style={styles.backIcon}>←</Text>
+          </TouchableOpacity>
+          <Text style={styles.title}>{t('orders.myOrders')}</Text>
+          <View style={styles.backButton} />
+        </View>
+        <EmptyState
+          icon={<Text style={{ fontSize: 48 }}>🔒</Text>}
+          title={t('orders.signInPrompt')}
+          action={{ label: t('orders.signIn'), onPress: () => router.push('/phone-entry') }}
+        />
+      </View>
+    )
+  }
+
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
+      {/* Offline banner */}
+      {isOffline && (
+        <Animated.View
+          entering={reduced ? undefined : FadeIn.duration(200)}
+          style={styles.offlineBanner}
+        >
+          <View style={styles.offlineDot} />
+          <Text style={styles.offlineText}>{t('orders.offlineCached')}</Text>
+        </Animated.View>
+      )}
+
       <View style={styles.topBar}>
         <TouchableOpacity
           onPress={() => router.back()}
@@ -412,15 +476,63 @@ export default function OrdersScreen() {
       </View>
 
       {loading ? (
-        <Animated.View entering={FadeIn.duration(duration.normal)} style={styles.loadingContainer} accessibilityRole="progressbar" accessibilityLabel={t('common.loadingOrders')}>
+        <Animated.View
+          entering={reduced ? undefined : FadeIn.duration(duration.normal)}
+          style={styles.loadingContainer}
+          accessibilityRole="progressbar"
+          accessibilityLabel={t('common.loadingOrders')}
+        >
           {[0, 1, 2, 3].map(i => <OrderCardSkeleton key={i} />)}
         </Animated.View>
+      ) : hasError ? (
+        <Animated.View
+          entering={reduced ? undefined : FadeIn.duration(duration.normal)}
+          style={styles.errorContainer}
+        >
+          <Text style={styles.errorIcon}>⚠️</Text>
+          <Text style={styles.errorTitle}>{t('orders.errorTitle')}</Text>
+          <Text style={styles.errorSubtitle}>{t('orders.errorSubtitle')}</Text>
+          <TouchableOpacity
+            onPress={fetchOrders}
+            activeOpacity={0.85}
+            style={styles.retryBtn}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.retry')}
+          >
+            <Text style={styles.retryText}>{t('common.retry')}</Text>
+          </TouchableOpacity>
+        </Animated.View>
       ) : filteredOrders.length === 0 ? (
-        <View style={styles.emptyContainer}>
+        <Animated.View
+          entering={reduced ? undefined : FadeIn.duration(duration.slower)}
+          style={styles.emptyContainer}
+        >
           <Text style={styles.emptyIcon}>📦</Text>
-          <Text style={styles.emptyTitle}>{t('orders.noOrders')}</Text>
-          <Text style={styles.emptySubtitle}>{t('orders.noOrdersSubtitle')}</Text>
-        </View>
+          <Text style={styles.emptyTitle}>{getTabEmptyMessage().title}</Text>
+          <Text style={styles.emptySubtitle}>{getTabEmptyMessage().subtitle}</Text>
+          {activeTab !== 'all' && (
+            <TouchableOpacity
+              onPress={() => setActiveTab('all')}
+              activeOpacity={0.85}
+              style={styles.clearTabBtn}
+              accessibilityRole="button"
+              accessibilityLabel={t('orders.clearTab')}
+            >
+              <Text style={styles.clearTabText}>{t('orders.clearTab')}</Text>
+            </TouchableOpacity>
+          )}
+          {activeTab === 'all' && (
+            <TouchableOpacity
+              onPress={() => router.push('/')}
+              activeOpacity={0.85}
+              style={styles.shopCta}
+              accessibilityRole="button"
+              accessibilityLabel={t('cart.startShopping')}
+            >
+              <Text style={styles.shopCtaText}>{t('cart.startShopping')}</Text>
+            </TouchableOpacity>
+          )}
+        </Animated.View>
       ) : (
         <FlatList
           data={filteredOrders}
@@ -559,8 +671,8 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    gap: spacing[3],
+    padding: spacing[4],
   },
   emptyContainer: {
     flex: 1,
@@ -584,6 +696,90 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  clearTabBtn: {
+    marginTop: spacing[2],
+    paddingHorizontal: spacing[5],
+    paddingVertical: spacing[2.5],
+    borderRadius: radii.lg,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    backgroundColor: 'transparent',
+  },
+  clearTabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  shopCta: {
+    marginTop: spacing[2],
+    paddingHorizontal: spacing[6],
+    paddingVertical: spacing[3],
+    borderRadius: radii.lg,
+    backgroundColor: colors.primary,
+  },
+  shopCtaText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.white,
+  },
+  errorContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing[8],
+    gap: spacing[3],
+  },
+  errorIcon: {
+    fontSize: 48,
+    marginBottom: spacing[2],
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  errorSubtitle: {
+    fontSize: 14,
+    color: colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  retryBtn: {
+    marginTop: spacing[2],
+    paddingHorizontal: spacing[5],
+    paddingVertical: spacing[2.5],
+    borderRadius: radii.lg,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    backgroundColor: 'transparent',
+  },
+  retryText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    backgroundColor: colors.warningLight,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.warning,
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[2.5],
+  },
+  offlineDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.warning,
+  },
+  offlineText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#92400E',
   },
   listContent: {
     padding: spacing[4],

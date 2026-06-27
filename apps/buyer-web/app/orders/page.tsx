@@ -1,10 +1,10 @@
 'use client'
 
-import React, { useState, useMemo, useEffect, useRef } from 'react'
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
-import { Container, Screen } from '@chinooz/ui-web'
+import { Container, Screen, EmptyState } from '@chinooz/ui-web'
 import { formatNPR } from '@chinooz/utils'
 import { getOrders } from '@chinooz/mock-data'
 import { useReducedMotion } from '@chinooz/ui-web'
@@ -237,14 +237,6 @@ export default function OrdersPage() {
   const reduced = useReducedMotion()
   const isLoggedIn = useSessionStore(s => s.isLoggedIn)
 
-  useEffect(() => {
-    if (!isLoggedIn) {
-      router.replace('/phone-entry')
-    }
-  }, [isLoggedIn])
-
-  if (!isLoggedIn) return null
-
   const initialTab: TabKey = (() => {
     const s = searchParams.get('status')
     if (s && VALID_TABS.includes(s as TabKey)) return s as TabKey
@@ -255,25 +247,41 @@ export default function OrdersPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
+  const [hasError, setHasError] = useState(false)
+  const [isOffline, setIsOffline] = useState(false)
+
+  // Offline detection
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false)
+    const handleOffline = () => setIsOffline(true)
+    setIsOffline(typeof window !== 'undefined' && !navigator.onLine)
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [])
+
+  const fetchOrders = useCallback(async () => {
+    setLoading(true)
+    setHasError(false)
+    try {
+      const statusParam = activeTab === 'all' ? undefined : activeTab
+      const searchParam = searchQuery.trim() || undefined
+      const data = await getOrders({ status: statusParam, search: searchParam })
+      setOrders(data)
+    } catch {
+      setOrders([])
+      setHasError(true)
+    } finally {
+      setLoading(false)
+    }
+  }, [activeTab, searchQuery])
 
   useEffect(() => {
-    let cancelled = false
-    async function fetchOrders() {
-      setLoading(true)
-      try {
-        const statusParam = activeTab === 'all' ? undefined : activeTab
-        const searchParam = searchQuery.trim() || undefined
-        const data = await getOrders({ status: statusParam, search: searchParam })
-        if (!cancelled) setOrders(data)
-      } catch {
-        if (!cancelled) setOrders([])
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
     fetchOrders()
-    return () => { cancelled = true }
-  }, [activeTab, searchQuery])
+  }, [fetchOrders])
 
   const counts = useMemo(() => {
     const c: Record<TabKey, number> = {
@@ -302,8 +310,64 @@ export default function OrdersPage() {
     return orders.filter(o => tab.statuses.includes(o.status))
   }, [orders, activeTab])
 
+  const getTabEmptyMessage = useCallback(() => {
+    switch (activeTab) {
+      case 'to_pay': return { title: t('orders.noToPayOrders'), subtitle: t('orders.noToPayOrdersNe') }
+      case 'processing': return { title: t('orders.noProcessingOrders'), subtitle: t('orders.noProcessingOrdersNe') }
+      case 'shipped': return { title: t('orders.noShippedOrders'), subtitle: t('orders.noShippedOrdersNe') }
+      case 'delivered': return { title: t('orders.noDeliveredOrders'), subtitle: t('orders.noDeliveredOrdersNe') }
+      case 'cancelled_returned': return { title: t('orders.noCancelledReturnedOrders'), subtitle: t('orders.noCancelledReturnedOrdersNe') }
+      default: return { title: t('orders.noOrders'), subtitle: t('orders.noOrdersSubtitle') }
+    }
+  }, [activeTab, t])
+
+  // Logged-out state
+  if (!isLoggedIn) {
+    return (
+      <Screen>
+        <Container className="py-6 max-w-[800px]">
+          <div className="flex items-center gap-3 mb-6">
+            <button
+              onClick={() => router.back()}
+              className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-background transition-colors"
+              aria-label={t('common.back')}
+            >
+              <span className="text-xl text-text">←</span>
+            </button>
+            <h1 className="text-xl font-bold text-text">{t('orders.myOrders')}</h1>
+          </div>
+          <EmptyState
+            icon={<span className="text-5xl">🔒</span>}
+            title={t('orders.signInPrompt')}
+            action={{ label: t('orders.signIn'), onPress: () => router.push('/phone-entry') }}
+          />
+        </Container>
+      </Screen>
+    )
+  }
+
   return (
     <Screen>
+      {/* Offline banner */}
+      <AnimatePresence>
+        {isOffline && (
+          <motion.div
+            initial={reduced ? false : { y: -48, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={reduced ? undefined : { y: -48, opacity: 0 }}
+            transition={reduced ? { duration: 0 } : { type: 'spring', damping: 20, stiffness: 300, mass: 0.8 }}
+            className="sticky top-16 z-40 bg-warning-light border-b border-warning px-4 py-2"
+          >
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-warning" />
+              <span className="text-sm font-semibold text-[#92400E]">
+                {t('orders.offlineCached')}
+              </span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <Container className="py-6 max-w-[800px]">
         <div className="flex items-center gap-3 mb-6">
           <button
@@ -345,6 +409,23 @@ export default function OrdersPage() {
           <div className="space-y-3" aria-busy="true" aria-label={t('common.loadingOrders')}>
             {[0, 1, 2, 3].map(i => <OrderCardSkeleton key={i} />)}
           </div>
+        ) : hasError ? (
+          <motion.div
+            initial={reduced ? false : { opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex flex-col items-center justify-center py-20 px-8"
+          >
+            <span className="text-5xl mb-4">⚠️</span>
+            <h3 className="text-lg font-semibold text-text text-center">{t('orders.errorTitle')}</h3>
+            <p className="text-sm text-text-muted text-center mt-2">{t('orders.errorSubtitle')}</p>
+            <button
+              onClick={fetchOrders}
+              className="mt-4 px-5 py-2.5 rounded-xl border-[1.5px] border-primary text-primary font-semibold text-sm hover:bg-primary-50 transition-colors"
+              aria-label={t('common.retry')}
+            >
+              {t('common.retry')}
+            </button>
+          </motion.div>
         ) : filteredOrders.length === 0 ? (
           <motion.div
             initial={reduced ? false : { opacity: 0, y: 20 }}
@@ -352,8 +433,25 @@ export default function OrdersPage() {
             className="flex flex-col items-center justify-center py-20 px-8"
           >
             <span className="text-5xl mb-4">📦</span>
-            <h3 className="text-lg font-semibold text-text text-center">{t('orders.noOrders')}</h3>
-            <p className="text-sm text-text-muted text-center mt-2">{t('orders.noOrdersSubtitle')}</p>
+            <h3 className="text-lg font-semibold text-text text-center">{getTabEmptyMessage().title}</h3>
+            <p className="text-sm text-text-muted text-center mt-2">{getTabEmptyMessage().subtitle}</p>
+            {activeTab !== 'all' ? (
+              <button
+                onClick={() => setActiveTab('all')}
+                className="mt-4 px-5 py-2.5 rounded-xl border-[1.5px] border-primary text-primary font-semibold text-sm hover:bg-primary-50 transition-colors"
+                aria-label={t('orders.clearTab')}
+              >
+                {t('orders.clearTab')}
+              </button>
+            ) : (
+              <button
+                onClick={() => router.push('/')}
+                className="mt-4 px-6 py-3 rounded-xl bg-primary text-white font-bold text-sm hover:bg-primary-dark transition-colors"
+                aria-label={t('cart.startShopping')}
+              >
+                {t('cart.startShopping')}
+              </button>
+            )}
           </motion.div>
         ) : (
           <div className="flex flex-col gap-3">

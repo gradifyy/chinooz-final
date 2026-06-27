@@ -26,7 +26,8 @@
     "loadingOrders": "अर्डरहरू लोड हुँदैछ",
     "loadingWishlist": "इच्छासूची लोड हुँदैछ",
     "loadingAddresses": "ठेगानाहरू लोड हुँदैछ",
-    "loadingPayments": "भुक्तानी विधिहरू लोड हुँदैछ"
+    "loadingPayments": "भुक्तानी विधिहरू लोड हुँदैछ",
+    "loadingOrderDetail": "अर्डर विवरण लोड हुँदैछ"
   },
   "nav": {
     "home": "गृहपृष्ठ",
@@ -401,7 +402,26 @@
     "cashOnDelivery": "नगद भुक्तानी",
     "shipmentFrom": "{{seller}} बाट शिपमेन्ट",
     "stepsComplete": "{{total}} मध्ये {{current}} चरणहरू पूरा",
-    "orderStatus": "अर्डर स्थिति: {{status}}, {{total}} मध्ये {{current}} चरणहरू पूरा"
+    "orderStatus": "अर्डर स्थिति: {{status}}, {{total}} मध्ये {{current}} चरणहरू पूरा",
+    "errorTitle": "केही गडबड भयो",
+    "errorSubtitle": "अर्डरहरू लोड गर्न सकिएन। कृपया फेरि प्रयास गर्नुहोस्।",
+    "notFoundSubtitle": "यो अर्डर हटाइएको वा अवस्थित छैन।",
+    "backToOrders": "अर्डरहरूमा फर्कनुहोस्",
+    "offlineCached": "तपाईं अफलाइन हुनुहुन्छ। क्यास गरिएका अर्डरहरू देखाइँदैछ।",
+    "signInPrompt": "अर्डर हेर्न साइन इन गर्नुहोस्",
+    "signIn": "साइन इन",
+    "clearTab": "सबै अर्डर हेर्नुहोस्",
+    "loadingDetail": "अर्डर विवरण लोड हुँदैछ",
+    "noShippedOrders": "कुनै शिप भएको अर्डर छैन",
+    "noDeliveredOrders": "कुनै डेलिभर भएको अर्डर छैन",
+    "noProcessingOrders": "कुनै प्रशोधन अर्डर छैन",
+    "noToPayOrders": "भुक्तानी गर्ने कुनै अर्डर छैन",
+    "noCancelledReturnedOrders": "कुनै रद्द वा फिर्ता अर्डर छैन",
+    "noShippedOrdersNe": "कुनै शिप भएको अर्डर छैन",
+    "noDeliveredOrdersNe": "कुनै डेलिभर भएको अर्डर छैन",
+    "noProcessingOrdersNe": "कुनै प्रशोधन अर्डर छैन",
+    "noToPayOrdersNe": "भुक्तानी गर्ने कुनै अर्डर छैन",
+    "noCancelledReturnedOrdersNe": "कुनै रद्द वा फिर्ता अर्डर छैन"
   },
   "wishlist": {
     "title": "इच्छासूची",

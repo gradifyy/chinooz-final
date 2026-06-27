@@ -1,13 +1,15 @@
 'use client'
 
-import React, { useMemo, useRef, useCallback } from 'react'
+import React, { useMemo, useRef, useCallback, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { formatNPR } from '@chinooz/utils'
-import { useReducedMotion, OrderStatusTimeline } from '@chinooz/ui-web'
+import { useReducedMotion, OrderStatusTimeline, EmptyState } from '@chinooz/ui-web'
 import { duration, easing } from '@chinooz/theme'
+import { useSessionStore } from '@chinooz/state'
 import OrderActions from '../../components/OrderActions'
+import { OrderDetailSkeleton } from '../../components/skeletons'
 import type { Order, OrderStatus, CartItem, TimelineStep, ShipmentTimeline } from '@chinooz/types'
 
 const STATUS_COLORS: Record<OrderStatus, { bg: string; text: string }> = {
@@ -251,10 +253,117 @@ function SummaryLine({
   )
 }
 
-export default function OrderDetailClient({ order }: { order: Order }) {
+export default function OrderDetailClient({ order, isError }: { order: Order | null; isError?: boolean }) {
   const { t } = useTranslation()
   const router = useRouter()
   const reduced = useReducedMotion()
+  const isLoggedIn = useSessionStore(s => s.isLoggedIn)
+  const [isOffline, setIsOffline] = useState(false)
+
+  // Offline detection
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false)
+    const handleOffline = () => setIsOffline(true)
+    setIsOffline(typeof window !== 'undefined' && !navigator.onLine)
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [])
+
+  // Logged-out state
+  if (!isLoggedIn) {
+    return (
+      <div className="space-y-5">
+        <div className="flex items-center gap-3 mb-2">
+          <button
+            onClick={() => router.back()}
+            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-background transition-colors"
+            aria-label={t('common.back')}
+          >
+            <span className="text-xl text-text">←</span>
+          </button>
+          <h1 className="text-xl font-bold text-text">{t('orders.orderDetail')}</h1>
+        </div>
+        <EmptyState
+          icon={<span className="text-5xl">🔒</span>}
+          title={t('orders.signInPrompt')}
+          action={{ label: t('orders.signIn'), onPress: () => router.push('/phone-entry') }}
+        />
+      </div>
+    )
+  }
+
+  // Error state
+  if (isError) {
+    return (
+      <div className="space-y-5">
+        <div className="flex items-center gap-3 mb-2">
+          <button
+            onClick={() => router.back()}
+            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-background transition-colors"
+            aria-label={t('common.back')}
+          >
+            <span className="text-xl text-text">←</span>
+          </button>
+          <h1 className="text-xl font-bold text-text">{t('orders.orderDetail')}</h1>
+        </div>
+        <motion.div
+          initial={reduced ? false : { opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col items-center justify-center py-20 px-8"
+        >
+          <span className="text-5xl mb-4">⚠️</span>
+          <h3 className="text-lg font-semibold text-text text-center">{t('orders.errorTitle')}</h3>
+          <p className="text-sm text-text-muted text-center mt-2">{t('orders.errorSubtitle')}</p>
+          <button
+            onClick={() => router.push('/orders')}
+            className="mt-4 px-5 py-2.5 rounded-xl border-[1.5px] border-primary text-primary font-semibold text-sm hover:bg-primary-50 transition-colors"
+            aria-label={t('orders.backToOrders')}
+          >
+            {t('orders.backToOrders')}
+          </button>
+        </motion.div>
+      </div>
+    )
+  }
+
+  // Not found state
+  if (!order) {
+    return (
+      <div className="space-y-5">
+        <div className="flex items-center gap-3 mb-2">
+          <button
+            onClick={() => router.back()}
+            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-background transition-colors"
+            aria-label={t('common.back')}
+          >
+            <span className="text-xl text-text">←</span>
+          </button>
+          <h1 className="text-xl font-bold text-text">{t('orders.orderDetail')}</h1>
+        </div>
+        <motion.div
+          initial={reduced ? false : { opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col items-center justify-center py-20 px-8"
+        >
+          <span className="text-5xl mb-4">😕</span>
+          <h3 className="text-lg font-semibold text-text text-center">{t('orders.notFound')}</h3>
+          <p className="text-sm text-text-muted text-center mt-2">{t('orders.notFoundSubtitle')}</p>
+          <button
+            onClick={() => router.push('/orders')}
+            className="mt-4 px-5 py-2.5 rounded-xl border-[1.5px] border-primary text-primary font-semibold text-sm hover:bg-primary-50 transition-colors"
+            aria-label={t('orders.backToOrders')}
+          >
+            {t('orders.backToOrders')}
+          </button>
+        </motion.div>
+      </div>
+    )
+  }
+
   const statusStyle = STATUS_COLORS[order.status]
 
   const sellerGroups = useMemo(() => {
@@ -276,6 +385,26 @@ export default function OrderDetailClient({ order }: { order: Order }) {
 
   return (
     <div className="space-y-5">
+      {/* Offline banner */}
+      <AnimatePresence>
+        {isOffline && (
+          <motion.div
+            initial={reduced ? false : { y: -48, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={reduced ? undefined : { y: -48, opacity: 0 }}
+            transition={reduced ? { duration: 0 } : { type: 'spring', damping: 20, stiffness: 300, mass: 0.8 }}
+            className="sticky top-16 z-40 bg-warning-light border-b border-warning px-4 py-2 -mx-4 md:-mx-6 lg:-mx-8"
+          >
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-warning" />
+              <span className="text-sm font-semibold text-[#92400E]">
+                {t('orders.offlineCached')}
+              </span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Back button */}
       <SectionReveal delay={0}>
         <div className="flex items-center gap-3 mb-2">

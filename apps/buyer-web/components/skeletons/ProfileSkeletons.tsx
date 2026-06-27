@@ -92,6 +92,83 @@ export function OrderCardSkeleton() {
   )
 }
 
+export function OrderDetailSkeleton() {
+  return (
+    <div className="space-y-5" aria-busy="true" aria-label="Loading order detail">
+      {/* Back + title skeleton */}
+      <div className="flex items-center gap-3 mb-2">
+        <Skeleton width={40} height={40} circle />
+        <Skeleton width={120} height={24} borderRadius={8} />
+      </div>
+
+      {/* Header card skeleton */}
+      <div className="bg-surface rounded-xl border border-border-light p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <Skeleton width={130} height={22} borderRadius={8} />
+          <Skeleton width={70} height={22} borderRadius={9999} />
+        </div>
+        <Skeleton width={180} height={14} borderRadius={4} />
+        <Skeleton width={140} height={14} borderRadius={4} />
+      </div>
+
+      {/* Timeline skeleton - 5 step rows */}
+      <div className="space-y-3">
+        <Skeleton width={110} height={18} borderRadius={4} />
+        <div className="h-px bg-border" />
+        <div className="space-y-3">
+          {[0, 1, 2, 3, 4].map(i => (
+            <div key={i} className="flex items-center gap-3">
+              <Skeleton width={32} height={32} circle />
+              <div className="flex-1 space-y-1">
+                <Skeleton width={`${60 + (i % 3) * 15}%`} height={14} borderRadius={4} />
+                <Skeleton width="50%" height={12} borderRadius={4} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Items skeleton */}
+      <div className="space-y-3">
+        <Skeleton width={100} height={18} borderRadius={4} />
+        <div className="h-px bg-border" />
+        <div className="bg-surface rounded-xl border border-border-light p-4 space-y-3">
+          {[0, 1].map(i => (
+            <div key={i} className="flex items-center gap-3">
+              <Skeleton width={56} height={56} borderRadius={8} />
+              <div className="flex-1 space-y-1">
+                <Skeleton width="70%" height={16} borderRadius={4} />
+                <Skeleton width="40%" height={12} borderRadius={4} />
+                <Skeleton width="30%" height={12} borderRadius={4} />
+              </div>
+              <Skeleton width={60} height={14} borderRadius={4} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Price breakdown skeleton */}
+      <div className="space-y-3">
+        <Skeleton width={130} height={18} borderRadius={4} />
+        <div className="h-px bg-border" />
+        <div className="bg-surface rounded-xl border border-border-light p-4 space-y-2">
+          {[0, 1, 2, 3].map(i => (
+            <div key={i} className="flex items-center justify-between py-0.5">
+              <Skeleton width={`${50 + (i % 2) * 20}%`} height={14} borderRadius={4} />
+              <Skeleton width={60} height={14} borderRadius={4} />
+            </div>
+          ))}
+          <div className="h-px bg-border-light my-1" />
+          <div className="flex items-center justify-between">
+            <Skeleton width={80} height={16} borderRadius={4} />
+            <Skeleton width={90} height={16} borderRadius={4} />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function WishlistGridSkeleton() {
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">

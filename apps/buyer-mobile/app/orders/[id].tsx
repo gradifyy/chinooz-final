@@ -1,24 +1,30 @@
-import React, { useMemo, useRef, useCallback } from 'react'
+import React, { useMemo, useRef, useCallback, useState, useEffect } from 'react'
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   Image,
-  ActivityIndicator,
   findNodeHandle,
 } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
-import { colors, spacing, radii } from '@chinooz/theme'
+import Animated, {
+  FadeIn,
+  FadeInDown,
+} from 'react-native-reanimated'
+import NetInfo from '@react-native-community/netinfo'
+import { colors, spacing, radii, duration } from '@chinooz/theme'
 import { formatNPR } from '@chinooz/utils'
 import { useOrderById } from '@chinooz/hooks'
 import { useSessionStore } from '@chinooz/state'
 import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
 import { OrderStatusTimeline } from '@chinooz/ui'
+import EmptyState from '@chinooz/ui/EmptyState'
 import SectionReveal from '../../components/SectionReveal'
 import OrderActions from '../../components/OrderActions'
+import { OrderDetailSkeleton } from '../../components/Skeletons'
 import type { Order, OrderStatus, CartItem, TimelineStep, ShipmentTimeline } from '@chinooz/types'
 
 const STATUS_COLORS: Record<OrderStatus, { bg: string; text: string }> = {
@@ -362,10 +368,43 @@ export default function OrderDetailScreen() {
   const timelineY = useRef(0)
 
   const { data: order, isLoading, isError } = useOrderById(id || '')
+  const [isOffline, setIsOffline] = useState(false)
 
+  // Offline detection
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener(state => {
+      const offline = !(state.isConnected && state.isInternetReachable !== false)
+      setIsOffline(offline)
+    })
+    return () => unsubscribe()
+  }, [])
+
+  // Logged-out state
   if (!isLoggedIn) {
-    router.replace('/phone-entry')
-    return null
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>
+        <View style={detailStyles.topBar}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={detailStyles.backButton}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.back')}
+          >
+            <Text style={{ fontSize: 22, color: colors.text }}>←</Text>
+          </TouchableOpacity>
+          <Text style={{ fontSize: 18, fontWeight: '700', color: colors.text }}>
+            {t('orders.orderDetail')}
+          </Text>
+          <View style={{ width: 40, height: 40 }} />
+        </View>
+        <EmptyState
+          icon={<Text style={{ fontSize: 48 }}>🔒</Text>}
+          title={t('orders.signInPrompt')}
+          action={{ label: t('orders.signIn'), onPress: () => router.push('/phone-entry') }}
+        />
+      </View>
+    )
   }
 
   const sellerGroups = useMemo(() => {
@@ -395,27 +434,22 @@ export default function OrderDetailScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>
+      {/* Offline banner */}
+      {isOffline && (
+        <Animated.View
+          entering={reduced ? undefined : FadeIn.duration(200)}
+          style={detailStyles.offlineBanner}
+        >
+          <View style={detailStyles.offlineDot} />
+          <Text style={detailStyles.offlineText}>{t('orders.offlineCached')}</Text>
+        </Animated.View>
+      )}
+
       {/* Top Bar */}
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          paddingHorizontal: spacing[4],
-          paddingVertical: spacing[3],
-          backgroundColor: colors.surface,
-          borderBottomWidth: 1,
-          borderBottomColor: colors.border,
-        }}
-      >
+      <View style={detailStyles.topBar}>
         <TouchableOpacity
           onPress={() => router.back()}
-          style={{
-            width: 40,
-            height: 40,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
+          style={detailStyles.backButton}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           accessibilityRole="button"
           accessibilityLabel={t('common.back')}
@@ -429,37 +463,38 @@ export default function OrderDetailScreen() {
       </View>
 
       {isLoading ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
+        <Animated.View
+          entering={reduced ? undefined : FadeIn.duration(duration.normal)}
+          style={{ flex: 1 }}
+          accessibilityRole="progressbar"
+          accessibilityLabel={t('common.loadingOrderDetail')}
+        >
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <OrderDetailSkeleton />
+          </ScrollView>
+        </Animated.View>
       ) : isError || !order ? (
-        <View
-          style={{
-            flex: 1,
-            alignItems: 'center',
-            justifyContent: 'center',
-            paddingHorizontal: spacing[8],
-            gap: spacing[3],
-          }}
+        <Animated.View
+          entering={reduced ? undefined : FadeInDown.duration(duration.normal)}
+          style={detailStyles.errorContainer}
         >
           <Text style={{ fontSize: 48 }}>😕</Text>
-          <Text style={{ fontSize: 18, fontWeight: '600', color: colors.text, textAlign: 'center' }}>
-            {t('orders.notFound')}
+          <Text style={detailStyles.errorTitle}>
+            {isError ? t('orders.errorTitle') : t('orders.notFound')}
+          </Text>
+          <Text style={detailStyles.errorSubtitle}>
+            {isError ? t('orders.errorSubtitle') : t('orders.notFoundSubtitle')}
           </Text>
           <TouchableOpacity
-            onPress={() => router.back()}
-            style={{
-              backgroundColor: colors.primary,
-              paddingHorizontal: spacing[6],
-              paddingVertical: spacing[3],
-              borderRadius: radii.lg,
-            }}
+            onPress={() => router.replace('/orders')}
+            activeOpacity={0.85}
+            style={detailStyles.backToOrdersBtn}
+            accessibilityRole="button"
+            accessibilityLabel={t('orders.backToOrders')}
           >
-            <Text style={{ fontSize: 14, fontWeight: '600', color: colors.white }}>
-              {t('common.back')}
-            </Text>
+            <Text style={detailStyles.backToOrdersText}>{t('orders.backToOrders')}</Text>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
       ) : (
         <ScrollView
           ref={scrollRef}
@@ -629,3 +664,78 @@ export default function OrderDetailScreen() {
     </View>
   )
 }
+
+import { StyleSheet } from 'react-native'
+
+const detailStyles = StyleSheet.create({
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  errorContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing[8],
+    gap: spacing[3],
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  errorSubtitle: {
+    fontSize: 14,
+    color: colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  backToOrdersBtn: {
+    marginTop: spacing[2],
+    paddingHorizontal: spacing[5],
+    paddingVertical: spacing[2.5],
+    borderRadius: radii.lg,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    backgroundColor: 'transparent',
+  },
+  backToOrdersText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    backgroundColor: colors.warningLight,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.warning,
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[2.5],
+  },
+  offlineDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.warning,
+  },
+  offlineText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#92400E',
+  },
+})

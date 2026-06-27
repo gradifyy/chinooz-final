@@ -26,7 +26,8 @@
     "loadingOrders": "Loading orders",
     "loadingWishlist": "Loading wishlist",
     "loadingAddresses": "Loading addresses",
-    "loadingPayments": "Loading payment methods"
+    "loadingPayments": "Loading payment methods",
+    "loadingOrderDetail": "Loading order detail"
   },
   "nav": {
     "home": "Home",
@@ -401,7 +402,26 @@
     "cashOnDelivery": "Cash on delivery",
     "shipmentFrom": "Shipment from {{seller}}",
     "stepsComplete": "{{current}} of {{total}} steps complete",
-    "orderStatus": "Order status: {{status}}, {{current}} of {{total}} steps complete"
+    "orderStatus": "Order status: {{status}}, {{current}} of {{total}} steps complete",
+    "errorTitle": "Something went wrong",
+    "errorSubtitle": "We couldn't load your orders. Please try again.",
+    "notFoundSubtitle": "This order may have been removed or doesn't exist.",
+    "backToOrders": "Back to orders",
+    "offlineCached": "You're offline. Showing cached orders.",
+    "signInPrompt": "Sign in to view your orders",
+    "signIn": "Sign in",
+    "clearTab": "View all orders",
+    "loadingDetail": "Loading order detail",
+    "noShippedOrders": "No shipped orders",
+    "noDeliveredOrders": "No delivered orders",
+    "noProcessingOrders": "No processing orders",
+    "noToPayOrders": "No orders to pay",
+    "noCancelledReturnedOrders": "No cancelled or returned orders",
+    "noShippedOrdersNe": "कुनै शिप भएको अर्डर छैन",
+    "noDeliveredOrdersNe": "कुनै डेलिभर भएको अर्डर छैन",
+    "noProcessingOrdersNe": "कुनै प्रशोधन अर्डर छैन",
+    "noToPayOrdersNe": "भुक्तानी गर्ने कुनै अर्डर छैन",
+    "noCancelledReturnedOrdersNe": "कुनै रद्द वा फिर्ता अर्डर छैन"
   },
   "wishlist": {
     "title": "Wishlist",
