@@ -179,19 +179,19 @@ export default function ProfilePage() {
     {
       headerKey: 'profile.supportSection',
       items: [
-        { key: 'help', labelKey: 'profile.helpCenter', icon: '❓' },
-        { key: 'contact', labelKey: 'profile.contactUs', icon: '✉️' },
-        { key: 'about', labelKey: 'profile.about', icon: 'ℹ️' },
-        { key: 'terms', labelKey: 'profile.termsPrivacy', icon: '📄' },
+        { key: 'help', labelKey: 'profile.helpCenter', icon: '❓', href: '/help' },
+        { key: 'contact', labelKey: 'profile.contactUs', icon: '✉️', href: '/contact' },
+        { key: 'about', labelKey: 'profile.about', icon: 'ℹ️', href: '/about' },
+        { key: 'terms', labelKey: 'profile.termsPrivacy', icon: '📄', href: '/terms' },
       ],
     },
   ]
 
   const safeItems: MenuItem[] = [
     { key: 'language', labelKey: 'profile.language', icon: '🌐' },
-    { key: 'help', labelKey: 'profile.helpCenter', icon: '❓' },
-    { key: 'about', labelKey: 'profile.about', icon: 'ℹ️' },
-    { key: 'terms', labelKey: 'profile.termsPrivacy', icon: '📄' },
+    { key: 'help', labelKey: 'profile.helpCenter', icon: '❓', href: '/help' },
+    { key: 'about', labelKey: 'profile.about', icon: 'ℹ️', href: '/about' },
+    { key: 'terms', labelKey: 'profile.termsPrivacy', icon: '📄', href: '/terms' },
   ]
 
   const handleSignOut = () => {

@@ -27,6 +27,12 @@ export default function RootLayout() {
               <Stack.Screen name="payments" options={{ animation: 'slide_from_right' }} />
               <Stack.Screen name="edit-profile" options={{ animation: 'slide_from_right' }} />
               <Stack.Screen name="settings" options={{ animation: 'slide_from_right' }} />
+              <Stack.Screen name="help" options={{ animation: 'slide_from_right' }} />
+              <Stack.Screen name="contact" options={{ animation: 'slide_from_right' }} />
+              <Stack.Screen name="about" options={{ animation: 'slide_from_right' }} />
+              <Stack.Screen name="terms" options={{ animation: 'slide_from_right' }} />
+              <Stack.Screen name="privacy" options={{ animation: 'slide_from_right' }} />
+              <Stack.Screen name="feedback" options={{ animation: 'slide_from_right' }} />
             </Stack>
           </SafeAreaProvider>
         </I18nProvider>

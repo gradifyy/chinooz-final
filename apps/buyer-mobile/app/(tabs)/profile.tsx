@@ -88,19 +88,19 @@ export default function ProfileScreen() {
     {
       headerKey: 'profile.supportSection',
       items: [
-        { key: 'help', labelKey: 'profile.helpCenter', icon: '❓', onPress: () => {} },
-        { key: 'contact', labelKey: 'profile.contactUs', icon: '✉️', onPress: () => {} },
-        { key: 'about', labelKey: 'profile.about', icon: 'ℹ️', onPress: () => {} },
-        { key: 'terms', labelKey: 'profile.termsPrivacy', icon: '📄', onPress: () => {} },
+        { key: 'help', labelKey: 'profile.helpCenter', icon: '❓', onPress: () => router.push('/help') },
+        { key: 'contact', labelKey: 'profile.contactUs', icon: '✉️', onPress: () => router.push('/contact') },
+        { key: 'about', labelKey: 'profile.about', icon: 'ℹ️', onPress: () => router.push('/about') },
+        { key: 'terms', labelKey: 'profile.termsPrivacy', icon: '📄', onPress: () => router.push('/terms') },
       ],
     },
   ]
 
   const safeItems: MenuItem[] = [
     { key: 'language', labelKey: 'profile.language', icon: '🌐', onPress: () => {} },
-    { key: 'help', labelKey: 'profile.helpCenter', icon: '❓', onPress: () => {} },
-    { key: 'about', labelKey: 'profile.about', icon: 'ℹ️', onPress: () => {} },
-    { key: 'terms', labelKey: 'profile.termsPrivacy', icon: '📄', onPress: () => {} },
+    { key: 'help', labelKey: 'profile.helpCenter', icon: '❓', onPress: () => router.push('/help') },
+    { key: 'about', labelKey: 'profile.about', icon: 'ℹ️', onPress: () => router.push('/about') },
+    { key: 'terms', labelKey: 'profile.termsPrivacy', icon: '📄', onPress: () => router.push('/terms') },
   ]
 
   const handleSignOut = () => {
