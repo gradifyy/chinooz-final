@@ -15,6 +15,7 @@ import { colors, spacing, radii } from '@chinooz/theme'
 import { formatNPR } from '@chinooz/utils'
 import { useCartStore, useCheckoutStore } from '@chinooz/state'
 import { placeOrder, SHIPPING_CONFIG } from '@chinooz/mock-data'
+import OrderConfirmation from './OrderConfirmation'
 import type { CartItem } from '@chinooz/types'
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity)
@@ -49,6 +50,9 @@ export default function ReviewStep({ onStepChange }: ReviewStepProps) {
   const checkScale = useSharedValue(0)
   const btnScale = useSharedValue(1)
 
+  const [orderIds, setOrderIds] = useState<string[]>([])
+  const [subOrders, setSubOrders] = useState<{ sellerName: string; orderId: string; eta: string; total: number; itemCount: number }[]>([])
+
   const subtotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0)
   const vat = Math.round(subtotal * SHIPPING_CONFIG.vatRate / (1 + SHIPPING_CONFIG.vatRate))
   const deliveryFee = checkout.deliveryMethod === 'sameDay' ? 250 : checkout.deliveryMethod === 'express' ? 150 : 100
@@ -67,10 +71,18 @@ export default function ReviewStep({ onStepChange }: ReviewStepProps) {
       })
       if (result.success) {
         setSuccess(true)
+        setOrderIds([result.orderId || `ORD-${Date.now()}`])
+        setSubOrders(Array.from(sellerGroups.entries()).map(([seller, sellerItems], i) => ({
+          sellerName: seller,
+          orderId: `${result.orderId || 'ORD'}-${i + 1}`,
+          eta: checkout.deliveryMethod === 'sameDay' ? 'Today' : checkout.deliveryMethod === 'express' ? 'Tomorrow' : '2-4 days',
+          total: sellerItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
+          itemCount: sellerItems.length,
+        })))
         try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success) } catch {}
         clearCart()
         reset()
-        setTimeout(() => router.replace('/(tabs)'), 1200)
+        setTimeout(() => router.replace('/(tabs)'), 2000)
       } else {
         setError(result.error || t('checkout.paymentFailed'))
         try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error) } catch {}
@@ -89,15 +101,13 @@ export default function ReviewStep({ onStepChange }: ReviewStepProps) {
 
   if (success) {
     return (
-      <View style={{ alignItems: 'center', paddingVertical: spacing[10], gap: spacing[3] }}>
-        <Animated.View
-          entering={FadeIn.duration(400)}
-          style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: colors.success, alignItems: 'center', justifyContent: 'center' }}
-        >
-          <Text style={{ fontSize: 28, color: colors.white }}>✓</Text>
-        </Animated.View>
-        <Text style={{ fontSize: 18, fontWeight: '600', color: colors.text }}>{t('checkout.orderPlaced')}</Text>
-      </View>
+      <OrderConfirmation
+        orderIds={orderIds}
+        subOrders={subOrders}
+        total={grandTotal}
+        paymentMethod={checkout.paymentMethod}
+        deliveryMethod={checkout.deliveryMethod}
+      />
     )
   }
 

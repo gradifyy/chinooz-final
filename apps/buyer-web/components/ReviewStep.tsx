@@ -8,6 +8,7 @@ import { formatNPR } from '@chinooz/utils'
 import { useReducedMotion } from '@chinooz/ui-web'
 import { useCartStore, useCheckoutStore } from '@chinooz/state'
 import { placeOrder, SHIPPING_CONFIG } from '@chinooz/mock-data'
+import OrderConfirmation from './OrderConfirmation'
 import type { CartItem } from '@chinooz/types'
 
 function groupBySeller(items: CartItem[]): Map<string, CartItem[]> {
@@ -39,6 +40,9 @@ export default function ReviewStep({ onStepChange }: ReviewStepProps) {
   const [success, setSuccess] = useState(false)
   const [openSections, setOpenSections] = useState<Set<string>>(new Set(['items']))
 
+  const [orderIds, setOrderIds] = useState<string[]>([])
+  const [subOrders, setSubOrders] = useState<{ sellerName: string; orderId: string; eta: string; total: number; itemCount: number }[]>([])
+
   const subtotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0)
   const vat = Math.round(subtotal * SHIPPING_CONFIG.vatRate / (1 + SHIPPING_CONFIG.vatRate))
   const deliveryFee = checkout.deliveryMethod === 'sameDay' ? 250 : checkout.deliveryMethod === 'express' ? 150 : 100
@@ -66,9 +70,17 @@ export default function ReviewStep({ onStepChange }: ReviewStepProps) {
       })
       if (result.success) {
         setSuccess(true)
+        setOrderIds([result.orderId || `ORD-${Date.now()}`])
+        setSubOrders(Array.from(sellerGroups.entries()).map(([seller, sellerItems], i) => ({
+          sellerName: seller,
+          orderId: `${result.orderId || 'ORD'}-${i + 1}`,
+          eta: checkout.deliveryMethod === 'sameDay' ? 'Today' : checkout.deliveryMethod === 'express' ? 'Tomorrow' : '2-4 days',
+          total: sellerItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
+          itemCount: sellerItems.length,
+        })))
         clearCart()
         reset()
-        setTimeout(() => router.push('/'), 1200)
+        setTimeout(() => router.push('/'), 2000)
       } else {
         setError(result.error || t('checkout.paymentFailed'))
       }
@@ -86,17 +98,13 @@ export default function ReviewStep({ onStepChange }: ReviewStepProps) {
 
   if (success) {
     return (
-      <div className="flex flex-col items-center py-12 gap-3">
-        <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ type: 'spring', damping: 12, stiffness: 400 }}
-          className="w-16 h-16 rounded-full bg-success flex items-center justify-center"
-        >
-          <span className="text-white text-3xl">✓</span>
-        </motion.div>
-        <p className="text-lg font-semibold text-text">{t('checkout.orderPlaced')}</p>
-      </div>
+      <OrderConfirmation
+        orderIds={orderIds}
+        subOrders={subOrders}
+        total={grandTotal}
+        paymentMethod={checkout.paymentMethod}
+        deliveryMethod={checkout.deliveryMethod}
+      />
     )
   }
 
