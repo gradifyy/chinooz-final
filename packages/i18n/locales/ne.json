@@ -92,7 +92,15 @@
     "checkout": "चेकआउट",
     "remove": "हटाउनुहोस्",
     "itemCount": "{{count}} वस्तु",
-    "itemCount_other": "{{count}} वस्तुहरू"
+    "itemCount_other": "{{count}} वस्तुहरू",
+    "selectAll": "सबै छान्नुहोस्",
+    "selectFromSeller": "{{seller}} बाट सबै छान्नुहोस्",
+    "selectItem": "वस्तु छान्नुहोस्: {{name}}",
+    "selectedCount": "{{count}} चयन गरिएको",
+    "selectAtLeastOne": "कम्तिमा एउटा वस्तु छान्नुहोस्",
+    "summary": "अर्डर सारांश",
+    "freeShipping": "निःशुल्क",
+    "soldBy": "बिक्री गर्ने"
   },
   "product": {
     "productDetail": "उत्पादन विवरण",

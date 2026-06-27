@@ -92,7 +92,15 @@
     "checkout": "Checkout",
     "remove": "Remove",
     "itemCount": "{{count}} item",
-    "itemCount_other": "{{count}} items"
+    "itemCount_other": "{{count}} items",
+    "selectAll": "Select all",
+    "selectFromSeller": "Select all from {{seller}}",
+    "selectItem": "Select item: {{name}}",
+    "selectedCount": "{{count}} selected",
+    "selectAtLeastOne": "Select at least one item",
+    "summary": "Order Summary",
+    "freeShipping": "Free",
+    "soldBy": "Sold by"
   },
   "product": {
     "productDetail": "Product Detail",
