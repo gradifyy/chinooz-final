@@ -158,18 +158,26 @@ export default function CheckoutScreen() {
                 accessibilityLabel={t(STEP_KEYS[step])}
                 accessibilityState={{ current: isActive }}
               >
-                <View style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 14,
-                  backgroundColor: isActive ? colors.primary : isCompleted ? colors.success : colors.border,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}>
+                <Animated.View
+                  style={{
+                    width: isActive ? 32 : 28,
+                    height: isActive ? 32 : 28,
+                    borderRadius: isActive ? 16 : 14,
+                    backgroundColor: isActive ? colors.primary : isCompleted ? colors.success : colors.border,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transform: [{ scale: isActive ? 1.05 : 1 }],
+                    shadowColor: isActive ? colors.primary : 'transparent',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: isActive ? 0.3 : 0,
+                    shadowRadius: isActive ? 6 : 0,
+                    elevation: isActive ? 3 : 0,
+                  }}
+                >
                   <Text style={{ fontSize: 12, fontWeight: '700', color: isActive || isCompleted ? colors.white : colors.textMuted }}>
                     {isCompleted ? '✓' : i + 1}
                   </Text>
-                </View>
+                </Animated.View>
                 <Text style={{ fontSize: 11, fontWeight: isActive ? '600' : '400', color: isActive ? colors.primary : colors.textMuted }}>
                   {t(STEP_KEYS[step])}
                 </Text>
@@ -187,8 +195,8 @@ export default function CheckoutScreen() {
       >
         <Animated.View
           key={currentStep}
-          entering={reduced ? FadeIn.duration(0) : SlideInRight.duration(250).springify().damping(20)}
-          exiting={reduced ? FadeOut.duration(0) : SlideOutLeft.duration(200)}
+          entering={reduced ? FadeIn.duration(0) : FadeIn.duration(200)}
+          exiting={reduced ? FadeOut.duration(0) : FadeOut.duration(150)}
         >
           <StepContent step={currentStep} onValidChange={() => {}} />
         </Animated.View>

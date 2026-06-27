@@ -105,9 +105,12 @@ export default function CheckoutPage() {
                       animate={{
                         backgroundColor: isActive ? '#8A1B57' : isCompleted ? '#16A34A' : '#E5E5E5',
                         scale: isActive ? 1.1 : 1,
+                        boxShadow: isActive ? '0 2px 8px rgba(138,27,87,0.3)' : '0 0 0 rgba(0,0,0,0)',
                       }}
                       transition={reduced ? { duration: 0 } : { type: 'spring', damping: 20, stiffness: 300 }}
-                      className="w-8 h-8 rounded-full flex items-center justify-center"
+                      className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                        isActive ? 'shadow-lg' : ''
+                      }`}
                     >
                       <span className={`text-xs font-bold ${isActive || isCompleted ? 'text-white' : 'text-text-muted'}`}>
                         {isCompleted ? '✓' : i + 1}
