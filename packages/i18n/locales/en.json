@@ -48,6 +48,10 @@
   "categories": {
     "title": "Categories",
     "subtitle": "Browse by category",
+    "viewAll": "View all in {{category}}",
+    "breadcrumbPath": "Category path",
+    "allCategories": "All Categories",
+    "toggleSidebar": "Toggle sidebar",
     "browseAll": "Browse All Categories"
   },
   "deals": {

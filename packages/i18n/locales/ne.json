@@ -48,6 +48,10 @@
   "categories": {
     "title": "श्रेणीहरू",
     "subtitle": "श्रेणी अनुसार ब्राउज गर्नुहोस्",
+    "viewAll": "{{category}} मा सबै हेर्नुहोस्",
+    "breadcrumbPath": "श्रेणी पथ",
+    "allCategories": "सबै श्रेणीहरू",
+    "toggleSidebar": "साइडबार टगल गर्नुहोस्",
     "browseAll": "सबै श्रेणीहरू ब्राउज गर्नुहोस्"
   },
   "deals": {
