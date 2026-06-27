@@ -106,6 +106,7 @@
     "unread": "{{count}} unread",
     "chatPlaceholder": "Ask me anything about your orders...",
     "chatGreeting": "Hi! How can I help you today?",
+    "searchConversations": "Search conversations",
     "today": "Today",
     "thisWeek": "This week",
     "earlier": "Earlier",
@@ -325,6 +326,21 @@
     "ordersCount": "{{count}} orders",
     "dateFilter": "Date range",
     "clearSearch": "Clear search"
+  },
+  "wishlist": {
+    "title": "Wishlist",
+    "emptyTitle": "Your wishlist is empty",
+    "emptySubtitle": "Save items you love by tapping the heart icon",
+    "browseProducts": "Browse products",
+    "addToCart": "Add to cart",
+    "removeFromWishlist": "Remove from wishlist",
+    "sortBy": "Sort by",
+    "recentlyAdded": "Recently added",
+    "priceLowHigh": "Price: Low to High",
+    "priceHighLow": "Price: High to Low",
+    "itemsCount": "{{count}} item",
+    "itemsCount_other": "{{count}} items",
+    "outOfStock": "Out of stock"
   },
   "search": {
     "title": "Search",

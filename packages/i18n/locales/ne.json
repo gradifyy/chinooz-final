@@ -106,6 +106,7 @@
     "unread": "{{count}} अपठित",
     "chatPlaceholder": "तपाईंको अर्डरबारे केही पनि सोध्नुहोस्...",
     "chatGreeting": "नमस्ते! आज म तपाईंलाई कसरी मद्दत गर्न सक्छु?",
+    "searchConversations": "कुराकानीहरू खोज्नुहोस्",
     "today": "आज",
     "thisWeek": "यो हप्ता",
     "earlier": "अघि",
@@ -325,6 +326,21 @@
     "ordersCount": "{{count}} अर्डरहरू",
     "dateFilter": "मिति सीमा",
     "clearSearch": "खोज मेटाउनुहोस्"
+  },
+  "wishlist": {
+    "title": "इच्छासूची",
+    "emptyTitle": "तपाईंको इच्छासूची खाली छ",
+    "emptySubtitle": "मन पर्ने वस्तुहरू हृदय आइकन थिचेर बचत गर्नुहोस्",
+    "browseProducts": "उत्पादनहरू ब्राउज गर्नुहोस्",
+    "addToCart": "कार्टमा थप्नुहोस्",
+    "removeFromWishlist": "इच्छासूचीबाट हटाउनुहोस्",
+    "sortBy": "क्रमबद्ध गर्नुहोस्",
+    "recentlyAdded": "हालै थपिएको",
+    "priceLowHigh": "मूल्य: कम देखि उच्च",
+    "priceHighLow": "मूल्य: उच्च देखि कम",
+    "itemsCount": "{{count}} वस्तु",
+    "itemsCount_other": "{{count}} वस्तुहरू",
+    "outOfStock": "स्टकमा छैन"
   },
   "search": {
     "title": "खोज्नुहोस्",

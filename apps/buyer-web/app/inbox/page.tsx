@@ -265,10 +265,21 @@ function MessagesView({
 }) {
   const { t } = useTranslation()
   const [selectedConvo, setSelectedConvo] = useState<string | null>(threadId ?? null)
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     if (threadId) setSelectedConvo(threadId)
   }, [threadId])
+
+  const sorted = useMemo(() => {
+    const filtered = search.trim()
+      ? conversations.filter(c =>
+          c.participantName.toLowerCase().includes(search.toLowerCase()) ||
+          c.lastMessage.toLowerCase().includes(search.toLowerCase())
+        )
+      : conversations
+    return [...filtered].sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime())
+  }, [conversations, search])
 
   if (selectedConvo) {
     return (
@@ -285,7 +296,7 @@ function MessagesView({
       <div className="flex flex-col gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="flex items-center gap-3 p-3">
-            <Skeleton width={44} height={44} circle />
+            <Skeleton width={48} height={48} circle />
             <div className="flex-1 flex flex-col gap-1.5">
               <Skeleton width="50%" height={14} />
               <Skeleton width="80%" height={12} />
@@ -308,29 +319,53 @@ function MessagesView({
 
   return (
     <div className="flex flex-col">
-      {conversations.map(item => (
-        <button
-          key={item.id}
-          onClick={() => setSelectedConvo(item.id)}
-          className="flex items-center gap-3 p-3 border-b border-border-light text-left hover:bg-background transition-colors"
-        >
-          <Avatar name={item.participantName} size="md" />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold text-text truncate">{item.participantName}</p>
-              <span className="text-[10px] text-text-tertiary ml-2 shrink-0">
-                {formatTime(item.lastMessageAt)}
+      <div className="flex items-center gap-2 h-10 bg-background rounded-md px-3 mb-2">
+        <span className="text-sm text-text-tertiary">{'\u{1F50D}'}</span>
+        <input
+          className="flex-1 bg-transparent text-sm text-text outline-none placeholder:text-text-tertiary"
+          placeholder={t('inbox.searchConversations')}
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          aria-label={t('inbox.searchConversations')}
+        />
+      </div>
+      {sorted.map(item => {
+        const isUnread = item.unreadCount > 0
+        return (
+          <button
+            key={item.id}
+            onClick={() => setSelectedConvo(item.id)}
+            className={`flex items-center gap-3 w-full p-3 text-left border-b border-border-light hover:bg-background active:scale-[0.98] transition-all duration-100 ${isUnread ? 'bg-white' : 'bg-transparent'}`}
+            role="button"
+            aria-label={`${item.participantName}. ${item.lastMessage}. ${formatTime(item.lastMessageAt)}${isUnread ? `. ${item.unreadCount} unread` : ''}`}
+          >
+            <div className="w-12 h-12 rounded-full bg-primary-50 flex items-center justify-center shrink-0">
+              <span className="text-base font-semibold text-primary">
+                {item.participantName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
               </span>
             </div>
-            <p className="text-xs text-text-muted mt-0.5 truncate">{item.lastMessage}</p>
-          </div>
-          {item.unreadCount > 0 && (
-            <span className="inline-flex items-center justify-center bg-primary text-white text-xs font-semibold rounded-full min-w-[20px] h-5 px-1.5 shrink-0">
-              {item.unreadCount}
-            </span>
-          )}
-        </button>
-      ))}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <p className={`text-base truncate ${isUnread ? 'font-semibold text-text' : 'font-normal text-text'}`}>
+                  {item.participantName}
+                </p>
+                <span className="text-xs text-text-muted ml-2 shrink-0">
+                  {formatTime(item.lastMessageAt)}
+                </span>
+              </div>
+              <p className="text-sm text-text-muted mt-0.5 truncate">{item.lastMessage}</p>
+            </div>
+            {isUnread && (
+              <span
+                className="inline-flex items-center justify-center bg-primary text-white text-xs font-semibold rounded-full min-w-[20px] h-5 px-1.5 shrink-0"
+                aria-label={`${item.unreadCount} unread`}
+              >
+                {item.unreadCount}
+              </span>
+            )}
+          </button>
+        )
+      })}
     </div>
   )
 }

@@ -484,16 +484,24 @@ export const notifications: Notification[] = [
 ]
 
 export const conversations: Conversation[] = [
-  { id: 'conv-1', participantName: 'TechHub Nepal', lastMessage: 'Your warranty card has been uploaded.', lastMessageAt: daysAgo(3), unreadCount: 0 },
-  { id: 'conv-2', participantName: 'Nepal Handicrafts', lastMessage: 'Thank you for your order! We will ship within 24 hours.', lastMessageAt: daysAgo(10), unreadCount: 0 },
-  { id: 'conv-3', participantName: 'Chinooz Support', lastMessage: 'How can we help you today?', lastMessageAt: daysAgo(30), unreadCount: 1 },
+  { id: 'conv-1', participantName: 'TechHub Nepal', participantAvatar: 'https://picsum.photos/seed/techhub/200/200', lastMessage: 'Your warranty card has been uploaded.', lastMessageAt: daysAgo(0), unreadCount: 2 },
+  { id: 'conv-2', participantName: 'Nepal Handicrafts', lastMessage: 'Thank you for your order! We will ship within 24 hours.', lastMessageAt: daysAgo(1), unreadCount: 0 },
+  { id: 'conv-3', participantName: 'Chinooz Support', lastMessage: 'How can we help you today?', lastMessageAt: daysAgo(3), unreadCount: 1 },
+  { id: 'conv-4', participantName: 'Kathmandu Cashmere Co.', lastMessage: 'The black pashmina is back in stock!', lastMessageAt: daysAgo(5), unreadCount: 0 },
+  { id: 'conv-5', participantName: 'Ilam Tea House', lastMessage: 'Your masala tea order has been dispatched.', lastMessageAt: daysAgo(8), unreadCount: 0 },
+  { id: 'conv-6', participantName: 'Bhaktapur Woodcraft', lastMessage: 'We can customize the mandala size for you.', lastMessageAt: daysAgo(15), unreadCount: 0 },
 ]
 
 export const messages: Message[] = [
   { id: 'msg-1', conversationId: 'conv-1', senderId: 'seller-1', senderName: 'TechHub Nepal', body: 'Hi! Your order has been confirmed.', createdAt: daysAgo(5), read: true },
   { id: 'msg-2', conversationId: 'conv-1', senderId: 'user-1', senderName: 'You', body: 'Great, when will it ship?', createdAt: daysAgo(4), read: true },
-  { id: 'msg-3', conversationId: 'conv-1', senderId: 'seller-1', senderName: 'TechHub Nepal', body: 'Your warranty card has been uploaded.', createdAt: daysAgo(3), read: true },
-  { id: 'msg-4', conversationId: 'conv-3', senderId: 'system', senderName: 'Chinooz Support', body: 'How can we help you today?', createdAt: daysAgo(30), read: false },
+  { id: 'msg-3', conversationId: 'conv-1', senderId: 'seller-1', senderName: 'TechHub Nepal', body: 'Your warranty card has been uploaded.', createdAt: daysAgo(0), read: false },
+  { id: 'msg-4', conversationId: 'conv-1', senderId: 'seller-1', senderName: 'TechHub Nepal', body: 'Also, your phone case gift is on the way!', createdAt: daysAgo(0), read: false },
+  { id: 'msg-5', conversationId: 'conv-2', senderId: 'seller-2', senderName: 'Nepal Handicrafts', body: 'Thank you for your order! We will ship within 24 hours.', createdAt: daysAgo(1), read: true },
+  { id: 'msg-6', conversationId: 'conv-3', senderId: 'system', senderName: 'Chinooz Support', body: 'How can we help you today?', createdAt: daysAgo(3), read: false },
+  { id: 'msg-7', conversationId: 'conv-4', senderId: 'seller-4', senderName: 'Kathmandu Cashmere Co.', body: 'The black pashmina is back in stock!', createdAt: daysAgo(5), read: true },
+  { id: 'msg-8', conversationId: 'conv-5', senderId: 'seller-5', senderName: 'Ilam Tea House', body: 'Your masala tea order has been dispatched.', createdAt: daysAgo(8), read: true },
+  { id: 'msg-9', conversationId: 'conv-6', senderId: 'seller-6', senderName: 'Bhaktapur Woodcraft', body: 'We can customize the mandala size for you.', createdAt: daysAgo(15), read: true },
 ]
 
 export const userProfile: UserProfile = {

@@ -344,12 +344,24 @@ function MessagesView({
 }) {
   const { t } = useTranslation()
   const [selectedConvo, setSelectedConvo] = useState<string | null>(threadId ?? null)
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     if (threadId) setSelectedConvo(threadId)
   }, [threadId])
 
+  const sorted = useMemo(() => {
+    const filtered = search.trim()
+      ? conversations.filter(c =>
+          c.participantName.toLowerCase().includes(search.toLowerCase()) ||
+          c.lastMessage.toLowerCase().includes(search.toLowerCase())
+        )
+      : conversations
+    return [...filtered].sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime())
+  }, [conversations, search])
+
   if (selectedConvo) {
+    const convo = conversations.find(c => c.id === selectedConvo)
     return (
       <ThreadView
         conversationId={selectedConvo}
@@ -364,7 +376,7 @@ function MessagesView({
       <View style={styles.skeletonWrap}>
         {Array.from({ length: 4 }).map((_, i) => (
           <View key={i} style={styles.skeletonRow}>
-            <Skeleton width={44} height={44} circle />
+            <Skeleton width={48} height={48} circle />
             <View style={{ flex: 1, gap: 6 }}>
               <Skeleton width="50%" height={14} />
               <Skeleton width="80%" height={12} />
@@ -387,37 +399,87 @@ function MessagesView({
 
   return (
     <FlatList
-      data={conversations}
+      data={sorted}
       keyExtractor={item => item.id}
-      contentContainerStyle={{ paddingVertical: spacing[2] }}
+      contentContainerStyle={{ paddingBottom: spacing[4] }}
+      ListHeaderComponent={
+        <View style={styles.searchWrap}>
+          <Text style={styles.searchIcon}>{'\u{1F50D}'}</Text>
+          <TextInput
+            style={styles.searchInput}
+            placeholder={t('inbox.searchConversations')}
+            placeholderTextColor={colors.textTertiary}
+            value={search}
+            onChangeText={setSearch}
+            accessibilityLabel={t('inbox.searchConversations')}
+          />
+        </View>
+      }
       renderItem={({ item }) => (
-        <TouchableOpacity
-          style={styles.convoItem}
-          activeOpacity={0.7}
-          onPress={() => setSelectedConvo(item.id)}
-        >
-          <Avatar name={item.participantName} size="md" />
-          <View style={{ flex: 1 }}>
-            <View style={styles.convoHeader}>
-              <Text style={styles.convoName} numberOfLines={1}>
-                {item.participantName}
-              </Text>
-              <Text style={styles.convoTime}>
-                {formatTime(item.lastMessageAt)}
-              </Text>
-            </View>
-            <Text style={styles.convoPreview} numberOfLines={1}>
-              {item.lastMessage}
-            </Text>
-          </View>
-          {item.unreadCount > 0 && (
-            <View style={styles.unreadBadge}>
-              <Text style={styles.unreadBadgeText}>{item.unreadCount}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+        <ConversationRow
+          convo={item}
+          onTap={() => setSelectedConvo(item.id)}
+        />
       )}
     />
+  )
+}
+
+function ConversationRow({
+  convo,
+  onTap,
+}: {
+  convo: Conversation
+  onTap: () => void
+}) {
+  const scale = useSharedValue(1)
+  const isUnread = convo.unreadCount > 0
+
+  const handlePressIn = () => { scale.value = withTiming(0.98, { duration: 100 }) }
+  const handlePressOut = () => { scale.value = withSpring(1, { damping: 15, stiffness: 400 }) }
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }))
+
+  return (
+    <Animated.View style={animStyle}>
+      <TouchableOpacity
+        style={[styles.convoItem, isUnread && styles.convoUnread]}
+        activeOpacity={0.8}
+        onPress={onTap}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        accessibilityRole="button"
+        accessibilityLabel={`${convo.participantName}. ${convo.lastMessage}. ${formatTime(convo.lastMessageAt)}${isUnread ? `. ${convo.unreadCount} unread` : ''}`}
+      >
+        <View style={styles.convoAvatar}>
+          <Text style={styles.convoAvatarText}>
+            {convo.participantName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+          </Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <View style={styles.convoHeader}>
+            <Text style={[styles.convoName, isUnread && styles.convoNameUnread]} numberOfLines={1}>
+              {convo.participantName}
+            </Text>
+            <Text style={styles.convoTime}>
+              {formatTime(convo.lastMessageAt)}
+            </Text>
+          </View>
+          <Text style={styles.convoPreview} numberOfLines={1}>
+            {convo.lastMessage}
+          </Text>
+        </View>
+        {isUnread && (
+          <View style={styles.unreadBadge}>
+            <Text style={styles.unreadBadgeText} accessibilityLabel={`${convo.unreadCount} unread`}>
+              {convo.unreadCount}
+            </Text>
+          </View>
+        )}
+      </TouchableOpacity>
+    </Animated.View>
   )
 }
 
@@ -748,27 +810,69 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
   },
+  convoUnread: {
+    backgroundColor: colors.white,
+  },
+  convoAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.primary50,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  convoAvatarText: {
+    fontSize: 16,
+    fontFamily: fontFamily.sansSemiBold[0],
+    fontWeight: '600',
+    color: colors.primary,
+  },
   convoHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   convoName: {
-    fontSize: fontSize.base[0],
-    fontFamily: fontFamily.sansSemiBold[0],
-    fontWeight: '600',
+    fontSize: fontSize.md[0],
+    fontFamily: fontFamily.sans[0],
+    fontWeight: '400',
     color: colors.text,
     flex: 1,
   },
+  convoNameUnread: {
+    fontFamily: fontFamily.sansSemiBold[0],
+    fontWeight: '600',
+  },
   convoTime: {
-    fontSize: fontSize.xs[0],
-    color: colors.textTertiary,
+    fontSize: fontSize.sm[0],
+    color: colors.textMuted,
     marginLeft: spacing[2],
   },
   convoPreview: {
-    fontSize: fontSize.sm[0],
+    fontSize: fontSize.base[0],
     color: colors.textMuted,
     marginTop: 2,
+  },
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: spacing[4],
+    marginVertical: spacing[2],
+    height: 40,
+    backgroundColor: colors.background,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing[3],
+    gap: spacing[2],
+  },
+  searchIcon: {
+    fontSize: 14,
+    color: colors.textTertiary,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: fontSize.base[0],
+    color: colors.text,
+    padding: 0,
   },
   unreadBadge: {
     backgroundColor: colors.primary,
