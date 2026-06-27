@@ -31,6 +31,7 @@ export type {
   IconButtonProps,
   ProductCardVariant,
   ProductCardProps,
+  OrderCardProps,
   InboxTab,
   SegmentedControlProps,
 } from './components'

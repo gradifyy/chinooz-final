@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import type { Product, StockStatus } from './entities'
+import type { Product, StockStatus, Order, OrderStatus } from './entities'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'destructive'
 export type ButtonSize = 'sm' | 'md' | 'lg'
@@ -201,3 +201,13 @@ export interface ProductCardProps extends BaseProps {
   onAddToCart?: (product: Product) => void
   onLongPress?: (product: Product) => void
 }
+
+export interface OrderCardProps extends BaseProps {
+  order: Order
+  sellerName?: string
+  shipmentCount?: number
+  onPress?: (order: Order) => void
+  onAction?: (order: Order) => void
+}
+
+export type { OrderStatus }
