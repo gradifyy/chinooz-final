@@ -1,16 +1,17 @@
-import React, { useState, useCallback } from 'react'
-import { View, Text, TouchableOpacity } from 'react-native'
+import React, { useState, useCallback, Suspense, lazy } from 'react'
+import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native'
 import { useRouter } from 'expo-router'
 import * as Haptics from 'expo-haptics'
 import { useTranslation } from 'react-i18next'
 import { colors, spacing, radii } from '@chinooz/theme'
 import { useReorder, useOrderInvoice } from '@chinooz/hooks'
 import { useCartStore, useUIStore } from '@chinooz/state'
-import CancelOrderSheet from './CancelOrderSheet'
-import ReturnRequestSheet from './ReturnRequestSheet'
-import InvoiceView from './InvoiceView'
 import Snackbar from './Snackbar'
 import type { Order } from '@chinooz/types'
+
+const CancelOrderSheet = lazy(() => import('./CancelOrderSheet'))
+const ReturnRequestSheet = lazy(() => import('./ReturnRequestSheet'))
+const InvoiceView = lazy(() => import('./InvoiceView'))
 
 interface OrderActionsProps {
   order: Order
@@ -233,28 +234,34 @@ export default function OrderActions({ order, onScrollToTimeline }: OrderActions
       </View>
 
       {/* Cancel Order Sheet */}
-      <CancelOrderSheet
-        visible={cancelSheetVisible}
-        orderId={order.id}
-        onClose={() => setCancelSheetVisible(false)}
-        onSuccess={handleCancelSuccess}
-      />
+      <Suspense fallback={null}>
+        <CancelOrderSheet
+          visible={cancelSheetVisible}
+          orderId={order.id}
+          onClose={() => setCancelSheetVisible(false)}
+          onSuccess={handleCancelSuccess}
+        />
+      </Suspense>
 
       {/* Return Request Sheet */}
-      <ReturnRequestSheet
-        visible={returnSheetVisible}
-        orderId={order.id}
-        items={order.items}
-        onClose={() => setReturnSheetVisible(false)}
-        onSuccess={handleReturnSuccess}
-      />
+      <Suspense fallback={null}>
+        <ReturnRequestSheet
+          visible={returnSheetVisible}
+          orderId={order.id}
+          items={order.items}
+          onClose={() => setReturnSheetVisible(false)}
+          onSuccess={handleReturnSuccess}
+        />
+      </Suspense>
 
       {/* Invoice View */}
-      <InvoiceView
-        visible={invoiceVisible}
-        invoice={invoice || null}
-        onClose={() => setInvoiceVisible(false)}
-      />
+      <Suspense fallback={null}>
+        <InvoiceView
+          visible={invoiceVisible}
+          invoice={invoice || null}
+          onClose={() => setInvoiceVisible(false)}
+        />
+      </Suspense>
 
       {/* Snackbar */}
       <Snackbar

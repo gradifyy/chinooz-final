@@ -12,6 +12,7 @@ export {
   useSubmitReview,
   useOrders,
   useOrderById,
+  usePrefetchOrder,
   useNotifications,
   useUnreadNotificationCount,
   useUnreadMessageCount,

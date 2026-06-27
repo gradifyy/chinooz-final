@@ -2,15 +2,17 @@
 
 import React, { useMemo, useRef, useCallback, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { formatNPR } from '@chinooz/utils'
 import { useReducedMotion, OrderStatusTimeline, EmptyState } from '@chinooz/ui-web'
 import { duration, easing } from '@chinooz/theme'
 import { useSessionStore } from '@chinooz/state'
-import OrderActions from '../../components/OrderActions'
 import { OrderDetailSkeleton } from '../../components/skeletons'
 import type { Order, OrderStatus, CartItem, TimelineStep, ShipmentTimeline } from '@chinooz/types'
+
+const OrderActions = dynamic(() => import('../../components/OrderActions'), { ssr: false }) as React.ComponentType<{ order: Order; onScrollToTimeline?: () => void }>
 
 const STATUS_COLORS: Record<OrderStatus, { bg: string; text: string }> = {
   pending: { bg: 'bg-warning-light', text: 'text-warning' },

@@ -176,6 +176,7 @@ export function useOrders(params?: { status?: string; search?: string }) {
   return useQuery({
     queryKey: ['orders', params],
     queryFn: () => api.getOrders(params),
+    staleTime: 1000 * 60, // 60s
   })
 }
 
@@ -184,7 +185,19 @@ export function useOrderById(id: string) {
     queryKey: ['order', id],
     queryFn: () => api.getOrderById(id),
     enabled: !!id,
+    staleTime: 1000 * 120, // 120s
   })
+}
+
+export function usePrefetchOrder() {
+  const queryClient = useQueryClient()
+  return (id: string) => {
+    queryClient.prefetchQuery({
+      queryKey: ['order', id],
+      queryFn: () => api.getOrderById(id),
+      staleTime: 1000 * 120,
+    })
+  }
 }
 
 export function useNotifications() {

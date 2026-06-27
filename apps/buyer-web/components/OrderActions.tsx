@@ -2,16 +2,18 @@
 
 import React, { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import { useTranslation } from 'react-i18next'
 import { useReducedMotion } from '@chinooz/ui-web'
 import { motion } from 'framer-motion'
 import { useReorder, useOrderInvoice } from '@chinooz/hooks'
 import { useCartStore, useUIStore } from '@chinooz/state'
-import CancelOrderModal from './CancelOrderModal'
-import ReturnRequestModal from './ReturnRequestModal'
-import InvoiceView from './InvoiceView'
 import Snackbar from './Snackbar'
 import type { Order } from '@chinooz/types'
+
+const CancelOrderModal = dynamic(() => import('./CancelOrderModal'), { ssr: false }) as React.ComponentType<{ visible: boolean; orderId: string; onClose: () => void; onSuccess: () => void }>
+const ReturnRequestModal = dynamic(() => import('./ReturnRequestModal'), { ssr: false }) as React.ComponentType<{ visible: boolean; orderId: string; items: any[]; onClose: () => void; onSuccess: () => void }>
+const InvoiceView = dynamic(() => import('./InvoiceView'), { ssr: false }) as React.ComponentType<{ visible: boolean; invoice: any; onClose: () => void }>
 
 interface OrderActionsProps {
   order: Order

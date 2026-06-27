@@ -25,9 +25,8 @@ const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity)
 import NetInfo from '@react-native-community/netinfo'
 import { colors, radii, spacing, duration, easing } from '@chinooz/theme'
 import { formatNPR } from '@chinooz/utils'
-import { getOrders } from '@chinooz/mock-data'
+import { useOrders, usePrefetchOrder } from '@chinooz/hooks'
 import { useSessionStore } from '@chinooz/state'
-import { useQueryClient } from '@tanstack/react-query'
 import type { Order, OrderStatus } from '@chinooz/types'
 import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
 import EmptyState from '@chinooz/ui/EmptyState'
@@ -314,7 +313,7 @@ export default function OrdersScreen() {
   const insets = useSafeAreaInsets()
   const reduced = useReducedMotion()
   const isLoggedIn = useSessionStore(s => s.isLoggedIn)
-  const queryClient = useQueryClient()
+  const prefetchOrder = usePrefetchOrder()
 
   const initialTab: TabKey = (() => {
     const s = params.status
@@ -324,9 +323,6 @@ export default function OrdersScreen() {
 
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab)
   const [searchQuery, setSearchQuery] = useState('')
-  const [orders, setOrders] = useState<Order[]>([])
-  const [loading, setLoading] = useState(true)
-  const [hasError, setHasError] = useState(false)
   const [isOffline, setIsOffline] = useState(false)
 
   // Offline detection
@@ -338,41 +334,17 @@ export default function OrdersScreen() {
     return () => unsubscribe()
   }, [])
 
-  // Auto-recover when coming back online
-  useEffect(() => {
-    if (!isOffline && orders.length === 0 && !loading) {
-      fetchOrders()
-    }
-  }, [isOffline])
+  const statusParam = activeTab === 'all' ? undefined : activeTab
+  const searchParam = searchQuery.trim() || undefined
 
-  const fetchOrders = useCallback(async () => {
-    setLoading(true)
-    setHasError(false)
-    try {
-      const statusParam = activeTab === 'all' ? undefined : activeTab
-      const searchParam = searchQuery.trim() || undefined
-      const data = await getOrders({ status: statusParam, search: searchParam })
-      setOrders(data)
-    } catch {
-      setOrders([])
-      setHasError(true)
-    } finally {
-      setLoading(false)
-    }
-  }, [activeTab, searchQuery])
-
-  useEffect(() => {
-    fetchOrders()
-  }, [fetchOrders])
+  const { data: orders = [], isLoading, isError, refetch } = useOrders({
+    status: statusParam,
+    search: searchParam,
+  })
 
   const counts = useMemo(() => {
     const c: Record<TabKey, number> = {
-      all: 0,
-      to_pay: 0,
-      processing: 0,
-      shipped: 0,
-      delivered: 0,
-      cancelled_returned: 0,
+      all: 0, to_pay: 0, processing: 0, shipped: 0, delivered: 0, cancelled_returned: 0,
     }
     for (const order of orders) {
       c.all++
@@ -403,6 +375,11 @@ export default function OrdersScreen() {
     }
   }, [activeTab, t])
 
+  const handleOrderPress = useCallback((order: Order) => {
+    prefetchOrder(order.id)
+    router.push(`/orders/${order.id}`)
+  }, [prefetchOrder, router])
+
   const renderOrder = useCallback(
     ({ item, index }: { item: Order; index: number }) => (
       <Animated.View
@@ -411,11 +388,11 @@ export default function OrdersScreen() {
       >
         <OrderCard
           order={item}
-          onPress={() => router.push(`/orders/${item.id}`)}
+          onPress={() => handleOrderPress(item)}
         />
       </Animated.View>
     ),
-    [router, reduced],
+    [handleOrderPress, reduced],
   )
 
   // Logged-out state
@@ -497,7 +474,7 @@ export default function OrdersScreen() {
         </View>
       </View>
 
-      {loading ? (
+      {isLoading ? (
         <Animated.View
           entering={reduced ? undefined : FadeIn.duration(duration.normal)}
           style={styles.loadingContainer}
@@ -506,7 +483,7 @@ export default function OrdersScreen() {
         >
           {[0, 1, 2, 3].map(i => <OrderCardSkeleton key={i} />)}
         </Animated.View>
-      ) : hasError ? (
+      ) : isError ? (
         <Animated.View
           entering={reduced ? undefined : FadeIn.duration(duration.normal)}
           style={styles.errorContainer}
@@ -515,7 +492,7 @@ export default function OrdersScreen() {
           <Text style={styles.errorTitle}>{t('orders.errorTitle')}</Text>
           <Text style={styles.errorSubtitle}>{t('orders.errorSubtitle')}</Text>
           <TouchableOpacity
-            onPress={fetchOrders}
+            onPress={() => refetch()}
             activeOpacity={0.85}
             style={styles.retryBtn}
             accessibilityRole="button"

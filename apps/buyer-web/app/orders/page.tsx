@@ -1,12 +1,12 @@
 'use client'
 
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { Container, Screen, EmptyState } from '@chinooz/ui-web'
 import { formatNPR } from '@chinooz/utils'
-import { getOrders } from '@chinooz/mock-data'
+import { useOrders, usePrefetchOrder } from '@chinooz/hooks'
 import { useReducedMotion } from '@chinooz/ui-web'
 import { useSessionStore } from '@chinooz/state'
 import { duration, easing } from '@chinooz/theme'
@@ -154,9 +154,8 @@ function SellerBreakdown({ order }: { order: Order }) {
   )
 }
 
-function OrderCard({ order, index }: { order: Order; index: number }) {
+function OrderCard({ order, index, onPress }: { order: Order; index: number; onPress: () => void }) {
   const { t } = useTranslation()
-  const router = useRouter()
   const reduced = useReducedMotion()
   const statusStyle = STATUS_COLORS[order.status]
   const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0)
@@ -174,7 +173,7 @@ function OrderCard({ order, index }: { order: Order; index: number }) {
       }}
     >
       <button
-        onClick={() => router.push(`/orders/${order.id}`)}
+        onClick={onPress}
         className="w-full text-left bg-surface rounded-2xl border border-border-light p-4 md:p-5 hover:shadow-lg transition-shadow duration-200 cursor-pointer"
         aria-label={`Order ${order.id}, ${statusLabel}`}
       >
@@ -236,6 +235,7 @@ export default function OrdersPage() {
   const searchParams = useSearchParams()
   const reduced = useReducedMotion()
   const isLoggedIn = useSessionStore(s => s.isLoggedIn)
+  const prefetchOrder = usePrefetchOrder()
 
   const initialTab: TabKey = (() => {
     const s = searchParams.get('status')
@@ -245,9 +245,6 @@ export default function OrdersPage() {
 
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab)
   const [searchQuery, setSearchQuery] = useState('')
-  const [orders, setOrders] = useState<Order[]>([])
-  const [loading, setLoading] = useState(true)
-  const [hasError, setHasError] = useState(false)
   const [isOffline, setIsOffline] = useState(false)
 
   // Offline detection
@@ -263,25 +260,13 @@ export default function OrdersPage() {
     }
   }, [])
 
-  const fetchOrders = useCallback(async () => {
-    setLoading(true)
-    setHasError(false)
-    try {
-      const statusParam = activeTab === 'all' ? undefined : activeTab
-      const searchParam = searchQuery.trim() || undefined
-      const data = await getOrders({ status: statusParam, search: searchParam })
-      setOrders(data)
-    } catch {
-      setOrders([])
-      setHasError(true)
-    } finally {
-      setLoading(false)
-    }
-  }, [activeTab, searchQuery])
+  const statusParam = activeTab === 'all' ? undefined : activeTab
+  const searchParam = searchQuery.trim() || undefined
 
-  useEffect(() => {
-    fetchOrders()
-  }, [fetchOrders])
+  const { data: orders = [], isLoading, isError, refetch } = useOrders({
+    status: statusParam,
+    search: searchParam,
+  })
 
   const counts = useMemo(() => {
     const c: Record<TabKey, number> = {
@@ -405,11 +390,11 @@ export default function OrdersPage() {
           </div>
         </div>
 
-        {loading ? (
+        {isLoading ? (
           <div className="space-y-3" aria-busy="true" aria-label={t('common.loadingOrders')}>
             {[0, 1, 2, 3].map(i => <OrderCardSkeleton key={i} />)}
           </div>
-        ) : hasError ? (
+        ) : isError ? (
           <motion.div
             initial={reduced ? false : { opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -419,7 +404,7 @@ export default function OrdersPage() {
             <h3 className="text-lg font-semibold text-text text-center">{t('orders.errorTitle')}</h3>
             <p className="text-sm text-text-muted text-center mt-2">{t('orders.errorSubtitle')}</p>
             <button
-              onClick={fetchOrders}
+              onClick={() => refetch()}
               className="mt-4 px-5 py-2.5 rounded-xl border-[1.5px] border-primary text-primary font-semibold text-sm hover:bg-primary-50 transition-colors"
               aria-label={t('common.retry')}
             >
@@ -457,7 +442,15 @@ export default function OrdersPage() {
           <div className="flex flex-col gap-3">
             <AnimatePresence mode="popLayout">
               {filteredOrders.map((order, index) => (
-                <OrderCard key={order.id} order={order} index={index} />
+                <OrderCard
+                  key={order.id}
+                  order={order}
+                  index={index}
+                  onPress={() => {
+                    prefetchOrder(order.id)
+                    router.push(`/orders/${order.id}`)
+                  }}
+                />
               ))}
             </AnimatePresence>
           </div>
