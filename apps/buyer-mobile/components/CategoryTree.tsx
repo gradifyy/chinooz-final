@@ -10,6 +10,7 @@ import { useRouter } from 'expo-router'
 import { useTranslation } from 'react-i18next'
 import { colors, spacing, radii } from '@chinooz/theme'
 import { useCategories } from '@chinooz/hooks'
+import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
 import type { Category } from '@chinooz/types'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
@@ -34,6 +35,7 @@ interface BreadcrumbItem {
 export default function CategoryTree() {
   const { t } = useTranslation()
   const router = useRouter()
+  const reduced = useReducedMotion()
   const { data: categories, isLoading } = useCategories()
 
   const [currentId, setCurrentId] = useState<string | null>(null)
@@ -140,13 +142,13 @@ export default function CategoryTree() {
       {/* Subcategories grid */}
       <Animated.View
         key={currentId || 'root'}
-        entering={reduced => FadeIn.duration(reduced ? 0 : 200)}
+        entering={reduced ? FadeIn.duration(0) : FadeIn.duration(200)}
         style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP }}
       >
         {currentChildren.map((cat, i) => (
           <Animated.View
             key={cat.id}
-            entering={FadeInRight.duration(250).delay(Math.min(i, 9) * 50).springify().damping(18)}
+            entering={reduced ? FadeIn.duration(0) : FadeInRight.duration(250).delay(Math.min(i, 9) * 50).springify().damping(18)}
             style={{ width: tileWidth }}
           >
             <TouchableOpacity

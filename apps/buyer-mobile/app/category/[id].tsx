@@ -4,7 +4,10 @@ import Animated, {
   useSharedValue,
   useAnimatedScrollHandler,
   useAnimatedStyle,
+  FadeIn,
   FadeInDown,
+  FadeOut,
+  Layout,
 } from 'react-native-reanimated'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -14,6 +17,7 @@ import { colors, spacing, radii } from '@chinooz/theme'
 import { useProducts, useCategories } from '@chinooz/hooks'
 import { EmptyState, ProductCard } from '@chinooz/ui'
 import { useCartStore } from '@chinooz/state'
+import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
 import FilterSheet, { type FilterState } from '../../components/FilterSheet'
 import SortSheet from '../../components/SortSheet'
 import CategoryResults from '../../components/CategoryResults'
@@ -64,6 +68,7 @@ export default function CategoryListingScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const addItem = useCartStore(s => s.addItem)
+  const reduced = useReducedMotion()
 
   const { data: categories } = useCategories()
   const { data: products, isLoading } = useProducts({ categoryId: id, limit: 50 })
@@ -230,15 +235,21 @@ export default function CategoryListingScreen() {
         <View style={styles.activeChipsRow}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing[2] }}>
             {activeChips.map(chip => (
-              <TouchableOpacity
+              <Animated.View
                 key={chip.key}
-                onPress={() => removeChip(chip.key)}
-                style={styles.activeChip}
-                activeOpacity={0.7}
+                entering={reduced ? FadeIn.duration(0) : FadeIn.duration(200)}
+                exiting={reduced ? FadeOut.duration(0) : FadeOut.duration(200)}
+                layout={Layout.springify().damping(20).stiffness(300)}
               >
-                <Text style={styles.activeChipText}>{chip.label}</Text>
-                <Text style={styles.activeChipX}>✕</Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => removeChip(chip.key)}
+                  style={styles.activeChip}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.activeChipText}>{chip.label}</Text>
+                  <Text style={styles.activeChipX}>✕</Text>
+                </TouchableOpacity>
+              </Animated.View>
             ))}
           </ScrollView>
           <TouchableOpacity onPress={clearAll} style={{ marginLeft: spacing[2] }}>

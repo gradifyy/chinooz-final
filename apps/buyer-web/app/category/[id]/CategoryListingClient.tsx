@@ -226,14 +226,18 @@ export default function CategoryListingClient({
       {activeChips.length > 0 && (
         <div className="flex items-center gap-2 flex-wrap">
           {activeChips.map(chip => (
-            <button
+            <motion.button
               key={chip.key}
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              transition={reduced ? { duration: 0 } : { type: 'spring', damping: 20, stiffness: 300 }}
               onClick={() => removeChip(chip.key)}
               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary-50 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
             >
               <span>{chip.label}</span>
               <span className="text-primary font-semibold">✕</span>
-            </button>
+            </motion.button>
           ))}
           <button onClick={clearAll} className="text-xs font-semibold text-text-muted hover:text-text transition-colors ml-1">
             {t('categories.clearAll')}
