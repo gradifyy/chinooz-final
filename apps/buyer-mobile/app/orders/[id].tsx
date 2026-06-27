@@ -15,8 +15,9 @@ import { formatNPR } from '@chinooz/utils'
 import { useOrderById } from '@chinooz/hooks'
 import { useSessionStore } from '@chinooz/state'
 import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
+import { OrderStatusTimeline } from '@chinooz/ui'
 import SectionReveal from '../../components/SectionReveal'
-import type { Order, OrderStatus, CartItem } from '@chinooz/types'
+import type { Order, OrderStatus, CartItem, TimelineStep, ShipmentTimeline } from '@chinooz/types'
 
 const STATUS_COLORS: Record<OrderStatus, { bg: string; text: string }> = {
   pending: { bg: colors.warningLight, text: colors.warning },
@@ -26,16 +27,6 @@ const STATUS_COLORS: Record<OrderStatus, { bg: string; text: string }> = {
   delivered: { bg: colors.successLight, text: colors.success },
   cancelled: { bg: colors.errorLight, text: colors.error },
   returned: { bg: '#FEF3C7', text: '#D97706' },
-}
-
-const TIMELINE_ICONS: Record<OrderStatus, string> = {
-  pending: '🕐',
-  confirmed: '✓',
-  processing: '📦',
-  shipped: '🚚',
-  delivered: '✅',
-  cancelled: '✕',
-  returned: '↩',
 }
 
 function groupBySeller(items: CartItem[]): Map<string, CartItem[]> {
@@ -48,76 +39,107 @@ function groupBySeller(items: CartItem[]): Map<string, CartItem[]> {
   return groups
 }
 
-function StatusTimeline({ order }: { order: Order }) {
-  const { t } = useTranslation()
-  const reduced = useReducedMotion()
+const ALL_STEPS = ['ordered', 'confirmed', 'packed', 'shipped', 'out_for_delivery', 'delivered'] as const
 
-  return (
-    <View style={{ gap: spacing[3] }}>
-      {order.timeline.map((entry, index) => {
-        const isLast = index === order.timeline.length - 1
-        const style = STATUS_COLORS[entry.status]
-        return (
-          <SectionReveal key={entry.status + index} delay={index * 50}>
-            <View style={{ flexDirection: 'row', gap: spacing[3] }}>
-              {/* Timeline indicator */}
-              <View style={{ alignItems: 'center', width: 32 }}>
-                <View
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: radii.full,
-                    backgroundColor: isLast ? style.bg : colors.borderLight,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Text style={{ fontSize: 14 }}>{TIMELINE_ICONS[entry.status]}</Text>
-                </View>
-                {!isLast && (
-                  <View
-                    style={{
-                      width: 2,
-                      flex: 1,
-                      backgroundColor: colors.borderLight,
-                      minHeight: 24,
-                    }}
-                  />
-                )}
-              </View>
+function buildTimelineSteps(order: Order, t: (key: string) => string): TimelineStep[] {
+  const timelineMap = new Map<string, { timestamp: string; note?: string }>()
+  for (const entry of order.timeline) {
+    timelineMap.set(entry.status, { timestamp: entry.timestamp, note: entry.note })
+  }
 
-              {/* Content */}
-              <View style={{ flex: 1, paddingBottom: isLast ? 0 : spacing[2] }}>
-                <Text
-                  style={{
-                    fontSize: 14,
-                    fontWeight: isLast ? '600' : '400',
-                    color: isLast ? style.text : colors.textSecondary,
-                  }}
-                >
-                  {t(`orders.${entry.status}`)}
-                </Text>
-                <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
-                  {new Date(entry.timestamp).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                    hour: 'numeric',
-                    minute: '2-digit',
-                  })}
-                </Text>
-                {entry.note && (
-                  <Text style={{ fontSize: 12, color: colors.textTertiary, marginTop: 2 }}>
-                    {entry.note}
-                  </Text>
-                )}
-              </View>
-            </View>
-          </SectionReveal>
-        )
-      })}
-    </View>
-  )
+  const isCancelled = order.status === 'cancelled'
+  const isReturned = order.status === 'returned'
+  const lastTimelineStatus = order.timeline[order.timeline.length - 1]?.status
+
+  const labelMap: Record<string, string> = {
+    ordered: t('orders.ordered'),
+    pending: t('orders.ordered'),
+    confirmed: t('orders.confirmed'),
+    processing: t('orders.packed'),
+    packed: t('orders.packed'),
+    shipped: t('orders.shipped'),
+    out_for_delivery: t('orders.outForDelivery'),
+    delivered: t('orders.delivered'),
+    cancelled: t('orders.cancelled'),
+    returned: t('orders.returned'),
+  }
+
+  const steps: TimelineStep[] = []
+
+  for (const stepKey of ALL_STEPS) {
+    const statusKey = stepKey === 'ordered' ? 'pending' : stepKey === 'packed' ? 'processing' : stepKey
+    const entry = timelineMap.get(statusKey)
+
+    if (entry) {
+      let stepStatus: 'completed' | 'current' | 'upcoming' = 'completed'
+      if (statusKey === lastTimelineStatus && !isCancelled && !isReturned) {
+        stepStatus = 'current'
+      }
+      steps.push({
+        key: stepKey,
+        label: labelMap[stepKey] || stepKey,
+        status: stepStatus,
+        timestamp: entry.timestamp,
+        note: entry.note,
+      })
+    } else {
+      const stepIndex = ALL_STEPS.indexOf(stepKey)
+      const lastCompletedIndex = ALL_STEPS.indexOf(
+        lastTimelineStatus === 'pending' ? 'ordered' :
+        lastTimelineStatus === 'processing' ? 'packed' :
+        lastTimelineStatus as typeof ALL_STEPS[number]
+      )
+
+      if (isCancelled || isReturned) {
+        steps.push({
+          key: stepKey,
+          label: labelMap[stepKey] || stepKey,
+          status: 'upcoming',
+        })
+      } else if (stepIndex <= lastCompletedIndex) {
+        steps.push({
+          key: stepKey,
+          label: labelMap[stepKey] || stepKey,
+          status: 'completed',
+        })
+      } else if (stepIndex === lastCompletedIndex + 1) {
+        steps.push({
+          key: stepKey,
+          label: labelMap[stepKey] || stepKey,
+          status: 'current',
+        })
+      } else {
+        steps.push({
+          key: stepKey,
+          label: labelMap[stepKey] || stepKey,
+          status: 'upcoming',
+        })
+      }
+    }
+  }
+
+  // Add cancelled/returned as the final step if applicable
+  if (isCancelled) {
+    const entry = timelineMap.get('cancelled')
+    steps.push({
+      key: 'cancelled',
+      label: labelMap['cancelled'],
+      status: 'current',
+      timestamp: entry?.timestamp,
+      note: entry?.note,
+    })
+  } else if (isReturned) {
+    const entry = timelineMap.get('returned')
+    steps.push({
+      key: 'returned',
+      label: labelMap['returned'],
+      status: 'current',
+      timestamp: entry?.timestamp,
+      note: entry?.note,
+    })
+  }
+
+  return steps
 }
 
 function SubOrderCard({
@@ -347,6 +369,20 @@ export default function OrderDetailScreen() {
     return [...groupBySeller(order.items).entries()]
   }, [order])
 
+  const timelineSteps = useMemo(() => {
+    if (!order) return []
+    return buildTimelineSteps(order, t)
+  }, [order, t])
+
+  const shipments = useMemo((): ShipmentTimeline[] | undefined => {
+    if (!order || sellerGroups.length <= 1) return undefined
+    return sellerGroups.map(([sellerName]) => ({
+      sellerName,
+      steps: timelineSteps,
+      estimatedDelivery: order.estimatedDelivery,
+    }))
+  }, [order, sellerGroups, timelineSteps])
+
   const statusStyle = order ? STATUS_COLORS[order.status] : null
 
   return (
@@ -489,7 +525,10 @@ export default function OrderDetailScreen() {
           <SectionReveal delay={50}>
             <View style={{ gap: spacing[3] }}>
               <SectionHeader title={t('orders.statusTimeline')} />
-              <StatusTimeline order={order} />
+              <OrderStatusTimeline
+                steps={timelineSteps}
+                shipments={shipments}
+              />
             </View>
           </SectionReveal>
 

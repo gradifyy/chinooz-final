@@ -32,6 +32,10 @@ export type {
   ProductCardVariant,
   ProductCardProps,
   OrderCardProps,
+  OrderStatusTimelineProps,
+  TimelineStep,
+  TimelineStepStatus,
+  ShipmentTimeline,
   InboxTab,
   SegmentedControlProps,
 } from './components'

@@ -5,9 +5,9 @@ import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { formatNPR } from '@chinooz/utils'
-import { useReducedMotion } from '@chinooz/ui-web'
+import { useReducedMotion, OrderStatusTimeline } from '@chinooz/ui-web'
 import { duration, easing } from '@chinooz/theme'
-import type { Order, OrderStatus, CartItem } from '@chinooz/types'
+import type { Order, OrderStatus, CartItem, TimelineStep, ShipmentTimeline } from '@chinooz/types'
 
 const STATUS_COLORS: Record<OrderStatus, { bg: string; text: string }> = {
   pending: { bg: 'bg-warning-light', text: 'text-warning' },
@@ -19,16 +19,6 @@ const STATUS_COLORS: Record<OrderStatus, { bg: string; text: string }> = {
   returned: { bg: 'bg-amber-100', text: 'text-amber-600' },
 }
 
-const TIMELINE_ICONS: Record<OrderStatus, string> = {
-  pending: '🕐',
-  confirmed: '✓',
-  processing: '📦',
-  shipped: '🚚',
-  delivered: '✅',
-  cancelled: '✕',
-  returned: '↩',
-}
-
 function groupBySeller(items: CartItem[]): Map<string, CartItem[]> {
   const groups = new Map<string, CartItem[]>()
   for (const item of items) {
@@ -37,6 +27,79 @@ function groupBySeller(items: CartItem[]): Map<string, CartItem[]> {
     groups.get(seller)!.push(item)
   }
   return groups
+}
+
+const ALL_STEPS = ['ordered', 'confirmed', 'packed', 'shipped', 'out_for_delivery', 'delivered'] as const
+
+function buildTimelineSteps(order: Order, t: (key: string) => string): TimelineStep[] {
+  const timelineMap = new Map<string, { timestamp: string; note?: string }>()
+  for (const entry of order.timeline) {
+    timelineMap.set(entry.status, { timestamp: entry.timestamp, note: entry.note })
+  }
+
+  const isCancelled = order.status === 'cancelled'
+  const isReturned = order.status === 'returned'
+  const lastTimelineStatus = order.timeline[order.timeline.length - 1]?.status
+
+  const labelMap: Record<string, string> = {
+    ordered: t('orders.ordered'),
+    pending: t('orders.ordered'),
+    confirmed: t('orders.confirmed'),
+    processing: t('orders.packed'),
+    packed: t('orders.packed'),
+    shipped: t('orders.shipped'),
+    out_for_delivery: t('orders.outForDelivery'),
+    delivered: t('orders.delivered'),
+    cancelled: t('orders.cancelled'),
+    returned: t('orders.returned'),
+  }
+
+  const steps: TimelineStep[] = []
+
+  for (const stepKey of ALL_STEPS) {
+    const statusKey = stepKey === 'ordered' ? 'pending' : stepKey === 'packed' ? 'processing' : stepKey
+    const entry = timelineMap.get(statusKey)
+
+    if (entry) {
+      let stepStatus: 'completed' | 'current' | 'upcoming' = 'completed'
+      if (statusKey === lastTimelineStatus && !isCancelled && !isReturned) {
+        stepStatus = 'current'
+      }
+      steps.push({
+        key: stepKey,
+        label: labelMap[stepKey] || stepKey,
+        status: stepStatus,
+        timestamp: entry.timestamp,
+        note: entry.note,
+      })
+    } else {
+      const stepIndex = ALL_STEPS.indexOf(stepKey)
+      const mappedLast = lastTimelineStatus === 'pending' ? 'ordered' :
+        lastTimelineStatus === 'processing' ? 'packed' :
+        lastTimelineStatus as typeof ALL_STEPS[number]
+      const lastCompletedIndex = ALL_STEPS.indexOf(mappedLast)
+
+      if (isCancelled || isReturned) {
+        steps.push({ key: stepKey, label: labelMap[stepKey] || stepKey, status: 'upcoming' })
+      } else if (stepIndex <= lastCompletedIndex) {
+        steps.push({ key: stepKey, label: labelMap[stepKey] || stepKey, status: 'completed' })
+      } else if (stepIndex === lastCompletedIndex + 1) {
+        steps.push({ key: stepKey, label: labelMap[stepKey] || stepKey, status: 'current' })
+      } else {
+        steps.push({ key: stepKey, label: labelMap[stepKey] || stepKey, status: 'upcoming' })
+      }
+    }
+  }
+
+  if (isCancelled) {
+    const entry = timelineMap.get('cancelled')
+    steps.push({ key: 'cancelled', label: labelMap['cancelled'], status: 'current', timestamp: entry?.timestamp, note: entry?.note })
+  } else if (isReturned) {
+    const entry = timelineMap.get('returned')
+    steps.push({ key: 'returned', label: labelMap['returned'], status: 'current', timestamp: entry?.timestamp, note: entry?.note })
+  }
+
+  return steps
 }
 
 function SectionReveal({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
@@ -62,57 +125,6 @@ function SectionHeader({ title, id }: { title: string; id?: string }) {
     <div className="space-y-2" aria-labelledby={id}>
       <h3 id={id} className="text-lg font-semibold text-text">{title}</h3>
       <div className="h-px bg-border" />
-    </div>
-  )
-}
-
-function StatusTimeline({ order }: { order: Order }) {
-  const { t } = useTranslation()
-
-  return (
-    <div className="space-y-3">
-      {order.timeline.map((entry, index) => {
-        const isLast = index === order.timeline.length - 1
-        const style = STATUS_COLORS[entry.status]
-        return (
-          <SectionReveal key={entry.status + index} delay={index * 50}>
-            <div className="flex gap-3">
-              {/* Timeline indicator */}
-              <div className="flex flex-col items-center w-8">
-                <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${
-                    isLast ? style.bg : 'bg-border-light'
-                  }`}
-                >
-                  {TIMELINE_ICONS[entry.status]}
-                </div>
-                {!isLast && (
-                  <div className="w-0.5 flex-1 bg-border-light min-h-[24px]" />
-                )}
-              </div>
-
-              {/* Content */}
-              <div className="flex-1 pb-2">
-                <p className={`text-sm ${isLast ? `font-semibold ${style.text}` : 'text-text-secondary'}`}>
-                  {t(`orders.${entry.status}`)}
-                </p>
-                <p className="text-xs text-text-muted mt-0.5">
-                  {new Date(entry.timestamp).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                    hour: 'numeric',
-                    minute: '2-digit',
-                  })}
-                </p>
-                {entry.note && (
-                  <p className="text-xs text-text-tertiary mt-0.5">{entry.note}</p>
-                )}
-              </div>
-            </div>
-          </SectionReveal>
-        )
-      })}
     </div>
   )
 }
@@ -248,6 +260,19 @@ export default function OrderDetailClient({ order }: { order: Order }) {
     return [...groupBySeller(order.items).entries()]
   }, [order.items])
 
+  const timelineSteps = useMemo(() => {
+    return buildTimelineSteps(order, t)
+  }, [order, t])
+
+  const shipments = useMemo((): ShipmentTimeline[] | undefined => {
+    if (sellerGroups.length <= 1) return undefined
+    return sellerGroups.map(([sellerName]) => ({
+      sellerName,
+      steps: timelineSteps,
+      estimatedDelivery: order.estimatedDelivery,
+    }))
+  }, [sellerGroups, timelineSteps, order.estimatedDelivery])
+
   return (
     <div className="space-y-5">
       {/* Back button */}
@@ -304,7 +329,10 @@ export default function OrderDetailClient({ order }: { order: Order }) {
       <SectionReveal delay={50}>
         <div className="space-y-3">
           <SectionHeader title={t('orders.statusTimeline')} id="timeline-heading" />
-          <StatusTimeline order={order} />
+          <OrderStatusTimeline
+            steps={timelineSteps}
+            shipments={shipments}
+          />
         </div>
       </SectionReveal>
 

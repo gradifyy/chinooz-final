@@ -210,4 +210,30 @@ export interface OrderCardProps extends BaseProps {
   onAction?: (order: Order) => void
 }
 
+export type TimelineStepStatus = 'completed' | 'current' | 'upcoming'
+
+export interface TimelineStep {
+  key: string
+  label: string
+  status: TimelineStepStatus
+  timestamp?: string
+  note?: string
+}
+
+export interface ShipmentTimeline {
+  sellerName: string
+  steps: TimelineStep[]
+  estimatedDelivery?: string
+  trackingNumber?: string
+  isCod?: boolean
+}
+
+export interface OrderStatusTimelineProps extends BaseProps {
+  steps: TimelineStep[]
+  shipments?: ShipmentTimeline[]
+  isCod?: boolean
+  trackingNumber?: string
+  onCopyTracking?: (trackingNumber: string) => void
+}
+
 export type { OrderStatus }
