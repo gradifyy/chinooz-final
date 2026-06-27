@@ -294,7 +294,18 @@
     "suggestionsFor": "Suggestions for \"{{query}}\"",
     "searchScreenOpened": "Search screen opened",
     "noResults": "No products found",
-    "noResultsSubtitle": "Try different keywords"
+    "noResultsSubtitle": "Try different keywords",
+    "noResultsFor": "No results for '{{term}}'",
+    "didYouMean": "Did you mean",
+    "clearFilters": "Clear filters",
+    "loadingResults": "Loading results",
+    "loadingSuggestions": "Loading suggestions",
+    "errorTitle": "Something went wrong",
+    "errorSubtitle": "We couldn't load your search results. Please try again.",
+    "retry": "Retry",
+    "offlineCached": "You're offline. Showing cached results.",
+    "tryTrending": "Try one of these trending searches",
+    "browseCategories": "Or browse these categories"
   },
   "emptyState": {
     "noItems": "No items found",

@@ -12,6 +12,7 @@ import { ProductCardSkeleton } from '@chinooz/ui-web/ProductCard'
 import SafeImage from '@chinooz/ui-web/SafeImage'
 import { formatNPR } from '@chinooz/utils'
 import type { Product } from '@chinooz/types'
+import OfflineBanner from '@/components/OfflineBanner'
 
 const FilterPanel = lazy(() => import('@/components/FilterPanel'))
 const SortDropdown = lazy(() => import('@/components/SortDropdown'))
@@ -77,6 +78,22 @@ function useCountUp(target: number, duration = 200): number {
 }
 
 const POPULAR_TERMS = ['Headphones', 'Shoes', 'T-shirt', 'Backpack', 'Watch', 'Sunglasses']
+
+function getDidYouMean(query: string): string | null {
+  if (!query || query.length < 2) return null
+  const q = query.toLowerCase()
+  for (const term of POPULAR_TERMS) {
+    const t = term.toLowerCase()
+    if (t.includes(q) || q.includes(t)) continue
+    let diff = 0
+    const len = Math.min(q.length, t.length)
+    for (let i = 0; i < len; i++) {
+      if (q[i] !== t[i]) diff++
+    }
+    if (diff <= 2 && Math.abs(q.length - t.length) <= 2) return term
+  }
+  return null
+}
 
 const POPULAR_CATEGORIES = [
   { id: 'cat-electronics', name: 'Electronics', icon: '📱' },
@@ -162,6 +179,7 @@ function SearchContent() {
   const [sortBy, setSortBy] = useState('relevance')
   const [showSort, setShowSort] = useState(false)
   const [showFilterPanel, setShowFilterPanel] = useState(false)
+  const [dismissedSuggestion, setDismissedSuggestion] = useState<string | null>(null)
   const reduced = useReducedMotion()
 
   const debouncedQuery = useDebounce(query, DEBOUNCE_MS)
@@ -170,7 +188,7 @@ function SearchContent() {
     useSearchSuggestions(debouncedQuery)
 
   const searchEnabled = debouncedQuery.length >= 2
-  const { data: searchResults, isLoading: searchLoading } = useSearchProducts(
+  const { data: searchResults, isLoading: searchLoading, isError: searchError, refetch } = useSearchProducts(
     submitted ? debouncedQuery : '',
   )
 
@@ -206,6 +224,16 @@ function SearchContent() {
     if (filters.priceMin > 0 || filters.priceMax < 999999) count++
     return count
   }, [filters])
+
+  const hasActiveFilters = activeChipCount > 0
+
+  const didYouMean = useMemo(() => {
+    if (!isResults || searchLoading || searchError) return null
+    if (filteredProducts.length > 0) return null
+    const suggestion = getDidYouMean(debouncedQuery)
+    if (suggestion && suggestion === dismissedSuggestion) return null
+    return suggestion
+  }, [isResults, searchLoading, searchError, filteredProducts, debouncedQuery, dismissedSuggestion])
 
   const activeChips = useMemo(() => {
     const chips: { key: string; label: string }[] = []
@@ -562,6 +590,7 @@ function SearchContent() {
 
   return (
     <div className="min-h-screen bg-background">
+      <OfflineBanner />
       <div className="sticky top-16 z-sticky bg-white border-b border-border">
         <Container className="py-3">
           <div className="flex items-center gap-3">
@@ -864,7 +893,25 @@ function SearchContent() {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.2 }}
             >
-              {suggestionItems.length > 0 ? (
+              {suggestionsFetching && suggestionItems.length === 0 ? (
+                <div className="space-y-0" aria-busy="true" aria-label={t('search.loadingSuggestions')}>
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <motion.div
+                      key={i}
+                      initial={reduced ? false : { opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.05, duration: 0.2 }}
+                      className="flex items-center gap-3 px-4 py-3"
+                    >
+                      <div className="w-10 h-10 rounded-lg bg-border animate-pulse" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-4 bg-border rounded w-3/4 animate-pulse" />
+                        <div className="h-3 bg-border rounded w-2/5 animate-pulse" />
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              ) : suggestionItems.length > 0 ? (
                 <div
                   ref={listRef}
                   id="search-suggestions-list"
@@ -897,12 +944,35 @@ function SearchContent() {
                 <div
                   className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3"
                   aria-busy="true"
+                  aria-label={t('search.loadingResults')}
                 >
                   {Array.from({ length: 8 }).map((_, i) => (
-                    <ProductCardSkeleton key={i} />
+                    <div key={i} className="bg-surface rounded-xl overflow-hidden">
+                      <ProductCardSkeleton />
+                    </div>
                   ))}
                 </div>
-              ) : searchResults && searchResults.length > 0 ? (
+              ) : searchError ? (
+                <motion.div
+                  initial={reduced ? false : { opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={reduced ? { duration: 0 } : { duration: 0.6, type: 'spring', damping: 18, stiffness: 120 }}
+                  className="flex flex-col items-center py-16 gap-3"
+                >
+                  <span className="text-6xl">{'\u{1F615}'}</span>
+                  <p className="text-lg font-semibold text-text">{t('search.errorTitle')}</p>
+                  <p className="text-sm text-text-muted text-center max-w-sm">
+                    {t('search.errorSubtitle')}
+                  </p>
+                  <button
+                    onClick={() => refetch()}
+                    className="mt-2 px-5 py-2.5 rounded-md border-[1.5px] border-primary text-sm font-semibold text-primary hover:bg-primary/5 transition-colors"
+                    aria-label={t('search.retry')}
+                  >
+                    {t('search.retry')}
+                  </button>
+                </motion.div>
+              ) : searchResults && searchResults.length > 0 && filteredProducts.length > 0 ? (
                 <div>
                   <div className="mb-4">
                     <h2 className="text-base font-semibold text-text">{debouncedQuery}</h2>
@@ -1042,14 +1112,117 @@ function SearchContent() {
                   </div>
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center py-20">
-                  <span className="text-5xl mb-4">{'\u{1F50D}'}</span>
-                  <h3 className="text-lg font-semibold text-text mb-2">
-                    {t('search.noResults')}
-                  </h3>
-                  <p className="text-sm text-text-muted text-center max-w-xs">
-                    {t('search.noResultsSubtitle')}
-                  </p>
+                <div>
+                  {didYouMean && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="flex items-center gap-1 px-0 py-3 bg-background rounded-lg mb-4"
+                    >
+                      <span className="text-sm font-medium text-text-muted">
+                        {t('search.didYouMean')}:{' '}
+                      </span>
+                      <button
+                        onClick={() => {
+                          setDismissedSuggestion(didYouMean)
+                          setQuery(didYouMean)
+                          setSubmitted(true)
+                          saveRecentSearch(didYouMean)
+                          setRecentSearches(getRecentSearches())
+                        }}
+                        className="text-sm font-medium text-primary underline hover:text-primary-dark transition-colors"
+                        role="link"
+                        aria-label={`${t('search.didYouMean')} ${didYouMean}`}
+                      >
+                        {didYouMean}
+                      </button>
+                    </motion.div>
+                  )}
+                  <motion.div
+                    initial={reduced ? false : { opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={reduced ? { duration: 0 } : { duration: 0.6, type: 'spring', damping: 15, stiffness: 80 }}
+                    className="flex flex-col items-center py-12 gap-3"
+                  >
+                    <div className="w-24 h-24 rounded-full bg-primary-50 flex items-center justify-center mb-2">
+                      <span className="text-5xl">{'\u{1F50D}'}</span>
+                    </div>
+                    <h3 className="text-base font-semibold text-text text-center">
+                      {t('search.noResultsFor', { term: debouncedQuery })}
+                    </h3>
+                    {hasActiveFilters && (
+                      <button
+                        onClick={clearAllFilters}
+                        className="mt-2 px-5 py-2.5 rounded-md border-[1.5px] border-primary text-sm font-semibold text-primary hover:bg-primary/5 transition-colors"
+                        aria-label={t('search.clearFilters')}
+                      >
+                        {t('search.clearFilters')}
+                      </button>
+                    )}
+                  </motion.div>
+                  <div className="mt-4">
+                    <motion.p
+                      initial={reduced ? false : { opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.2, duration: 0.25 }}
+                      className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-3"
+                    >
+                      {t('search.tryTrending')}
+                    </motion.p>
+                    <div className="flex flex-wrap gap-2 mb-6">
+                      {POPULAR_TERMS.slice(0, 4).map((term, i) => (
+                        <motion.button
+                          key={term}
+                          initial={reduced ? false : { opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{
+                            delay: reduced ? 0 : 0.25 + i * 0.05,
+                            duration: 0.25,
+                            ease: [0.34, 1.56, 0.64, 1],
+                          }}
+                          whileHover={{ scale: 1.03 }}
+                          whileTap={{ scale: 0.97 }}
+                          onClick={() => handlePopularPress(term)}
+                          className="px-4 py-2 bg-surface border border-primary rounded-full text-sm font-medium text-primary hover:bg-primary-50 transition-colors"
+                        >
+                          {term}
+                        </motion.button>
+                      ))}
+                    </div>
+                    <motion.p
+                      initial={reduced ? false : { opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.45, duration: 0.25 }}
+                      className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-3"
+                    >
+                      {t('search.browseCategories')}
+                    </motion.p>
+                    <div className="grid grid-cols-2 gap-3">
+                      {POPULAR_CATEGORIES.slice(0, 4).map((cat, i) => (
+                        <motion.button
+                          key={cat.id}
+                          initial={reduced ? false : { opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{
+                            delay: reduced ? 0 : 0.5 + i * 0.05,
+                            duration: 0.25,
+                            ease: [0.34, 1.56, 0.64, 1],
+                          }}
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.97 }}
+                          onClick={() => handleCategoryPress(cat)}
+                          className="flex items-center gap-3 bg-background border border-border rounded-lg px-3 py-3 hover:border-primary/30 transition-colors text-left"
+                          aria-label={cat.name}
+                        >
+                          <span className="text-[28px]">{cat.icon}</span>
+                          <span className="text-sm font-semibold text-text truncate">
+                            {cat.name}
+                          </span>
+                        </motion.button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
 

@@ -30,12 +30,13 @@ import {
 } from '@chinooz/hooks'
 import type { SuggestionItem } from '@chinooz/hooks'
 import { colors, radii, spacing } from '@chinooz/theme'
-import { ProductCard, ProductCardSkeleton, SafeImage } from '@chinooz/ui'
+import { ProductCard, ProductCardSkeleton, Skeleton, SafeImage } from '@chinooz/ui'
 import { formatNPR } from '@chinooz/utils'
 import { useCartStore } from '@chinooz/state'
 import type { Product } from '@chinooz/types'
 import FilterSheet, { type FilterState } from '../components/FilterSheet'
 import SortSheet, { type SortOption } from '../components/SortSheet'
+import OfflineBanner from '../components/OfflineBanner'
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity)
 
@@ -106,6 +107,22 @@ function useCountUp(target: number, duration = 200): number {
 
 const POPULAR_TERMS = ['Headphones', 'Shoes', 'T-shirt', 'Backpack', 'Watch', 'Sunglasses']
 
+function getDidYouMean(query: string): string | null {
+  if (!query || query.length < 2) return null
+  const q = query.toLowerCase()
+  for (const term of POPULAR_TERMS) {
+    const t = term.toLowerCase()
+    if (t.includes(q) || q.includes(t)) continue
+    let diff = 0
+    const len = Math.min(q.length, t.length)
+    for (let i = 0; i < len; i++) {
+      if (q[i] !== t[i]) diff++
+    }
+    if (diff <= 2 && Math.abs(q.length - t.length) <= 2) return term
+  }
+  return null
+}
+
 const POPULAR_CATEGORIES = [
   { id: 'cat-electronics', name: 'Electronics', icon: '📱' },
   { id: 'cat-fashion', name: 'Fashion', icon: '👗' },
@@ -169,7 +186,7 @@ export default function SearchScreen() {
     useSearchSuggestions(debouncedQuery)
 
   const searchEnabled = debouncedQuery.length >= 2
-  const { data: searchResults, isLoading: searchLoading } = useSearchProducts(
+  const { data: searchResults, isLoading: searchLoading, isError: searchError, refetch } = useSearchProducts(
     submitted ? debouncedQuery : '',
   )
 
@@ -194,6 +211,16 @@ export default function SearchScreen() {
     return items
   }, [searchResults, filters, sortBy])
 
+  const [dismissedSuggestion, setDismissedSuggestion] = useState<string | null>(null)
+
+  const didYouMean = useMemo(() => {
+    if (!isResults || searchLoading || searchError) return null
+    if (filteredProducts.length > 0) return null
+    const suggestion = getDidYouMean(debouncedQuery)
+    if (suggestion && suggestion === dismissedSuggestion) return null
+    return suggestion
+  }, [isResults, searchLoading, searchError, filteredProducts, debouncedQuery, dismissedSuggestion])
+
   const displayCount = useCountUp(filteredProducts.length)
 
   const activeChipCount = useMemo(() => {
@@ -205,6 +232,8 @@ export default function SearchScreen() {
     if (filters.priceMin > 0 || filters.priceMax < 999999) count++
     return count
   }, [filters])
+
+  const hasActiveFilters = activeChipCount > 0
 
   const activeChips = useMemo(() => {
     const chips: { key: string; label: string }[] = []
@@ -667,7 +696,23 @@ export default function SearchScreen() {
 
         {isTyping && (
           <Animated.View entering={FadeIn.duration(200)} style={styles.suggestionsContainer}>
-            {suggestionItems.length > 0 ? (
+            {suggestionsFetching && suggestionItems.length === 0 ? (
+              <View style={styles.suggestionSkeletons} accessibilityState={{ busy: true }} accessibilityLabel={t('search.loadingSuggestions')}>
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Animated.View
+                    key={i}
+                    entering={FadeInDown.duration(200).delay(i * 50).springify().damping(18)}
+                    style={styles.suggestionSkeletonRow}
+                  >
+                    <Skeleton width={40} height={40} borderRadius={radii.lg} />
+                    <View style={styles.suggestionSkeletonContent}>
+                      <Skeleton width="75%" height={16} />
+                      <Skeleton width="40%" height={14} />
+                    </View>
+                  </Animated.View>
+                ))}
+              </View>
+            ) : suggestionItems.length > 0 ? (
               <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
                 {suggestionItems.map((item, index) => renderSuggestionRow({ item, index }))}
               </ScrollView>
@@ -682,14 +727,36 @@ export default function SearchScreen() {
         {isResults && (
           <Animated.View entering={FadeIn.duration(200)} style={styles.resultsContainer}>
             {searchLoading ? (
-              <View style={styles.skeletonGrid} accessibilityState={{ busy: true }}>
+              <View style={styles.skeletonGrid} accessibilityState={{ busy: true }} accessibilityLabel={t('search.loadingResults')}>
                 {Array.from({ length: 6 }).map((_, i) => (
                   <View key={i} style={{ width: gridItemWidth }}>
-                    <ProductCardSkeleton variant="compact" />
+                    <View style={styles.skeletonCard}>
+                      <Skeleton width="100%" height={gridItemWidth * 1.2} borderRadius={radii.lg} />
+                      <View style={styles.skeletonBody}>
+                        <Skeleton width="85%" height={14} />
+                        <Skeleton width="55%" height={12} />
+                        <Skeleton width="40%" height={16} />
+                      </View>
+                    </View>
                   </View>
                 ))}
               </View>
-            ) : searchResults && searchResults.length > 0 ? (
+            ) : searchError ? (
+              <Animated.View entering={FadeInDown.duration(250).springify().damping(18)} style={styles.errorState}>
+                <Text style={styles.errorIcon}>{'\u{1F615}'}</Text>
+                <Text style={styles.errorTitle}>{t('search.errorTitle')}</Text>
+                <Text style={styles.errorSubtitle}>{t('search.errorSubtitle')}</Text>
+                <TouchableOpacity
+                  onPress={() => refetch()}
+                  style={styles.retryButton}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('search.retry')}
+                >
+                  <Text style={styles.retryText}>{t('search.retry')}</Text>
+                </TouchableOpacity>
+              </Animated.View>
+            ) : searchResults && searchResults.length > 0 && filteredProducts.length > 0 ? (
               <FlatList
                 data={filteredProducts}
                 keyExtractor={item => item.id}
@@ -821,11 +888,96 @@ export default function SearchScreen() {
                 )}
               />
             ) : (
-              <View style={styles.emptyResults}>
-                <Text style={styles.emptyResultsIcon}>{'\u{1F50D}'}</Text>
-                <Text style={styles.emptyResultsTitle}>{t('search.noResults')}</Text>
-                <Text style={styles.emptyResultsSubtitle}>{t('search.noResultsSubtitle')}</Text>
-              </View>
+              <ScrollView contentContainerStyle={styles.emptyScrollContent} showsVerticalScrollIndicator={false}>
+                {didYouMean && (
+                  <Animated.View entering={FadeInDown.duration(200).springify().damping(18)} style={styles.didYouMeanBar}>
+                    <Text style={styles.didYouMeanLabel}>{t('search.didYouMean')}: </Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setDismissedSuggestion(didYouMean)
+                        setQuery(didYouMean)
+                        setSubmitted(true)
+                        persistRecent(didYouMean)
+                      }}
+                      activeOpacity={0.7}
+                      accessibilityRole="link"
+                      accessibilityLabel={`${t('search.didYouMean')} ${didYouMean}`}
+                    >
+                      <Text style={styles.didYouMeanTerm}>{didYouMean}</Text>
+                    </TouchableOpacity>
+                  </Animated.View>
+                )}
+                <Animated.View entering={FadeIn.duration(400)} style={styles.emptyStateWrap}>
+                  <Animated.View
+                    entering={FadeInDown.duration(600).springify().damping(15).stiffness(80)}
+                    style={styles.emptyIllustration}
+                  >
+                    <Text style={styles.emptyIllustrationIcon}>{'\u{1F50D}'}</Text>
+                  </Animated.View>
+                  <Text style={styles.emptyTitle}>
+                    {t('search.noResultsFor', { term: debouncedQuery })}
+                  </Text>
+                  {hasActiveFilters && (
+                    <TouchableOpacity
+                      onPress={clearAllFilters}
+                      style={styles.clearFiltersOutlineBtn}
+                      activeOpacity={0.7}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('search.clearFilters')}
+                    >
+                      <Text style={styles.clearFiltersOutlineText}>{t('search.clearFilters')}</Text>
+                    </TouchableOpacity>
+                  )}
+                </Animated.View>
+                <View style={styles.emptyRecovery}>
+                  <Animated.View entering={FadeInDown.duration(250).delay(200).springify().damping(18)}>
+                    <Text style={styles.emptyRecoveryTitle}>{t('search.tryTrending')}</Text>
+                  </Animated.View>
+                  <View style={styles.emptyRecoveryChips}>
+                    {POPULAR_TERMS.slice(0, 4).map((term, i) => (
+                      <Animated.View
+                        key={term}
+                        entering={FadeInDown.duration(250).delay(250 + i * 50).springify().damping(18)}
+                      >
+                        <TouchableOpacity
+                          style={styles.emptyChip}
+                          onPress={() => handlePopularPress(term)}
+                          activeOpacity={0.7}
+                          accessibilityRole="button"
+                          accessibilityLabel={term}
+                        >
+                          <Text style={styles.emptyChipText}>{term}</Text>
+                        </TouchableOpacity>
+                      </Animated.View>
+                    ))}
+                  </View>
+                  <Animated.View entering={FadeInDown.duration(250).delay(450).springify().damping(18)}>
+                    <Text style={[styles.emptyRecoveryTitle, { marginTop: spacing[4] }]}>
+                      {t('search.browseCategories')}
+                    </Text>
+                  </Animated.View>
+                  <View style={styles.emptyCategoryGrid}>
+                    {POPULAR_CATEGORIES.slice(0, 4).map((cat, i) => (
+                      <Animated.View
+                        key={cat.id}
+                        entering={FadeInDown.duration(250).delay(500 + i * 50).springify().damping(18)}
+                        style={styles.emptyCategoryTileWrap}
+                      >
+                        <TouchableOpacity
+                          style={styles.emptyCategoryTile}
+                          onPress={() => handleCategoryPress(cat)}
+                          activeOpacity={0.7}
+                          accessibilityRole="button"
+                          accessibilityLabel={cat.name}
+                        >
+                          <Text style={styles.emptyCategoryIcon}>{cat.icon}</Text>
+                          <Text style={styles.emptyCategoryName}>{cat.name}</Text>
+                        </TouchableOpacity>
+                      </Animated.View>
+                    ))}
+                  </View>
+                </View>
+              </ScrollView>
             )}
           </Animated.View>
         )}
@@ -845,6 +997,7 @@ export default function SearchScreen() {
           activeKey={sortBy}
           onSelect={setSortBy}
         />
+        <OfflineBanner />
       </View>
     </Animated.View>
   )
@@ -1245,27 +1398,181 @@ const styles = StyleSheet.create({
     paddingHorizontal: EDGE_PADDING,
     paddingTop: spacing[4],
   },
-  emptyResults: {
+  skeletonCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    overflow: 'hidden',
+  },
+  skeletonBody: {
+    padding: spacing[3],
+    gap: spacing[2],
+  },
+  suggestionSkeletons: {
+    paddingTop: spacing[4],
+    paddingHorizontal: spacing[4],
+  },
+  suggestionSkeletonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    paddingVertical: spacing[3],
+  },
+  suggestionSkeletonContent: {
+    flex: 1,
+    gap: spacing[2],
+  },
+  errorState: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing[8],
     paddingVertical: spacing[16],
+    gap: spacing[3],
   },
-  emptyResultsIcon: {
+  errorIcon: {
     fontSize: 48,
-    marginBottom: spacing[4],
+    marginBottom: spacing[2],
   },
-  emptyResultsTitle: {
+  errorTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: colors.text,
-    marginBottom: spacing[2],
     textAlign: 'center',
   },
-  emptyResultsSubtitle: {
+  errorSubtitle: {
     fontSize: 14,
     color: colors.textMuted,
     textAlign: 'center',
+    lineHeight: 20,
+  },
+  retryButton: {
+    marginTop: spacing[2],
+    paddingHorizontal: spacing[5],
+    paddingVertical: spacing[2.5],
+    borderRadius: radii.md,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+  },
+  retryText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  didYouMeanBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: EDGE_PADDING,
+    paddingVertical: spacing[3],
+    backgroundColor: colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  didYouMeanLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.textMuted,
+  },
+  didYouMeanTerm: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.primary,
+    textDecorationLine: 'underline',
+  },
+  emptyScrollContent: {
+    paddingBottom: spacing[16],
+  },
+  emptyStateWrap: {
+    alignItems: 'center',
+    paddingHorizontal: spacing[8],
+    paddingTop: spacing[10],
+    gap: spacing[3],
+  },
+  emptyIllustration: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: colors.primary50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing[2],
+  },
+  emptyIllustrationIcon: {
+    fontSize: 48,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  clearFiltersOutlineBtn: {
+    marginTop: spacing[2],
+    paddingHorizontal: spacing[5],
+    paddingVertical: spacing[2.5],
+    borderRadius: radii.md,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+  },
+  clearFiltersOutlineText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  emptyRecovery: {
+    paddingTop: spacing[6],
+    paddingHorizontal: EDGE_PADDING,
+  },
+  emptyRecoveryTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textMuted,
+    letterSpacing: 0.5,
+    marginBottom: spacing[3],
+  },
+  emptyRecoveryChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing[2],
+  },
+  emptyChip: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: 8,
+    borderRadius: radii.full,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.surface,
+  },
+  emptyChipText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: colors.primary,
+  },
+  emptyCategoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing[3],
+  },
+  emptyCategoryTileWrap: {
+    width: '47%',
+  },
+  emptyCategoryTile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    borderRadius: radii.lg,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[3],
+    gap: spacing[2],
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  emptyCategoryIcon: {
+    fontSize: 28,
+  },
+  emptyCategoryName: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.text,
   },
 })
