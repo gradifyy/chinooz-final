@@ -13,7 +13,7 @@ import {
 } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useTranslation } from 'react-i18next'
-import { Screen, SegmentedControl, EmptyState, Skeleton, Avatar } from '@chinooz/ui'
+import { Screen, SegmentedControl, EmptyState, Skeleton, Avatar, useReducedMotion } from '@chinooz/ui'
 import {
   useNotifications,
   useConversations,
@@ -25,7 +25,7 @@ import {
 import { useInboxStore } from '@chinooz/state'
 import { useSessionStore } from '@chinooz/state'
 import { assistantService, type AssistantMessage, SUGGESTED_PROMPTS } from '@chinooz/mock-data'
-import { colors, spacing, radii, fontSize, fontFamily } from '@chinooz/theme'
+import { colors, spacing, radii, fontSize, fontFamily, duration, easing } from '@chinooz/theme'
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -319,6 +319,7 @@ function NotificationRow({
   onDismiss: (id: string) => void
 }) {
   const { t } = useTranslation()
+  const reduced = useReducedMotion()
   const translateX = useSharedValue(0)
   const rowHeight = useSharedValue(1)
   const opacity = useSharedValue(1)
@@ -334,11 +335,18 @@ function NotificationRow({
     })
     .onEnd(e => {
       if (e.translationX < -60) {
-        translateX.value = withTiming(-400, { duration: 250 })
-        rowHeight.value = withTiming(0, { duration: 250 })
-        opacity.value = withTiming(0, { duration: 200 }, () => {
+        if (reduced) {
+          translateX.value = -400
+          rowHeight.value = 0
+          opacity.value = 0
           runOnJS(onDismiss)(notif.id)
-        })
+        } else {
+          translateX.value = withTiming(-400, { duration: duration.normal })
+          rowHeight.value = withTiming(0, { duration: duration.normal })
+          opacity.value = withTiming(0, { duration: duration.fast }, () => {
+            runOnJS(onDismiss)(notif.id)
+          })
+        }
       } else {
         translateX.value = withSpring(0, { damping: 20, stiffness: 300 })
       }
@@ -350,7 +358,7 @@ function NotificationRow({
   }))
 
   const wrapperStyle = useAnimatedStyle(() => ({
-    maxHeight: rowHeight.value === 0 ? withTiming(0, { duration: 250 }) : undefined,
+    maxHeight: rowHeight.value === 0 ? (reduced ? 0 : withTiming(0, { duration: duration.normal })) : undefined,
     overflow: 'hidden',
   }))
 
@@ -790,12 +798,14 @@ function BubbleRow({ msg, isMine, router }: { msg: Message; isMine: boolean; rou
     return <PendingBubble text={msg.body} />
   }
 
-  const bubbleScale = useSharedValue(0.9)
-  const bubbleOpacity = useSharedValue(0)
+  const reduced = useReducedMotion()
+  const bubbleScale = useSharedValue(reduced ? 1 : 0.9)
+  const bubbleOpacity = useSharedValue(reduced ? 1 : 0)
 
   useEffect(() => {
+    if (reduced) return
     bubbleScale.value = withSpring(1, { damping: 15, stiffness: 300 })
-    bubbleOpacity.value = withTiming(1, { duration: 200 })
+    bubbleOpacity.value = withTiming(1, { duration: duration.fast })
   }, [])
 
   const bubbleAnim = useAnimatedStyle(() => ({
@@ -839,11 +849,13 @@ function BubbleRow({ msg, isMine, router }: { msg: Message; isMine: boolean; rou
 }
 
 function TypingIndicator() {
+  const reduced = useReducedMotion()
   const dot1 = useSharedValue(0)
   const dot2 = useSharedValue(0)
   const dot3 = useSharedValue(0)
 
   useEffect(() => {
+    if (reduced) return
     const bounce = (sv: SharedValue<number>, delay: number) => {
       sv.value = withDelay(delay, withRepeat(withSequence(
         withTiming(-6, { duration: 200 }),
@@ -885,6 +897,7 @@ function mockReply(_input: string): string {
 function AssistantView({ threadId }: { threadId?: string }) {
   const { t } = useTranslation()
   const router = useRouter()
+  const reduced = useReducedMotion()
   const [messages, setMessages] = useState<AssistantMessage[]>([])
   const [input, setInput] = useState('')
   const [thinking, setThinking] = useState(false)
@@ -946,8 +959,8 @@ function AssistantView({ threadId }: { threadId?: string }) {
     try { localStorage.removeItem('chinooz-assistant') } catch {}
   }, [])
 
-  const handlePressIn = () => { sendScale.value = withTiming(0.95, { duration: 100 }) }
-  const handlePressOut = () => { sendScale.value = withSpring(1, { damping: 15, stiffness: 400 }) }
+  const handlePressIn = () => { if (!reduced) sendScale.value = withTiming(0.95, { duration: duration.fast }) }
+  const handlePressOut = () => { if (!reduced) sendScale.value = withSpring(1, { damping: 15, stiffness: 400 }) }
   const sendBtnStyle = useAnimatedStyle(() => ({ transform: [{ scale: sendScale.value }] }))
 
   const showIntro = messages.length === 0
@@ -1055,9 +1068,11 @@ function AssistantView({ threadId }: { threadId?: string }) {
 }
 
 function SuggestionChip({ label, delay, onPress }: { label: string; delay: number; onPress: () => void }) {
-  const scale = useSharedValue(0)
+  const reduced = useReducedMotion()
+  const scale = useSharedValue(reduced ? 1 : 0)
 
   useEffect(() => {
+    if (reduced) return
     scale.value = withDelay(delay, withSpring(1, { damping: 15, stiffness: 300 }))
   }, [])
 
@@ -1065,8 +1080,8 @@ function SuggestionChip({ label, delay, onPress }: { label: string; delay: numbe
     transform: [{ scale: scale.value }],
   }))
 
-  const pressIn = () => { scale.value = withTiming(0.97, { duration: 150 }) }
-  const pressOut = () => { scale.value = withSpring(1, { damping: 15, stiffness: 400 }) }
+  const pressIn = () => { if (!reduced) scale.value = withTiming(0.97, { duration: duration.fast }) }
+  const pressOut = () => { if (!reduced) scale.value = withSpring(1, { damping: 15, stiffness: 400 }) }
 
   return (
     <Animated.View style={animStyle}>
@@ -1086,12 +1101,14 @@ function SuggestionChip({ label, delay, onPress }: { label: string; delay: numbe
 
 function AssistantBubble({ msg, router, t }: { msg: AssistantMessage; router: any; t: (k: string) => string }) {
   const isMine = msg.from === 'user'
-  const bubbleScale = useSharedValue(0.9)
-  const bubbleOpacity = useSharedValue(0)
+  const reduced = useReducedMotion()
+  const bubbleScale = useSharedValue(reduced ? 1 : 0.9)
+  const bubbleOpacity = useSharedValue(reduced ? 1 : 0)
 
   useEffect(() => {
+    if (reduced) return
     bubbleScale.value = withSpring(1, { damping: 15, stiffness: 300 })
-    bubbleOpacity.value = withTiming(1, { duration: 300 })
+    bubbleOpacity.value = withTiming(1, { duration: duration.slow })
   }, [])
 
   const bubbleAnim = useAnimatedStyle(() => ({
@@ -1209,8 +1226,10 @@ function InboxOfflineBanner({ t }: { t: (k: string) => string }) {
 }
 
 function PendingBubble({ text }: { text: string }) {
-  const opacity = useSharedValue(0.5)
+  const reduced = useReducedMotion()
+  const opacity = useSharedValue(reduced ? 1 : 0.5)
   useEffect(() => {
+    if (reduced) return
     opacity.value = withRepeat(withSequence(
       withTiming(1, { duration: 750 }),
       withTiming(0.5, { duration: 750 }),

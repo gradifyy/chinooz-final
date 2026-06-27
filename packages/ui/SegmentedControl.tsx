@@ -7,12 +7,15 @@ import Animated, {
   useAnimatedReaction,
   withTiming,
 } from 'react-native-reanimated'
-import { colors, radii, spacing, fontSize, fontFamily } from '@chinooz/theme'
+import { colors, radii, spacing, fontSize, fontFamily, duration } from '@chinooz/theme'
 import type { SegmentedControlProps } from '@chinooz/types/components'
 import { useReducedMotion } from './hooks/useReducedMotion'
 
 const SEGMENT_HEIGHT = 40
 const BADGE_PADDING = 8
+
+const SPRING_CONFIG = { damping: 25, stiffness: 350, mass: 0.8 }
+const BADGE_SPRING = { damping: 10, stiffness: 400 }
 
 export default function SegmentedControl({
   segments,
@@ -32,7 +35,7 @@ export default function SegmentedControl({
   const indicatorStyle = useAnimatedStyle(() => {
     const x = segmentWidth.value * indicatorX.value
     return {
-      transform: [{ translateX: reduced ? x : withSpring(x, { damping: 25, stiffness: 350, mass: 0.8 }) }],
+      transform: [{ translateX: reduced ? x : withSpring(x, SPRING_CONFIG) }],
     }
   })
 
@@ -71,7 +74,7 @@ export default function SegmentedControl({
                 {seg.label}
               </Text>
               {seg.badge != null && seg.badge > 0 && (
-                <UnreadBadge count={seg.badge} />
+                <UnreadBadge count={seg.badge} reduced={reduced} />
               )}
             </TouchableOpacity>
           )
@@ -81,28 +84,34 @@ export default function SegmentedControl({
   )
 }
 
-function UnreadBadge({ count }: { count: number }) {
+function UnreadBadge({ count, reduced }: { count: number; reduced: boolean }) {
   const scale = useSharedValue(1)
-  const prevCount = useSharedValue(count)
+  const opacity = useSharedValue(1)
 
   useAnimatedReaction(
     () => count,
     (current, previous) => {
       if (previous === undefined || previous === null) return
+      if (reduced) {
+        scale.value = 1
+        opacity.value = current === 0 ? 0 : 1
+        return
+      }
       if (current > previous) {
-        scale.value = withTiming(1.3, { duration: 150 }, () => {
-          scale.value = withSpring(1, { damping: 10, stiffness: 400 })
+        scale.value = withTiming(1.3, { duration: duration.fast }, () => {
+          scale.value = withSpring(1, BADGE_SPRING)
         })
       } else if (current === 0) {
-        scale.value = withTiming(0, { duration: 200 })
+        scale.value = withTiming(0, { duration: duration.normal })
+        opacity.value = withTiming(0, { duration: duration.normal })
       }
     },
-    [count],
+    [count, reduced],
   )
 
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
-    opacity: count === 0 ? withTiming(0, { duration: 200 }) : 1,
+    opacity: opacity.value,
   }))
 
   if (count <= 0) return null

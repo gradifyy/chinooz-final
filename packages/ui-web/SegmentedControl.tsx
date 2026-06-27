@@ -30,14 +30,15 @@ export default function SegmentedControl({
     <div
       ref={containerRef}
       data-testid={testID}
-      className={`relative inline-flex bg-surface rounded-full h-10 p-1 max-w-full ${className}`}
+      className={`segmented-control relative inline-flex bg-surface rounded-full h-10 p-1 max-w-full ${className}`}
       role="tablist"
     >
       <div
-        className="absolute top-1 h-8 bg-primary rounded-full transition-all duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)]"
+        className="segmented-indicator absolute top-1 h-8 bg-primary rounded-full"
         style={{
           left: indicatorStyle.left,
           width: indicatorStyle.width,
+          transition: 'left 250ms cubic-bezier(0.34,1.56,0.64,1), width 250ms cubic-bezier(0.34,1.56,0.64,1)',
         }}
       />
       {segments.map(seg => {
@@ -57,7 +58,7 @@ export default function SegmentedControl({
             {seg.label}
             {seg.badge != null && seg.badge > 0 && (
               <span
-                className="inline-flex items-center justify-center bg-primary text-white text-xs font-semibold rounded-full px-2 py-0.5 min-w-[20px] animate-[badge-pop_300ms_ease]"
+                className="segmented-badge inline-flex items-center justify-center bg-primary text-white text-xs font-semibold rounded-full px-2 py-0.5 min-w-[20px] animate-[badge-pop_300ms_ease]"
                 key={seg.badge}
               >
                 {seg.badge > 99 ? '99+' : seg.badge}
