@@ -174,6 +174,37 @@ export async function getSimilarProducts(categoryId: string, excludeId?: string)
     .slice(0, 10)
 }
 
+// --- Promo / Voucher ---
+
+const PROMO_CODES: Record<string, { discount: number; type: 'percentage' | 'fixed' }> = {
+  CHINOOZ10: { discount: 10, type: 'percentage' },
+  FLAT500: { discount: 500, type: 'fixed' },
+  WELCOME15: { discount: 15, type: 'percentage' },
+}
+
+export async function applyPromoCode(code: string): Promise<{
+  success: boolean
+  discount?: number
+  type?: 'percentage' | 'fixed'
+  error?: string
+}> {
+  await randomDelay(300, 600)
+  const upper = code.toUpperCase().trim()
+  const promo = PROMO_CODES[upper]
+  if (!promo) {
+    return { success: false, error: 'Invalid code. Please try again.' }
+  }
+  return { success: true, discount: promo.discount, type: promo.type }
+}
+
+// --- Shipping Config ---
+
+export const SHIPPING_CONFIG = {
+  deliveryFee: 150,
+  freeShippingThreshold: 2000,
+  vatRate: 0.13,
+} as const
+
 export async function getTrendingProducts(): Promise<Product[]> {
   await randomDelay(200, 500)
   return [...products].sort((a, b) => b.reviewCount - a.reviewCount).slice(0, 8)
