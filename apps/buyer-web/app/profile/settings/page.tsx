@@ -4,7 +4,7 @@ import React, { useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
 import { Container, Screen } from '@chinooz/ui-web'
-import { useSessionStore, useUIStore } from '@chinooz/state'
+import { useSessionStore, useUIStore, usePreferencesStore } from '@chinooz/state'
 import type { Locale } from '@chinooz/state'
 import { i18n } from '@chinooz/i18n'
 
@@ -48,10 +48,9 @@ export default function SettingsPage() {
   const logout = useSessionStore(s => s.logout)
   const locale = useUIStore(s => s.locale)
   const setLocale = useUIStore(s => s.setLocale)
+  const notifications = usePreferencesStore(s => s.notifications)
+  const setNotification = usePreferencesStore(s => s.setNotification)
 
-  const [ordersNotif, setOrdersNotif] = useState(true)
-  const [dealsNotif, setDealsNotif] = useState(true)
-  const [messagesNotif, setMessagesNotif] = useState(true)
   const [showDelete, setShowDelete] = useState(false)
 
   useEffect(() => {
@@ -116,9 +115,9 @@ export default function SettingsPage() {
             <p className="text-xs font-semibold text-text-muted uppercase pl-4 mb-2">{t('settings.notifications').toUpperCase()}</p>
             <div className="bg-surface rounded-2xl shadow-sm overflow-hidden">
               {[
-                { key: 'orders', label: t('settings.ordersNotif'), desc: t('settings.ordersNotifDesc'), value: ordersNotif, setter: setOrdersNotif },
-                { key: 'deals', label: t('settings.dealsNotif'), desc: t('settings.dealsNotifDesc'), value: dealsNotif, setter: setDealsNotif },
-                { key: 'messages', label: t('settings.messagesNotif'), desc: t('settings.messagesNotifDesc'), value: messagesNotif, setter: setMessagesNotif },
+                { key: 'orders' as const, label: t('settings.ordersNotif'), desc: t('settings.ordersNotifDesc'), value: notifications.orders },
+                { key: 'deals' as const, label: t('settings.dealsNotif'), desc: t('settings.dealsNotifDesc'), value: notifications.deals },
+                { key: 'messages' as const, label: t('settings.messagesNotif'), desc: t('settings.messagesNotifDesc'), value: notifications.messages },
               ].map((item, i) => (
                 <React.Fragment key={item.key}>
                   {i > 0 && <div className="h-px bg-[#E5E5E5] ml-4" />}
@@ -128,7 +127,7 @@ export default function SettingsPage() {
                       <p className="text-sm text-text-muted">{item.desc}</p>
                     </div>
                     <button
-                      onClick={() => item.setter(!item.value)}
+                      onClick={() => setNotification(item.key, !item.value)}
                       className={`relative w-11 h-6 rounded-full transition-colors ${item.value ? 'bg-primary' : 'bg-border'}`}
                       role="switch"
                       aria-checked={item.value}

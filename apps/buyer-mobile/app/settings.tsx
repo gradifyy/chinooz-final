@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
 import * as Haptics from 'expo-haptics'
 import { colors, radii, spacing, duration } from '@chinooz/theme'
-import { useSessionStore, useUIStore } from '@chinooz/state'
+import { useSessionStore, useUIStore, usePreferencesStore } from '@chinooz/state'
 import type { Locale } from '@chinooz/state'
 import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
 import { i18n } from '@chinooz/i18n'
@@ -34,10 +34,9 @@ export default function SettingsScreen() {
   const logout = useSessionStore(s => s.logout)
   const locale = useUIStore(s => s.locale)
   const setLocale = useUIStore(s => s.setLocale)
+  const notifications = usePreferencesStore(s => s.notifications)
+  const setNotification = usePreferencesStore(s => s.setNotification)
 
-  const [ordersNotif, setOrdersNotif] = useState(true)
-  const [dealsNotif, setDealsNotif] = useState(true)
-  const [messagesNotif, setMessagesNotif] = useState(true)
   const [showDelete, setShowDelete] = useState(false)
 
   useEffect(() => {
@@ -110,7 +109,7 @@ export default function SettingsScreen() {
                 <Text style={s.rowLabel}>{t('settings.ordersNotif')}</Text>
                 <Text style={s.rowDesc}>{t('settings.ordersNotifDesc')}</Text>
               </View>
-              <Switch value={ordersNotif} onValueChange={setOrdersNotif} trackColor={{ false: colors.border, true: colors.primary50 }} thumbColor={ordersNotif ? colors.primary : colors.textTertiary} />
+              <Switch value={notifications.orders} onValueChange={v => setNotification('orders', v)} trackColor={{ false: colors.border, true: colors.primary50 }} thumbColor={notifications.orders ? colors.primary : colors.textTertiary} />
             </View>
             <View style={s.divider} />
             <View style={s.toggleRow}>
@@ -118,7 +117,7 @@ export default function SettingsScreen() {
                 <Text style={s.rowLabel}>{t('settings.dealsNotif')}</Text>
                 <Text style={s.rowDesc}>{t('settings.dealsNotifDesc')}</Text>
               </View>
-              <Switch value={dealsNotif} onValueChange={setDealsNotif} trackColor={{ false: colors.border, true: colors.primary50 }} thumbColor={dealsNotif ? colors.primary : colors.textTertiary} />
+              <Switch value={notifications.deals} onValueChange={v => setNotification('deals', v)} trackColor={{ false: colors.border, true: colors.primary50 }} thumbColor={notifications.deals ? colors.primary : colors.textTertiary} />
             </View>
             <View style={s.divider} />
             <View style={s.toggleRow}>
@@ -126,7 +125,7 @@ export default function SettingsScreen() {
                 <Text style={s.rowLabel}>{t('settings.messagesNotif')}</Text>
                 <Text style={s.rowDesc}>{t('settings.messagesNotifDesc')}</Text>
               </View>
-              <Switch value={messagesNotif} onValueChange={setMessagesNotif} trackColor={{ false: colors.border, true: colors.primary50 }} thumbColor={messagesNotif ? colors.primary : colors.textTertiary} />
+              <Switch value={notifications.messages} onValueChange={v => setNotification('messages', v)} trackColor={{ false: colors.border, true: colors.primary50 }} thumbColor={notifications.messages ? colors.primary : colors.textTertiary} />
             </View>
           </View>
         </View>
