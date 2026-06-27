@@ -4,10 +4,11 @@ import React, { useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
-import { Container, Screen, EmptyState, QuantityStepper } from '@chinooz/ui-web'
+import { Container, Screen, QuantityStepper } from '@chinooz/ui-web'
 import { formatNPR } from '@chinooz/utils'
 import { useCartStore } from '@chinooz/state'
 import { useReducedMotion } from '@chinooz/ui-web'
+import EmptyCart from '@/components/EmptyCart'
 import type { CartItem } from '@chinooz/types'
 
 function getInitials(name: string): string {
@@ -70,12 +71,7 @@ export default function CartPage() {
     return (
       <Screen>
         <Container className="py-6">
-          <EmptyState
-            icon={<span className="text-5xl">🛒</span>}
-            title={t('cart.empty')}
-            subtitle={t('cart.emptySubtitle')}
-            action={{ label: t('cart.startShopping'), onPress: () => router.push('/') }}
-          />
+          <EmptyCart />
         </Container>
       </Screen>
     )

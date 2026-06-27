@@ -15,6 +15,7 @@ import { colors, spacing, radii } from '@chinooz/theme'
 import { formatNPR } from '@chinooz/utils'
 import { useCartStore, useUIStore } from '@chinooz/state'
 import { EmptyState } from '@chinooz/ui'
+import EmptyCart from '../../components/EmptyCart'
 import type { CartItem } from '@chinooz/types'
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity)
@@ -91,12 +92,7 @@ export default function CartScreen() {
         <View style={{ paddingHorizontal: spacing[4], paddingVertical: spacing[3], borderBottomWidth: 1, borderBottomColor: colors.borderLight, backgroundColor: colors.surface }}>
           <Text style={{ fontSize: 18, fontWeight: '600', color: colors.text }}>{t('cart.title')}</Text>
         </View>
-        <EmptyState
-          icon={<Text style={{ fontSize: 48 }}>🛒</Text>}
-          title={t('cart.empty')}
-          subtitle={t('cart.emptySubtitle')}
-          action={{ label: t('cart.startShopping'), onPress: () => router.replace('/(tabs)') }}
-        />
+        <EmptyCart />
       </View>
     )
   }
