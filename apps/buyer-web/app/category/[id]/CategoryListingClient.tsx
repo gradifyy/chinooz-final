@@ -8,6 +8,7 @@ import { useReducedMotion, EmptyState } from '@chinooz/ui-web'
 import { ProductCard } from '@chinooz/ui-web'
 import { useCartStore } from '@chinooz/state'
 import FilterPanel, { type FilterState } from '@/components/FilterPanel'
+import SortDropdown from '@/components/SortDropdown'
 import type { Product, Category } from '@chinooz/types'
 
 const QUICK_FILTERS = [
@@ -18,9 +19,12 @@ const QUICK_FILTERS = [
 ]
 
 const SORT_OPTIONS = [
-  { key: 'popular', labelKey: 'categories.mostPopular' },
+  { key: 'relevance', labelKey: 'categories.relevance' },
   { key: 'priceLow', labelKey: 'categories.priceLowHigh' },
   { key: 'priceHigh', labelKey: 'categories.priceHighLow' },
+  { key: 'rating', labelKey: 'categories.rating' },
+  { key: 'newest', labelKey: 'categories.newest' },
+  { key: 'popular', labelKey: 'categories.mostPopular' },
 ]
 
 const DEFAULT_FILTERS: FilterState = {
@@ -205,23 +209,15 @@ export default function CategoryListingClient({
             aria-expanded={showSort}
           >
             <span>↕</span>
-            <span>{t('categories.sortBy')}: {t(SORT_OPTIONS.find(o => o.key === sortBy)?.labelKey || 'categories.mostPopular')}</span>
+            <span>{t('categories.sortBy')}: {t(SORT_OPTIONS.find(o => o.key === sortBy)?.labelKey || 'categories.relevance')}</span>
           </button>
-          {showSort && (
-            <div className="absolute top-full left-0 mt-1 bg-surface border border-border rounded-lg shadow-lg overflow-hidden z-10 min-w-[180px]">
-              {SORT_OPTIONS.map(opt => (
-                <button
-                  key={opt.key}
-                  onClick={() => { setSortBy(opt.key); setShowSort(false); syncToUrl(filters, opt.key) }}
-                  className={`w-full px-4 py-2.5 text-left text-sm transition-colors ${
-                    sortBy === opt.key ? 'bg-primary-50 text-primary font-semibold' : 'text-text hover:bg-background'
-                  }`}
-                >
-                  {t(opt.labelKey)}
-                </button>
-              ))}
-            </div>
-          )}
+          <SortDropdown
+            visible={showSort}
+            onClose={() => setShowSort(false)}
+            options={SORT_OPTIONS}
+            activeKey={sortBy}
+            onSelect={(key) => { setSortBy(key); syncToUrl(filters, key) }}
+          />
         </div>
       </div>
 

@@ -71,6 +71,9 @@
     "priceLowHigh": "Price: Low to High",
     "priceHighLow": "Price: High to Low",
     "mostPopular": "Most Popular",
+    "relevance": "Relevance",
+    "newest": "Newest",
+    "rating": "Rating",
     "browseAll": "Browse All Categories"
   },
   "deals": {

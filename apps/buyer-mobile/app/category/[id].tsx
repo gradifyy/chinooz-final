@@ -15,6 +15,7 @@ import { useProducts, useCategories } from '@chinooz/hooks'
 import { EmptyState, ProductCard } from '@chinooz/ui'
 import { useCartStore } from '@chinooz/state'
 import FilterSheet, { type FilterState } from '../../components/FilterSheet'
+import SortSheet from '../../components/SortSheet'
 import type { Product } from '@chinooz/types'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
@@ -29,9 +30,12 @@ const QUICK_FILTERS = [
 ]
 
 const SORT_OPTIONS = [
-  { key: 'popular', labelKey: 'categories.mostPopular' },
+  { key: 'relevance', labelKey: 'categories.relevance' },
   { key: 'priceLow', labelKey: 'categories.priceLowHigh' },
   { key: 'priceHigh', labelKey: 'categories.priceHighLow' },
+  { key: 'rating', labelKey: 'categories.rating' },
+  { key: 'newest', labelKey: 'categories.newest' },
+  { key: 'popular', labelKey: 'categories.mostPopular' },
 ]
 
 const DEFAULT_FILTERS: FilterState = {
@@ -64,8 +68,8 @@ export default function CategoryListingScreen() {
   const { data: products, isLoading } = useProducts({ categoryId: id, limit: 50 })
 
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS)
-  const [sortBy, setSortBy] = useState('popular')
-  const [showSort, setShowSort] = useState(false)
+  const [sortBy, setSortBy] = useState('relevance')
+  const [showSortSheet, setShowSortSheet] = useState(false)
   const [showFilterSheet, setShowFilterSheet] = useState(false)
 
   const scrollY = useSharedValue(0)
@@ -209,31 +213,15 @@ export default function CategoryListingScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={() => setShowSort(!showSort)}
+            onPress={() => setShowSortSheet(true)}
             style={styles.chip}
             activeOpacity={0.7}
           >
             <Text style={styles.chipText}>
-              ↕ {t('categories.sortBy')}: {t(SORT_OPTIONS.find(o => o.key === sortBy)?.labelKey || 'categories.mostPopular')}
+              ↕ {t('categories.sortBy')}: {t(SORT_OPTIONS.find(o => o.key === sortBy)?.labelKey || 'categories.relevance')}
             </Text>
           </TouchableOpacity>
         </View>
-
-        {showSort && (
-          <View style={styles.sortDropdown}>
-            {SORT_OPTIONS.map(opt => (
-              <TouchableOpacity
-                key={opt.key}
-                onPress={() => { setSortBy(opt.key); setShowSort(false) }}
-                style={[styles.sortOption, sortBy === opt.key && styles.sortOptionActive]}
-              >
-                <Text style={[styles.sortOptionText, sortBy === opt.key && styles.sortOptionTextActive]}>
-                  {t(opt.labelKey)}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
       </Animated.View>
 
       {/* Active filter chips */}
@@ -310,6 +298,15 @@ export default function CategoryListingScreen() {
         filters={filters}
         onApply={(f) => { setFilters(f); setShowFilterSheet(false) }}
         onReset={() => { setFilters(DEFAULT_FILTERS); setShowFilterSheet(false) }}
+      />
+
+      {/* Sort sheet */}
+      <SortSheet
+        visible={showSortSheet}
+        onClose={() => setShowSortSheet(false)}
+        options={SORT_OPTIONS}
+        activeKey={sortBy}
+        onSelect={(key) => setSortBy(key)}
       />
     </View>
   )
