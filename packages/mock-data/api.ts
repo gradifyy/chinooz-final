@@ -10,6 +10,9 @@ import type {
   Message,
   UserProfile,
   CartItem,
+  CancelReason,
+  ReturnRequest,
+  OrderInvoice,
 } from '@chinooz/types'
 import {
   products,
@@ -175,6 +178,38 @@ export async function deleteNotification(id: string): Promise<void> {
   await randomDelay(100, 200)
   const idx = notifications.findIndex(n => n.id === id)
   if (idx >= 0) notifications.splice(idx, 1)
+}
+
+export async function sendMessage(conversationId: string, body: string): Promise<Message> {
+  await randomDelay(200, 500)
+  const msg: Message = {
+    id: `msg-${Date.now()}`,
+    conversationId,
+    senderId: 'user-1',
+    senderName: 'You',
+    body,
+    createdAt: new Date().toISOString(),
+    read: false,
+    status: 'sent',
+  }
+  messages.push(msg)
+  const convo = conversations.find(c => c.id === conversationId)
+  if (convo) {
+    convo.lastMessage = body
+    convo.lastMessageAt = msg.createdAt
+  }
+  return msg
+}
+
+export async function markConversationRead(conversationId: string): Promise<void> {
+  await randomDelay(100, 200)
+  const convo = conversations.find(c => c.id === conversationId)
+  if (convo) convo.unreadCount = 0
+  for (const m of messages) {
+    if (m.conversationId === conversationId && !m.read && m.senderId !== 'user-1') {
+      m.read = true
+    }
+  }
 }
 
 export async function getConversations(): Promise<Conversation[]> {
@@ -365,4 +400,94 @@ export async function verifyOtp(phone: string, code: string): Promise<{ success:
     return { success: true, userId: 'user-1' }
   }
   return { success: false, error: 'Invalid code. Try again.' }
+}
+
+// --- Order Actions ---
+
+export async function cancelOrder(
+  orderId: string,
+  reason: CancelReason,
+  reasonDetail?: string,
+): Promise<{ success: boolean; order?: Order; error?: string }> {
+  await randomDelay(400, 800)
+  const order = orders.find(o => o.id === orderId)
+  if (!order) return { success: false, error: 'Order not found' }
+  if (order.status === 'shipped' || order.status === 'delivered' || order.status === 'cancelled' || order.status === 'returned') {
+    return { success: false, error: 'Order cannot be cancelled at this stage' }
+  }
+  order.status = 'cancelled'
+  order.timeline.push({ status: 'cancelled', timestamp: new Date().toISOString(), note: reasonDetail || `Reason: ${reason}` })
+  return { success: true, order: { ...order } }
+}
+
+export async function requestReturn(
+  orderId: string,
+  itemIds: string[],
+  reason: CancelReason,
+  reasonDetail?: string,
+): Promise<{ success: boolean; returnRequest?: ReturnRequest; error?: string }> {
+  await randomDelay(500, 1000)
+  const order = orders.find(o => o.id === orderId)
+  if (!order) return { success: false, error: 'Order not found' }
+  if (order.status !== 'delivered') return { success: false, error: 'Only delivered orders can be returned' }
+  if (itemIds.length === 0) return { success: false, error: 'Select at least one item' }
+  const returnRequest: ReturnRequest = {
+    orderId,
+    itemIds,
+    reason,
+    reasonDetail,
+    status: 'requested',
+    createdAt: new Date().toISOString(),
+  }
+  order.status = 'returned'
+  order.timeline.push({ status: 'returned', timestamp: new Date().toISOString(), note: `Return requested: ${reason}` })
+  return { success: true, returnRequest }
+}
+
+export async function reorder(orderId: string): Promise<{ success: boolean; items?: CartItem[]; error?: string }> {
+  await randomDelay(300, 600)
+  const order = orders.find(o => o.id === orderId)
+  if (!order) return { success: false, error: 'Order not found' }
+  return { success: true, items: [...order.items] }
+}
+
+export async function getOrderInvoice(orderId: string): Promise<OrderInvoice | null> {
+  await randomDelay(200, 500)
+  const order = orders.find(o => o.id === orderId)
+  if (!order) return null
+  const subtotal = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+  const vat = Math.round(subtotal * 0.13 / 1.13)
+  const deliveryFee = order.total > subtotal ? order.total - subtotal : 0
+  const discount = subtotal + deliveryFee - order.total > 0 ? subtotal + deliveryFee - order.total : 0
+  return {
+    orderId: order.id,
+    invoiceNumber: `INV-${order.id.toUpperCase().replace('ORD-', '')}`,
+    issuedAt: order.createdAt,
+    companyName: 'Chinooz Marketplace Pvt. Ltd.',
+    companyAddress: 'Baneshwor-10, Kathmandu, Nepal',
+    companyPan: 'PAN: 601234567',
+    customerName: order.address.fullName,
+    customerAddress: `${order.address.line1}${order.address.line2 ? `, ${order.address.line2}` : ''}, ${order.address.city}, ${order.address.district}`,
+    items: order.items.map(item => ({
+      name: item.name,
+      quantity: item.quantity,
+      unitPrice: item.price,
+      total: item.price * item.quantity,
+    })),
+    subtotal,
+    vat,
+    deliveryFee,
+    discount,
+    grandTotal: order.total,
+  }
+}
+
+// --- Return Requests Store ---
+
+const returnRequests: ReturnRequest[] = []
+
+export async function getReturnRequests(orderId?: string): Promise<ReturnRequest[]> {
+  await randomDelay(150, 300)
+  if (orderId) return returnRequests.filter(r => r.orderId === orderId)
+  return returnRequests
 }

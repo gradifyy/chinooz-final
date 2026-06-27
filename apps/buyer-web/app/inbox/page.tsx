@@ -11,6 +11,8 @@ import {
   useMarkNotificationRead,
   useMarkAllNotificationsRead,
   useDeleteNotification,
+  useSendMessage,
+  useMarkConversationRead,
 } from '@chinooz/hooks'
 import { useInboxStore } from '@chinooz/state'
 import { useSessionStore } from '@chinooz/state'
@@ -24,7 +26,7 @@ export default function InboxPage() {
   const { t } = useTranslation()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { activeTab, setActiveTab } = useInboxStore()
+  const { activeTab, setActiveTab, setNotifUnread, setMsgUnread } = useInboxStore()
   const isLoggedIn = useSessionStore(s => s.isLoggedIn)
   const initialized = useRef(false)
   const [isOffline, setIsOffline] = useState(false)
@@ -52,6 +54,9 @@ export default function InboxPage() {
     () => (conversations ?? []).reduce((s, c) => s + c.unreadCount, 0),
     [conversations],
   )
+
+  useEffect(() => { setNotifUnread(notifUnread) }, [notifUnread])
+  useEffect(() => { setMsgUnread(msgUnread) }, [msgUnread])
 
   useEffect(() => {
     if (initialized.current) return
@@ -269,7 +274,7 @@ function NotificationsView({
                   onClick={() => handleTap(notif)}
                   className={`relative flex items-start gap-3 w-full p-3 text-left transition-colors border-b border-border-light hover:bg-background ${!notif.read ? 'bg-white' : 'bg-white/50'}`}
                   role="button"
-                  aria-label={`${notif.title}. ${notif.body}. ${formatTime(notif.createdAt)}`}
+                  aria-label={`${notif.title}. ${notif.body}. ${formatTime(notif.createdAt, t)}`}
                   aria-selected={!notif.read}
                 >
                   {!notif.read && (
@@ -285,7 +290,7 @@ function NotificationsView({
                     <p className="text-base font-semibold text-text">{notif.title}</p>
                     <p className="text-sm text-text-muted mt-0.5 line-clamp-2">{notif.body}</p>
                   </div>
-                  <span className="text-xs text-text-muted shrink-0 mt-0.5">{formatTime(notif.createdAt)}</span>
+                  <span className="text-xs text-text-muted shrink-0 mt-0.5">{formatTime(notif.createdAt, t)}</span>
                 </button>
               </div>
             )
@@ -400,7 +405,7 @@ function MessagesView({
             onClick={() => setSelectedConvo(item.id)}
             className={`flex items-center gap-3 w-full p-3 text-left border-b border-border-light hover:bg-background active:scale-[0.98] transition-all duration-100 ${isUnread ? 'bg-white' : 'bg-transparent'}`}
             role="button"
-            aria-label={`${item.participantName}. ${item.lastMessage}. ${formatTime(item.lastMessageAt)}${isUnread ? `. ${item.unreadCount} unread` : ''}`}
+            aria-label={`${item.participantName}. ${item.lastMessage}. ${formatTime(item.lastMessageAt, t)}${isUnread ? `. ${item.unreadCount} unread` : ''}`}
           >
             <div className="w-12 h-12 rounded-full bg-primary-50 flex items-center justify-center shrink-0">
               <span className="text-base font-semibold text-primary">
@@ -413,7 +418,7 @@ function MessagesView({
                   {item.participantName}
                 </p>
                 <span className="text-xs text-text-muted ml-2 shrink-0">
-                  {formatTime(item.lastMessageAt)}
+                  {formatTime(item.lastMessageAt, t)}
                 </span>
               </div>
               <p className="text-sm text-text-muted mt-0.5 truncate">{item.lastMessage}</p>
@@ -447,6 +452,8 @@ function ThreadView({
   const { t } = useTranslation()
   const router = useRouter()
   const { data: serverMessages, isLoading } = useMessages(conversationId)
+  const sendMessageMutation = useSendMessage()
+  const markReadMutation = useMarkConversationRead()
   const convo = conversations.find(c => c.id === conversationId)
   const [input, setInput] = useState('')
   const [localMessages, setLocalMessages] = useState<Message[]>([])
@@ -460,10 +467,14 @@ function ThreadView({
   }, [serverMessages])
 
   useEffect(() => {
+    markReadMutation.mutate(conversationId)
+  }, [conversationId])
+
+  useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [localMessages.length, typing])
 
-  const grouped = useMemo(() => groupMessagesByDay(localMessages), [localMessages])
+  const grouped = useMemo(() => groupMessagesByDay(localMessages, t), [localMessages, t])
 
   const handleSend = useCallback(() => {
     const trimmed = input.trim()
@@ -481,7 +492,16 @@ function ThreadView({
     setLocalMessages(prev => [...prev, newMsg])
     setInput('')
 
-    if (isOffline) return
+    if (isOffline) {
+      try {
+        const queue = JSON.parse(localStorage.getItem('chinooz-offline-queue') || '[]')
+        queue.push({ conversationId, body: trimmed, createdAt: newMsg.createdAt })
+        localStorage.setItem('chinooz-offline-queue', JSON.stringify(queue))
+      } catch {}
+      return
+    }
+
+    sendMessageMutation.mutate({ conversationId, body: trimmed })
 
     const delay = 1500 + Math.random() * 1500
     setTyping(true)
@@ -586,7 +606,7 @@ function ThreadView({
           }
           const msg = item as Message
           const isMine = msg.senderId === 'user-1'
-          const time = new Date(msg.createdAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+          const time = new Date(msg.createdAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true })
           if (isMine && msg.status === 'sending') {
             return (
               <div key={msg.id} className="flex flex-col items-end">
@@ -722,11 +742,11 @@ function InboxOfflineBanner({ t }: { t: (k: string) => string }) {
   )
 }
 
-function groupMessagesByDay(messages: Message[]) {
+function groupMessagesByDay(messages: Message[], t: (k: string, o?: any) => string) {
   const result: (Message | { id: string; type: 'separator'; label: string })[] = []
   let lastDay = ''
   for (const msg of messages) {
-    const day = dayLabel(msg.createdAt)
+    const day = dayLabel(msg.createdAt, t)
     if (day !== lastDay) {
       result.push({ id: `sep-${day}`, type: 'separator', label: day })
       lastDay = day
@@ -736,15 +756,15 @@ function groupMessagesByDay(messages: Message[]) {
   return result
 }
 
-function dayLabel(iso: string): string {
+function dayLabel(iso: string, t: (k: string, o?: any) => string): string {
   const d = new Date(iso)
   const now = new Date()
   const diff = now.getTime() - d.getTime()
-  if (diff < MS_DAY && d.getDate() === now.getDate()) return 'today'
+  if (diff < MS_DAY && d.getDate() === now.getDate()) return t('inbox.today')
   const yesterday = new Date(now)
   yesterday.setDate(yesterday.getDate() - 1)
-  if (d.getDate() === yesterday.getDate() && d.getMonth() === yesterday.getMonth()) return 'yesterday'
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  if (d.getDate() === yesterday.getDate() && d.getMonth() === yesterday.getMonth()) return t('inbox.yesterday')
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
 const MOCK_REPLIES = [
@@ -1061,14 +1081,14 @@ function notifTypeColor(type: NotificationType): string {
   }
 }
 
-function formatTime(iso: string): string {
+function formatTime(iso: string, t?: (k: string, o?: any) => string): string {
   const now = Date.now()
   const diff = now - new Date(iso).getTime()
   const mins = Math.floor(diff / 60000)
-  if (mins < 1) return 'now'
-  if (mins < 60) return `${mins}m`
+  if (mins < 1) return t ? t('inbox.timeNow') : 'now'
+  if (mins < 60) return t ? t('inbox.timeMinutesAgo', { count: mins }) : `${mins}m`
   const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h`
+  if (hrs < 24) return t ? t('inbox.timeHoursAgo', { count: hrs }) : `${hrs}h`
   const days = Math.floor(hrs / 24)
-  return `${days}d`
+  return t ? t('inbox.timeDaysAgo', { count: days }) : `${days}d`
 }

@@ -1,6 +1,6 @@
 import { useQuery, useInfiniteQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import * as api from '@chinooz/mock-data'
-import type { Product, Category } from '@chinooz/types'
+import type { Product, Category, CancelReason } from '@chinooz/types'
 
 const STALE_PRODUCTS = 1000 * 30
 
@@ -191,6 +191,7 @@ export function useNotifications() {
   return useQuery({
     queryKey: ['notifications'],
     queryFn: () => api.getNotifications(),
+    staleTime: 30000,
   })
 }
 
@@ -199,6 +200,7 @@ export function useUnreadNotificationCount() {
     queryKey: ['notifications', 'unread-count'],
     queryFn: () => api.getUnreadNotificationCount(),
     refetchInterval: 30000,
+    staleTime: 30000,
   })
 }
 
@@ -207,6 +209,7 @@ export function useUnreadMessageCount() {
     queryKey: ['messages', 'unread-count'],
     queryFn: () => api.getUnreadMessageCount(),
     refetchInterval: 30000,
+    staleTime: 30000,
   })
 }
 
@@ -215,6 +218,7 @@ export function useAssistantUnreadCount() {
     queryKey: ['assistant', 'unread-count'],
     queryFn: () => api.getAssistantUnreadCount(),
     refetchInterval: 30000,
+    staleTime: 0,
   })
 }
 
@@ -252,6 +256,7 @@ export function useConversations() {
   return useQuery({
     queryKey: ['conversations'],
     queryFn: () => api.getConversations(),
+    staleTime: 30000,
   })
 }
 
@@ -260,6 +265,32 @@ export function useMessages(conversationId: string) {
     queryKey: ['messages', conversationId],
     queryFn: () => api.getMessages(conversationId),
     enabled: !!conversationId,
+    staleTime: 0,
+  })
+}
+
+export function useSendMessage() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ conversationId, body }: { conversationId: string; body: string }) =>
+      api.sendMessage(conversationId, body),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['messages', variables.conversationId] })
+      queryClient.invalidateQueries({ queryKey: ['conversations'] })
+      queryClient.invalidateQueries({ queryKey: ['messages', 'unread-count'] })
+    },
+  })
+}
+
+export function useMarkConversationRead() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (conversationId: string) => api.markConversationRead(conversationId),
+    onSuccess: (_data, conversationId) => {
+      queryClient.invalidateQueries({ queryKey: ['messages', conversationId] })
+      queryClient.invalidateQueries({ queryKey: ['conversations'] })
+      queryClient.invalidateQueries({ queryKey: ['messages', 'unread-count'] })
+    },
   })
 }
 
@@ -325,5 +356,50 @@ export function useNearbyProducts() {
     queryKey: ['products', 'nearby'],
     queryFn: () => api.getNearbyProducts(),
     staleTime: STALE_PRODUCTS,
+  })
+}
+
+export function useCancelOrder() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ orderId, reason, reasonDetail }: { orderId: string; reason: CancelReason; reasonDetail?: string }) =>
+      api.cancelOrder(orderId, reason, reasonDetail),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] })
+      queryClient.invalidateQueries({ queryKey: ['order'] })
+    },
+  })
+}
+
+export function useRequestReturn() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ orderId, itemIds, reason, reasonDetail }: { orderId: string; itemIds: string[]; reason: CancelReason; reasonDetail?: string }) =>
+      api.requestReturn(orderId, itemIds, reason, reasonDetail),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] })
+      queryClient.invalidateQueries({ queryKey: ['order'] })
+    },
+  })
+}
+
+export function useReorder() {
+  return useMutation({
+    mutationFn: (orderId: string) => api.reorder(orderId),
+  })
+}
+
+export function useOrderInvoice(orderId: string) {
+  return useQuery({
+    queryKey: ['invoice', orderId],
+    queryFn: () => api.getOrderInvoice(orderId),
+    enabled: !!orderId,
+  })
+}
+
+export function useReturnRequests(orderId?: string) {
+  return useQuery({
+    queryKey: ['returns', orderId],
+    queryFn: () => api.getReturnRequests(orderId),
   })
 }

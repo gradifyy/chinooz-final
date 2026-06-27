@@ -21,6 +21,8 @@ export {
   useDeleteNotification,
   useConversations,
   useMessages,
+  useSendMessage,
+  useMarkConversationRead,
   useUserProfile,
   useSearchProducts,
   useSearchSuggestions,
@@ -30,6 +32,11 @@ export {
   useTrendingProducts,
   useNewestProducts,
   useNearbyProducts,
+  useCancelOrder,
+  useRequestReturn,
+  useReorder,
+  useOrderInvoice,
+  useReturnRequests,
 } from './useProducts'
 
 export type { SuggestionItem } from './useProducts'

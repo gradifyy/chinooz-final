@@ -21,6 +21,8 @@ import {
   useMarkNotificationRead,
   useMarkAllNotificationsRead,
   useDeleteNotification,
+  useSendMessage,
+  useMarkConversationRead,
 } from '@chinooz/hooks'
 import { useInboxStore } from '@chinooz/state'
 import { useSessionStore } from '@chinooz/state'
@@ -52,7 +54,7 @@ export default function InboxScreen() {
   const { t } = useTranslation()
   const router = useRouter()
   const params = useLocalSearchParams<{ tab?: string; thread?: string }>()
-  const { activeTab, setActiveTab } = useInboxStore()
+  const { activeTab, setActiveTab, setNotifUnread, setMsgUnread } = useInboxStore()
   const isLoggedIn = useSessionStore(s => s.isLoggedIn)
   const initialized = useRef(false)
   const [isOffline, setIsOffline] = useState(false)
@@ -85,6 +87,9 @@ export default function InboxScreen() {
     () => (conversations ?? []).reduce((s, c) => s + c.unreadCount, 0),
     [conversations],
   )
+
+  useEffect(() => { setNotifUnread(notifUnread) }, [notifUnread])
+  useEffect(() => { setMsgUnread(msgUnread) }, [msgUnread])
 
   useEffect(() => {
     if (initialized.current) return
@@ -375,7 +380,7 @@ function NotificationRow({
               activeOpacity={0.7}
               onPress={() => onTap(notif)}
               accessibilityRole="button"
-              accessibilityLabel={`${notif.title}. ${notif.body}. ${formatTime(notif.createdAt)}`}
+              accessibilityLabel={`${notif.title}. ${notif.body}. ${formatTime(notif.createdAt, t)}`}
               accessibilityState={{ selected: !notif.read }}
             >
               {!notif.read && <View style={styles.unreadDot} />}
@@ -386,7 +391,7 @@ function NotificationRow({
                 <Text style={styles.notifTitle}>{notif.title}</Text>
                 <Text style={styles.notifBody} numberOfLines={2}>{notif.body}</Text>
               </View>
-              <Text style={styles.notifTime}>{formatTime(notif.createdAt)}</Text>
+              <Text style={styles.notifTime}>{formatTime(notif.createdAt, t)}</Text>
             </TouchableOpacity>
           </Animated.View>
         </GestureDetector>
@@ -515,6 +520,7 @@ function ConversationRow({
   convo: Conversation
   onTap: () => void
 }) {
+  const { t } = useTranslation()
   const scale = useSharedValue(1)
   const isUnread = convo.unreadCount > 0
 
@@ -534,7 +540,7 @@ function ConversationRow({
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         accessibilityRole="button"
-        accessibilityLabel={`${convo.participantName}. ${convo.lastMessage}. ${formatTime(convo.lastMessageAt)}${isUnread ? `. ${convo.unreadCount} unread` : ''}`}
+        accessibilityLabel={`${convo.participantName}. ${convo.lastMessage}. ${formatTime(convo.lastMessageAt, t)}${isUnread ? `. ${convo.unreadCount} unread` : ''}`}
       >
         <View style={styles.convoAvatar}>
           <Text style={styles.convoAvatarText}>
@@ -547,7 +553,7 @@ function ConversationRow({
               {convo.participantName}
             </Text>
             <Text style={styles.convoTime}>
-              {formatTime(convo.lastMessageAt)}
+              {formatTime(convo.lastMessageAt, t)}
             </Text>
           </View>
           <Text style={styles.convoPreview} numberOfLines={1}>
@@ -580,6 +586,8 @@ function ThreadView({
   const { t } = useTranslation()
   const router = useRouter()
   const { data: serverMessages, isLoading } = useMessages(conversationId)
+  const sendMessageMutation = useSendMessage()
+  const markReadMutation = useMarkConversationRead()
   const convo = conversations.find(c => c.id === conversationId)
   const [input, setInput] = useState('')
   const [localMessages, setLocalMessages] = useState<Message[]>([])
@@ -593,7 +601,11 @@ function ThreadView({
     if (serverMessages) setLocalMessages(serverMessages)
   }, [serverMessages])
 
-  const grouped = useMemo(() => groupMessagesByDay(localMessages), [localMessages])
+  useEffect(() => {
+    markReadMutation.mutate(conversationId)
+  }, [conversationId])
+
+  const grouped = useMemo(() => groupMessagesByDay(localMessages, t), [localMessages, t])
 
   const handleSend = useCallback(() => {
     const trimmed = input.trim()
@@ -612,7 +624,16 @@ function ThreadView({
     setInput('')
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100)
 
-    if (isOffline) return
+    if (isOffline) {
+      try {
+        const queue = JSON.parse(localStorage.getItem('chinooz-offline-queue') || '[]')
+        queue.push({ conversationId, body: trimmed, createdAt: newMsg.createdAt })
+        localStorage.setItem('chinooz-offline-queue', JSON.stringify(queue))
+      } catch {}
+      return
+    }
+
+    sendMessageMutation.mutate({ conversationId, body: trimmed })
 
     const delay = 1500 + Math.random() * 1500
     setTyping(true)
@@ -768,11 +789,11 @@ function ThreadView({
 type MessageItem = Message & { type?: 'message' }
 type GroupedItem = MessageItem | { id: string; type: 'separator'; label: string }
 
-function groupMessagesByDay(messages: Message[]): GroupedItem[] {
+function groupMessagesByDay(messages: Message[], t: (k: string, o?: any) => string): GroupedItem[] {
   const result: GroupedItem[] = []
   let lastDay = ''
   for (const msg of messages) {
-    const day = dayLabel(msg.createdAt)
+    const day = dayLabel(msg.createdAt, t)
     if (day !== lastDay) {
       result.push({ id: `sep-${day}`, type: 'separator', label: day })
       lastDay = day
@@ -782,15 +803,15 @@ function groupMessagesByDay(messages: Message[]): GroupedItem[] {
   return result
 }
 
-function dayLabel(iso: string): string {
+function dayLabel(iso: string, t: (k: string, o?: any) => string): string {
   const d = new Date(iso)
   const now = new Date()
   const diff = now.getTime() - d.getTime()
-  if (diff < MS_DAY && d.getDate() === now.getDate()) return 'today'
+  if (diff < MS_DAY && d.getDate() === now.getDate()) return t('inbox.today')
   const yesterday = new Date(now)
   yesterday.setDate(yesterday.getDate() - 1)
-  if (d.getDate() === yesterday.getDate() && d.getMonth() === yesterday.getMonth()) return 'yesterday'
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  if (d.getDate() === yesterday.getDate() && d.getMonth() === yesterday.getMonth()) return t('inbox.yesterday')
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
 function BubbleRow({ msg, isMine, router }: { msg: Message; isMine: boolean; router: any }) {
@@ -813,7 +834,7 @@ function BubbleRow({ msg, isMine, router }: { msg: Message; isMine: boolean; rou
     opacity: bubbleOpacity.value,
   }))
 
-  const time = new Date(msg.createdAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+  const time = new Date(msg.createdAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true })
 
   return (
     <Animated.View style={[{ alignItems: isMine ? 'flex-end' : 'flex-start', marginBottom: spacing[2] }, bubbleAnim]}>
@@ -1304,16 +1325,16 @@ function notifTypeColor(type: NotificationType): string {
   }
 }
 
-function formatTime(iso: string): string {
+function formatTime(iso: string, t?: (k: string, o?: any) => string): string {
   const now = Date.now()
   const diff = now - new Date(iso).getTime()
   const mins = Math.floor(diff / 60000)
-  if (mins < 1) return 'now'
-  if (mins < 60) return `${mins}m`
+  if (mins < 1) return t ? t('inbox.timeNow') : 'now'
+  if (mins < 60) return t ? t('inbox.timeMinutesAgo', { count: mins }) : `${mins}m`
   const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h`
+  if (hrs < 24) return t ? t('inbox.timeHoursAgo', { count: hrs }) : `${hrs}h`
   const days = Math.floor(hrs / 24)
-  return `${days}d`
+  return t ? t('inbox.timeDaysAgo', { count: days }) : `${days}d`
 }
 
 const styles = StyleSheet.create({
