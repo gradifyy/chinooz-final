@@ -206,6 +206,41 @@ export default function SearchScreen() {
     return count
   }, [filters])
 
+  const activeChips = useMemo(() => {
+    const chips: { key: string; label: string }[] = []
+    if (filters.onSale) chips.push({ key: 'onSale', label: t('categories.onSale') })
+    if (filters.inStock) chips.push({ key: 'inStock', label: t('categories.inStock') })
+    if (filters.minRating > 0) chips.push({ key: 'rating', label: `${filters.minRating}\u2605+` })
+    filters.brands.forEach(b => chips.push({ key: `brand-${b}`, label: b }))
+    if (filters.priceMin > 0 || filters.priceMax < 999999) {
+      chips.push({ key: 'price', label: `${formatNPR(filters.priceMin)}\u2013${formatNPR(filters.priceMax)}` })
+    }
+    return chips
+  }, [filters, t])
+
+  const removeChip = useCallback((key: string) => {
+    setFilters(f => {
+      const next = { ...f }
+      if (key === 'onSale') next.onSale = false
+      else if (key === 'inStock') next.inStock = false
+      else if (key === 'rating') next.minRating = 0
+      else if (key.startsWith('brand-')) {
+        const brand = key.replace('brand-', '')
+        const b = new Set(f.brands)
+        b.delete(brand)
+        next.brands = b
+      } else if (key === 'price') {
+        next.priceMin = 0
+        next.priceMax = 999999
+      }
+      return next
+    })
+  }, [])
+
+  const clearAllFilters = useCallback(() => {
+    setFilters(DEFAULT_FILTERS)
+  }, [])
+
   const gridColumns = getGridColumns()
   const gridItemWidth = getGridItemWidth(gridColumns)
 
@@ -702,6 +737,38 @@ export default function SearchScreen() {
                         </Text>
                       </TouchableOpacity>
                     </View>
+                    {activeChips.length > 0 && (
+                      <View style={styles.activeChipsRow}>
+                        {activeChips.map(chip => (
+                          <Animated.View
+                            key={chip.key}
+                            entering={FadeInDown.duration(200).springify().damping(18)}
+                            exiting={FadeOut.duration(200)}
+                            layout={LinearTransition.springify()}
+                          >
+                            <TouchableOpacity
+                              style={styles.activeChip}
+                              onPress={() => removeChip(chip.key)}
+                              activeOpacity={0.7}
+                              accessibilityRole="button"
+                              accessibilityLabel={`${chip.label}, remove`}
+                            >
+                              <Text style={styles.activeChipText}>{chip.label}</Text>
+                              <Text style={styles.activeChipX}>{'\u00D7'}</Text>
+                            </TouchableOpacity>
+                          </Animated.View>
+                        ))}
+                        <TouchableOpacity
+                          onPress={clearAllFilters}
+                          style={styles.clearFiltersBtn}
+                          activeOpacity={0.7}
+                          accessibilityRole="button"
+                          accessibilityLabel={t('categories.clearAll')}
+                        >
+                          <Text style={styles.clearFiltersText}>{t('categories.clearAll')}</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
                     <ScrollView
                       horizontal
                       showsHorizontalScrollIndicator={false}
@@ -741,6 +808,7 @@ export default function SearchScreen() {
                       .delay(Math.min(index, 9) * 50)
                       .springify()
                       .damping(18)}
+                    layout={LinearTransition.springify().damping(18)}
                     style={{ width: gridItemWidth }}
                   >
                     <ProductCard
@@ -1133,6 +1201,42 @@ const styles = StyleSheet.create({
   },
   quickChipTextActive: {
     color: colors.white,
+  },
+  activeChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: EDGE_PADDING,
+    paddingVertical: spacing[2],
+    gap: spacing[2],
+    alignItems: 'center',
+  },
+  activeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
+    paddingHorizontal: spacing[2.5],
+    paddingVertical: spacing[1],
+    borderRadius: radii.full,
+    backgroundColor: colors.primary50,
+  },
+  activeChipText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.primary,
+  },
+  activeChipX: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  clearFiltersBtn: {
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[1],
+  },
+  clearFiltersText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textMuted,
   },
   skeletonGrid: {
     flexDirection: 'row',

@@ -207,6 +207,41 @@ function SearchContent() {
     return count
   }, [filters])
 
+  const activeChips = useMemo(() => {
+    const chips: { key: string; label: string }[] = []
+    if (filters.onSale) chips.push({ key: 'onSale', label: t('categories.onSale') })
+    if (filters.inStock) chips.push({ key: 'inStock', label: t('categories.inStock') })
+    if (filters.minRating > 0) chips.push({ key: 'rating', label: `${filters.minRating}\u2605+` })
+    filters.brands.forEach(b => chips.push({ key: `brand-${b}`, label: b }))
+    if (filters.priceMin > 0 || filters.priceMax < 999999) {
+      chips.push({ key: 'price', label: `${formatNPR(filters.priceMin)}\u2013${formatNPR(filters.priceMax)}` })
+    }
+    return chips
+  }, [filters, t])
+
+  const removeChip = useCallback((key: string) => {
+    setFilters(f => {
+      const next = { ...f }
+      if (key === 'onSale') next.onSale = false
+      else if (key === 'inStock') next.inStock = false
+      else if (key === 'rating') next.minRating = 0
+      else if (key.startsWith('brand-')) {
+        const brand = key.replace('brand-', '')
+        const b = new Set(f.brands)
+        b.delete(brand)
+        next.brands = b
+      } else if (key === 'price') {
+        next.priceMin = 0
+        next.priceMax = 999999
+      }
+      return next
+    })
+  }, [])
+
+  const clearAllFilters = useCallback(() => {
+    setFilters(DEFAULT_FILTERS)
+  }, [])
+
   const actionableItems = useMemo(
     () => suggestionItems.filter(i => i.type !== 'label'),
     [suggestionItems],
@@ -224,17 +259,37 @@ function SearchContent() {
       setQuery(q)
       setSubmitted(true)
     }
-  }, [searchParams])
+    const urlFilters: FilterState = { ...DEFAULT_FILTERS }
+    if (searchParams.get('onSale') === '1') urlFilters.onSale = true
+    if (searchParams.get('inStock') === '1') urlFilters.inStock = true
+    if (searchParams.get('minRating')) urlFilters.minRating = Number(searchParams.get('minRating'))
+    if (searchParams.get('minPrice')) urlFilters.priceMin = Number(searchParams.get('minPrice'))
+    if (searchParams.get('maxPrice')) urlFilters.priceMax = Number(searchParams.get('maxPrice'))
+    if (searchParams.get('brands')) {
+      urlFilters.brands = new Set(searchParams.get('brands')!.split(','))
+    }
+    if (searchParams.get('sort')) setSortBy(searchParams.get('sort')!)
+    const hasFilters = urlFilters.onSale || urlFilters.inStock || urlFilters.minRating > 0 ||
+      urlFilters.priceMin > 0 || urlFilters.priceMax < 999999 || urlFilters.brands.size > 0
+    if (hasFilters) setFilters(urlFilters)
+  }, [])
 
   useEffect(() => {
     if (submitted && debouncedQuery.trim().length >= 2) {
       const params = new URLSearchParams()
       params.set('q', debouncedQuery.trim())
+      if (filters.onSale) params.set('onSale', '1')
+      if (filters.inStock) params.set('inStock', '1')
+      if (filters.minRating > 0) params.set('minRating', String(filters.minRating))
+      if (filters.priceMin > 0) params.set('minPrice', String(filters.priceMin))
+      if (filters.priceMax < 999999) params.set('maxPrice', String(filters.priceMax))
+      if (filters.brands.size > 0) params.set('brands', Array.from(filters.brands).join(','))
+      if (sortBy !== 'relevance') params.set('sort', sortBy)
       router.replace(`/search?${params.toString()}`, { scroll: false })
     } else if (!submitted && !debouncedQuery) {
       router.replace('/search', { scroll: false })
     }
-  }, [submitted, debouncedQuery, router])
+  }, [submitted, debouncedQuery, filters, sortBy, router])
 
   useEffect(() => {
     setActiveIndex(-1)
@@ -898,6 +953,36 @@ function SearchContent() {
                     </div>
                   </div>
 
+                  {activeChips.length > 0 && (
+                    <div className="flex items-center gap-2 flex-wrap py-2">
+                      {activeChips.map(chip => (
+                        <motion.button
+                          key={chip.key}
+                          initial={{ opacity: 0, scale: 0.8 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.8 }}
+                          transition={
+                            reduced
+                              ? { duration: 0 }
+                              : { type: 'spring', damping: 20, stiffness: 300 }
+                          }
+                          layout
+                          onClick={() => removeChip(chip.key)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary-50 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
+                        >
+                          <span>{chip.label}</span>
+                          <span className="text-primary font-semibold">{'\u00D7'}</span>
+                        </motion.button>
+                      ))}
+                      <button
+                        onClick={clearAllFilters}
+                        className="text-xs font-semibold text-text-muted hover:text-text transition-colors ml-1"
+                      >
+                        {t('categories.clearAll')}
+                      </button>
+                    </div>
+                  )}
+
                   <div className="flex gap-2 overflow-x-auto scrollbar-none py-1 mb-4">
                     {QUICK_FILTERS.map(f => {
                       const active =
@@ -945,6 +1030,8 @@ function SearchContent() {
                           duration: reduced ? 0 : 0.25,
                           delay: reduced ? 0 : Math.min(i, 9) * 0.05,
                         }}
+                        layout={reduced ? false : true}
+                        layoutId={`search-product-${product.id}`}
                       >
                         <ProductCard
                           product={product}

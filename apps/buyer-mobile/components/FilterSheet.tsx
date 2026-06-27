@@ -162,6 +162,8 @@ export default function FilterSheet({
                   key={brand}
                   onPress={() => toggleBrand(brand)}
                   style={styles.checkboxRow}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: local.brands.has(brand) }}
                 >
                   <View style={[styles.checkbox, local.brands.has(brand) && styles.checkboxActive]}>
                     {local.brands.has(brand) && <Text style={styles.checkmark}>✓</Text>}
@@ -179,6 +181,8 @@ export default function FilterSheet({
               <TouchableOpacity
                 onPress={() => setLocal(prev => ({ ...prev, inStock: !prev.inStock }))}
                 style={styles.checkboxRow}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: local.inStock }}
               >
                 <View style={[styles.checkbox, local.inStock && styles.checkboxActive]}>
                   {local.inStock && <Text style={styles.checkmark}>✓</Text>}
@@ -188,6 +192,8 @@ export default function FilterSheet({
               <TouchableOpacity
                 onPress={() => setLocal(prev => ({ ...prev, onSale: !prev.onSale }))}
                 style={styles.checkboxRow}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: local.onSale }}
               >
                 <View style={[styles.checkbox, local.onSale && styles.checkboxActive]}>
                   {local.onSale && <Text style={styles.checkmark}>✓</Text>}

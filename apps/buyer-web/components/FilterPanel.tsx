@@ -167,6 +167,8 @@ export default function FilterPanel({
                       key={brand}
                       onClick={() => toggleBrand(brand)}
                       className="flex items-center gap-2 w-full py-2 text-left hover:bg-background rounded transition-colors"
+                      role="checkbox"
+                      aria-checked={local.brands.has(brand)}
                     >
                       <div className={`w-5 h-5 rounded border-[1.5px] flex items-center justify-center transition-colors ${
                         local.brands.has(brand) ? 'border-primary bg-primary' : 'border-border'
@@ -187,6 +189,8 @@ export default function FilterPanel({
                 <button
                   onClick={() => setLocal(prev => ({ ...prev, inStock: !prev.inStock }))}
                   className="flex items-center gap-2 w-full py-2 text-left hover:bg-background rounded transition-colors"
+                  role="checkbox"
+                  aria-checked={local.inStock}
                 >
                   <div className={`w-5 h-5 rounded border-[1.5px] flex items-center justify-center transition-colors ${
                     local.inStock ? 'border-primary bg-primary' : 'border-border'
@@ -198,6 +202,8 @@ export default function FilterPanel({
                 <button
                   onClick={() => setLocal(prev => ({ ...prev, onSale: !prev.onSale }))}
                   className="flex items-center gap-2 w-full py-2 text-left hover:bg-background rounded transition-colors"
+                  role="checkbox"
+                  aria-checked={local.onSale}
                 >
                   <div className={`w-5 h-5 rounded border-[1.5px] flex items-center justify-center transition-colors ${
                     local.onSale ? 'border-primary bg-primary' : 'border-border'
