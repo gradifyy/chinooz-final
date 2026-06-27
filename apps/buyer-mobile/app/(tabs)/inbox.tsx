@@ -29,12 +29,16 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
   withSpring,
+  withDelay,
+  withRepeat,
+  withSequence,
   useAnimatedReaction,
   runOnJS,
+  type SharedValue,
 } from 'react-native-reanimated'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import type { InboxTab } from '@chinooz/types'
-import type { Notification, NotificationType, Conversation, Message } from '@chinooz/types'
+import type { Notification, NotificationType, Conversation, Message, MessageStatus } from '@chinooz/types'
 
 const TAB_KEYS: InboxTab[] = ['notifications', 'messages', 'assistant']
 
@@ -493,14 +497,75 @@ function ThreadView({
   onBack: () => void
 }) {
   const { t } = useTranslation()
-  const { data: messages, isLoading } = useMessages(conversationId)
+  const router = useRouter()
+  const { data: serverMessages, isLoading } = useMessages(conversationId)
   const convo = conversations.find(c => c.id === conversationId)
   const [input, setInput] = useState('')
+  const [localMessages, setLocalMessages] = useState<Message[]>([])
+  const [typing, setTyping] = useState(false)
+  const [loadEarlier, setLoadEarlier] = useState(true)
+  const [loadingEarlier, setLoadingEarlier] = useState(false)
+  const flatListRef = useRef<FlatList>(null)
+  const scale = useSharedValue(1)
+
+  useEffect(() => {
+    if (serverMessages) setLocalMessages(serverMessages)
+  }, [serverMessages])
+
+  const grouped = useMemo(() => groupMessagesByDay(localMessages), [localMessages])
+
+  const handleSend = useCallback(() => {
+    const trimmed = input.trim()
+    if (!trimmed) return
+    const newMsg: Message = {
+      id: `msg-optimistic-${Date.now()}`,
+      conversationId,
+      senderId: 'user-1',
+      senderName: 'You',
+      body: trimmed,
+      createdAt: new Date().toISOString(),
+      read: false,
+      status: 'sent',
+    }
+    setLocalMessages(prev => [...prev, newMsg])
+    setInput('')
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100)
+
+    const delay = 1500 + Math.random() * 1500
+    setTyping(true)
+    setTimeout(() => {
+      setTyping(false)
+      const reply: Message = {
+        id: `msg-reply-${Date.now()}`,
+        conversationId,
+        senderId: 'seller-1',
+        senderName: convo?.participantName ?? 'Seller',
+        body: mockReply(trimmed),
+        createdAt: new Date().toISOString(),
+        read: false,
+        status: 'delivered',
+      }
+      setLocalMessages(prev => [...prev, reply])
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100)
+    }, delay)
+  }, [input, conversationId, convo])
+
+  const handleLoadEarlier = useCallback(() => {
+    setLoadingEarlier(true)
+    setTimeout(() => {
+      setLoadEarlier(false)
+      setLoadingEarlier(false)
+    }, 1200)
+  }, [])
+
+  const handlePressIn = () => { scale.value = withTiming(0.95, { duration: 100 }) }
+  const handlePressOut = () => { scale.value = withSpring(1, { damping: 15, stiffness: 400 }) }
+  const sendBtnStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }))
 
   if (isLoading) {
     return (
       <View style={styles.skeletonWrap}>
-        {Array.from({ length: 3 }).map((_, i) => (
+        {Array.from({ length: 4 }).map((_, i) => (
           <View key={i} style={[styles.skeletonRow, { justifyContent: i % 2 === 0 ? 'flex-start' : 'flex-end' }]}>
             <Skeleton width="60%" height={36} borderRadius={18} />
           </View>
@@ -513,41 +578,228 @@ function ThreadView({
     <KeyboardAvoidingView
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
       <View style={styles.threadHeader}>
         <TouchableOpacity onPress={onBack} style={styles.backBtn}>
           <Text style={{ fontSize: 18 }}>{'\u{2190}'}</Text>
         </TouchableOpacity>
-        <Text style={styles.threadName}>{convo?.participantName ?? conversationId}</Text>
+        <View style={styles.threadAvatar}>
+          <Text style={styles.threadAvatarText}>
+            {(convo?.participantName ?? 'S').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+          </Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.threadName} numberOfLines={1}>{convo?.participantName ?? conversationId}</Text>
+          <TouchableOpacity
+            onPress={() => router.push('/profile')}
+            accessibilityRole="button"
+            accessibilityLabel={t('inbox.store')}
+          >
+            <Text style={styles.storeLink}>{t('inbox.store')} {'\u{203A}'}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
+
       <FlatList
-        data={messages ?? []}
+        ref={flatListRef}
+        data={grouped}
         keyExtractor={item => item.id}
-        contentContainerStyle={{ padding: spacing[4], gap: spacing[2] }}
-        renderItem={({ item }) => {
-          const isMine = item.senderId === 'user-1'
-          return (
-            <View
-              style={[styles.bubble, isMine ? styles.bubbleMine : styles.bubbleTheirs]}
+        contentContainerStyle={{ padding: spacing[4], paddingBottom: spacing[2] }}
+        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+        ListHeaderComponent={
+          loadEarlier ? (
+            <TouchableOpacity
+              style={styles.loadEarlierBtn}
+              onPress={handleLoadEarlier}
+              disabled={loadingEarlier}
             >
-              <Text style={[styles.bubbleText, isMine && { color: colors.white }]}>
-                {item.body}
-              </Text>
-            </View>
-          )
+              {loadingEarlier ? (
+                <View style={{ gap: spacing[2] }}>
+                  {Array.from({ length: 2 }).map((_, i) => (
+                    <View key={i} style={[styles.skeletonRow, { justifyContent: i % 2 === 0 ? 'flex-start' : 'flex-end' }]}>
+                      <Skeleton width="50%" height={32} borderRadius={16} />
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.loadEarlierText}>{t('inbox.loadEarlier')}</Text>
+              )}
+            </TouchableOpacity>
+          ) : null
+        }
+        renderItem={({ item }) => {
+          if (item.type === 'separator') {
+            return (
+              <View style={styles.daySeparator}>
+                <View style={styles.dayLine} />
+                <Text style={styles.dayText}>{item.label}</Text>
+                <View style={styles.dayLine} />
+              </View>
+            )
+          }
+          const msg = item as MessageItem
+          const isMine = msg.senderId === 'user-1'
+          return <BubbleRow msg={msg} isMine={isMine} router={router} />
         }}
+        ListFooterComponent={typing ? <TypingIndicator /> : null}
       />
+
       <View style={styles.inputBar}>
+        <TouchableOpacity
+          style={styles.attachBtn}
+          accessibilityRole="button"
+          accessibilityLabel={t('inbox.attachImage')}
+        >
+          <Text style={{ fontSize: 18, color: colors.textMuted }}>{'\u{1F4CE}'}</Text>
+        </TouchableOpacity>
         <TextInput
           style={styles.chatInput}
-          placeholder={t('inbox.chatPlaceholder')}
+          placeholder={t('inbox.typeMessage')}
           placeholderTextColor={colors.textTertiary}
           value={input}
           onChangeText={setInput}
+          multiline
+          maxLength={1000}
+          accessibilityLabel={t('inbox.typeMessage')}
         />
+        <Animated.View style={sendBtnStyle}>
+          <TouchableOpacity
+            onPress={handleSend}
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+            style={[styles.sendBtn, { opacity: input.trim() ? 1 : 0.5 }]}
+            disabled={!input.trim()}
+            accessibilityRole="button"
+            accessibilityLabel={t('inbox.send')}
+          >
+            <Text style={{ fontSize: 16, color: colors.white }}>{'\u{27A4}'}</Text>
+          </TouchableOpacity>
+        </Animated.View>
       </View>
     </KeyboardAvoidingView>
   )
+}
+
+type MessageItem = Message & { type?: 'message' }
+type GroupedItem = MessageItem | { id: string; type: 'separator'; label: string }
+
+function groupMessagesByDay(messages: Message[]): GroupedItem[] {
+  const result: GroupedItem[] = []
+  let lastDay = ''
+  for (const msg of messages) {
+    const day = dayLabel(msg.createdAt)
+    if (day !== lastDay) {
+      result.push({ id: `sep-${day}`, type: 'separator', label: day })
+      lastDay = day
+    }
+    result.push({ ...msg, type: 'message' } as MessageItem)
+  }
+  return result
+}
+
+function dayLabel(iso: string): string {
+  const d = new Date(iso)
+  const now = new Date()
+  const diff = now.getTime() - d.getTime()
+  if (diff < MS_DAY && d.getDate() === now.getDate()) return 'today'
+  const yesterday = new Date(now)
+  yesterday.setDate(yesterday.getDate() - 1)
+  if (d.getDate() === yesterday.getDate() && d.getMonth() === yesterday.getMonth()) return 'yesterday'
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+function BubbleRow({ msg, isMine, router }: { msg: Message; isMine: boolean; router: any }) {
+  const bubbleScale = useSharedValue(0.9)
+  const bubbleOpacity = useSharedValue(0)
+
+  useEffect(() => {
+    bubbleScale.value = withSpring(1, { damping: 15, stiffness: 300 })
+    bubbleOpacity.value = withTiming(1, { duration: 200 })
+  }, [])
+
+  const bubbleAnim = useAnimatedStyle(() => ({
+    transform: [{ scale: bubbleScale.value }],
+    opacity: bubbleOpacity.value,
+  }))
+
+  const time = new Date(msg.createdAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+
+  return (
+    <Animated.View style={[{ alignItems: isMine ? 'flex-end' : 'flex-start', marginBottom: spacing[2] }, bubbleAnim]}>
+      {msg.productId ? (
+        <TouchableOpacity
+          style={[styles.productCard, isMine && { alignSelf: 'flex-end' }]}
+          onPress={() => router.push(`/product/${msg.productId}`)}
+          accessibilityRole="button"
+          accessibilityLabel={`${msg.productName}. NPR ${msg.productPrice?.toLocaleString()}`}
+        >
+          <View style={styles.productCardImg}>
+            <Text style={{ fontSize: 20 }}>{'\u{1F4E6}'}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.productCardName} numberOfLines={1}>{msg.productName}</Text>
+            <Text style={styles.productCardPrice}>NPR {msg.productPrice?.toLocaleString()}</Text>
+          </View>
+        </TouchableOpacity>
+      ) : null}
+      <View style={[styles.bubble, isMine ? styles.bubbleMine : styles.bubbleTheirs]}>
+        <Text style={[styles.bubbleText, isMine && { color: colors.white }]}>{msg.body}</Text>
+      </View>
+      <View style={[styles.bubbleMeta, isMine && { flexDirection: 'row-reverse' }]}>
+        <Text style={styles.bubbleTime}>{time}</Text>
+        {isMine && msg.status && (
+          <Text style={[styles.tick, msg.status === 'read' && styles.tickRead]}>
+            {msg.status === 'read' ? '\u{2713}\u{2713}' : '\u{2713}'}
+          </Text>
+        )}
+      </View>
+    </Animated.View>
+  )
+}
+
+function TypingIndicator() {
+  const dot1 = useSharedValue(0)
+  const dot2 = useSharedValue(0)
+  const dot3 = useSharedValue(0)
+
+  useEffect(() => {
+    const bounce = (sv: SharedValue<number>, delay: number) => {
+      sv.value = withDelay(delay, withRepeat(withSequence(
+        withTiming(-6, { duration: 200 }),
+        withTiming(0, { duration: 200 }),
+      ), -1, true))
+    }
+    bounce(dot1, 0)
+    bounce(dot2, 150)
+    bounce(dot3, 300)
+  }, [])
+
+  const s1 = useAnimatedStyle(() => ({ transform: [{ translateY: dot1.value }] }))
+  const s2 = useAnimatedStyle(() => ({ transform: [{ translateY: dot2.value }] }))
+  const s3 = useAnimatedStyle(() => ({ transform: [{ translateY: dot3.value }] }))
+
+  return (
+    <View style={styles.typingWrap}>
+      <View style={styles.typingBubble}>
+        <Animated.View style={[styles.typingDot, s1]} />
+        <Animated.View style={[styles.typingDot, s2]} />
+        <Animated.View style={[styles.typingDot, s3]} />
+      </View>
+    </View>
+  )
+}
+
+const MOCK_REPLIES = [
+  'Thanks for reaching out! Let me check on that for you.',
+  'Sure, I can help with that. Give me a moment.',
+  'That is a great question! The answer is yes.',
+  'I will get back to you shortly with more details.',
+  'Absolutely! We offer that service.',
+]
+
+function mockReply(_input: string): string {
+  return MOCK_REPLIES[Math.floor(Math.random() * MOCK_REPLIES.length)]
 }
 
 function AssistantView({ threadId }: { threadId?: string }) {
@@ -904,36 +1156,165 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  threadAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.primary50,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  threadAvatarText: {
+    fontSize: 12,
+    fontFamily: fontFamily.sansSemiBold[0],
+    fontWeight: '600',
+    color: colors.primary,
+  },
   threadName: {
     fontSize: fontSize.md[0],
     fontFamily: fontFamily.sansSemiBold[0],
     fontWeight: '600',
     color: colors.text,
   },
+  storeLink: {
+    fontSize: fontSize.sm[0],
+    fontFamily: fontFamily.sans[0],
+    fontWeight: '500',
+    color: colors.primary,
+    marginTop: 1,
+  },
+  loadEarlierBtn: {
+    alignItems: 'center',
+    paddingVertical: spacing[3],
+    marginBottom: spacing[2],
+  },
+  loadEarlierText: {
+    fontSize: fontSize.sm[0],
+    color: colors.textMuted,
+    textDecorationLine: 'underline',
+    textDecorationColor: colors.primary,
+  },
+  daySeparator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    marginVertical: spacing[3],
+  },
+  dayLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  dayText: {
+    fontSize: fontSize.sm[0],
+    fontFamily: fontFamily.sansSemiBold[0],
+    fontWeight: '600',
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   bubble: {
     maxWidth: '75%',
     paddingHorizontal: spacing[4],
-    paddingVertical: spacing[2.5],
-    borderRadius: radii.xl,
+    paddingVertical: spacing[3],
+    borderRadius: radii.lg,
   },
   bubbleMine: {
     alignSelf: 'flex-end',
     backgroundColor: colors.primary,
-    borderBottomRightRadius: radii.sm,
+    borderBottomLeftRadius: radii.sm,
   },
   bubbleTheirs: {
     alignSelf: 'flex-start',
-    backgroundColor: colors.border,
-    borderBottomLeftRadius: radii.sm,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderBottomRightRadius: radii.sm,
   },
   bubbleText: {
-    fontSize: fontSize.base[0],
+    fontSize: fontSize.md[0],
     color: colors.text,
-    lineHeight: fontSize.base[1],
+    lineHeight: fontSize.md[1],
+    fontWeight: '400',
+  },
+  bubbleMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
+    marginTop: spacing[0.5],
+    paddingHorizontal: spacing[1],
+  },
+  bubbleTime: {
+    fontSize: fontSize.sm[0],
+    color: colors.textMuted,
+    fontWeight: '400',
+  },
+  tick: {
+    fontSize: 14,
+    color: colors.textMuted,
+    fontWeight: '400',
+  },
+  tickRead: {
+    color: colors.primary,
+  },
+  productCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    padding: spacing[3],
+    marginBottom: spacing[1],
+    maxWidth: '75%',
+    alignSelf: 'flex-start',
+  },
+  productCardImg: {
+    width: 48,
+    height: 48,
+    borderRadius: radii.md,
+    backgroundColor: colors.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  productCardName: {
+    fontSize: fontSize.base[0],
+    fontFamily: fontFamily.sansSemiBold[0],
+    fontWeight: '600',
+    color: colors.text,
+  },
+  productCardPrice: {
+    fontSize: fontSize.sm[0],
+    color: colors.primary,
+    fontFamily: fontFamily.sansSemiBold[0],
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  typingWrap: {
+    alignItems: 'flex-start',
+    marginBottom: spacing[2],
+  },
+  typingBubble: {
+    flexDirection: 'row',
+    gap: spacing[1.5],
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderBottomRightRadius: radii.sm,
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+  },
+  typingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.textTertiary,
   },
   inputBar: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     gap: spacing[2],
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[2],
@@ -941,14 +1322,25 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
     backgroundColor: colors.white,
   },
+  attachBtn: {
+    width: 40,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   chatInput: {
     flex: 1,
-    height: 40,
-    backgroundColor: colors.background,
-    borderRadius: radii.full,
+    minHeight: 44,
+    maxHeight: 120,
+    backgroundColor: colors.surface,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
     paddingHorizontal: spacing[4],
-    fontSize: fontSize.base[0],
+    paddingVertical: spacing[2.5],
+    fontSize: fontSize.md[0],
     color: colors.text,
+    fontWeight: '400',
   },
   sendBtn: {
     width: 40,

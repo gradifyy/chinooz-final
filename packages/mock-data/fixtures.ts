@@ -493,15 +493,21 @@ export const conversations: Conversation[] = [
 ]
 
 export const messages: Message[] = [
-  { id: 'msg-1', conversationId: 'conv-1', senderId: 'seller-1', senderName: 'TechHub Nepal', body: 'Hi! Your order has been confirmed.', createdAt: daysAgo(5), read: true },
-  { id: 'msg-2', conversationId: 'conv-1', senderId: 'user-1', senderName: 'You', body: 'Great, when will it ship?', createdAt: daysAgo(4), read: true },
-  { id: 'msg-3', conversationId: 'conv-1', senderId: 'seller-1', senderName: 'TechHub Nepal', body: 'Your warranty card has been uploaded.', createdAt: daysAgo(0), read: false },
-  { id: 'msg-4', conversationId: 'conv-1', senderId: 'seller-1', senderName: 'TechHub Nepal', body: 'Also, your phone case gift is on the way!', createdAt: daysAgo(0), read: false },
-  { id: 'msg-5', conversationId: 'conv-2', senderId: 'seller-2', senderName: 'Nepal Handicrafts', body: 'Thank you for your order! We will ship within 24 hours.', createdAt: daysAgo(1), read: true },
-  { id: 'msg-6', conversationId: 'conv-3', senderId: 'system', senderName: 'Chinooz Support', body: 'How can we help you today?', createdAt: daysAgo(3), read: false },
-  { id: 'msg-7', conversationId: 'conv-4', senderId: 'seller-4', senderName: 'Kathmandu Cashmere Co.', body: 'The black pashmina is back in stock!', createdAt: daysAgo(5), read: true },
-  { id: 'msg-8', conversationId: 'conv-5', senderId: 'seller-5', senderName: 'Ilam Tea House', body: 'Your masala tea order has been dispatched.', createdAt: daysAgo(8), read: true },
-  { id: 'msg-9', conversationId: 'conv-6', senderId: 'seller-6', senderName: 'Bhaktapur Woodcraft', body: 'We can customize the mandala size for you.', createdAt: daysAgo(15), read: true },
+  { id: 'msg-1', conversationId: 'conv-1', senderId: 'seller-1', senderName: 'TechHub Nepal', body: 'Hi! Your Samsung Galaxy A55 order has been confirmed.', createdAt: daysAgo(5), read: true, status: 'read' },
+  { id: 'msg-2', conversationId: 'conv-1', senderId: 'user-1', senderName: 'You', body: 'Great, when will it ship?', createdAt: daysAgo(5), read: true, status: 'read' },
+  { id: 'msg-3', conversationId: 'conv-1', senderId: 'seller-1', senderName: 'TechHub Nepal', body: 'It will ship within 24 hours. You will get a tracking link.', createdAt: daysAgo(4), read: true, status: 'read' },
+  { id: 'msg-4', conversationId: 'conv-1', senderId: 'user-1', senderName: 'You', body: 'Perfect, thanks!', createdAt: daysAgo(4), read: true, status: 'read' },
+  { id: 'msg-p', conversationId: 'conv-1', senderId: 'seller-1', senderName: 'TechHub Nepal', body: 'Also, check out this case — it pairs perfectly with your phone:', createdAt: daysAgo(3), read: true, status: 'read', productId: 'prod-5', productName: 'Daraz 10000mAh Power Bank', productImage: 'https://picsum.photos/seed/powerbank/400/400', productPrice: 1299 },
+  { id: 'msg-5', conversationId: 'conv-1', senderId: 'user-1', senderName: 'You', body: 'Looks good! Does it come with a warranty?', createdAt: daysAgo(2), read: true, status: 'read' },
+  { id: 'msg-6', conversationId: 'conv-1', senderId: 'seller-1', senderName: 'TechHub Nepal', body: 'Yes, 6 months warranty. Your warranty card has been uploaded.', createdAt: daysAgo(0), read: false, status: 'delivered' },
+  { id: 'msg-7', conversationId: 'conv-1', senderId: 'seller-1', senderName: 'TechHub Nepal', body: 'Also, your phone case gift is on the way!', createdAt: daysAgo(0), read: false, status: 'delivered' },
+  { id: 'msg-8', conversationId: 'conv-2', senderId: 'seller-2', senderName: 'Nepal Handicrafts', body: 'Thank you for your order! We will ship within 24 hours.', createdAt: daysAgo(1), read: true, status: 'read' },
+  { id: 'msg-9', conversationId: 'conv-2', senderId: 'user-1', senderName: 'You', body: 'Can you gift wrap it?', createdAt: daysAgo(1), read: true, status: 'read' },
+  { id: 'msg-10', conversationId: 'conv-2', senderId: 'seller-2', senderName: 'Nepal Handicrafts', body: 'Yes, we offer free gift wrapping! I will include a handwritten note as well.', createdAt: daysAgo(1), read: true, status: 'read' },
+  { id: 'msg-11', conversationId: 'conv-3', senderId: 'system', senderName: 'Chinooz Support', body: 'How can we help you today?', createdAt: daysAgo(3), read: false, status: 'delivered' },
+  { id: 'msg-12', conversationId: 'conv-4', senderId: 'seller-4', senderName: 'Kathmandu Cashmere Co.', body: 'The black pashmina is back in stock!', createdAt: daysAgo(5), read: true, status: 'read' },
+  { id: 'msg-13', conversationId: 'conv-5', senderId: 'seller-5', senderName: 'Ilam Tea House', body: 'Your masala tea order has been dispatched.', createdAt: daysAgo(8), read: true, status: 'read' },
+  { id: 'msg-14', conversationId: 'conv-6', senderId: 'seller-6', senderName: 'Bhaktapur Woodcraft', body: 'We can customize the mandala size for you. Would you like 30cm or 45cm?', createdAt: daysAgo(15), read: true, status: 'read' },
 ]
 
 export const userProfile: UserProfile = {

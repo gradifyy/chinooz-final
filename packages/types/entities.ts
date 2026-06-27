@@ -144,6 +144,8 @@ export interface Notification {
   link?: string
 }
 
+export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read'
+
 export interface Message {
   id: string
   conversationId: string
@@ -152,6 +154,11 @@ export interface Message {
   body: string
   createdAt: string
   read: boolean
+  status?: MessageStatus
+  productId?: string
+  productName?: string
+  productImage?: string
+  productPrice?: number
 }
 
 export interface Conversation {

@@ -367,6 +367,20 @@
     "itemsCount_other": "{{count}} items",
     "outOfStock": "Out of stock"
   },
+  "addresses": {
+    "title": "Addresses",
+    "emptyTitle": "No addresses saved",
+    "emptySubtitle": "Add a delivery address for faster checkout",
+    "addNew": "Add new address",
+    "editAddress": "Edit address",
+    "deleteTitle": "Delete this address?",
+    "deleteMsg": "This address will be permanently removed.",
+    "setDefault": "Set as default",
+    "default": "Default",
+    "home": "Home",
+    "work": "Work",
+    "other": "Other"
+  },
   "search": {
     "title": "Search",
     "placeholder": "Find anything on Chinooz",

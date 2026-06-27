@@ -14,7 +14,7 @@ import {
 } from '@chinooz/hooks'
 import { useInboxStore } from '@chinooz/state'
 import type { InboxTab } from '@chinooz/types'
-import type { Notification, NotificationType, Conversation, Message } from '@chinooz/types'
+import type { Notification, NotificationType, Conversation, Message, MessageStatus } from '@chinooz/types'
 
 const TAB_KEYS: InboxTab[] = ['notifications', 'messages', 'assistant']
 
@@ -380,14 +380,79 @@ function ThreadView({
   onBack: () => void
 }) {
   const { t } = useTranslation()
-  const { data: messages, isLoading } = useMessages(conversationId)
+  const router = useRouter()
+  const { data: serverMessages, isLoading } = useMessages(conversationId)
   const convo = conversations.find(c => c.id === conversationId)
   const [input, setInput] = useState('')
+  const [localMessages, setLocalMessages] = useState<Message[]>([])
+  const [typing, setTyping] = useState(false)
+  const [loadEarlier, setLoadEarlier] = useState(true)
+  const [loadingEarlier, setLoadingEarlier] = useState(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (serverMessages) setLocalMessages(serverMessages)
+  }, [serverMessages])
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+  }, [localMessages.length, typing])
+
+  const grouped = useMemo(() => groupMessagesByDay(localMessages), [localMessages])
+
+  const handleSend = useCallback(() => {
+    const trimmed = input.trim()
+    if (!trimmed) return
+    const newMsg: Message = {
+      id: `msg-optimistic-${Date.now()}`,
+      conversationId,
+      senderId: 'user-1',
+      senderName: 'You',
+      body: trimmed,
+      createdAt: new Date().toISOString(),
+      read: false,
+      status: 'sent',
+    }
+    setLocalMessages(prev => [...prev, newMsg])
+    setInput('')
+
+    const delay = 1500 + Math.random() * 1500
+    setTyping(true)
+    setTimeout(() => {
+      setTyping(false)
+      const reply: Message = {
+        id: `msg-reply-${Date.now()}`,
+        conversationId,
+        senderId: 'seller-1',
+        senderName: convo?.participantName ?? 'Seller',
+        body: mockReply(trimmed),
+        createdAt: new Date().toISOString(),
+        read: false,
+        status: 'delivered',
+      }
+      setLocalMessages(prev => [...prev, reply])
+    }, delay)
+  }, [input, conversationId, convo])
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSend()
+    }
+  }
+
+  const handleLoadEarlier = useCallback(() => {
+    setLoadingEarlier(true)
+    setTimeout(() => {
+      setLoadEarlier(false)
+      setLoadingEarlier(false)
+    }, 1200)
+  }, [])
 
   if (isLoading) {
     return (
       <div className="flex flex-col gap-3 p-4">
-        {Array.from({ length: 3 }).map((_, i) => (
+        {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className={`flex ${i % 2 === 0 ? 'justify-start' : 'justify-end'}`}>
             <Skeleton width="60%" height={36} borderRadius={18} />
           </div>
@@ -397,40 +462,177 @@ function ThreadView({
   }
 
   return (
-    <div className="flex flex-col h-[500px]">
+    <div className="flex flex-col h-[600px]">
       <div className="flex items-center gap-2 p-3 border-b border-border">
         <button onClick={onBack} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-background">
           <span className="text-lg">{'\u{2190}'}</span>
         </button>
-        <p className="text-base font-semibold text-text">{convo?.participantName ?? conversationId}</p>
+        <div className="w-8 h-8 rounded-full bg-primary-50 flex items-center justify-center shrink-0">
+          <span className="text-xs font-semibold text-primary">
+            {(convo?.participantName ?? 'S').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+          </span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-base font-semibold text-text truncate">{convo?.participantName ?? conversationId}</p>
+          <button
+            onClick={() => router.push('/profile')}
+            className="text-xs font-medium text-primary hover:text-primary-dark transition-colors"
+            aria-label={t('inbox.store')}
+          >
+            {t('inbox.store')} {'\u{203A}'}
+          </button>
+        </div>
       </div>
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
-        {(messages ?? []).map(item => {
-          const isMine = item.senderId === 'user-1'
+
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 flex flex-col gap-2" aria-live="polite">
+        {loadEarlier && (
+          <div className="flex justify-center mb-2">
+            {loadingEarlier ? (
+              <div className="flex flex-col gap-2 w-full">
+                {Array.from({ length: 2 }).map((_, i) => (
+                  <div key={i} className={`flex ${i % 2 === 0 ? 'justify-start' : 'justify-end'}`}>
+                    <Skeleton width="50%" height={32} borderRadius={16} />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <button
+                onClick={handleLoadEarlier}
+                className="text-sm text-text-muted hover:text-primary underline transition-colors"
+              >
+                {t('inbox.loadEarlier')}
+              </button>
+            )}
+          </div>
+        )}
+
+        {grouped.map(item => {
+          if ('type' in item && item.type === 'separator') {
+            return (
+              <div key={item.id} className="flex items-center gap-3 my-3">
+                <div className="flex-1 h-px bg-border" />
+                <span className="text-xs font-semibold text-text-muted uppercase tracking-wide">{item.label}</span>
+                <div className="flex-1 h-px bg-border" />
+              </div>
+            )
+          }
+          const msg = item as Message
+          const isMine = msg.senderId === 'user-1'
+          const time = new Date(msg.createdAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
           return (
-            <div
-              key={item.id}
-              className={`max-w-[75%] px-4 py-2.5 rounded-xl ${
-                isMine
-                  ? 'self-end bg-primary text-white rounded-br-sm'
-                  : 'self-start bg-border rounded-bl-sm'
-              }`}
-            >
-              <p className="text-sm leading-5">{item.body}</p>
+            <div key={msg.id} className={`flex flex-col ${isMine ? 'items-end' : 'items-start'}`}>
+              {msg.productId && (
+                <button
+                  onClick={() => router.push(`/product/${msg.productId}`)}
+                  className="flex items-center gap-3 bg-white border border-border rounded-lg p-3 mb-1 max-w-[75%] text-left hover:bg-background transition-colors"
+                  role="button"
+                  aria-label={`${msg.productName}. NPR ${msg.productPrice?.toLocaleString()}`}
+                >
+                  <div className="w-12 h-12 rounded-md bg-border-light flex items-center justify-center shrink-0 text-xl">
+                    {'\u{1F4E6}'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-text truncate">{msg.productName}</p>
+                    <p className="text-xs font-semibold text-primary mt-0.5">NPR {msg.productPrice?.toLocaleString()}</p>
+                  </div>
+                </button>
+              )}
+              <div
+                className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-base leading-6 font-normal animate-[bubble-in_200ms_ease] ${
+                  isMine
+                    ? 'bg-primary text-white rounded-bl-sm'
+                    : 'bg-white border border-border text-text rounded-br-sm'
+                }`}
+              >
+                {msg.body}
+              </div>
+              <div className={`flex items-center gap-1 mt-0.5 px-1 ${isMine ? 'flex-row-reverse' : ''}`}>
+                <span className="text-xs text-text-muted font-normal">{time}</span>
+                {isMine && msg.status && (
+                  <span className={`text-sm ${msg.status === 'read' ? 'text-primary' : 'text-text-muted'}`}>
+                    {msg.status === 'read' ? '\u{2713}\u{2713}' : '\u{2713}'}
+                  </span>
+                )}
+              </div>
             </div>
           )
         })}
+
+        {typing && (
+          <div className="flex justify-start">
+            <div className="flex gap-1.5 bg-white border border-border rounded-2xl rounded-br-sm px-4 py-3">
+              <span className="w-2 h-2 rounded-full bg-text-tertiary animate-[dot-bounce_0.4s_ease_infinite]" />
+              <span className="w-2 h-2 rounded-full bg-text-tertiary animate-[dot-bounce_0.4s_ease_0.15s_infinite]" />
+              <span className="w-2 h-2 rounded-full bg-text-tertiary animate-[dot-bounce_0.4s_ease_0.3s_infinite]" />
+            </div>
+          </div>
+        )}
       </div>
-      <div className="flex items-center gap-2 p-3 border-t border-border">
-        <input
-          className="flex-1 h-10 bg-background rounded-full px-4 text-sm text-text outline-none"
-          placeholder={t('inbox.chatPlaceholder')}
+
+      <div className="flex items-end gap-2 p-3 border-t border-border">
+        <button
+          className="w-10 h-11 flex items-center justify-center text-text-muted hover:text-text transition-colors"
+          aria-label={t('inbox.attachImage')}
+        >
+          <span className="text-lg">{'\u{1F4CE}'}</span>
+        </button>
+        <textarea
+          className="flex-1 min-h-[44px] max-h-[120px] bg-white border border-border rounded-2xl px-4 py-2.5 text-base text-text font-normal resize-none outline-none placeholder:text-text-tertiary"
+          placeholder={t('inbox.typeMessage')}
           value={input}
           onChange={e => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          rows={1}
+          aria-label={t('inbox.typeMessage')}
         />
+        <button
+          onClick={handleSend}
+          disabled={!input.trim()}
+          className={`w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center shrink-0 transition-all duration-100 ${input.trim() ? 'hover:bg-primary-dark active:scale-95' : 'opacity-50 cursor-not-allowed'}`}
+          aria-label={t('inbox.send')}
+        >
+          <span className="text-base">{'\u{27A4}'}</span>
+        </button>
       </div>
     </div>
   )
+}
+
+function groupMessagesByDay(messages: Message[]) {
+  const result: (Message | { id: string; type: 'separator'; label: string })[] = []
+  let lastDay = ''
+  for (const msg of messages) {
+    const day = dayLabel(msg.createdAt)
+    if (day !== lastDay) {
+      result.push({ id: `sep-${day}`, type: 'separator', label: day })
+      lastDay = day
+    }
+    result.push(msg)
+  }
+  return result
+}
+
+function dayLabel(iso: string): string {
+  const d = new Date(iso)
+  const now = new Date()
+  const diff = now.getTime() - d.getTime()
+  if (diff < MS_DAY && d.getDate() === now.getDate()) return 'today'
+  const yesterday = new Date(now)
+  yesterday.setDate(yesterday.getDate() - 1)
+  if (d.getDate() === yesterday.getDate() && d.getMonth() === yesterday.getMonth()) return 'yesterday'
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+const MOCK_REPLIES = [
+  'Thanks for reaching out! Let me check on that for you.',
+  'Sure, I can help with that. Give me a moment.',
+  'That is a great question! The answer is yes.',
+  'I will get back to you shortly with more details.',
+  'Absolutely! We offer that service.',
+]
+
+function mockReply(_input: string): string {
+  return MOCK_REPLIES[Math.floor(Math.random() * MOCK_REPLIES.length)]
 }
 
 function AssistantView() {

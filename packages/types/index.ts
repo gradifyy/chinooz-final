@@ -53,6 +53,7 @@ export type {
   NotificationType,
   Notification,
   Message,
+  MessageStatus,
   Conversation,
   UserProfile,
 } from './entities'
