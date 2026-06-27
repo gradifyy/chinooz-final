@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useMemo, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { Container, Screen } from '@chinooz/ui-web'
@@ -27,6 +27,8 @@ const TABS: TabDef[] = [
   { key: 'delivered', labelKey: 'orders.tabDelivered', statuses: ['delivered'] },
   { key: 'cancelled_returned', labelKey: 'orders.tabCancelledReturned', statuses: ['cancelled', 'returned'] },
 ]
+
+const VALID_TABS: TabKey[] = TABS.map(t => t.key)
 
 const STATUS_COLORS: Record<OrderStatus, { bg: string; text: string }> = {
   pending: { bg: 'bg-warning-light', text: 'text-warning' },
@@ -77,7 +79,7 @@ function SegmentControl({
 
   return (
     <div
-      className="flex gap-1 overflow-x-auto md:overflow-visible md:flex-wrap"
+      className="flex overflow-x-auto md:overflow-visible scrollbar-none"
       role="tablist"
     >
       <div className="relative flex bg-background rounded-full h-10 min-w-max md:min-w-0">
@@ -92,7 +94,7 @@ function SegmentControl({
               aria-selected={isActive}
               className={`
                 relative z-10 flex items-center gap-1 px-4 h-10 rounded-full text-sm font-semibold
-                whitespace-nowrap transition-colors duration-${duration.normal}
+                whitespace-nowrap transition-colors duration-250
                 ${isActive ? 'text-white' : 'text-text-muted hover:text-text'}
               `}
             >
@@ -120,6 +122,36 @@ function SegmentControl({
   )
 }
 
+function SellerBreakdown({ order }: { order: Order }) {
+  const { t } = useTranslation()
+  const sellers = useMemo(() => {
+    const map = new Map<string, { name: string; count: number }>()
+    for (const item of order.items) {
+      const name = item.name.split(' — ')[0] || item.name
+      const existing = map.get(name)
+      if (existing) {
+        existing.count += item.quantity
+      } else {
+        map.set(name, { name, count: item.quantity })
+      }
+    }
+    return [...map.values()]
+  }, [order.items])
+
+  if (sellers.length <= 1) return null
+
+  return (
+    <div className="mb-3 px-3 py-2 bg-background rounded-lg">
+      <p className="text-xs font-semibold text-text-secondary mb-1">{t('orders.subOrders')}</p>
+      {sellers.map(seller => (
+        <p key={seller.name} className="text-xs text-text-muted">
+          {t('orders.soldBy')}: {seller.name} ({seller.count} {seller.count === 1 ? t('orders.item') : t('orders.items')})
+        </p>
+      ))}
+    </div>
+  )
+}
+
 function OrderCard({ order, index }: { order: Order; index: number }) {
   const { t } = useTranslation()
   const router = useRouter()
@@ -128,20 +160,6 @@ function OrderCard({ order, index }: { order: Order; index: number }) {
   const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0)
   const firstItem = order.items[0]
   const statusLabel = t(`orders.${order.status}`)
-
-  const sellers = useMemo(() => {
-    const sellerMap = new Map<string, { name: string; items: typeof order.items }>()
-    for (const item of order.items) {
-      const name = item.name.split(' — ')[0] || item.name
-      const existing = sellerMap.get(name)
-      if (existing) {
-        existing.items.push(item)
-      } else {
-        sellerMap.set(name, { name, items: [item] })
-      }
-    }
-    return [...sellerMap.values()]
-  }, [order.items])
 
   return (
     <motion.div
@@ -183,16 +201,7 @@ function OrderCard({ order, index }: { order: Order; index: number }) {
           </div>
         </div>
 
-        {sellers.length > 1 && (
-          <div className="mb-3 px-3 py-2 bg-background rounded-lg">
-            <p className="text-xs font-semibold text-text-secondary mb-1">{t('orders.subOrders')}</p>
-            {sellers.map(seller => (
-              <p key={seller.name} className="text-xs text-text-muted">
-                {t('orders.soldBy')}: {seller.name} ({seller.items.length} {seller.items.length === 1 ? t('orders.item') : t('orders.items')})
-              </p>
-            ))}
-          </div>
-        )}
+        <SellerBreakdown order={order} />
 
         <div className="flex items-center justify-between pt-3 border-t border-border-light">
           <span className="text-sm text-text-muted">
@@ -222,9 +231,16 @@ function OrderCard({ order, index }: { order: Order; index: number }) {
 export default function OrdersPage() {
   const { t } = useTranslation()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const reduced = useReducedMotion()
 
-  const [activeTab, setActiveTab] = useState<TabKey>('all')
+  const initialTab: TabKey = (() => {
+    const s = searchParams.get('status')
+    if (s && VALID_TABS.includes(s as TabKey)) return s as TabKey
+    return 'all'
+  })()
+
+  const [activeTab, setActiveTab] = useState<TabKey>(initialTab)
   const [searchQuery, setSearchQuery] = useState('')
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)

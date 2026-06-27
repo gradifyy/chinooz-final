@@ -9,7 +9,7 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useRouter, useLocalSearchParams } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
 import Animated, {
@@ -53,6 +53,8 @@ const STATUS_COLORS: Record<OrderStatus, { bg: string; text: string }> = {
   returned: { bg: '#FEF3C7', text: '#D97706' },
 }
 
+const VALID_TABS: TabKey[] = TABS.map(t => t.key)
+
 function CountBadge({ count, active }: { count: number; active: boolean }) {
   const scale = useSharedValue(1)
   const reduced = useReducedMotion()
@@ -92,28 +94,39 @@ function SegmentControl({
 }) {
   const { t } = useTranslation()
   const indicatorX = useSharedValue(0)
+  const indicatorW = useSharedValue(0)
   const tabWidths = useRef<Record<string, number>>({})
   const tabPositions = useRef<Record<string, number>>({})
   const reduced = useReducedMotion()
 
   const indicatorStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: indicatorX.value }],
+    width: indicatorW.value,
   }))
 
   const handleTabLayout = (key: TabKey, event: any) => {
-    tabWidths.current[key] = event.nativeEvent.layout.width
-    tabPositions.current[key] = event.nativeEvent.layout.x
+    const { width, x } = event.nativeEvent.layout
+    tabWidths.current[key] = width
+    tabPositions.current[key] = x
     if (key === activeTab) {
-      indicatorX.value = event.nativeEvent.layout.x
+      indicatorX.value = x
+      indicatorW.value = width
     }
   }
 
   const handlePress = (key: TabKey) => {
     const pos = tabPositions.current[key] ?? 0
+    const w = tabWidths.current[key] ?? 0
     if (reduced) {
       indicatorX.value = pos
+      indicatorW.value = w
     } else {
       indicatorX.value = withSpring(pos, {
+        damping: 20,
+        stiffness: 300,
+        mass: 0.8,
+      })
+      indicatorW.value = withSpring(w, {
         damping: 20,
         stiffness: 300,
         mass: 0.8,
@@ -124,7 +137,14 @@ function SegmentControl({
 
   useEffect(() => {
     const pos = tabPositions.current[activeTab] ?? 0
-    indicatorX.value = reduced ? pos : withSpring(pos, { damping: 20, stiffness: 300, mass: 0.8 })
+    const w = tabWidths.current[activeTab] ?? 0
+    if (reduced) {
+      indicatorX.value = pos
+      indicatorW.value = w
+    } else {
+      indicatorX.value = withSpring(pos, { damping: 20, stiffness: 300, mass: 0.8 })
+      indicatorW.value = withSpring(w, { damping: 20, stiffness: 300, mass: 0.8 })
+    }
   }, [activeTab])
 
   return (
@@ -136,11 +156,7 @@ function SegmentControl({
     >
       <View style={styles.segmentTrack}>
         <Animated.View
-          style={[
-            styles.segmentIndicator,
-            { width: tabWidths.current[activeTab] ?? 0 },
-            indicatorStyle,
-          ]}
+          style={[styles.segmentIndicator, indicatorStyle]}
         />
         {TABS.map(tab => {
           const isActive = tab.key === activeTab
@@ -164,6 +180,36 @@ function SegmentControl({
         })}
       </View>
     </ScrollView>
+  )
+}
+
+function SellerBreakdown({ order }: { order: Order }) {
+  const { t } = useTranslation()
+  const sellers = useMemo(() => {
+    const map = new Map<string, { name: string; count: number }>()
+    for (const item of order.items) {
+      const name = item.name.split(' — ')[0] || item.name
+      const existing = map.get(name)
+      if (existing) {
+        existing.count += item.quantity
+      } else {
+        map.set(name, { name, count: item.quantity })
+      }
+    }
+    return [...map.values()]
+  }, [order.items])
+
+  if (sellers.length <= 1) return null
+
+  return (
+    <View style={styles.sellerBox}>
+      <Text style={styles.sellerTitle}>{t('orders.subOrders')}</Text>
+      {sellers.map(s => (
+        <Text key={s.name} style={styles.sellerRow}>
+          {t('orders.soldBy')}: {s.name} ({s.count} {s.count === 1 ? t('orders.item') : t('orders.items')})
+        </Text>
+      ))}
+    </View>
   )
 }
 
@@ -210,6 +256,8 @@ function OrderCard({ order, onPress }: { order: Order; onPress: () => void }) {
         </View>
       </View>
 
+      <SellerBreakdown order={order} />
+
       <View style={styles.cardFooter}>
         <Text style={styles.itemCount}>
           {itemCount} {itemCount === 1 ? t('orders.item') : t('orders.items')}
@@ -235,10 +283,17 @@ function OrderCard({ order, onPress }: { order: Order; onPress: () => void }) {
 export default function OrdersScreen() {
   const { t } = useTranslation()
   const router = useRouter()
+  const params = useLocalSearchParams<{ status?: string }>()
   const insets = useSafeAreaInsets()
   const reduced = useReducedMotion()
 
-  const [activeTab, setActiveTab] = useState<TabKey>('all')
+  const initialTab: TabKey = (() => {
+    const s = params.status
+    if (s && VALID_TABS.includes(s as TabKey)) return s as TabKey
+    return 'all'
+  })()
+
+  const [activeTab, setActiveTab] = useState<TabKey>(initialTab)
   const [searchQuery, setSearchQuery] = useState('')
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
@@ -582,6 +637,23 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   moreItems: {
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  sellerBox: {
+    backgroundColor: colors.background,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    gap: spacing[0.5],
+  },
+  sellerTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: spacing[0.5],
+  },
+  sellerRow: {
     fontSize: 12,
     color: colors.textMuted,
   },
