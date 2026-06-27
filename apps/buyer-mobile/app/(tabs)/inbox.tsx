@@ -23,6 +23,7 @@ import {
   useDeleteNotification,
 } from '@chinooz/hooks'
 import { useInboxStore } from '@chinooz/state'
+import { useSessionStore } from '@chinooz/state'
 import { assistantService, type AssistantMessage, SUGGESTED_PROMPTS } from '@chinooz/mock-data'
 import { colors, spacing, radii, fontSize, fontFamily } from '@chinooz/theme'
 import Animated, {
@@ -52,10 +53,29 @@ export default function InboxScreen() {
   const router = useRouter()
   const params = useLocalSearchParams<{ tab?: string; thread?: string }>()
   const { activeTab, setActiveTab } = useInboxStore()
+  const isLoggedIn = useSessionStore(s => s.isLoggedIn)
   const initialized = useRef(false)
+  const [isOffline, setIsOffline] = useState(false)
 
-  const { data: notifications, isLoading: loadingNotifs } = useNotifications()
-  const { data: conversations, isLoading: loadingConvos } = useConversations()
+  const { data: notifications, isLoading: loadingNotifs, isError: errorNotifs, refetch: refetchNotifs } = useNotifications()
+  const { data: conversations, isLoading: loadingConvos, isError: errorConvos, refetch: refetchConvos } = useConversations()
+
+  useEffect(() => {
+    if (Platform.OS === 'android' || Platform.OS === 'ios') {
+      const NetInfo = require('@react-native-community/netinfo').default
+      const unsub = NetInfo.addEventListener((s: any) => {
+        setIsOffline(!(s.isConnected && s.isInternetReachable !== false))
+      })
+      return () => unsub()
+    } else {
+      const off = () => setIsOffline(true)
+      const on = () => setIsOffline(false)
+      setIsOffline(typeof navigator !== 'undefined' && !navigator.onLine)
+      window.addEventListener('offline', off)
+      window.addEventListener('online', on)
+      return () => { window.removeEventListener('offline', off); window.removeEventListener('online', on) }
+    }
+  }, [])
 
   const notifUnread = useMemo(
     () => (notifications ?? []).filter(n => !n.read).length,
@@ -107,12 +127,22 @@ export default function InboxScreen() {
           <NotificationsView
             notifications={notifications ?? []}
             isLoading={loadingNotifs}
+            isError={errorNotifs}
+            isLoggedIn={isLoggedIn}
+            isOffline={isOffline}
+            onRetry={refetchNotifs}
+            onSignIn={() => router.push('/phone-entry')}
           />
         )}
         {activeTab === 'messages' && (
           <MessagesView
             conversations={conversations ?? []}
             isLoading={loadingConvos}
+            isError={errorConvos}
+            isLoggedIn={isLoggedIn}
+            isOffline={isOffline}
+            onRetry={refetchConvos}
+            onSignIn={() => router.push('/phone-entry')}
             threadId={params.thread}
           />
         )}
@@ -127,9 +157,19 @@ export default function InboxScreen() {
 function NotificationsView({
   notifications,
   isLoading,
+  isError,
+  isLoggedIn,
+  isOffline,
+  onRetry,
+  onSignIn,
 }: {
   notifications: Notification[]
   isLoading: boolean
+  isError: boolean
+  isLoggedIn: boolean
+  isOffline: boolean
+  onRetry: () => void
+  onSignIn: () => void
 }) {
   const { t } = useTranslation()
   const router = useRouter()
@@ -171,9 +211,17 @@ function NotificationsView({
     deleteNotif.mutate(id)
   }, [deleteNotif])
 
+  if (!isLoggedIn) {
+    return <SignInPrompt t={t} onSignIn={onSignIn} />
+  }
+
+  if (isError && !isLoading) {
+    return <ErrorState t={t} onRetry={onRetry} />
+  }
+
   if (isLoading) {
     return (
-      <View style={styles.skeletonWrap}>
+      <View style={styles.skeletonWrap} accessibilityRole="none" accessibilityLabel={t('inbox.loadingNotifications')} accessibilityState={{ busy: true }}>
         {Array.from({ length: 5 }).map((_, i) => (
           <View key={i} style={styles.skeletonRow}>
             <Skeleton width={32} height={32} circle />
@@ -190,9 +238,10 @@ function NotificationsView({
   if (localNotifs.length === 0) {
     return (
       <EmptyState
-        icon={<Text style={{ fontSize: 48 }}>{'\u{1F514}'}</Text>}
-        title={t('emptyState.noNotifications')}
-        subtitle={t('emptyState.noNotificationsSubtitle')}
+        icon={<Text style={{ fontSize: 48 }}>{'\u{2728}'}</Text>}
+        title={t('inbox.caughtUp')}
+        subtitle={t('inbox.caughtUpSubtitle')}
+        action={{ label: t('inbox.browseProducts'), onPress: () => router.push('/') }}
       />
     )
   }
@@ -341,13 +390,24 @@ function NotificationRow({
 function MessagesView({
   conversations,
   isLoading,
+  isError,
+  isLoggedIn,
+  isOffline,
+  onRetry,
+  onSignIn,
   threadId,
 }: {
   conversations: Conversation[]
   isLoading: boolean
+  isError: boolean
+  isLoggedIn: boolean
+  isOffline: boolean
+  onRetry: () => void
+  onSignIn: () => void
   threadId?: string
 }) {
   const { t } = useTranslation()
+  const router = useRouter()
   const [selectedConvo, setSelectedConvo] = useState<string | null>(threadId ?? null)
   const [search, setSearch] = useState('')
 
@@ -371,14 +431,23 @@ function MessagesView({
       <ThreadView
         conversationId={selectedConvo}
         conversations={conversations}
+        isOffline={isOffline}
         onBack={() => setSelectedConvo(null)}
       />
     )
   }
 
+  if (!isLoggedIn) {
+    return <SignInPrompt t={t} onSignIn={onSignIn} />
+  }
+
+  if (isError && !isLoading) {
+    return <ErrorState t={t} onRetry={onRetry} />
+  }
+
   if (isLoading) {
     return (
-      <View style={styles.skeletonWrap}>
+      <View style={styles.skeletonWrap} accessibilityRole="none" accessibilityLabel={t('inbox.loadingMessages')} accessibilityState={{ busy: true }}>
         {Array.from({ length: 4 }).map((_, i) => (
           <View key={i} style={styles.skeletonRow}>
             <Skeleton width={48} height={48} circle />
@@ -396,8 +465,9 @@ function MessagesView({
     return (
       <EmptyState
         icon={<Text style={{ fontSize: 48 }}>{'\u{1F4AC}'}</Text>}
-        title={t('emptyState.noMessages')}
-        subtitle={t('emptyState.noMessagesSubtitle')}
+        title={t('inbox.noMessages')}
+        subtitle={t('inbox.noMessagesNudge')}
+        action={{ label: t('inbox.browseProducts'), onPress: () => router.push('/') }}
       />
     )
   }
@@ -491,10 +561,12 @@ function ConversationRow({
 function ThreadView({
   conversationId,
   conversations,
+  isOffline,
   onBack,
 }: {
   conversationId: string
   conversations: Conversation[]
+  isOffline?: boolean
   onBack: () => void
 }) {
   const { t } = useTranslation()
@@ -526,11 +598,13 @@ function ThreadView({
       body: trimmed,
       createdAt: new Date().toISOString(),
       read: false,
-      status: 'sent',
+      status: isOffline ? 'sending' : 'sent',
     }
     setLocalMessages(prev => [...prev, newMsg])
     setInput('')
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100)
+
+    if (isOffline) return
 
     const delay = 1500 + Math.random() * 1500
     setTyping(true)
@@ -565,7 +639,7 @@ function ThreadView({
 
   if (isLoading) {
     return (
-      <View style={styles.skeletonWrap}>
+      <View style={styles.skeletonWrap} accessibilityRole="none" accessibilityLabel={t('inbox.loadingThread')} accessibilityState={{ busy: true }}>
         {Array.from({ length: 4 }).map((_, i) => (
           <View key={i} style={[styles.skeletonRow, { justifyContent: i % 2 === 0 ? 'flex-start' : 'flex-end' }]}>
             <Skeleton width="60%" height={36} borderRadius={18} />
@@ -581,6 +655,7 @@ function ThreadView({
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
+      {isOffline && <InboxOfflineBanner t={t} />}
       <View style={styles.threadHeader}>
         <TouchableOpacity onPress={onBack} style={styles.backBtn}>
           <Text style={{ fontSize: 18 }}>{'\u{2190}'}</Text>
@@ -711,6 +786,10 @@ function dayLabel(iso: string): string {
 }
 
 function BubbleRow({ msg, isMine, router }: { msg: Message; isMine: boolean; router: any }) {
+  if (isMine && msg.status === 'sending') {
+    return <PendingBubble text={msg.body} />
+  }
+
   const bubbleScale = useSharedValue(0.9)
   const bubbleOpacity = useSharedValue(0)
 
@@ -1087,6 +1166,66 @@ function AssistantBubble({ msg, router, t }: { msg: AssistantMessage; router: an
         </View>
       )}
     </Animated.View>
+  )
+}
+
+function SignInPrompt({ t, onSignIn }: { t: (k: string) => string; onSignIn: () => void }) {
+  return (
+    <View style={styles.signInWrap}>
+      <Text style={{ fontSize: 48 }}>{'\u{1F512}'}</Text>
+      <Text style={styles.signInTitle}>{t('inbox.signInPrompt')}</Text>
+      <TouchableOpacity style={styles.signInBtn} onPress={onSignIn} accessibilityRole="button" accessibilityLabel={t('inbox.signIn')}>
+        <Text style={styles.signInBtnText}>{t('inbox.signIn')}</Text>
+      </TouchableOpacity>
+    </View>
+  )
+}
+
+function ErrorState({ t, onRetry }: { t: (k: string) => string; onRetry: () => void }) {
+  return (
+    <View style={styles.errorWrap}>
+      <Text style={{ fontSize: 48 }}>{'\u{26A0}'}</Text>
+      <Text style={styles.errorTitle}>{t('inbox.errorTitle')}</Text>
+      <Text style={styles.errorSubtitle}>{t('inbox.errorSubtitle')}</Text>
+      <TouchableOpacity style={styles.retryBtn} onPress={onRetry} accessibilityRole="button" accessibilityLabel={t('inbox.retry')}>
+        <Text style={styles.retryBtnText}>{t('inbox.retry')}</Text>
+      </TouchableOpacity>
+    </View>
+  )
+}
+
+function InboxOfflineBanner({ t }: { t: (k: string) => string }) {
+  const opacity = useSharedValue(0)
+  useEffect(() => {
+    opacity.value = withTiming(1, { duration: 200 })
+  }, [])
+  const animStyle = useAnimatedStyle(() => ({ opacity: opacity.value }))
+  return (
+    <Animated.View style={[styles.offlineBanner, animStyle]}>
+      <View style={styles.offlineDot} />
+      <Text style={styles.offlineText}>{t('inbox.offlineBanner')}</Text>
+    </Animated.View>
+  )
+}
+
+function PendingBubble({ text }: { text: string }) {
+  const opacity = useSharedValue(0.5)
+  useEffect(() => {
+    opacity.value = withRepeat(withSequence(
+      withTiming(1, { duration: 750 }),
+      withTiming(0.5, { duration: 750 }),
+    ), -1, true)
+  }, [])
+  const animStyle = useAnimatedStyle(() => ({ opacity: opacity.value }))
+  return (
+    <View style={{ alignItems: 'flex-end', marginBottom: spacing[2] }}>
+      <View style={[styles.bubble, styles.bubbleMine]}>
+        <Text style={[styles.bubbleText, { color: colors.white }]}>{text}</Text>
+      </View>
+      <Animated.View style={[styles.bubbleMeta, { flexDirection: 'row-reverse' }, animStyle]}>
+        <Text style={styles.pendingText}>{'\u{23F3}'} Pending</Text>
+      </Animated.View>
+    </View>
   )
 }
 
@@ -1765,5 +1904,95 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.sansSemiBold[0],
     fontWeight: '600',
     color: colors.white,
+  },
+  signInWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing[12],
+    gap: spacing[3],
+  },
+  signInTitle: {
+    fontSize: fontSize.md[0],
+    fontFamily: fontFamily.sansSemiBold[0],
+    fontWeight: '600',
+    color: colors.text,
+    textAlign: 'center',
+    paddingHorizontal: spacing[8],
+  },
+  signInBtn: {
+    paddingHorizontal: spacing[6],
+    paddingVertical: spacing[3],
+    borderRadius: radii.md,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    marginTop: spacing[2],
+  },
+  signInBtnText: {
+    fontSize: fontSize.base[0],
+    fontFamily: fontFamily.sansSemiBold[0],
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  errorWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing[12],
+    gap: spacing[2],
+  },
+  errorTitle: {
+    fontSize: fontSize.md[0],
+    fontFamily: fontFamily.sansSemiBold[0],
+    fontWeight: '600',
+    color: colors.text,
+    marginTop: spacing[2],
+  },
+  errorSubtitle: {
+    fontSize: fontSize.base[0],
+    color: colors.textMuted,
+    textAlign: 'center',
+    paddingHorizontal: spacing[8],
+  },
+  retryBtn: {
+    paddingHorizontal: spacing[6],
+    paddingVertical: spacing[3],
+    borderRadius: radii.md,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    marginTop: spacing[2],
+  },
+  retryBtnText: {
+    fontSize: fontSize.base[0],
+    fontFamily: fontFamily.sansSemiBold[0],
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    backgroundColor: '#FEF3C7',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.warning,
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[2.5],
+  },
+  offlineDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.warning,
+  },
+  offlineText: {
+    fontSize: 13,
+    fontFamily: fontFamily.sansSemiBold[0],
+    fontWeight: '600',
+    color: '#92400E',
+  },
+  pendingText: {
+    fontSize: fontSize.sm[0],
+    color: colors.textMuted,
+    fontWeight: '400',
   },
 })

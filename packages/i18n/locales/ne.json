@@ -379,7 +379,18 @@
     "orderDate": "अर्डर मिति",
     "notFound": "अर्डर फेला भएन",
     "errorLoading": "अर्डर विवरण लोड गर्दा त्रुटि",
-    "paymentMethod": "भुक्तानी विधि"
+    "paymentMethod": "भुक्तानी विधि",
+    "ordered": "अर्डर गरियो",
+    "packed": "प्याक गरियो",
+    "outForDelivery": "डेलिभरीमा छ",
+    "trackingNumber": "ट्र्याकिङ नम्बर",
+    "copied": "प्रतिलिपि भयो!",
+    "copyTracking": "ट्र्याकिङ नम्बर प्रतिलिपि गर्नुहोस्",
+    "payOnDelivery": "डेलिभरीमा भुक्तानी",
+    "cashOnDelivery": "नगद भुक्तानी",
+    "shipmentFrom": "{{seller}} बाट शिपमेन्ट",
+    "stepsComplete": "{{total}} मध्ये {{current}} चरणहरू पूरा",
+    "orderStatus": "अर्डर स्थिति: {{status}}, {{total}} मध्ये {{current}} चरणहरू पूरा"
   },
   "wishlist": {
     "title": "इच्छासूची",

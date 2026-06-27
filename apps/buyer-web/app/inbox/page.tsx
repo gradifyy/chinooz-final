@@ -13,6 +13,7 @@ import {
   useDeleteNotification,
 } from '@chinooz/hooks'
 import { useInboxStore } from '@chinooz/state'
+import { useSessionStore } from '@chinooz/state'
 import { assistantService, type AssistantMessage, SUGGESTED_PROMPTS } from '@chinooz/mock-data'
 import type { InboxTab } from '@chinooz/types'
 import type { Notification, NotificationType, Conversation, Message, MessageStatus } from '@chinooz/types'
@@ -24,13 +25,24 @@ export default function InboxPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { activeTab, setActiveTab } = useInboxStore()
+  const isLoggedIn = useSessionStore(s => s.isLoggedIn)
   const initialized = useRef(false)
+  const [isOffline, setIsOffline] = useState(false)
 
   const tabParam = searchParams.get('tab') as InboxTab | null
   const threadParam = searchParams.get('thread') ?? undefined
 
-  const { data: notifications, isLoading: loadingNotifs } = useNotifications()
-  const { data: conversations, isLoading: loadingConvos } = useConversations()
+  const { data: notifications, isLoading: loadingNotifs, isError: errorNotifs, refetch: refetchNotifs } = useNotifications()
+  const { data: conversations, isLoading: loadingConvos, isError: errorConvos, refetch: refetchConvos } = useConversations()
+
+  useEffect(() => {
+    setIsOffline(typeof navigator !== 'undefined' && !navigator.onLine)
+    const off = () => setIsOffline(true)
+    const on = () => setIsOffline(false)
+    window.addEventListener('offline', off)
+    window.addEventListener('online', on)
+    return () => { window.removeEventListener('offline', off); window.removeEventListener('online', on) }
+  }, [])
 
   const notifUnread = useMemo(
     () => (notifications ?? []).filter(n => !n.read).length,
@@ -85,12 +97,22 @@ export default function InboxPage() {
             <NotificationsView
               notifications={notifications ?? []}
               isLoading={loadingNotifs}
+              isError={errorNotifs}
+              isLoggedIn={isLoggedIn}
+              isOffline={isOffline}
+              onRetry={refetchNotifs}
+              onSignIn={() => router.push('/phone-entry')}
             />
           )}
           {activeTab === 'messages' && (
             <MessagesView
               conversations={conversations ?? []}
               isLoading={loadingConvos}
+              isError={errorConvos}
+              isLoggedIn={isLoggedIn}
+              isOffline={isOffline}
+              onRetry={refetchConvos}
+              onSignIn={() => router.push('/phone-entry')}
               threadId={threadParam}
             />
           )}
@@ -106,9 +128,19 @@ export default function InboxPage() {
 function NotificationsView({
   notifications,
   isLoading,
+  isError,
+  isLoggedIn,
+  isOffline,
+  onRetry,
+  onSignIn,
 }: {
   notifications: Notification[]
   isLoading: boolean
+  isError: boolean
+  isLoggedIn: boolean
+  isOffline: boolean
+  onRetry: () => void
+  onSignIn: () => void
 }) {
   const { t } = useTranslation()
   const router = useRouter()
@@ -154,9 +186,17 @@ function NotificationsView({
     }, 250)
   }, [deleteNotif])
 
+  if (!isLoggedIn) {
+    return <SignInPrompt t={t} onSignIn={onSignIn} />
+  }
+
+  if (isError && !isLoading) {
+    return <ErrorState t={t} onRetry={onRetry} />
+  }
+
   if (isLoading) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4" aria-busy="true" aria-label={t('inbox.loadingNotifications')}>
         {Array.from({ length: 5 }).map((_, i) => (
           <div key={i} className="flex items-center gap-3 p-3">
             <Skeleton width={32} height={32} circle />
@@ -173,9 +213,10 @@ function NotificationsView({
   if (localNotifs.length === 0) {
     return (
       <EmptyState
-        icon={<span className="text-5xl">{'\u{1F514}'}</span>}
-        title={t('emptyState.noNotifications')}
-        subtitle={t('emptyState.noNotificationsSubtitle')}
+        icon={<span className="text-5xl">{'\u{2728}'}</span>}
+        title={t('inbox.caughtUp')}
+        subtitle={t('inbox.caughtUpSubtitle')}
+        action={{ label: t('inbox.browseProducts'), onPress: () => router.push('/') }}
       />
     )
   }
@@ -258,13 +299,24 @@ function NotificationsView({
 function MessagesView({
   conversations,
   isLoading,
+  isError,
+  isLoggedIn,
+  isOffline,
+  onRetry,
+  onSignIn,
   threadId,
 }: {
   conversations: Conversation[]
   isLoading: boolean
+  isError: boolean
+  isLoggedIn: boolean
+  isOffline: boolean
+  onRetry: () => void
+  onSignIn: () => void
   threadId?: string
 }) {
   const { t } = useTranslation()
+  const router = useRouter()
   const [selectedConvo, setSelectedConvo] = useState<string | null>(threadId ?? null)
   const [search, setSearch] = useState('')
 
@@ -287,14 +339,23 @@ function MessagesView({
       <ThreadView
         conversationId={selectedConvo}
         conversations={conversations}
+        isOffline={isOffline}
         onBack={() => setSelectedConvo(null)}
       />
     )
   }
 
+  if (!isLoggedIn) {
+    return <SignInPrompt t={t} onSignIn={onSignIn} />
+  }
+
+  if (isError && !isLoading) {
+    return <ErrorState t={t} onRetry={onRetry} />
+  }
+
   if (isLoading) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4" aria-busy="true" aria-label={t('inbox.loadingMessages')}>
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="flex items-center gap-3 p-3">
             <Skeleton width={48} height={48} circle />
@@ -312,8 +373,9 @@ function MessagesView({
     return (
       <EmptyState
         icon={<span className="text-5xl">{'\u{1F4AC}'}</span>}
-        title={t('emptyState.noMessages')}
-        subtitle={t('emptyState.noMessagesSubtitle')}
+        title={t('inbox.noMessages')}
+        subtitle={t('inbox.noMessagesNudge')}
+        action={{ label: t('inbox.browseProducts'), onPress: () => router.push('/') }}
       />
     )
   }
@@ -374,10 +436,12 @@ function MessagesView({
 function ThreadView({
   conversationId,
   conversations,
+  isOffline,
   onBack,
 }: {
   conversationId: string
   conversations: Conversation[]
+  isOffline?: boolean
   onBack: () => void
 }) {
   const { t } = useTranslation()
@@ -412,10 +476,12 @@ function ThreadView({
       body: trimmed,
       createdAt: new Date().toISOString(),
       read: false,
-      status: 'sent',
+      status: isOffline ? 'sending' : 'sent',
     }
     setLocalMessages(prev => [...prev, newMsg])
     setInput('')
+
+    if (isOffline) return
 
     const delay = 1500 + Math.random() * 1500
     setTyping(true)
@@ -452,7 +518,7 @@ function ThreadView({
 
   if (isLoading) {
     return (
-      <div className="flex flex-col gap-3 p-4">
+      <div className="flex flex-col gap-3 p-4" aria-busy="true" aria-label={t('inbox.loadingThread')}>
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className={`flex ${i % 2 === 0 ? 'justify-start' : 'justify-end'}`}>
             <Skeleton width="60%" height={36} borderRadius={18} />
@@ -464,6 +530,7 @@ function ThreadView({
 
   return (
     <div className="flex flex-col h-[600px]">
+      {isOffline && <InboxOfflineBanner t={t} />}
       <div className="flex items-center gap-2 p-3 border-b border-border">
         <button onClick={onBack} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-background">
           <span className="text-lg">{'\u{2190}'}</span>
@@ -520,6 +587,18 @@ function ThreadView({
           const msg = item as Message
           const isMine = msg.senderId === 'user-1'
           const time = new Date(msg.createdAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+          if (isMine && msg.status === 'sending') {
+            return (
+              <div key={msg.id} className="flex flex-col items-end">
+                <div className="max-w-[75%] px-4 py-2.5 rounded-2xl rounded-bl-sm bg-primary text-white text-base leading-6 font-normal">
+                  {msg.body}
+                </div>
+                <div className="flex items-center gap-1 mt-0.5 px-1 flex-row-reverse animate-pulse">
+                  <span className="text-xs text-text-muted">{'\u{23F3}'} {t('inbox.pending')}</span>
+                </div>
+              </div>
+            )
+          }
           return (
             <div key={msg.id} className={`flex flex-col ${isMine ? 'items-end' : 'items-start'}`}>
               {msg.productId && (
@@ -595,6 +674,50 @@ function ThreadView({
           <span className="text-base">{'\u{27A4}'}</span>
         </button>
       </div>
+    </div>
+  )
+}
+
+function SignInPrompt({ t, onSignIn }: { t: (k: string) => string; onSignIn: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-12 gap-3">
+      <span className="text-5xl">{'\u{1F512}'}</span>
+      <p className="text-base font-semibold text-text text-center px-6">{t('inbox.signInPrompt')}</p>
+      <button
+        onClick={onSignIn}
+        className="px-6 py-3 rounded-md border-[1.5px] border-primary text-sm font-semibold text-primary hover:bg-primary-50 transition-colors"
+        role="button"
+        aria-label={t('inbox.signIn')}
+      >
+        {t('inbox.signIn')}
+      </button>
+    </div>
+  )
+}
+
+function ErrorState({ t, onRetry }: { t: (k: string) => string; onRetry: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-12 gap-2">
+      <span className="text-5xl">{'\u{26A0}'}</span>
+      <p className="text-base font-semibold text-text mt-2">{t('inbox.errorTitle')}</p>
+      <p className="text-sm text-text-muted text-center px-6">{t('inbox.errorSubtitle')}</p>
+      <button
+        onClick={onRetry}
+        className="px-6 py-3 rounded-md border-[1.5px] border-primary text-sm font-semibold text-primary hover:bg-primary-50 transition-colors mt-2"
+        role="button"
+        aria-label={t('inbox.retry')}
+      >
+        {t('inbox.retry')}
+      </button>
+    </div>
+  )
+}
+
+function InboxOfflineBanner({ t }: { t: (k: string) => string }) {
+  return (
+    <div className="flex items-center gap-2 bg-warning-light border-b border-warning px-4 py-2">
+      <span className="w-2 h-2 rounded-full bg-warning" />
+      <span className="text-sm font-semibold text-[#92400E]">{t('inbox.offlineBanner')}</span>
     </div>
   )
 }

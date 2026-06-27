@@ -379,7 +379,18 @@
     "orderDate": "Order Date",
     "notFound": "Order not found",
     "errorLoading": "Error loading order details",
-    "paymentMethod": "Payment Method"
+    "paymentMethod": "Payment Method",
+    "ordered": "Ordered",
+    "packed": "Packed",
+    "outForDelivery": "Out for delivery",
+    "trackingNumber": "Tracking number",
+    "copied": "Copied!",
+    "copyTracking": "Copy tracking number",
+    "payOnDelivery": "Pay on delivery",
+    "cashOnDelivery": "Cash on delivery",
+    "shipmentFrom": "Shipment from {{seller}}",
+    "stepsComplete": "{{current}} of {{total}} steps complete",
+    "orderStatus": "Order status: {{status}}, {{current}} of {{total}} steps complete"
   },
   "wishlist": {
     "title": "Wishlist",
