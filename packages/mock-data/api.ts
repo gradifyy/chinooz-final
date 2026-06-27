@@ -160,6 +160,23 @@ export async function getAssistantUnreadCount(): Promise<number> {
   return 0
 }
 
+export async function markNotificationRead(id: string): Promise<void> {
+  await randomDelay(100, 200)
+  const notif = notifications.find(n => n.id === id)
+  if (notif) notif.read = true
+}
+
+export async function markAllNotificationsRead(): Promise<void> {
+  await randomDelay(200, 400)
+  for (const n of notifications) n.read = true
+}
+
+export async function deleteNotification(id: string): Promise<void> {
+  await randomDelay(100, 200)
+  const idx = notifications.findIndex(n => n.id === id)
+  if (idx >= 0) notifications.splice(idx, 1)
+}
+
 export async function getConversations(): Promise<Conversation[]> {
   await randomDelay(200, 500)
   return conversations

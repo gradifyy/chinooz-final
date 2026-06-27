@@ -471,10 +471,16 @@ export const orders: Order[] = [
 ]
 
 export const notifications: Notification[] = [
-  { id: 'notif-1', type: 'order', title: 'Order Shipped!', body: 'Your Samsung Galaxy A55 has been dispatched via Pathao.', read: false, createdAt: daysAgo(1), link: '/orders' },
-  { id: 'notif-2', type: 'promo', title: 'Dashain Sale 🎉', body: 'Up to 50% off on electronics. Limited time only!', read: false, createdAt: daysAgo(2), link: '/deals' },
+  { id: 'notif-1', type: 'order', title: 'Order Shipped!', body: 'Your Samsung Galaxy A55 has been dispatched via Pathao.', read: false, createdAt: daysAgo(0), link: '/orders' },
+  { id: 'notif-2', type: 'promo', title: 'Dashain Sale', body: 'Up to 50% off on electronics. Limited time only!', read: false, createdAt: daysAgo(0), link: '/deals' },
+  { id: 'notif-5', type: 'price_drop', title: 'Price Drop Alert', body: 'Pashmina Shawl dropped from NPR 5,000 to NPR 3,500.', read: false, createdAt: daysAgo(0), link: '/product/pashmina-shawl-grade-a' },
+  { id: 'notif-6', type: 'order', title: 'Order Confirmed', body: 'Your Redmi Note 13 Pro order has been confirmed. Payment verified via Khalti.', read: true, createdAt: daysAgo(1), link: '/orders' },
+  { id: 'notif-7', type: 'promo', title: 'Free Delivery Weekend', body: 'Free delivery on all orders above NPR 1,000 this weekend!', read: true, createdAt: daysAgo(1), link: '/deals' },
+  { id: 'notif-4', type: 'message', title: 'New message from TechHub Nepal', body: 'Your warranty card has been uploaded.', read: false, createdAt: daysAgo(3), link: '/inbox?tab=messages&thread=conv-1' },
+  { id: 'notif-8', type: 'order', title: 'Order Delivered', body: 'Your Pashmina Shawl order was delivered. Rate your experience!', read: true, createdAt: daysAgo(5), link: '/orders' },
+  { id: 'notif-9', type: 'price_drop', title: 'Price Drop Alert', body: 'Masala Tea 500g dropped to NPR 700. Save 12%!', read: true, createdAt: daysAgo(6), link: '/product/masala-tea-organic' },
   { id: 'notif-3', type: 'system', title: 'Welcome to Chinooz!', body: 'Explore thousands of products from local sellers.', read: true, createdAt: daysAgo(30) },
-  { id: 'notif-4', type: 'message', title: 'New message from TechHub Nepal', body: 'Your warranty card has been uploaded.', read: true, createdAt: daysAgo(3) },
+  { id: 'notif-10', type: 'system', title: 'App Update Available', body: 'Version 2.0 is here with faster checkout and new features.', read: true, createdAt: daysAgo(45) },
 ]
 
 export const conversations: Conversation[] = [

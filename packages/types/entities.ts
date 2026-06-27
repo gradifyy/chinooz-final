@@ -132,7 +132,7 @@ export interface Address {
   isDefault: boolean
 }
 
-export type NotificationType = 'order' | 'promo' | 'system' | 'message'
+export type NotificationType = 'order' | 'promo' | 'system' | 'message' | 'price_drop'
 
 export interface Notification {
   id: string
