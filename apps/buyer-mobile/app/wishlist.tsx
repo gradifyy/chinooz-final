@@ -26,6 +26,7 @@ import { getProducts } from '@chinooz/mock-data'
 import { useWishlistStore, useCartStore, useSessionStore } from '@chinooz/state'
 import { SafeImage } from '@chinooz/ui'
 import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
+import { WishlistGridSkeleton } from '../components/Skeletons'
 import type { Product } from '@chinooz/types'
 
 type SortKey = 'recent' | 'price_asc' | 'price_desc'
@@ -158,6 +159,7 @@ export default function WishlistScreen() {
 
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>('recent')
   const [showSort, setShowSort] = useState(false)
 
@@ -171,6 +173,7 @@ export default function WishlistScreen() {
     let cancelled = false
     async function load() {
       setLoading(true)
+      setError(false)
       try {
         const { items } = await getProducts()
         if (!cancelled) {
@@ -178,7 +181,7 @@ export default function WishlistScreen() {
           setProducts(items.filter(p => ids.has(p.id)))
         }
       } catch {
-        if (!cancelled) setProducts([])
+        if (!cancelled) { setProducts([]); setError(true) }
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -245,8 +248,16 @@ export default function WishlistScreen() {
       </View>
 
       {loading ? (
+        <Animated.View entering={FadeIn.duration(duration.normal)} style={styles.skeletonWrap} accessibilityRole="progressbar" accessibilityLabel={t('common.loadingWishlist')}>
+          <WishlistGridSkeleton />
+        </Animated.View>
+      ) : error ? (
         <View style={styles.centerWrap}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.emptyIcon}>😕</Text>
+          <Text style={styles.emptyTitle}>{t('common.error')}</Text>
+          <TouchableOpacity onPress={() => {}} activeOpacity={0.85} style={styles.retryBtn} accessibilityRole="button" accessibilityLabel={t('common.retry')}>
+            <Text style={styles.retryText}>{t('common.retry')}</Text>
+          </TouchableOpacity>
         </View>
       ) : sorted.length === 0 ? (
         <View style={styles.centerWrap}>
@@ -438,4 +449,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cartButtonText: { fontSize: 13, fontWeight: '600', color: colors.primary },
+  skeletonWrap: { flex: 1, paddingTop: spacing[4] },
+  retryBtn: {
+    marginTop: spacing[2],
+    paddingHorizontal: spacing[5],
+    height: 44,
+    borderRadius: radii.md,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  retryText: { fontSize: 14, fontWeight: '600', color: colors.primary },
 })

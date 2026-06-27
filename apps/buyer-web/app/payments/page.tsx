@@ -8,6 +8,7 @@ import { Container, Screen } from '@chinooz/ui-web'
 import { usePaymentsStore, useSessionStore } from '@chinooz/state'
 import { useReducedMotion } from '@chinooz/ui-web'
 import { duration } from '@chinooz/theme'
+import { PaymentMethodSkeleton } from '../../components/skeletons/ProfileSkeletons'
 import type { LinkedPaymentMethod, PaymentType } from '@chinooz/state'
 
 const METHOD_META: Record<PaymentType, { icon: string; color: string }> = {
@@ -135,10 +136,16 @@ export default function PaymentsPage() {
 
   const [connectId, setConnectId] = useState<string | null>(null)
   const [removeId, setRemoveId] = useState<string | null>(null)
+  const [initialLoading, setInitialLoading] = useState(true)
 
   useEffect(() => {
     if (!isLoggedIn) router.replace('/phone-entry')
   }, [isLoggedIn])
+
+  useEffect(() => {
+    const timer = setTimeout(() => setInitialLoading(false), 400)
+    return () => clearTimeout(timer)
+  }, [])
 
   const handleRemove = useCallback(() => {
     if (removeId) { remove(removeId); setRemoveId(null) }
@@ -160,7 +167,11 @@ export default function PaymentsPage() {
           <h1 className="text-xl font-bold text-text">{t('payments.title')}</h1>
         </div>
 
-        {connectedMethods.length === 0 && unconnectedMethods.length === 0 ? (
+        {initialLoading ? (
+          <div className="space-y-3" aria-busy="true" aria-label={t('common.loadingPayments')}>
+            {[0, 1, 2].map(i => <PaymentMethodSkeleton key={i} />)}
+          </div>
+        ) : connectedMethods.length === 0 && unconnectedMethods.length === 0 ? (
           <motion.div initial={reduced ? false : { opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center justify-center py-20 px-8">
             <span className="text-5xl mb-4">💳</span>
             <h3 className="text-lg font-semibold text-text text-center">{t('payments.emptyTitle')}</h3>

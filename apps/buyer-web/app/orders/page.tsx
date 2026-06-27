@@ -10,6 +10,7 @@ import { getOrders } from '@chinooz/mock-data'
 import { useReducedMotion } from '@chinooz/ui-web'
 import { useSessionStore } from '@chinooz/state'
 import { duration, easing } from '@chinooz/theme'
+import { OrderCardSkeleton } from '../../components/skeletons/ProfileSkeletons'
 import type { Order, OrderStatus } from '@chinooz/types'
 
 type TabKey = 'all' | 'to_pay' | 'processing' | 'shipped' | 'delivered' | 'cancelled_returned'
@@ -341,8 +342,8 @@ export default function OrdersPage() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="w-8 h-8 border-3 border-primary border-t-transparent rounded-full animate-spin" />
+          <div className="space-y-3" aria-busy="true" aria-label={t('common.loadingOrders')}>
+            {[0, 1, 2, 3].map(i => <OrderCardSkeleton key={i} />)}
           </div>
         ) : filteredOrders.length === 0 ? (
           <motion.div

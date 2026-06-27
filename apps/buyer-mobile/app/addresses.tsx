@@ -24,6 +24,7 @@ import { colors, radii, spacing, duration } from '@chinooz/theme'
 import { useAddressStore, useSessionStore } from '@chinooz/state'
 import { addressFormSchema } from '@chinooz/validation'
 import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
+import { AddressCardSkeleton } from '../components/Skeletons'
 import type { SavedAddress } from '@chinooz/state'
 
 const KATHMANDU_AREAS = [
@@ -53,6 +54,7 @@ export default function AddressesScreen() {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [initialLoading, setInitialLoading] = useState(true)
 
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
@@ -64,6 +66,11 @@ export default function AddressesScreen() {
   useEffect(() => {
     if (!isLoggedIn) router.replace('/phone-entry')
   }, [isLoggedIn])
+
+  useEffect(() => {
+    const timer = setTimeout(() => setInitialLoading(false), 400)
+    return () => clearTimeout(timer)
+  }, [])
 
   const openAdd = useCallback(() => {
     setName(''); setPhone(''); setStreet(''); setArea(''); setLabel('home'); setErrors({})
@@ -122,11 +129,18 @@ export default function AddressesScreen() {
       </View>
 
       <ScrollView contentContainerStyle={s.list} showsVerticalScrollIndicator={false}>
-        {addresses.length === 0 ? (
+        {initialLoading ? (
+          <Animated.View entering={FadeIn.duration(duration.normal)} accessibilityRole="progressbar" accessibilityLabel={t('common.loadingAddresses')}>
+            {[0, 1, 2].map(i => <AddressCardSkeleton key={i} />)}
+          </Animated.View>
+        ) : addresses.length === 0 ? (
           <Animated.View entering={reduced ? undefined : FadeIn.duration(duration.normal)} style={s.emptyWrap}>
             <Text style={s.emptyIcon}>📍</Text>
             <Text style={s.emptyTitle}>{t('addresses.emptyTitle')}</Text>
             <Text style={s.emptySub}>{t('addresses.emptySubtitle')}</Text>
+            <TouchableOpacity onPress={openAdd} activeOpacity={0.85} style={s.emptyCta} accessibilityRole="button" accessibilityLabel={t('addresses.addNew')}>
+              <Text style={s.emptyCtaText}>{t('addresses.addNew')}</Text>
+            </TouchableOpacity>
           </Animated.View>
         ) : (
           addresses.map((addr, i) => {
@@ -284,6 +298,17 @@ const s = StyleSheet.create({
   emptyIcon: { fontSize: 48, marginBottom: spacing[2] },
   emptyTitle: { fontSize: 18, fontWeight: '600', color: colors.text, textAlign: 'center' },
   emptySub: { fontSize: 14, color: colors.textMuted, textAlign: 'center', lineHeight: 20 },
+  emptyCta: {
+    marginTop: spacing[2],
+    paddingHorizontal: spacing[5],
+    height: 44,
+    borderRadius: radii.md,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyCtaText: { fontSize: 14, fontWeight: '600', color: colors.primary },
 
   card: { backgroundColor: colors.surface, borderRadius: radii.lg, padding: spacing[4], borderWidth: 1, borderColor: colors.borderLight, gap: spacing[1.5], shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 1 },
   cardDefault: { borderColor: colors.primary, borderWidth: 2 },

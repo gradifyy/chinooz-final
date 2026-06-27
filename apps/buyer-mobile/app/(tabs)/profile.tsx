@@ -8,6 +8,7 @@ import { useOrders, useUserProfile } from '@chinooz/hooks'
 import { useSessionStore } from '@chinooz/state'
 import { colors, radii, spacing, duration } from '@chinooz/theme'
 import { Avatar } from '@chinooz/ui'
+import { ProfileHubSkeleton } from '../../components/Skeletons'
 import type { OrderStatus } from '@chinooz/types'
 
 interface MenuItem {
@@ -31,8 +32,11 @@ export default function ProfileScreen() {
   const isLoggedIn = useSessionStore(s => s.isLoggedIn)
   const logout = useSessionStore(s => s.logout)
 
-  const { data: profile } = useUserProfile()
-  const { data: allOrders } = useOrders()
+  const { data: profile, isLoading: profileLoading, error: profileError } = useUserProfile()
+  const { data: allOrders, isLoading: ordersLoading, error: ordersError } = useOrders()
+
+  const isLoading = profileLoading || ordersLoading
+  const hasError = profileError || ordersError
 
   const [showSignOut, setShowSignOut] = useState(false)
 
@@ -161,6 +165,18 @@ export default function ProfileScreen() {
                 {safeItems.map((item, ii) => renderMenuRow(item, ii < safeItems.length - 1))}
               </View>
             </View>
+          </Animated.View>
+        ) : isLoading ? (
+          <Animated.View entering={FadeIn.duration(duration.normal)} accessibilityRole="progressbar" accessibilityLabel={t('common.loadingProfile')}>
+            <ProfileHubSkeleton />
+          </Animated.View>
+        ) : hasError ? (
+          <Animated.View entering={FadeIn.duration(duration.normal)} style={styles.errorWrap}>
+            <Text style={styles.errorIcon}>😕</Text>
+            <Text style={styles.errorTitle}>{t('common.error')}</Text>
+            <TouchableOpacity onPress={() => {}} activeOpacity={0.85} style={styles.retryBtn} accessibilityRole="button" accessibilityLabel={t('common.retry')}>
+              <Text style={styles.retryText}>{t('common.retry')}</Text>
+            </TouchableOpacity>
           </Animated.View>
         ) : (
           <Animated.View entering={FadeIn.duration(duration.normal)} exiting={FadeOut.duration(duration.normal)}>
@@ -508,5 +524,38 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: colors.white,
+  },
+
+  // --- Error state ---
+  errorWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing[12],
+    gap: spacing[3],
+  },
+  errorIcon: {
+    fontSize: 48,
+    marginBottom: spacing[2],
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  retryBtn: {
+    marginTop: spacing[2],
+    paddingHorizontal: spacing[5],
+    height: 44,
+    borderRadius: radii.md,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  retryText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.primary,
   },
 })

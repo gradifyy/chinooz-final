@@ -8,6 +8,7 @@ import { Container, Screen, Avatar } from '@chinooz/ui-web'
 import { useOrders, useUserProfile } from '@chinooz/hooks'
 import { useSessionStore } from '@chinooz/state'
 import { duration } from '@chinooz/theme'
+import { ProfileHubSkeleton } from '../../components/skeletons/ProfileSkeletons'
 
 interface MenuItem {
   key: string
@@ -122,8 +123,11 @@ export default function ProfilePage() {
   const isLoggedIn = useSessionStore(s => s.isLoggedIn)
   const logout = useSessionStore(s => s.logout)
 
-  const { data: profile } = useUserProfile()
-  const { data: allOrders } = useOrders()
+  const { data: profile, isLoading: profileLoading, error: profileError } = useUserProfile()
+  const { data: allOrders, isLoading: ordersLoading, error: ordersError } = useOrders()
+
+  const isLoading = profileLoading || ordersLoading
+  const hasError = profileError || ordersError
 
   const [showSignOut, setShowSignOut] = useState(false)
 
@@ -257,6 +261,24 @@ export default function ProfilePage() {
               exit={{ opacity: 0 }}
               transition={{ duration: duration.normal / 1000 }}
             >
+              {isLoading ? (
+                <div aria-busy="true" aria-label={t('common.loadingProfile')}>
+                  <ProfileHubSkeleton />
+                </div>
+              ) : hasError ? (
+                <div className="flex flex-col items-center justify-center py-20 gap-3">
+                  <span className="text-5xl mb-2">😕</span>
+                  <p className="text-lg font-semibold text-text">{t('common.error')}</p>
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="mt-2 h-11 px-5 rounded-lg border-[1.5px] border-primary text-primary font-semibold text-sm hover:bg-primary-50 transition-colors"
+                    aria-label={t('common.retry')}
+                  >
+                    {t('common.retry')}
+                  </button>
+                </div>
+              ) : (
+              <>
               <div className="bg-surface rounded-2xl p-5 shadow-sm flex flex-col items-center text-center mb-5">
                 <Avatar source={profile?.avatar} name={profile?.name} size="xl" />
                 <h2 className="text-[22px] font-semibold text-text mt-3">
@@ -318,6 +340,8 @@ export default function ProfilePage() {
                   </button>
                 </div>
               </div>
+              </>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

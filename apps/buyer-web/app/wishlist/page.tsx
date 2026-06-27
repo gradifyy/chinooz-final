@@ -11,6 +11,7 @@ import { useWishlistStore, useCartStore, useSessionStore } from '@chinooz/state'
 import { useReducedMotion } from '@chinooz/ui-web'
 import { duration } from '@chinooz/theme'
 import SafeImage from '@chinooz/ui-web/SafeImage'
+import { WishlistGridSkeleton } from '../../components/skeletons/ProfileSkeletons'
 import type { Product } from '@chinooz/types'
 
 type SortKey = 'recent' | 'price_asc' | 'price_desc'
@@ -133,6 +134,7 @@ export default function WishlistPage() {
 
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>('recent')
   const [showSort, setShowSort] = useState(false)
 
@@ -146,6 +148,7 @@ export default function WishlistPage() {
     let cancelled = false
     async function load() {
       setLoading(true)
+      setError(false)
       try {
         const { items } = await getProducts()
         if (!cancelled) {
@@ -153,7 +156,7 @@ export default function WishlistPage() {
           setProducts(items.filter(p => ids.has(p.id)))
         }
       } catch {
-        if (!cancelled) setProducts([])
+        if (!cancelled) { setProducts([]); setError(true) }
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -207,8 +210,16 @@ export default function WishlistPage() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="w-8 h-8 border-3 border-primary border-t-transparent rounded-full animate-spin" />
+          <div aria-busy="true" aria-label={t('common.loadingWishlist')}>
+            <WishlistGridSkeleton />
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center py-20 gap-3">
+            <span className="text-5xl mb-2">😕</span>
+            <p className="text-lg font-semibold text-text">{t('common.error')}</p>
+            <button onClick={() => window.location.reload()} className="mt-2 h-11 px-5 rounded-lg border-[1.5px] border-primary text-primary font-semibold text-sm hover:bg-primary-50 transition-colors" aria-label={t('common.retry')}>
+              {t('common.retry')}
+            </button>
           </div>
         ) : sorted.length === 0 ? (
           <motion.div

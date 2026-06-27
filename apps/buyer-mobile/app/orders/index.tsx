@@ -26,6 +26,7 @@ import { getOrders } from '@chinooz/mock-data'
 import { useSessionStore } from '@chinooz/state'
 import type { Order, OrderStatus } from '@chinooz/types'
 import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
+import { OrderCardSkeleton } from '../../components/Skeletons'
 
 type TabKey = 'all' | 'to_pay' | 'processing' | 'shipped' | 'delivered' | 'cancelled_returned'
 
@@ -411,9 +412,9 @@ export default function OrdersScreen() {
       </View>
 
       {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
+        <Animated.View entering={FadeIn.duration(duration.normal)} style={styles.loadingContainer} accessibilityRole="progressbar" accessibilityLabel={t('common.loadingOrders')}>
+          {[0, 1, 2, 3].map(i => <OrderCardSkeleton key={i} />)}
+        </Animated.View>
       ) : filteredOrders.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyIcon}>📦</Text>

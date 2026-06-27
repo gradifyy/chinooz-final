@@ -9,6 +9,7 @@ import { useAddressStore, useSessionStore } from '@chinooz/state'
 import { addressFormSchema } from '@chinooz/validation'
 import { useReducedMotion } from '@chinooz/ui-web'
 import { duration } from '@chinooz/theme'
+import { AddressCardSkeleton } from '../../components/skeletons/ProfileSkeletons'
 import type { SavedAddress } from '@chinooz/state'
 
 const KATHMANDU_AREAS = [
@@ -214,10 +215,16 @@ export default function AddressesPage() {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [initialLoading, setInitialLoading] = useState(true)
 
   useEffect(() => {
     if (!isLoggedIn) router.replace('/phone-entry')
   }, [isLoggedIn])
+
+  useEffect(() => {
+    const timer = setTimeout(() => setInitialLoading(false), 400)
+    return () => clearTimeout(timer)
+  }, [])
 
   const handleDelete = useCallback(() => {
     if (deleteId) { removeAddress(deleteId); setDeleteId(null) }
@@ -235,11 +242,18 @@ export default function AddressesPage() {
           <h1 className="text-xl font-bold text-text">{t('addresses.title')}</h1>
         </div>
 
-        {addresses.length === 0 ? (
+        {initialLoading ? (
+          <div className="space-y-3" aria-busy="true" aria-label={t('common.loadingAddresses')}>
+            {[0, 1, 2].map(i => <AddressCardSkeleton key={i} />)}
+          </div>
+        ) : addresses.length === 0 ? (
           <motion.div initial={reduced ? false : { opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center justify-center py-20 px-8">
             <span className="text-5xl mb-4">📍</span>
             <h3 className="text-lg font-semibold text-text text-center">{t('addresses.emptyTitle')}</h3>
             <p className="text-sm text-text-muted text-center mt-2 max-w-xs">{t('addresses.emptySubtitle')}</p>
+            <button onClick={() => { setEditingId(null); setShowForm(true) }} className="mt-4 h-11 px-5 rounded-lg border-[1.5px] border-primary text-primary font-semibold text-sm hover:bg-primary-50 transition-colors" aria-label={t('addresses.addNew')}>
+              {t('addresses.addNew')}
+            </button>
           </motion.div>
         ) : (
           <div className="space-y-3 mb-4">

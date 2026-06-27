@@ -23,6 +23,7 @@ import * as Haptics from 'expo-haptics'
 import { colors, radii, spacing, duration } from '@chinooz/theme'
 import { usePaymentsStore, useSessionStore } from '@chinooz/state'
 import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
+import { PaymentMethodSkeleton } from '../components/Skeletons'
 import type { LinkedPaymentMethod, PaymentType } from '@chinooz/state'
 
 const METHOD_META: Record<PaymentType, { icon: string; color: string }> = {
@@ -46,10 +47,16 @@ export default function PaymentsScreen() {
   const [connectId, setConnectId] = useState<string | null>(null)
   const [connecting, setConnecting] = useState(false)
   const [removeId, setRemoveId] = useState<string | null>(null)
+  const [initialLoading, setInitialLoading] = useState(true)
 
   useEffect(() => {
     if (!isLoggedIn) router.replace('/phone-entry')
   }, [isLoggedIn])
+
+  useEffect(() => {
+    const timer = setTimeout(() => setInitialLoading(false), 400)
+    return () => clearTimeout(timer)
+  }, [])
 
   const handleSetDefault = useCallback((id: string) => {
     setDefault(id)
@@ -93,7 +100,11 @@ export default function PaymentsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={s.list} showsVerticalScrollIndicator={false}>
-        {connectedMethods.length === 0 && unconnectedMethods.length === 0 ? (
+        {initialLoading ? (
+          <Animated.View entering={FadeIn.duration(duration.normal)} accessibilityRole="progressbar" accessibilityLabel={t('common.loadingPayments')}>
+            {[0, 1, 2].map(i => <PaymentMethodSkeleton key={i} />)}
+          </Animated.View>
+        ) : connectedMethods.length === 0 && unconnectedMethods.length === 0 ? (
           <Animated.View entering={reduced ? undefined : FadeIn.duration(duration.normal)} style={s.emptyWrap}>
             <Text style={s.emptyIcon}>💳</Text>
             <Text style={s.emptyTitle}>{t('payments.emptyTitle')}</Text>
