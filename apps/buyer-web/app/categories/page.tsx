@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
 import { Container, Screen } from '@chinooz/ui-web'
 import CategoryTree from '@/components/CategoryTree'
+import OfflineBanner from '@/components/OfflineBanner'
 
 export default function CategoriesPage() {
   const { t } = useTranslation()
@@ -11,6 +12,7 @@ export default function CategoriesPage() {
 
   return (
     <Screen>
+      <OfflineBanner />
       <Container className="py-6">
         {/* Search bar */}
         <button

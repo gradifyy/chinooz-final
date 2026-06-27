@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react'
-import { View, Text, TouchableOpacity, Dimensions, FlatList } from 'react-native'
+import { View, Text, TouchableOpacity, Dimensions } from 'react-native'
 import Animated, { FadeInDown } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
 import { useTranslation } from 'react-i18next'
@@ -7,8 +7,7 @@ import { colors, spacing, radii } from '@chinooz/theme'
 import { formatNPR } from '@chinooz/utils'
 import { useInfiniteProducts, usePrefetchProduct } from '@chinooz/hooks'
 import { useCartStore } from '@chinooz/state'
-import { ProductCard, ProductCardSkeleton } from '@chinooz/ui'
-import { EmptyState } from '@chinooz/ui'
+import { ProductCard, ProductCardSkeleton, EmptyState } from '@chinooz/ui'
 import type { Product } from '@chinooz/types'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
@@ -29,9 +28,10 @@ function getGridItemWidth(columns: number) {
 
 interface CategoryResultsProps {
   categoryId?: string
+  onClearFilters?: () => void
 }
 
-export default function CategoryResults({ categoryId }: CategoryResultsProps) {
+export default function CategoryResults({ categoryId, onClearFilters }: CategoryResultsProps) {
   const { t } = useTranslation()
   const router = useRouter()
   const addItem = useCartStore(s => s.addItem)
@@ -78,66 +78,14 @@ export default function CategoryResults({ categoryId }: CategoryResultsProps) {
     if (hasNextPage && !isFetchingNextPage) fetchNextPage()
   }, [hasNextPage, isFetchingNextPage, fetchNextPage])
 
-  const renderGridItem = useCallback((product: Product, index: number) => (
-    <Animated.View
-      key={product.id}
-      entering={FadeInDown.duration(250).delay(Math.min(index, 9) * 50).springify().damping(18)}
-      style={{ width: gridItemWidth }}
-    >
-      <ProductCard
-        product={product}
-        onPress={handlePress}
-        onAddToCart={handleAddToCart}
-      />
-    </Animated.View>
-  ), [gridItemWidth, handlePress, handleAddToCart])
-
-  const renderListItem = useCallback((product: Product, index: number) => (
-    <Animated.View
-      key={product.id}
-      entering={FadeInDown.duration(250).delay(Math.min(index, 9) * 50).springify().damping(18)}
-      style={{ marginBottom: GAP }}
-    >
-      <TouchableOpacity
-        onPress={() => handlePress(product)}
-        activeOpacity={0.85}
-        accessibilityRole="button"
-        accessibilityLabel={`${product.name}, ${formatNPR(product.price)}`}
-        style={{
-          flexDirection: 'row',
-          backgroundColor: colors.surface,
-          borderRadius: radii.lg,
-          overflow: 'hidden',
-          shadowColor: colors.black,
-          shadowOffset: { width: 0, height: 1 },
-          shadowOpacity: 0.06,
-          shadowRadius: 4,
-          elevation: 1,
-        }}
-      >
-        <View style={{ width: 80, height: 80, backgroundColor: colors.shimmer }}>
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontSize: 24 }}>📦</Text>
-          </View>
-        </View>
-        <View style={{ flex: 1, padding: spacing[2], gap: 4 }}>
-          <Text style={{ fontSize: 14, color: colors.text }} numberOfLines={2}>{product.name}</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[1] }}>
-            <Text style={{ fontSize: 11, color: colors.gold }}>★</Text>
-            <Text style={{ fontSize: 11, color: colors.textMuted }}>{product.rating}</Text>
-            <Text style={{ fontSize: 11, color: colors.textMuted }}>({product.reviewCount})</Text>
-          </View>
-          <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text, fontVariant: ['tabular-nums'] }}>
-            {formatNPR(product.price)}
-          </Text>
-        </View>
-      </TouchableOpacity>
-    </Animated.View>
-  ), [handlePress])
-
+  // Loading state
   if (isLoading) {
     return (
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP }}>
+      <View
+        style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP }}
+        accessibilityLabel={t('home.loadingProducts')}
+        accessibilityState={{ busy: true }}
+      >
         {Array.from({ length: 6 }).map((_, i) => (
           <View key={i} style={{ width: gridItemWidth }}>
             <ProductCardSkeleton />
@@ -147,78 +95,155 @@ export default function CategoryResults({ categoryId }: CategoryResultsProps) {
     )
   }
 
+  // Error state
   if (isError) {
     return (
-      <View style={{ alignItems: 'center', paddingVertical: spacing[8], gap: spacing[3] }}>
-        <Text style={{ fontSize: 32 }}>😕</Text>
-        <Text style={{ fontSize: 14, color: colors.textMuted }}>{t('common.error')}</Text>
-        <TouchableOpacity onPress={refetch} style={{ backgroundColor: colors.primary, paddingHorizontal: spacing[4], paddingVertical: spacing[2], borderRadius: radii.lg }}>
-          <Text style={{ color: colors.white, fontSize: 13, fontWeight: '600' }}>{t('common.retry')}</Text>
+      <Animated.View
+        entering={FadeInDown.duration(250)}
+        style={{ alignItems: 'center', paddingVertical: spacing[8], gap: spacing[3] }}
+      >
+        <Text style={{ fontSize: 40 }}>😕</Text>
+        <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text }}>{t('home.somethingWentWrong')}</Text>
+        <TouchableOpacity
+          onPress={refetch}
+          style={{
+            borderWidth: 1.5,
+            borderColor: colors.primary,
+            borderRadius: radii.md,
+            paddingHorizontal: spacing[4],
+            paddingVertical: spacing[2],
+          }}
+          activeOpacity={0.7}
+          accessibilityLabel={t('common.retry')}
+        >
+          <Text style={{ fontSize: 14, fontWeight: '600', color: colors.primary }}>{t('common.retry')}</Text>
         </TouchableOpacity>
-      </View>
+      </Animated.View>
     )
   }
 
-  if (allProducts.length === 0) {
+  // Empty state — no products in category
+  if (allProducts.length === 0 && !onClearFilters) {
     return (
-      <EmptyState
-        icon={<Text style={{ fontSize: 48 }}>🔍</Text>}
-        title={t('home.noProducts')}
-        subtitle={t('emptyState.noItemsSubtitle')}
-      />
+      <Animated.View
+        entering={FadeInDown.duration(250)}
+        style={{ alignItems: 'center', paddingVertical: spacing[8], gap: spacing[3] }}
+      >
+        <Text style={{ fontSize: 40 }}>📭</Text>
+        <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text }}>{t('home.noProductsInCategory')}</Text>
+        <Text style={{ fontSize: 14, color: colors.textMuted, textAlign: 'center' }}>
+          {t('home.noProductsInCategorySubtitle')}
+        </Text>
+        <TouchableOpacity
+          onPress={() => router.push('/(tabs)/categories')}
+          style={{
+            borderWidth: 1.5,
+            borderColor: colors.primary,
+            borderRadius: radii.md,
+            paddingHorizontal: spacing[4],
+            paddingVertical: spacing[2],
+          }}
+          activeOpacity={0.7}
+        >
+          <Text style={{ fontSize: 14, fontWeight: '600', color: colors.primary }}>{t('home.backToCategories')}</Text>
+        </TouchableOpacity>
+      </Animated.View>
+    )
+  }
+
+  // No results — filters too narrow
+  if (allProducts.length === 0 && onClearFilters) {
+    return (
+      <Animated.View
+        entering={FadeInDown.duration(250)}
+        style={{ alignItems: 'center', paddingVertical: spacing[8], gap: spacing[3] }}
+      >
+        <Text style={{ fontSize: 40 }}>🔍</Text>
+        <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text }}>{t('home.noProducts')}</Text>
+        <Text style={{ fontSize: 14, color: colors.textMuted, textAlign: 'center' }}>
+          {t('home.noProductsSubtitle')}
+        </Text>
+        <TouchableOpacity
+          onPress={onClearFilters}
+          style={{
+            borderWidth: 1.5,
+            borderColor: colors.primary,
+            borderRadius: radii.md,
+            paddingHorizontal: spacing[4],
+            paddingVertical: spacing[2],
+          }}
+          activeOpacity={0.7}
+          accessibilityLabel={t('home.clearFilters')}
+        >
+          <Text style={{ fontSize: 14, fontWeight: '600', color: colors.primary }}>{t('home.clearFilters')}</Text>
+        </TouchableOpacity>
+      </Animated.View>
     )
   }
 
   return (
     <View>
-      {/* View toggle */}
-      <View style={{ flexDirection: 'row', gap: spacing[1], marginBottom: spacing[3] }}>
-        <TouchableOpacity
-          onPress={() => setViewMode('grid')}
-          style={{
-            paddingHorizontal: spacing[3],
-            paddingVertical: spacing[1.5],
-            borderRadius: radii.full,
-            backgroundColor: viewMode === 'grid' ? colors.primary : colors.surface,
-            borderWidth: 1,
-            borderColor: viewMode === 'grid' ? colors.primary : colors.border,
-          }}
-          activeOpacity={0.7}
-          accessibilityLabel={t('home.gridView')}
-          accessibilityState={{ selected: viewMode === 'grid' }}
-        >
-          <Text style={{ fontSize: 12, fontWeight: '600', color: viewMode === 'grid' ? colors.white : colors.text }}>
-            ⊞ {t('home.gridView')}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setViewMode('list')}
-          style={{
-            paddingHorizontal: spacing[3],
-            paddingVertical: spacing[1.5],
-            borderRadius: radii.full,
-            backgroundColor: viewMode === 'list' ? colors.primary : colors.surface,
-            borderWidth: 1,
-            borderColor: viewMode === 'list' ? colors.primary : colors.border,
-          }}
-          activeOpacity={0.7}
-          accessibilityLabel={t('home.listView')}
-          accessibilityState={{ selected: viewMode === 'list' }}
-        >
-          <Text style={{ fontSize: 12, fontWeight: '600', color: viewMode === 'list' ? colors.white : colors.text }}>
-            ☰ {t('home.listView')}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
       {/* Grid/List */}
       {viewMode === 'grid' ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP }}>
-          {allProducts.map((p, i) => renderGridItem(p, i))}
+          {allProducts.map((p, i) => (
+            <Animated.View
+              key={p.id}
+              entering={FadeInDown.duration(250).delay(Math.min(i, 9) * 50).springify().damping(18)}
+              style={{ width: gridItemWidth }}
+            >
+              <ProductCard
+                product={p}
+                onPress={handlePress}
+                onAddToCart={handleAddToCart}
+              />
+            </Animated.View>
+          ))}
         </View>
       ) : (
         <View>
-          {allProducts.map((p, i) => renderListItem(p, i))}
+          {allProducts.map((p, i) => (
+            <Animated.View
+              key={p.id}
+              entering={FadeInDown.duration(250).delay(Math.min(i, 9) * 50).springify().damping(18)}
+              style={{ marginBottom: GAP }}
+            >
+              <TouchableOpacity
+                onPress={() => handlePress(p)}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={`${p.name}, ${formatNPR(p.price)}`}
+                style={{
+                  flexDirection: 'row',
+                  backgroundColor: colors.surface,
+                  borderRadius: radii.lg,
+                  overflow: 'hidden',
+                  shadowColor: colors.black,
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.06,
+                  shadowRadius: 4,
+                  elevation: 1,
+                }}
+              >
+                <View style={{ width: 80, height: 80, backgroundColor: colors.shimmer }}>
+                  <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 24 }}>📦</Text>
+                  </View>
+                </View>
+                <View style={{ flex: 1, padding: spacing[2], gap: 4 }}>
+                  <Text style={{ fontSize: 14, color: colors.text }} numberOfLines={2}>{p.name}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[1] }}>
+                    <Text style={{ fontSize: 11, color: colors.gold }}>★</Text>
+                    <Text style={{ fontSize: 11, color: colors.textMuted }}>{p.rating}</Text>
+                    <Text style={{ fontSize: 11, color: colors.textMuted }}>({p.reviewCount})</Text>
+                  </View>
+                  <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text, fontVariant: ['tabular-nums'] }}>
+                    {formatNPR(p.price)}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </Animated.View>
+          ))}
         </View>
       )}
 

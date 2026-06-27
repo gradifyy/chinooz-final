@@ -13,9 +13,10 @@ import type { Product } from '@chinooz/types'
 
 interface CategoryResultsProps {
   categoryId?: string
+  onClearFilters?: () => void
 }
 
-export default function CategoryResults({ categoryId }: CategoryResultsProps) {
+export default function CategoryResults({ categoryId, onClearFilters }: CategoryResultsProps) {
   const { t } = useTranslation()
   const router = useRouter()
   const reduced = useReducedMotion()
@@ -60,9 +61,14 @@ export default function CategoryResults({ categoryId }: CategoryResultsProps) {
     if (hasNextPage && !isFetchingNextPage) fetchNextPage()
   }, [hasNextPage, isFetchingNextPage, fetchNextPage])
 
+  // Loading state
   if (isLoading) {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+      <div
+        className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3"
+        aria-busy="true"
+        aria-label={t('home.loadingProducts')}
+      >
         {Array.from({ length: 10 }).map((_, i) => (
           <ProductCardSkeleton key={i} />
         ))}
@@ -70,57 +76,78 @@ export default function CategoryResults({ categoryId }: CategoryResultsProps) {
     )
   }
 
+  // Error state
   if (isError) {
     return (
-      <div className="flex flex-col items-center py-12 gap-3">
-        <span className="text-4xl">😕</span>
-        <p className="text-sm text-text-muted">{t('common.error')}</p>
+      <motion.div
+        initial={reduced ? false : { opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex flex-col items-center py-12 gap-3"
+      >
+        <span className="text-5xl">😕</span>
+        <p className="text-base font-semibold text-text">{t('home.somethingWentWrong')}</p>
         <button
           onClick={refetch}
-          className="bg-primary text-white px-4 py-2 rounded-xl font-semibold text-sm hover:bg-primary-dark transition-colors"
+          className="px-4 py-2 rounded-md border-[1.5px] border-primary text-sm font-semibold text-primary hover:bg-primary/5 transition-colors"
+          aria-label={t('common.retry')}
         >
           {t('common.retry')}
         </button>
-      </div>
+      </motion.div>
     )
   }
 
-  if (allProducts.length === 0) {
+  // Empty — no products in category
+  if (allProducts.length === 0 && !onClearFilters) {
     return (
-      <EmptyState
-        icon={<span className="text-5xl">🔍</span>}
-        title={t('home.noProducts')}
-        subtitle={t('emptyState.noItemsSubtitle')}
-      />
+      <motion.div
+        initial={reduced ? false : { opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={reduced ? { duration: 0 } : { duration: 0.6, type: 'spring', damping: 18, stiffness: 120 }}
+        className="flex flex-col items-center py-12 gap-3"
+      >
+        <span className="text-6xl">📭</span>
+        <p className="text-base font-semibold text-text">{t('home.noProductsInCategory')}</p>
+        <p className="text-sm text-text-muted text-center max-w-sm">
+          {t('home.noProductsInCategorySubtitle')}
+        </p>
+        <button
+          onClick={() => router.push('/categories')}
+          className="mt-2 px-4 py-2 rounded-md border-[1.5px] border-primary text-sm font-semibold text-primary hover:bg-primary/5 transition-colors"
+        >
+          {t('home.backToCategories')}
+        </button>
+      </motion.div>
+    )
+  }
+
+  // No results — filters too narrow
+  if (allProducts.length === 0 && onClearFilters) {
+    return (
+      <motion.div
+        initial={reduced ? false : { opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={reduced ? { duration: 0 } : { duration: 0.6, type: 'spring', damping: 18, stiffness: 120 }}
+        className="flex flex-col items-center py-12 gap-3"
+      >
+        <span className="text-6xl">🔍</span>
+        <p className="text-base font-semibold text-text">{t('home.noProducts')}</p>
+        <p className="text-sm text-text-muted text-center max-w-sm">
+          {t('home.noProductsSubtitle')}
+        </p>
+        <button
+          onClick={onClearFilters}
+          className="mt-2 px-4 py-2 rounded-md border-[1.5px] border-primary text-sm font-semibold text-primary hover:bg-primary/5 transition-colors"
+          aria-label={t('home.clearFilters')}
+        >
+          {t('home.clearFilters')}
+        </button>
+      </motion.div>
     )
   }
 
   return (
     <div>
-      {/* View toggle */}
-      <div className="flex gap-1 mb-3">
-        <button
-          onClick={() => setViewMode('grid')}
-          className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-            viewMode === 'grid' ? 'bg-primary border-primary text-white' : 'bg-surface border-border text-text'
-          }`}
-          aria-label={t('home.gridView')}
-          aria-pressed={viewMode === 'grid'}
-        >
-          ⊞ {t('home.gridView')}
-        </button>
-        <button
-          onClick={() => setViewMode('list')}
-          className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-            viewMode === 'list' ? 'bg-primary border-primary text-white' : 'bg-surface border-border text-text'
-          }`}
-          aria-label={t('home.listView')}
-          aria-pressed={viewMode === 'list'}
-        >
-          ☰ {t('home.listView')}
-        </button>
-      </div>
-
       {/* Grid/List */}
       {viewMode === 'grid' ? (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">

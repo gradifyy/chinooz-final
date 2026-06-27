@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { colors, spacing, radii } from '@chinooz/theme'
 import CategoryTree from '../../components/CategoryTree'
+import OfflineBanner from '../../components/OfflineBanner'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 const EDGE_PADDING = 16
@@ -15,6 +16,8 @@ export default function CategoriesScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>
+      <OfflineBanner />
+
       {/* Search bar */}
       <View style={{ paddingHorizontal: EDGE_PADDING, paddingTop: spacing[4], paddingBottom: spacing[2] }}>
         <TouchableOpacity
