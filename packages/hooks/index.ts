@@ -14,6 +14,8 @@ export {
   useOrderById,
   useNotifications,
   useUnreadNotificationCount,
+  useUnreadMessageCount,
+  useAssistantUnreadCount,
   useConversations,
   useMessages,
   useUserProfile,

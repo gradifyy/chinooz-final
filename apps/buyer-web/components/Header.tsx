@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useState } from 'react'
 import { CartBadge } from './CartBadge'
+import { InboxBadge } from './InboxBadge'
 
 const navItems = [
   { href: '/', labelKey: 'nav.home' },
@@ -38,18 +39,20 @@ export function Header() {
 
         <nav className="hidden md:flex items-center gap-1 ml-4">
           {navItems.map(link => {
-            const isActive = pathname === link.href
+            const isActive = pathname === link.href || (link.href === '/inbox' && pathname.startsWith('/inbox'))
+            const isInbox = link.href === '/inbox'
             return (
               <Link
                 key={link.href}
                 href={link.href}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                className={`relative px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                   isActive
                     ? 'bg-primary-50 text-primary'
                     : 'text-text-secondary hover:bg-background hover:text-text'
                 }`}
               >
                 {t(link.labelKey)}
+                {isInbox && <InboxBadge />}
               </Link>
             )
           })}

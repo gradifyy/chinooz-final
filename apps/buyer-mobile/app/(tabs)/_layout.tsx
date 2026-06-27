@@ -8,11 +8,14 @@ import Animated, {
   withRepeat,
   withTiming,
   withSequence,
+  withSpring,
   Easing,
 } from 'react-native-reanimated'
 import { useEffect, createContext, useContext, useCallback } from 'react'
 import TopBar from '../../components/TopBar'
 import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
+import { useUnreadNotificationCount, useUnreadMessageCount } from '@chinooz/hooks'
+import { colors, radii } from '@chinooz/theme'
 
 export const ScrollContext = createContext<{ scrollY: any; scrollToTop: () => void }>({
   scrollY: { value: 0 },
@@ -53,6 +56,9 @@ const tabIcons: Record<string, string> = {
 function TabIcon({ label, focused, isCenter }: { label: string; focused: boolean; isCenter?: boolean }) {
   const { t } = useTranslation()
   const reduced = useReducedMotion()
+  const { data: notifCount } = useUnreadNotificationCount()
+  const { data: msgCount } = useUnreadMessageCount()
+  const totalUnread = (notifCount ?? 0) + (msgCount ?? 0)
 
   if (isCenter) {
     return (
@@ -62,9 +68,39 @@ function TabIcon({ label, focused, isCenter }: { label: string; focused: boolean
 
   return (
     <View style={styles.tabItem}>
-      <Text style={[styles.icon, focused && styles.iconActive]}>{tabIcons[label]}</Text>
+      <View>
+        <Text style={[styles.icon, focused && styles.iconActive]}>{tabIcons[label]}</Text>
+        {label === 'Inbox' && totalUnread > 0 && (
+          <InboxBadge count={totalUnread} reduced={reduced} />
+        )}
+      </View>
       <Text style={[styles.label, focused && styles.labelActive]}>{t(tabKeys[label])}</Text>
     </View>
+  )
+}
+
+function InboxBadge({ count, reduced }: { count: number; reduced: boolean }) {
+  const scale = useSharedValue(1)
+
+  useEffect(() => {
+    if (reduced) return
+    scale.value = withSequence(
+      withTiming(1.3, { duration: 150 }),
+      withSpring(1, { damping: 10, stiffness: 400 }),
+    )
+  }, [count])
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }))
+
+  return (
+    <Animated.View
+      style={[styles.navBadge, animStyle]}
+      accessibilityLabel={`${count} unread`}
+    >
+      <Text style={styles.navBadgeText}>{count > 99 ? '99+' : count}</Text>
+    </Animated.View>
   )
 }
 
@@ -194,6 +230,23 @@ const styles = StyleSheet.create({
   iconActive: { opacity: 1 },
   label: { fontSize: 10, fontWeight: '500', color: '#6B7280', marginTop: 2 },
   labelActive: { color: '#8A1B57', fontWeight: '700' },
+  navBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -10,
+    backgroundColor: colors.error,
+    borderRadius: radii.full,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  navBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: colors.white,
+  },
   centerTab: {
     alignItems: 'center',
     justifyContent: 'center',

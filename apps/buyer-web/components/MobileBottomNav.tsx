@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
+import { InboxBadge } from './InboxBadge'
 
 const tabItems = [
   { href: '/', labelKey: 'nav.home', icon: '🏠' },
@@ -53,7 +54,10 @@ export function MobileBottomNav() {
               href={tab.href}
               className="flex flex-col items-center justify-center min-w-[44px] min-h-[44px]"
             >
-              <span className={`text-xl ${isActive ? '' : 'opacity-50'}`}>{tab.icon}</span>
+              <span className="relative">
+                <span className={`text-xl ${isActive ? '' : 'opacity-50'}`}>{tab.icon}</span>
+                {tab.href === '/inbox' && <InboxBadge />}
+              </span>
               <span
                 className={`text-[10px] font-medium mt-0.5 ${
                   isActive ? 'text-primary font-bold' : 'text-text-muted'

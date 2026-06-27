@@ -142,6 +142,14 @@ export interface TabsProps extends BaseProps {
   onChange: (key: string) => void
 }
 
+export type InboxTab = 'notifications' | 'messages' | 'assistant'
+
+export interface SegmentedControlProps extends BaseProps {
+  segments: { key: string; label: string; badge?: number }[]
+  activeKey: string
+  onChange: (key: string) => void
+}
+
 export interface RatingProps extends BaseProps {
   rating: number
   maxStars?: number
