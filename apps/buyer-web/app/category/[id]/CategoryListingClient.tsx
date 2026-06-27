@@ -1,12 +1,13 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+import React, { useState, useMemo, useCallback, useEffect } from 'react'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { useReducedMotion, EmptyState } from '@chinooz/ui-web'
 import { ProductCard } from '@chinooz/ui-web'
 import { useCartStore } from '@chinooz/state'
+import FilterPanel, { type FilterState } from '@/components/FilterPanel'
 import type { Product, Category } from '@chinooz/types'
 
 const QUICK_FILTERS = [
@@ -21,6 +22,15 @@ const SORT_OPTIONS = [
   { key: 'priceLow', labelKey: 'categories.priceLowHigh' },
   { key: 'priceHigh', labelKey: 'categories.priceHighLow' },
 ]
+
+const DEFAULT_FILTERS: FilterState = {
+  priceMin: 0,
+  priceMax: 999999,
+  minRating: 0,
+  brands: new Set(),
+  inStock: false,
+  onSale: false,
+}
 
 interface Props {
   categoryId: string
@@ -39,41 +49,117 @@ export default function CategoryListingClient({
 }: Props) {
   const { t } = useTranslation()
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const reduced = useReducedMotion()
   const addItem = useCartStore(s => s.addItem)
 
-  const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set())
+  const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS)
   const [sortBy, setSortBy] = useState('popular')
   const [showSort, setShowSort] = useState(false)
+  const [showFilterPanel, setShowFilterPanel] = useState(false)
 
-  const breadcrumb = useMemo(() => {
-    const path: { id: string; name: string }[] = []
-    let current = categories.find(c => c.id === categoryId)
-    while (current) {
-      path.unshift({ id: current.id, name: current.name })
-      current = current.parentId ? categories.find(c => c.id === current!.parentId) : undefined
+  // Hydrate filters from URL on mount
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString())
+    const urlFilters: FilterState = { ...DEFAULT_FILTERS }
+    if (params.get('onSale') === '1') urlFilters.onSale = true
+    if (params.get('inStock') === '1') urlFilters.inStock = true
+    if (params.get('minRating')) urlFilters.minRating = Number(params.get('minRating'))
+    if (params.get('priceMin')) urlFilters.priceMin = Number(params.get('priceMin'))
+    if (params.get('priceMax')) urlFilters.priceMax = Number(params.get('priceMax'))
+    if (params.get('brands')) {
+      urlFilters.brands = new Set(params.get('brands')!.split(','))
     }
-    return path
-  }, [categories, categoryId])
+    if (params.get('sort')) setSortBy(params.get('sort')!)
+    setFilters(urlFilters)
+  }, [])
+
+  // Sync filters to URL
+  const syncToUrl = useCallback((f: FilterState, sort: string) => {
+    const params = new URLSearchParams()
+    if (f.onSale) params.set('onSale', '1')
+    if (f.inStock) params.set('inStock', '1')
+    if (f.minRating > 0) params.set('minRating', String(f.minRating))
+    if (f.priceMin > 0) params.set('priceMin', String(f.priceMin))
+    if (f.priceMax < 999999) params.set('priceMax', String(f.priceMax))
+    if (f.brands.size > 0) params.set('brands', Array.from(f.brands).join(','))
+    if (sort !== 'popular') params.set('sort', sort)
+    const qs = params.toString()
+    window.history.replaceState(null, '', `${pathname}${qs ? `?${qs}` : ''}`)
+  }, [pathname])
 
   const filteredProducts = useMemo(() => {
     let items = [...initialProducts]
-    if (activeFilters.has('onSale')) items = items.filter(p => p.compareAtPrice && p.compareAtPrice > p.price)
-    if (activeFilters.has('topRated')) items = items.filter(p => p.rating >= 4)
+    if (filters.inStock) items = items.filter(p => p.stock !== 'out_of_stock')
+    if (filters.onSale) items = items.filter(p => p.compareAtPrice && p.compareAtPrice > p.price)
+    if (filters.minRating > 0) items = items.filter(p => p.rating >= filters.minRating)
+    if (filters.brands.size > 0) items = items.filter(p => filters.brands.has(p.sellerName))
+    items = items.filter(p => p.price >= filters.priceMin && p.price <= filters.priceMax)
     if (sortBy === 'priceLow') items.sort((a, b) => a.price - b.price)
     if (sortBy === 'priceHigh') items.sort((a, b) => b.price - a.price)
     if (sortBy === 'popular') items.sort((a, b) => b.reviewCount - a.reviewCount)
     return items
-  }, [initialProducts, activeFilters, sortBy])
+  }, [initialProducts, filters, sortBy])
 
-  const toggleFilter = (key: string) => {
-    setActiveFilters(prev => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
+  const activeChipCount = useMemo(() => {
+    let count = 0
+    if (filters.inStock) count++
+    if (filters.onSale) count++
+    if (filters.minRating > 0) count++
+    if (filters.brands.size > 0) count += filters.brands.size
+    if (filters.priceMin > 0 || filters.priceMax < 999999) count++
+    return count
+  }, [filters])
+
+  const activeChips = useMemo(() => {
+    const chips: { key: string; label: string }[] = []
+    if (filters.onSale) chips.push({ key: 'onSale', label: t('categories.onSale') })
+    if (filters.inStock) chips.push({ key: 'inStock', label: t('categories.inStock') })
+    if (filters.minRating > 0) chips.push({ key: 'rating', label: `${filters.minRating}★+` })
+    filters.brands.forEach(b => chips.push({ key: `brand-${b}`, label: b }))
+    if (filters.priceMin > 0 || filters.priceMax < 999999) {
+      chips.push({ key: 'price', label: `${filters.priceMin}–${filters.priceMax}` })
+    }
+    return chips
+  }, [filters, t])
+
+  const removeChip = useCallback((key: string) => {
+    setFilters(f => {
+      const next = { ...f }
+      if (key === 'onSale') next.onSale = false
+      else if (key === 'inStock') next.inStock = false
+      else if (key === 'rating') next.minRating = 0
+      else if (key.startsWith('brand-')) {
+        const brand = key.replace('brand-', '')
+        const b = new Set(f.brands)
+        b.delete(brand)
+        next.brands = b
+      } else if (key === 'price') {
+        next.priceMin = 0
+        next.priceMax = 999999
+      }
+      syncToUrl(next, sortBy)
       return next
     })
-  }
+  }, [sortBy, syncToUrl])
+
+  const clearAll = useCallback(() => {
+    setFilters(DEFAULT_FILTERS)
+    syncToUrl(DEFAULT_FILTERS, sortBy)
+  }, [sortBy, syncToUrl])
+
+  const handleApplyFilters = useCallback((f: FilterState) => {
+    setFilters(f)
+    syncToUrl(f, sortBy)
+    setShowFilterPanel(false)
+  }, [sortBy, syncToUrl])
+
+  const handleResetFilters = useCallback(() => {
+    setFilters(DEFAULT_FILTERS)
+    syncToUrl(DEFAULT_FILTERS, sortBy)
+    setShowFilterPanel(false)
+  }, [sortBy, syncToUrl])
 
   return (
     <div className="space-y-4">
@@ -82,21 +168,7 @@ export default function CategoryListingClient({
         <Link href="/categories" className="text-text-muted hover:text-primary transition-colors">
           {t('categories.allCategories')}
         </Link>
-        {breadcrumb.map((crumb, i) => (
-          <React.Fragment key={crumb.id}>
-            <span className="text-text-muted">›</span>
-            <Link
-              href={`/category/${crumb.id}`}
-              className={`transition-colors ${
-                i === breadcrumb.length - 1
-                  ? 'text-primary font-semibold'
-                  : 'text-text-muted hover:text-primary'
-              }`}
-            >
-              {crumb.name}
-            </Link>
-          </React.Fragment>
-        ))}
+        <BreadcrumbTrail categoryId={categoryId} categories={categories} />
       </nav>
 
       {/* Header */}
@@ -109,18 +181,22 @@ export default function CategoryListingClient({
 
       {/* Sticky filter/sort bar */}
       <div className="sticky top-16 z-20 bg-surface border-b border-border-light py-2 flex items-center gap-2">
-        {/* Filter button */}
-        <button className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full border border-border bg-surface text-sm font-medium text-text hover:border-primary/30 transition-colors">
+        <button
+          onClick={() => setShowFilterPanel(true)}
+          className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-full border text-sm font-medium transition-colors ${
+            activeChipCount > 0 ? 'border-primary bg-primary-50 text-primary' : 'border-border bg-surface text-text'
+          } hover:border-primary/30`}
+          aria-haspopup="dialog"
+        >
           <span>🔧</span>
           <span>{t('categories.filters')}</span>
-          {activeFilters.size > 0 && (
+          {activeChipCount > 0 && (
             <span className="bg-primary text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
-              {activeFilters.size}
+              {activeChipCount}
             </span>
           )}
         </button>
 
-        {/* Sort dropdown */}
         <div className="relative">
           <button
             onClick={() => setShowSort(!showSort)}
@@ -136,7 +212,7 @@ export default function CategoryListingClient({
               {SORT_OPTIONS.map(opt => (
                 <button
                   key={opt.key}
-                  onClick={() => { setSortBy(opt.key); setShowSort(false) }}
+                  onClick={() => { setSortBy(opt.key); setShowSort(false); syncToUrl(filters, opt.key) }}
                   className={`w-full px-4 py-2.5 text-left text-sm transition-colors ${
                     sortBy === opt.key ? 'bg-primary-50 text-primary font-semibold' : 'text-text hover:bg-background'
                   }`}
@@ -149,18 +225,48 @@ export default function CategoryListingClient({
         </div>
       </div>
 
+      {/* Active filter chips */}
+      {activeChips.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          {activeChips.map(chip => (
+            <button
+              key={chip.key}
+              onClick={() => removeChip(chip.key)}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary-50 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
+            >
+              <span>{chip.label}</span>
+              <span className="text-primary font-semibold">✕</span>
+            </button>
+          ))}
+          <button onClick={clearAll} className="text-xs font-semibold text-text-muted hover:text-text transition-colors ml-1">
+            {t('categories.clearAll')}
+          </button>
+        </div>
+      )}
+
       {/* Quick-filter chips */}
       <div className="flex gap-2 overflow-x-auto scrollbar-none py-1">
         {QUICK_FILTERS.map(f => {
-          const active = activeFilters.has(f.key)
+          const active = f.key === 'onSale' ? filters.onSale
+            : f.key === 'topRated' ? filters.minRating >= 4
+            : f.key === 'freeDelivery' ? false
+            : false
           return (
             <button
               key={f.key}
-              onClick={() => toggleFilter(f.key)}
+              onClick={() => {
+                if (f.key === 'onSale') {
+                  const next = { ...filters, onSale: !filters.onSale }
+                  setFilters(next)
+                  syncToUrl(next, sortBy)
+                } else if (f.key === 'topRated') {
+                  const next = { ...filters, minRating: filters.minRating >= 4 ? 0 : 4 }
+                  setFilters(next)
+                  syncToUrl(next, sortBy)
+                }
+              }}
               className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap ${
-                active
-                  ? 'bg-primary border-primary text-white'
-                  : 'bg-surface border-border text-text'
+                active ? 'bg-primary border-primary text-white' : 'bg-surface border-border text-text'
               }`}
               aria-pressed={active}
             >
@@ -206,6 +312,16 @@ export default function CategoryListingClient({
           ))}
         </div>
       )}
+
+      {/* Filter panel */}
+      <FilterPanel
+        visible={showFilterPanel}
+        onClose={() => setShowFilterPanel(false)}
+        products={initialProducts}
+        filters={filters}
+        onApply={handleApplyFilters}
+        onReset={handleResetFilters}
+      />
     </div>
   )
 }
@@ -216,5 +332,35 @@ function Link({ href, className, children }: { href: string; className?: string;
     <button onClick={() => router.push(href)} className={className}>
       {children}
     </button>
+  )
+}
+
+function BreadcrumbTrail({ categoryId, categories }: { categoryId: string; categories: Category[] }) {
+  const router = useRouter()
+  const path: { id: string; name: string }[] = []
+  let current = categories.find(c => c.id === categoryId)
+  while (current) {
+    path.unshift({ id: current.id, name: current.name })
+    current = current.parentId ? categories.find(c => c.id === current!.parentId) : undefined
+  }
+
+  return (
+    <>
+      {path.map((crumb, i) => (
+        <React.Fragment key={crumb.id}>
+          <span className="text-text-muted">›</span>
+          <button
+            onClick={() => router.push(`/category/${crumb.id}`)}
+            className={`transition-colors ${
+              i === path.length - 1
+                ? 'text-primary font-semibold'
+                : 'text-text-muted hover:text-primary'
+            }`}
+          >
+            {crumb.name}
+          </button>
+        </React.Fragment>
+      ))}
+    </>
   )
 }

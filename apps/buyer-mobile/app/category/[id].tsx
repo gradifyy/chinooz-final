@@ -1,21 +1,20 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useCallback } from 'react'
 import { View, Text, TouchableOpacity, ScrollView, Dimensions } from 'react-native'
 import Animated, {
   useSharedValue,
   useAnimatedScrollHandler,
   useAnimatedStyle,
-  interpolate,
-  Extrapolation,
-  FadeIn,
   FadeInDown,
 } from 'react-native-reanimated'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
+import * as Haptics from 'expo-haptics'
 import { colors, spacing, radii } from '@chinooz/theme'
 import { useProducts, useCategories } from '@chinooz/hooks'
 import { EmptyState, ProductCard } from '@chinooz/ui'
 import { useCartStore } from '@chinooz/state'
+import FilterSheet, { type FilterState } from '../../components/FilterSheet'
 import type { Product } from '@chinooz/types'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
@@ -34,6 +33,15 @@ const SORT_OPTIONS = [
   { key: 'priceLow', labelKey: 'categories.priceLowHigh' },
   { key: 'priceHigh', labelKey: 'categories.priceHighLow' },
 ]
+
+const DEFAULT_FILTERS: FilterState = {
+  priceMin: 0,
+  priceMax: 999999,
+  minRating: 0,
+  brands: new Set(),
+  inStock: false,
+  onSale: false,
+}
 
 function getColumns() {
   const w = SCREEN_WIDTH - EDGE_PADDING * 2
@@ -55,9 +63,10 @@ export default function CategoryListingScreen() {
   const { data: categories } = useCategories()
   const { data: products, isLoading } = useProducts({ categoryId: id, limit: 50 })
 
-  const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set())
+  const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS)
   const [sortBy, setSortBy] = useState('popular')
   const [showSort, setShowSort] = useState(false)
+  const [showFilterSheet, setShowFilterSheet] = useState(false)
 
   const scrollY = useSharedValue(0)
 
@@ -80,22 +89,56 @@ export default function CategoryListingScreen() {
   const filteredProducts = useMemo(() => {
     if (!products?.items) return []
     let items = [...products.items]
-    if (activeFilters.has('onSale')) items = items.filter(p => p.compareAtPrice && p.compareAtPrice > p.price)
-    if (activeFilters.has('topRated')) items = items.filter(p => p.rating >= 4)
+    if (filters.inStock) items = items.filter(p => p.stock !== 'out_of_stock')
+    if (filters.onSale) items = items.filter(p => p.compareAtPrice && p.compareAtPrice > p.price)
+    if (filters.minRating > 0) items = items.filter(p => p.rating >= filters.minRating)
+    if (filters.brands.size > 0) items = items.filter(p => filters.brands.has(p.sellerName))
+    items = items.filter(p => p.price >= filters.priceMin && p.price <= filters.priceMax)
     if (sortBy === 'priceLow') items.sort((a, b) => a.price - b.price)
     if (sortBy === 'priceHigh') items.sort((a, b) => b.price - a.price)
     if (sortBy === 'popular') items.sort((a, b) => b.reviewCount - a.reviewCount)
     return items
-  }, [products, activeFilters, sortBy])
+  }, [products, filters, sortBy])
 
-  const toggleFilter = (key: string) => {
-    setActiveFilters(prev => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
-  }
+  const activeChipCount = useMemo(() => {
+    let count = 0
+    if (filters.inStock) count++
+    if (filters.onSale) count++
+    if (filters.minRating > 0) count++
+    if (filters.brands.size > 0) count += filters.brands.size
+    if (filters.priceMin > 0 || filters.priceMax < 999999) count++
+    return count
+  }, [filters])
+
+  const activeChips = useMemo(() => {
+    const chips: { key: string; label: string }[] = []
+    if (filters.onSale) chips.push({ key: 'onSale', label: t('categories.onSale') })
+    if (filters.inStock) chips.push({ key: 'inStock', label: t('categories.inStock') })
+    if (filters.minRating > 0) chips.push({ key: 'rating', label: `${filters.minRating}★+` })
+    filters.brands.forEach(b => chips.push({ key: `brand-${b}`, label: b }))
+    if (filters.priceMin > 0 || filters.priceMax < 999999) {
+      chips.push({ key: 'price', label: `${filters.priceMin}–${filters.priceMax}` })
+    }
+    return chips
+  }, [filters, t])
+
+  const removeChip = useCallback((key: string) => {
+    if (key === 'onSale') setFilters(f => ({ ...f, onSale: false }))
+    else if (key === 'inStock') setFilters(f => ({ ...f, inStock: false }))
+    else if (key === 'rating') setFilters(f => ({ ...f, minRating: 0 }))
+    else if (key.startsWith('brand-')) {
+      const brand = key.replace('brand-', '')
+      setFilters(f => {
+        const next = new Set(f.brands)
+        next.delete(brand)
+        return { ...f, brands: next }
+      })
+    } else if (key === 'price') setFilters(f => ({ ...f, priceMin: 0, priceMax: 999999 }))
+  }, [])
+
+  const clearAll = useCallback(() => {
+    setFilters(DEFAULT_FILTERS)
+  }, [])
 
   const columns = getColumns()
   const cardWidth = getColumnWidth(columns)
@@ -142,7 +185,7 @@ export default function CategoryListingScreen() {
         <Text style={{ fontSize: 22, fontWeight: '600', color: colors.text, marginTop: spacing[2] }}>
           {category?.name || t('categories.allCategories')}
         </Text>
-        <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: spacing[1] }}>
+        <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: spacing[1] }} accessibilityLiveRegion="polite">
           {t('categories.results', { count: filteredProducts.length })}
         </Text>
       </View>
@@ -150,22 +193,21 @@ export default function CategoryListingScreen() {
       {/* Sticky filter/sort bar */}
       <Animated.View style={[styles.stickyBar, stickyStyle]}>
         <View style={{ flexDirection: 'row', gap: spacing[2], alignItems: 'center' }}>
-          {/* Filter button */}
           <TouchableOpacity
-            style={[styles.chip, activeFilters.size > 0 && styles.chipActive]}
+            onPress={() => setShowFilterSheet(true)}
+            style={[styles.chip, activeChipCount > 0 && styles.chipActive]}
             activeOpacity={0.7}
           >
-            <Text style={[styles.chipText, activeFilters.size > 0 && styles.chipTextActive]}>
+            <Text style={[styles.chipText, activeChipCount > 0 && styles.chipTextActive]}>
               🔧 {t('categories.filters')}
             </Text>
-            {activeFilters.size > 0 && (
+            {activeChipCount > 0 && (
               <View style={styles.badge}>
-                <Text style={styles.badgeText}>{activeFilters.size}</Text>
+                <Text style={styles.badgeText}>{activeChipCount}</Text>
               </View>
             )}
           </TouchableOpacity>
 
-          {/* Sort button */}
           <TouchableOpacity
             onPress={() => setShowSort(!showSort)}
             style={styles.chip}
@@ -177,7 +219,6 @@ export default function CategoryListingScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Sort dropdown */}
         {showSort && (
           <View style={styles.sortDropdown}>
             {SORT_OPTIONS.map(opt => (
@@ -195,32 +236,30 @@ export default function CategoryListingScreen() {
         )}
       </Animated.View>
 
-      {/* Quick-filter chips */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: spacing[2], paddingHorizontal: EDGE_PADDING, paddingVertical: spacing[2] }}
-      >
-        {QUICK_FILTERS.map(f => {
-          const active = activeFilters.has(f.key)
-          return (
-            <TouchableOpacity
-              key={f.key}
-              onPress={() => toggleFilter(f.key)}
-              style={[styles.quickChip, active && styles.quickChipActive]}
-              activeOpacity={0.7}
-              accessibilityState={{ selected: active }}
-            >
-              <Text style={[styles.quickChipText, active && styles.quickChipTextActive]}>
-                {t(f.labelKey)}
-              </Text>
-            </TouchableOpacity>
-          )
-        })}
-      </ScrollView>
+      {/* Active filter chips */}
+      {activeChips.length > 0 && (
+        <View style={styles.activeChipsRow}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing[2] }}>
+            {activeChips.map(chip => (
+              <TouchableOpacity
+                key={chip.key}
+                onPress={() => removeChip(chip.key)}
+                style={styles.activeChip}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.activeChipText}>{chip.label}</Text>
+                <Text style={styles.activeChipX}>✕</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          <TouchableOpacity onPress={clearAll} style={{ marginLeft: spacing[2] }}>
+            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textMuted }}>{t('categories.clearAll')}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Product grid */}
-      <ScrollView
+      <Animated.ScrollView
         onScroll={scrollHandler}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
@@ -261,7 +300,17 @@ export default function CategoryListingScreen() {
             ))}
           </View>
         )}
-      </ScrollView>
+      </Animated.ScrollView>
+
+      {/* Filter sheet */}
+      <FilterSheet
+        visible={showFilterSheet}
+        onClose={() => setShowFilterSheet(false)}
+        products={products?.items ?? []}
+        filters={filters}
+        onApply={(f) => { setFilters(f); setShowFilterSheet(false) }}
+        onReset={() => { setFilters(DEFAULT_FILTERS); setShowFilterSheet(false) }}
+      />
     </View>
   )
 }
@@ -336,26 +385,29 @@ const styles = {
     color: colors.primary,
     fontWeight: '600' as const,
   },
-  quickChip: {
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[1.5],
+  activeChipsRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingHorizontal: EDGE_PADDING,
+    paddingVertical: spacing[2],
+  },
+  activeChip: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingHorizontal: spacing[2.5],
+    paddingVertical: spacing[1],
     borderRadius: radii.full,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    minHeight: 36,
-    justifyContent: 'center' as const,
+    backgroundColor: colors.primary50,
+    gap: spacing[1],
   },
-  quickChipActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primary,
-  },
-  quickChipText: {
-    fontSize: 13,
+  activeChipText: {
+    fontSize: 12,
     fontWeight: '500' as const,
-    color: colors.text,
+    color: colors.primary,
   },
-  quickChipTextActive: {
-    color: colors.white,
+  activeChipX: {
+    fontSize: 11,
+    color: colors.primary,
+    fontWeight: '600' as const,
   },
 }
