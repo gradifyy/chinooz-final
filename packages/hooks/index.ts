@@ -1,6 +1,8 @@
 export {
   useProducts,
   useInfiniteProducts,
+  usePrefetchProduct,
+  usePrefetchCategory,
   useProductById,
   useProductBySlug,
   usePrefetchProduct,
@@ -17,6 +19,7 @@ export {
   useMessages,
   useUserProfile,
   useSearchProducts,
+  useSearchSuggestions,
   usePopularProducts,
   useRecommendedProducts,
   useSimilarProducts,
@@ -24,3 +27,5 @@ export {
   useNewestProducts,
   useNearbyProducts,
 } from './useProducts'
+
+export type { SuggestionItem } from './useProducts'

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   StyleSheet,
   AccessibilityInfo,
   Platform,
+  ActivityIndicator,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -21,15 +22,21 @@ import Animated, {
   Easing,
   LinearTransition,
 } from 'react-native-reanimated'
-import { useSearchProducts, useCategories, usePrefetchProduct } from '@chinooz/hooks'
+import {
+  useSearchProducts,
+  useSearchSuggestions,
+  usePrefetchProduct,
+} from '@chinooz/hooks'
+import type { SuggestionItem } from '@chinooz/hooks'
 import { colors, radii, spacing } from '@chinooz/theme'
-import { ProductCard } from '@chinooz/ui'
-import type { Product, Category } from '@chinooz/types'
+import { ProductCard, SafeImage } from '@chinooz/ui'
+import { formatNPR } from '@chinooz/utils'
+import type { Product } from '@chinooz/types'
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity)
 
 const MAX_RECENT = 8
-const DEBOUNCE_MS = 300
+const DEBOUNCE_MS = 250
 const STAGGER_CAP = 8
 const STAGGER_DELAY = 50
 
@@ -59,6 +66,19 @@ function useDebounce<T>(value: T, delay: number): T {
   return debounced
 }
 
+function highlightMatch(text: string, query: string): React.ReactNode {
+  if (!query || query.length < 2) return text
+  const idx = text.toLowerCase().indexOf(query.toLowerCase())
+  if (idx === -1) return text
+  return (
+    <Text>
+      {text.slice(0, idx)}
+      <Text style={styles.highlightText}>{text.slice(idx, idx + query.length)}</Text>
+      {text.slice(idx + query.length)}
+    </Text>
+  )
+}
+
 export default function SearchScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
@@ -75,20 +95,19 @@ export default function SearchScreen() {
 
   const debouncedQuery = useDebounce(query, DEBOUNCE_MS)
 
+  const { items: suggestionItems, isFetching: suggestionsFetching } =
+    useSearchSuggestions(debouncedQuery)
+
   const searchEnabled = debouncedQuery.length >= 2
   const { data: searchResults, isLoading: searchLoading } = useSearchProducts(
-    searchEnabled ? debouncedQuery : '',
+    submitted ? debouncedQuery : '',
   )
-
-  const typeaheadResults = searchEnabled && !submitted ? searchResults : undefined
-  const typeaheadLoading = searchEnabled && !submitted ? searchLoading : false
-
-  const resultsData = submitted && searchEnabled ? searchResults : undefined
-  const resultsLoading = submitted && searchEnabled ? searchLoading : false
 
   const isTyping = searchEnabled && !submitted
   const isResults = submitted && searchEnabled
   const isEmpty = !searchEnabled
+
+  const showSpinner = suggestionsFetching && isTyping && debouncedQuery.length >= 2
 
   useEffect(() => {
     setRecentSearches([...inMemoryRecentSearches])
@@ -174,30 +193,133 @@ export default function SearchScreen() {
     [prefetch, router],
   )
 
+  const handleSuggestionPress = useCallback(
+    (item: SuggestionItem) => {
+      if (item.type === 'product') {
+        prefetch(item.product.id)
+        router.push(`/product/${item.product.id}`)
+      } else if (item.type === 'category') {
+        router.push(`/category/${item.category.id}`)
+      } else if (item.type === 'brand') {
+        setQuery(item.brand.name)
+        setSubmitted(true)
+        persistRecent(item.brand.name)
+      } else if (item.type === 'term') {
+        setQuery(item.term)
+        setSubmitted(true)
+        persistRecent(item.term)
+      }
+    },
+    [prefetch, router, persistRecent],
+  )
+
   const handleBack = useCallback(() => {
     router.back()
   }, [router])
 
-  const renderTypeaheadItem = useCallback(
-    ({ item }: { item: Product }) => (
-      <TouchableOpacity
-        style={styles.suggestionRow}
-        onPress={() => {
-          setQuery(item.name)
-          setSubmitted(true)
-          persistRecent(item.name)
-        }}
-        activeOpacity={0.7}
-        accessibilityRole="button"
-        accessibilityLabel={item.name}
-      >
-        <Text style={styles.suggestionIcon}>{'\u2315'}</Text>
-        <Text style={styles.suggestionText} numberOfLines={1}>
-          {item.name}
-        </Text>
-      </TouchableOpacity>
-    ),
-    [persistRecent],
+  const renderSuggestionRow = useCallback(
+    ({ item, index }: { item: SuggestionItem; index: number }) => {
+      if (item.type === 'label') {
+        return (
+          <Animated.View
+            key={item.key}
+            entering={FadeInDown.duration(200)
+              .easing(Easing.bezier(0.34, 1.56, 0.64, 1))
+              .delay(staggerDelay(index))}
+            style={styles.suggestionLabel}
+          >
+            <Text style={styles.suggestionLabelText}>
+              {t(`search.suggestionLabel_${item.label}`, { defaultValue: item.label.toUpperCase() })}
+            </Text>
+          </Animated.View>
+        )
+      }
+
+      if (item.type === 'product') {
+        const p = item.product
+        return (
+          <Animated.View
+            key={item.key}
+            entering={FadeInDown.duration(200)
+              .easing(Easing.bezier(0.34, 1.56, 0.64, 1))
+              .delay(staggerDelay(index))}
+          >
+            <TouchableOpacity
+              style={styles.suggestionRow}
+              onPress={() => handleSuggestionPress(item)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={`${p.name}, ${formatNPR(p.price)}`}
+            >
+              <SafeImage
+                source={p.images?.[0]?.uri}
+                style={styles.suggestionThumb}
+                accessibilityLabel={p.name}
+              />
+              <View style={styles.suggestionContent}>
+                <Text style={styles.suggestionName} numberOfLines={1}>
+                  {highlightMatch(p.name, debouncedQuery)}
+                </Text>
+                <Text style={styles.suggestionPrice}>{formatNPR(p.price)}</Text>
+              </View>
+            </TouchableOpacity>
+          </Animated.View>
+        )
+      }
+
+      if (item.type === 'category') {
+        const c = item.category
+        return (
+          <Animated.View
+            key={item.key}
+            entering={FadeInDown.duration(200)
+              .easing(Easing.bezier(0.34, 1.56, 0.64, 1))
+              .delay(staggerDelay(index))}
+          >
+            <TouchableOpacity
+              style={styles.suggestionRow}
+              onPress={() => handleSuggestionPress(item)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={c.name}
+            >
+              <Text style={styles.suggestionCatIcon}>{c.icon}</Text>
+              <Text style={styles.suggestionName} numberOfLines={1}>
+                {highlightMatch(c.name, debouncedQuery)}
+              </Text>
+            </TouchableOpacity>
+          </Animated.View>
+        )
+      }
+
+      if (item.type === 'brand') {
+        const b = item.brand
+        return (
+          <Animated.View
+            key={item.key}
+            entering={FadeInDown.duration(200)
+              .easing(Easing.bezier(0.34, 1.56, 0.64, 1))
+              .delay(staggerDelay(index))}
+          >
+            <TouchableOpacity
+              style={styles.suggestionRow}
+              onPress={() => handleSuggestionPress(item)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={b.name}
+            >
+              <Text style={styles.suggestionBrandIcon}>{'\u{1F3EA}'}</Text>
+              <Text style={styles.suggestionName} numberOfLines={1}>
+                {highlightMatch(b.name, debouncedQuery)}
+              </Text>
+            </TouchableOpacity>
+          </Animated.View>
+        )
+      }
+
+      return null
+    },
+    [debouncedQuery, handleSuggestionPress, t],
   )
 
   const renderResultItem = useCallback(
@@ -243,7 +365,14 @@ export default function SearchScreen() {
             autoCorrect={false}
             accessibilityLabel={t('common.search')}
           />
-          {query.length > 0 && (
+          {showSpinner && (
+            <ActivityIndicator
+              size="small"
+              color={colors.primary}
+              style={styles.spinner}
+            />
+          )}
+          {query.length > 0 && !showSpinner && (
             <Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(100)}>
               <TouchableOpacity
                 onPress={handleClear}
@@ -397,37 +526,27 @@ export default function SearchScreen() {
 
         {isTyping && (
           <Animated.View entering={FadeIn.duration(200)} style={styles.suggestionsContainer}>
-            <Text style={styles.sectionTitle}>
-              {t('search.suggestionsFor', { query: debouncedQuery })}
-            </Text>
-            {typeaheadLoading ? (
-              <View style={styles.loadingRow}>
-                <Text style={styles.loadingText}>{t('common.loading')}</Text>
-              </View>
-            ) : typeaheadResults && typeaheadResults.length > 0 ? (
-              <FlatList
-                data={typeaheadResults.slice(0, 8)}
-                keyExtractor={item => item.id}
-                renderItem={renderTypeaheadItem}
-                keyboardShouldPersistTaps="handled"
-              />
-            ) : (
+            {suggestionItems.length > 0 ? (
+              <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                {suggestionItems.map((item, index) => renderSuggestionRow({ item, index }))}
+              </ScrollView>
+            ) : !suggestionsFetching ? (
               <View style={styles.emptyTypeahead}>
                 <Text style={styles.emptyText}>{t('search.noResults')}</Text>
               </View>
-            )}
+            ) : null}
           </Animated.View>
         )}
 
         {isResults && (
           <Animated.View entering={FadeIn.duration(200)} style={styles.resultsContainer}>
-            {resultsLoading ? (
+            {searchLoading ? (
               <View style={styles.loadingRow}>
-                <Text style={styles.loadingText}>{t('common.loading')}</Text>
+                <ActivityIndicator size="small" color={colors.primary} />
               </View>
-            ) : resultsData && resultsData.length > 0 ? (
+            ) : searchResults && searchResults.length > 0 ? (
               <FlatList
-                data={resultsData}
+                data={searchResults}
                 keyExtractor={item => item.id}
                 renderItem={renderResultItem}
                 numColumns={2}
@@ -500,6 +619,9 @@ const styles = StyleSheet.create({
     color: colors.text,
     height: '100%',
     paddingVertical: 0,
+  },
+  spinner: {
+    marginLeft: spacing[2],
   },
   clearButton: {
     padding: spacing[1],
@@ -615,6 +737,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text,
   },
+  suggestionLabel: {
+    paddingHorizontal: spacing[4],
+    paddingTop: spacing[4],
+    paddingBottom: spacing[2],
+  },
+  suggestionLabelText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textMuted,
+    letterSpacing: 0.5,
+  },
   suggestionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -622,24 +755,46 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[3],
     gap: spacing[3],
   },
-  suggestionIcon: {
+  suggestionThumb: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.lg,
+    backgroundColor: colors.shimmer,
+  },
+  suggestionCatIcon: {
     fontSize: 16,
+    width: 40,
+    textAlign: 'center',
     color: colors.textMuted,
   },
-  suggestionText: {
+  suggestionBrandIcon: {
+    fontSize: 16,
+    width: 40,
+    textAlign: 'center',
+  },
+  suggestionContent: {
     flex: 1,
+    gap: 2,
+  },
+  suggestionName: {
     fontSize: 16,
     fontWeight: '400',
     color: colors.text,
+  },
+  suggestionPrice: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textMuted,
+    fontVariant: ['tabular-nums'],
+  },
+  highlightText: {
+    color: colors.primary,
+    fontWeight: '600',
   },
   loadingRow: {
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[6],
     alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 14,
-    color: colors.textMuted,
   },
   emptyTypeahead: {
     paddingHorizontal: spacing[4],

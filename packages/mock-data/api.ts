@@ -157,6 +157,33 @@ export async function searchProducts(query: string): Promise<Product[]> {
   )
 }
 
+export async function searchCategories(query: string): Promise<Category[]> {
+  await randomDelay(100, 300)
+  const q = query.toLowerCase()
+  const results: Category[] = []
+  for (const cat of categories) {
+    if (cat.name.toLowerCase().includes(q)) results.push(cat)
+    if (cat.children) {
+      for (const child of cat.children) {
+        if (child.name.toLowerCase().includes(q)) results.push(child)
+      }
+    }
+  }
+  return results
+}
+
+export async function searchBrands(query: string): Promise<{ id: string; name: string }[]> {
+  await randomDelay(100, 300)
+  const q = query.toLowerCase()
+  const brandMap = new Map<string, { id: string; name: string }>()
+  for (const p of products) {
+    if (!brandMap.has(p.sellerId)) {
+      brandMap.set(p.sellerId, { id: p.sellerId, name: p.sellerName })
+    }
+  }
+  return [...brandMap.values()].filter(b => b.name.toLowerCase().includes(q))
+}
+
 export async function getPopularProducts(): Promise<Product[]> {
   await randomDelay(200, 500)
   return [...products].sort((a, b) => b.reviewCount - a.reviewCount).slice(0, 6)

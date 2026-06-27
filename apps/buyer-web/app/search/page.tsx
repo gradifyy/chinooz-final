@@ -1,17 +1,20 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useSearchProducts } from '@chinooz/hooks'
+import { useSearchProducts, useSearchSuggestions } from '@chinooz/hooks'
+import type { SuggestionItem } from '@chinooz/hooks'
 import { Container } from '@chinooz/ui-web'
 import ProductCard from '@chinooz/ui-web/ProductCard'
+import SafeImage from '@chinooz/ui-web/SafeImage'
+import { formatNPR } from '@chinooz/utils'
 import type { Product } from '@chinooz/types'
 
 const RECENT_SEARCHES_KEY = 'chinooz_recent_searches'
 const MAX_RECENT = 8
-const DEBOUNCE_MS = 300
+const DEBOUNCE_MS = 250
 const STAGGER_CAP = 8
 const STAGGER_DELAY = 0.05
 
@@ -70,11 +73,25 @@ function useDebounce<T>(value: T, delay: number): T {
   return debounced
 }
 
+function HighlightText({ text, query }: { text: string; query: string }) {
+  if (!query || query.length < 2) return <>{text}</>
+  const idx = text.toLowerCase().indexOf(query.toLowerCase())
+  if (idx === -1) return <>{text}</>
+  return (
+    <>
+      {text.slice(0, idx)}
+      <span className="text-primary font-semibold">{text.slice(idx, idx + query.length)}</span>
+      {text.slice(idx + query.length)}
+    </>
+  )
+}
+
 function SearchContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { t } = useTranslation()
   const inputRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
 
   const initialQuery = searchParams.get('q') || ''
   const [query, setQuery] = useState(initialQuery)
@@ -82,22 +99,28 @@ function SearchContent() {
   const [submitted, setSubmitted] = useState(!!initialQuery)
   const [recentSearches, setRecentSearches] = useState<string[]>([])
   const [hoveredRow, setHoveredRow] = useState<string | null>(null)
+  const [activeIndex, setActiveIndex] = useState(-1)
 
   const debouncedQuery = useDebounce(query, DEBOUNCE_MS)
+
+  const { items: suggestionItems, isFetching: suggestionsFetching } =
+    useSearchSuggestions(debouncedQuery)
+
   const searchEnabled = debouncedQuery.length >= 2
   const { data: searchResults, isLoading: searchLoading } = useSearchProducts(
-    searchEnabled ? debouncedQuery : '',
+    submitted ? debouncedQuery : '',
   )
-
-  const typeaheadResults = searchEnabled && !submitted ? searchResults : undefined
-  const typeaheadLoading = searchEnabled && !submitted ? searchLoading : false
-
-  const resultsData = submitted && searchEnabled ? searchResults : undefined
-  const resultsLoading = submitted && searchEnabled ? searchLoading : false
 
   const isTyping = searchEnabled && !submitted
   const isResults = submitted && searchEnabled
   const isEmpty = !searchEnabled
+
+  const showSpinner = suggestionsFetching && isTyping && debouncedQuery.length >= 2
+
+  const actionableItems = useMemo(
+    () => suggestionItems.filter(i => i.type !== 'label'),
+    [suggestionItems],
+  )
 
   useEffect(() => {
     setRecentSearches(getRecentSearches())
@@ -123,6 +146,10 @@ function SearchContent() {
     }
   }, [submitted, debouncedQuery, router])
 
+  useEffect(() => {
+    setActiveIndex(-1)
+  }, [debouncedQuery])
+
   const handleQueryChange = useCallback((value: string) => {
     setQuery(value)
     setSubmitted(false)
@@ -131,6 +158,7 @@ function SearchContent() {
   const handleClear = useCallback(() => {
     setQuery('')
     setSubmitted(false)
+    setActiveIndex(-1)
     inputRef.current?.focus()
   }, [])
 
@@ -181,12 +209,211 @@ function SearchContent() {
     [router],
   )
 
+  const handleSuggestionPress = useCallback(
+    (item: SuggestionItem) => {
+      if (item.type === 'product') {
+        router.push(`/product/${item.product.id}`)
+      } else if (item.type === 'category') {
+        router.push(`/category/${item.category.id}`)
+      } else if (item.type === 'brand') {
+        setQuery(item.brand.name)
+        setSubmitted(true)
+        saveRecentSearch(item.brand.name)
+        setRecentSearches(getRecentSearches())
+      } else if (item.type === 'term') {
+        setQuery(item.term)
+        setSubmitted(true)
+        saveRecentSearch(item.term)
+        setRecentSearches(getRecentSearches())
+      }
+    },
+    [router],
+  )
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter') handleSubmit()
+      if (!isTyping || actionableItems.length === 0) {
+        if (e.key === 'Enter') handleSubmit()
+        return
+      }
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setActiveIndex(prev => {
+          const next = prev < actionableItems.length - 1 ? prev + 1 : 0
+          return next
+        })
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setActiveIndex(prev => {
+          const next = prev > 0 ? prev - 1 : actionableItems.length - 1
+          return next
+        })
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        if (activeIndex >= 0 && activeIndex < actionableItems.length) {
+          handleSuggestionPress(actionableItems[activeIndex])
+        } else {
+          handleSubmit()
+        }
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        handleClear()
+      }
     },
-    [handleSubmit],
+    [isTyping, actionableItems, activeIndex, handleSuggestionPress, handleSubmit, handleClear],
   )
+
+  useEffect(() => {
+    if (activeIndex >= 0 && listRef.current) {
+      const el = listRef.current.querySelector(`[data-suggestion-index="${activeIndex}"]`)
+      el?.scrollIntoView({ block: 'nearest' })
+    }
+  }, [activeIndex])
+
+  const renderSuggestionRow = (item: SuggestionItem, index: number, actionIndex: number) => {
+    if (item.type === 'label') {
+      return (
+        <motion.div
+          key={item.key}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{
+            delay: staggerDelay(index),
+            duration: 0.2,
+            ease: [0.34, 1.56, 0.64, 1],
+          }}
+          className="px-4 pt-4 pb-2"
+        >
+          <span className="text-xs font-semibold text-text-muted uppercase tracking-wide">
+            {t(`search.suggestionLabel_${item.label}`, { defaultValue: item.label.toUpperCase() })}
+          </span>
+        </motion.div>
+      )
+    }
+
+    const isActive = actionIndex === activeIndex
+    const rowId = `suggestion-${actionIndex}`
+
+    if (item.type === 'product') {
+      const p = item.product
+      return (
+        <motion.div
+          key={item.key}
+          data-suggestion-index={actionIndex}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{
+            delay: staggerDelay(index),
+            duration: 0.2,
+            ease: [0.34, 1.56, 0.64, 1],
+          }}
+        >
+          <button
+            id={rowId}
+            onClick={() => handleSuggestionPress(item)}
+            onMouseEnter={() => {
+              setHoveredRow(item.key)
+              setActiveIndex(actionIndex)
+            }}
+            onMouseLeave={() => setHoveredRow(null)}
+            className={`flex items-center gap-3 w-full px-4 py-2.5 text-left transition-colors ${
+              isActive ? 'bg-primary-50' : 'hover:bg-background'
+            }`}
+            aria-label={`${p.name}, ${formatNPR(p.price)}`}
+          >
+            <SafeImage
+              src={p.images?.[0]?.uri}
+              alt={p.name}
+              className="w-10 h-10 rounded-lg object-cover bg-shimmer shrink-0"
+            />
+            <div className="flex-1 min-w-0">
+              <p className="text-base font-normal text-text truncate">
+                <HighlightText text={p.name} query={debouncedQuery} />
+              </p>
+              <p className="text-sm font-semibold text-muted tabular-nums">
+                {formatNPR(p.price)}
+              </p>
+            </div>
+          </button>
+        </motion.div>
+      )
+    }
+
+    if (item.type === 'category') {
+      const c = item.category
+      return (
+        <motion.div
+          key={item.key}
+          data-suggestion-index={actionIndex}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{
+            delay: staggerDelay(index),
+            duration: 0.2,
+            ease: [0.34, 1.56, 0.64, 1],
+          }}
+        >
+          <button
+            id={rowId}
+            onClick={() => handleSuggestionPress(item)}
+            onMouseEnter={() => {
+              setHoveredRow(item.key)
+              setActiveIndex(actionIndex)
+            }}
+            onMouseLeave={() => setHoveredRow(null)}
+            className={`flex items-center gap-3 w-full px-4 py-2.5 text-left transition-colors ${
+              isActive ? 'bg-primary-50' : 'hover:bg-background'
+            }`}
+            aria-label={c.name}
+          >
+            <span className="text-base text-text-muted w-10 text-center shrink-0">{c.icon}</span>
+            <p className="text-base font-normal text-text truncate">
+              <HighlightText text={c.name} query={debouncedQuery} />
+            </p>
+          </button>
+        </motion.div>
+      )
+    }
+
+    if (item.type === 'brand') {
+      const b = item.brand
+      return (
+        <motion.div
+          key={item.key}
+          data-suggestion-index={actionIndex}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{
+            delay: staggerDelay(index),
+            duration: 0.2,
+            ease: [0.34, 1.56, 0.64, 1],
+          }}
+        >
+          <button
+            id={rowId}
+            onClick={() => handleSuggestionPress(item)}
+            onMouseEnter={() => {
+              setHoveredRow(item.key)
+              setActiveIndex(actionIndex)
+            }}
+            onMouseLeave={() => setHoveredRow(null)}
+            className={`flex items-center gap-3 w-full px-4 py-2.5 text-left transition-colors ${
+              isActive ? 'bg-primary-50' : 'hover:bg-background'
+            }`}
+            aria-label={b.name}
+          >
+            <span className="text-base w-10 text-center shrink-0">{'\u{1F3EA}'}</span>
+            <p className="text-base font-normal text-text truncate">
+              <HighlightText text={b.name} query={debouncedQuery} />
+            </p>
+          </button>
+        </motion.div>
+      )
+    }
+
+    return null
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -241,10 +468,42 @@ function SearchContent() {
                 onBlur={() => setInputFocused(false)}
                 placeholder={t('search.inputPlaceholder')}
                 aria-label={t('common.search')}
+                aria-activedescendant={
+                  activeIndex >= 0 ? `suggestion-${activeIndex}` : undefined
+                }
+                role="combobox"
+                aria-expanded={isTyping && suggestionItems.length > 0}
+                aria-controls="search-suggestions-list"
                 className="flex-1 text-base font-normal text-text bg-transparent outline-none placeholder:text-text-muted h-full"
               />
+              {showSpinner && (
+                <svg
+                  className="animate-spin ml-2 shrink-0 text-primary"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                >
+                  <circle
+                    cx="8"
+                    cy="8"
+                    r="6"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    className="opacity-25"
+                  />
+                  <path
+                    d="M14 8a6 6 0 01-6 6"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    className="opacity-75"
+                  />
+                </svg>
+              )}
               <AnimatePresence>
-                {query.length > 0 && (
+                {query.length > 0 && !showSpinner && (
                   <motion.button
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -460,34 +719,24 @@ function SearchContent() {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.2 }}
             >
-              <h2 className="text-base font-semibold text-text mb-3">
-                {t('search.suggestionsFor', { query: debouncedQuery })}
-              </h2>
-              {typeaheadLoading ? (
-                <div className="py-12 text-center">
-                  <p className="text-sm text-text-muted">{t('common.loading')}</p>
+              {suggestionItems.length > 0 ? (
+                <div
+                  ref={listRef}
+                  id="search-suggestions-list"
+                  role="listbox"
+                  aria-label={t('search.suggestionsFor', { query: debouncedQuery })}
+                >
+                  {suggestionItems.map((item, index) => {
+                    const actionIndex =
+                      item.type !== 'label'
+                        ? actionableItems.indexOf(item)
+                        : -1
+                    return renderSuggestionRow(item, index, actionIndex)
+                  })}
                 </div>
-              ) : typeaheadResults && typeaheadResults.length > 0 ? (
-                <div className="space-y-1">
-                  {typeaheadResults.slice(0, 8).map(product => (
-                    <button
-                      key={product.id}
-                      onClick={() => {
-                        setQuery(product.name)
-                        setSubmitted(true)
-                        saveRecentSearch(product.name)
-                        setRecentSearches(getRecentSearches())
-                      }}
-                      className="flex items-center gap-3 w-full px-0 py-2.5 text-left hover:bg-background rounded-lg transition-colors"
-                    >
-                      <span className="text-base text-text-muted">{'\u2315'}</span>
-                      <span className="text-base text-text truncate">{product.name}</span>
-                    </button>
-                  ))}
-                </div>
-              ) : (
+              ) : !suggestionsFetching ? (
                 <p className="text-sm text-text-muted py-6">{t('search.noResults')}</p>
-              )}
+              ) : null}
             </motion.div>
           )}
 
@@ -499,7 +748,7 @@ function SearchContent() {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.2 }}
             >
-              {resultsLoading ? (
+              {searchLoading ? (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {Array.from({ length: 8 }).map((_, i) => (
                     <div
@@ -515,13 +764,13 @@ function SearchContent() {
                     </div>
                   ))}
                 </div>
-              ) : resultsData && resultsData.length > 0 ? (
+              ) : searchResults && searchResults.length > 0 ? (
                 <>
                   <p className="text-sm text-text-muted mb-4">
-                    {t('categories.results', { count: resultsData.length })}
+                    {t('categories.results', { count: searchResults.length })}
                   </p>
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {resultsData.map(product => (
+                    {searchResults.map(product => (
                       <ProductCard
                         key={product.id}
                         product={product}

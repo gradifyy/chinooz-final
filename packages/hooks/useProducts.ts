@@ -1,8 +1,63 @@
 import { useQuery, useInfiniteQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import * as api from '@chinooz/mock-data'
-import type { Product } from '@chinooz/types'
+import type { Product, Category } from '@chinooz/types'
 
 const STALE_PRODUCTS = 1000 * 30
+
+export type SuggestionItem =
+  | { type: 'label'; key: string; label: string }
+  | { type: 'product'; key: string; product: Product }
+  | { type: 'category'; key: string; category: Category }
+  | { type: 'brand'; key: string; brand: { id: string; name: string } }
+  | { type: 'term'; key: string; term: string }
+
+export function useSearchSuggestions(query: string) {
+  const enabled = query.length >= 2
+  const productsQ = useQuery({
+    queryKey: ['suggestions', 'products', query],
+    queryFn: () => api.searchProducts(query),
+    enabled,
+    staleTime: STALE_PRODUCTS,
+  })
+  const categoriesQ = useQuery({
+    queryKey: ['suggestions', 'categories', query],
+    queryFn: () => api.searchCategories(query),
+    enabled,
+    staleTime: STALE_PRODUCTS,
+  })
+  const brandsQ = useQuery({
+    queryKey: ['suggestions', 'brands', query],
+    queryFn: () => api.searchBrands(query),
+    enabled,
+    staleTime: STALE_PRODUCTS,
+  })
+
+  const isLoading = productsQ.isLoading || categoriesQ.isLoading || brandsQ.isLoading
+  const isFetching = productsQ.isFetching || categoriesQ.isFetching || brandsQ.isFetching
+
+  const items: SuggestionItem[] = []
+  if (!enabled) return { items: [], isLoading: false, isFetching: false }
+
+  const products = productsQ.data?.slice(0, 5) ?? []
+  const cats = categoriesQ.data?.slice(0, 4) ?? []
+  const brands = brandsQ.data?.slice(0, 3) ?? []
+
+  if (products.length > 0) {
+    items.push({ type: 'label', key: 'lbl-products', label: 'products' })
+    for (const p of products) items.push({ type: 'product', key: `p-${p.id}`, product: p })
+  }
+  if (cats.length > 0) {
+    items.push({ type: 'label', key: 'lbl-categories', label: 'categories' })
+    for (const c of cats) items.push({ type: 'category', key: `c-${c.id}`, category: c })
+  }
+  if (brands.length > 0) {
+    items.push({ type: 'label', key: 'lbl-brands', label: 'brands' })
+    for (const b of brands) items.push({ type: 'brand', key: `b-${b.id}`, brand: b })
+  }
+
+  return { items, isLoading, isFetching }
+}
+
 const STALE_PRODUCT_DETAIL = 1000 * 60
 const STALE_REVIEWS = 1000 * 30
 const STALE_BANNERS = 1000 * 60
@@ -13,7 +68,7 @@ export function useProducts(params?: { categoryId?: string; limit?: number; offs
   return useQuery({
     queryKey: ['products', params],
     queryFn: () => api.getProducts(params),
-    staleTime: STALE_PRODUCTS,
+    staleTime: params?.categoryId ? STALE_PRODUCTS : STALE_PRODUCTS,
   })
 }
 
@@ -29,6 +84,17 @@ export function useInfiniteProducts(params?: { categoryId?: string; limit?: numb
     initialPageParam: 0,
     staleTime: STALE_PRODUCTS,
   })
+}
+
+export function usePrefetchCategory() {
+  const queryClient = useQueryClient()
+  return (categoryId: string) => {
+    queryClient.prefetchQuery({
+      queryKey: ['products', { categoryId, limit: 50 }],
+      queryFn: () => api.getProducts({ categoryId, limit: 50 }),
+      staleTime: STALE_PRODUCTS,
+    })
+  }
 }
 
 export function useProductById(id: string) {
