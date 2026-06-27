@@ -106,9 +106,33 @@ export async function submitReview(data: {
   return { success: true, review: newReview }
 }
 
-export async function getOrders(): Promise<Order[]> {
+export async function getOrders(params?: {
+  status?: string
+  search?: string
+}): Promise<Order[]> {
   await randomDelay(300, 700)
-  return orders
+  let filtered = orders
+
+  if (params?.status && params.status !== 'all') {
+    if (params.status === 'to_pay') {
+      filtered = filtered.filter(o => o.status === 'pending' || o.status === 'confirmed')
+    } else if (params.status === 'cancelled_returned') {
+      filtered = filtered.filter(o => o.status === 'cancelled' || o.status === 'returned')
+    } else {
+      filtered = filtered.filter(o => o.status === params.status)
+    }
+  }
+
+  if (params?.search) {
+    const q = params.search.toLowerCase()
+    filtered = filtered.filter(
+      o =>
+        o.id.toLowerCase().includes(q) ||
+        o.items.some(item => item.name.toLowerCase().includes(q)),
+    )
+  }
+
+  return filtered
 }
 
 export async function getOrderById(id: string): Promise<Order | null> {
@@ -124,6 +148,16 @@ export async function getNotifications(): Promise<Notification[]> {
 export async function getUnreadNotificationCount(): Promise<number> {
   await randomDelay(50, 150)
   return notifications.filter(n => !n.read).length
+}
+
+export async function getUnreadMessageCount(): Promise<number> {
+  await randomDelay(50, 150)
+  return conversations.reduce((sum, c) => sum + c.unreadCount, 0)
+}
+
+export async function getAssistantUnreadCount(): Promise<number> {
+  await randomDelay(50, 150)
+  return 0
 }
 
 export async function getConversations(): Promise<Conversation[]> {

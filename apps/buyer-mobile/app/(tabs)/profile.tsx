@@ -1,17 +1,27 @@
 import { View, Text, TouchableOpacity } from 'react-native'
 import { useTranslation } from 'react-i18next'
+import { useRouter } from 'expo-router'
 import { Screen, Stack, Divider } from '@chinooz/ui'
 import { useUIStore } from '@chinooz/state'
 import type { Locale } from '@chinooz/state'
 
 export default function ProfileScreen() {
   const { t } = useTranslation()
+  const router = useRouter()
   const locale = useUIStore(s => s.locale)
   const setLocale = useUIStore(s => s.setLocale)
 
   const toggleLocale = () => {
     setLocale(locale === 'en' ? 'ne' : 'en')
   }
+
+  const menuItems = [
+    { key: 'profile.myOrders', icon: '📦', onPress: () => router.push('/orders') },
+    { key: 'profile.wishlist', icon: '❤️', onPress: () => {} },
+    { key: 'profile.addresses', icon: '📍', onPress: () => {} },
+    { key: 'profile.settings', icon: '⚙️', onPress: () => {} },
+    { key: 'profile.help', icon: '❓', onPress: () => {} },
+  ]
 
   return (
     <Screen>
@@ -49,15 +59,10 @@ export default function ProfileScreen() {
 
         <Divider />
 
-        {[
-          { key: 'profile.myOrders', icon: '📦' },
-          { key: 'profile.wishlist', icon: '❤️' },
-          { key: 'profile.addresses', icon: '📍' },
-          { key: 'profile.settings', icon: '⚙️' },
-          { key: 'profile.help', icon: '❓' },
-        ].map(item => (
+        {menuItems.map(item => (
           <TouchableOpacity
             key={item.key}
+            onPress={item.onPress}
             style={{
               flexDirection: 'row',
               alignItems: 'center',

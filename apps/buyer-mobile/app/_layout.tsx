@@ -20,6 +20,7 @@ export default function RootLayout() {
               <Stack.Screen name="search" options={{ presentation: 'modal' }} />
               <Stack.Screen name="product/[id]" />
               <Stack.Screen name="cart" options={{ presentation: 'card' }} />
+              <Stack.Screen name="orders" options={{ animation: 'slide_from_right' }} />
             </Stack>
           </SafeAreaProvider>
         </I18nProvider>

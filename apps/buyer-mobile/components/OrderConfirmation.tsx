@@ -215,7 +215,7 @@ export default function OrderConfirmation({
         {/* Actions */}
         <Animated.View entering={FadeInDown.delay(reduced ? 0 : 1000).duration(300)} style={styles.actions}>
           <TouchableOpacity
-            onPress={() => router.push('/(tabs)/profile')}
+            onPress={() => router.push('/orders')}
             style={styles.trackButton}
             activeOpacity={0.85}
             accessibilityLabel={t('orders.trackOrder')}

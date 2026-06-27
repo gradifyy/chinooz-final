@@ -5,7 +5,6 @@ export {
   usePrefetchCategory,
   useProductById,
   useProductBySlug,
-  usePrefetchProduct,
   useCategories,
   useDeals,
   useBanners,

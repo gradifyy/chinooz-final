@@ -172,10 +172,10 @@ export function useSubmitReview() {
   })
 }
 
-export function useOrders() {
+export function useOrders(params?: { status?: string; search?: string }) {
   return useQuery({
-    queryKey: ['orders'],
-    queryFn: () => api.getOrders(),
+    queryKey: ['orders', params],
+    queryFn: () => api.getOrders(params),
   })
 }
 
@@ -198,6 +198,22 @@ export function useUnreadNotificationCount() {
   return useQuery({
     queryKey: ['notifications', 'unread-count'],
     queryFn: () => api.getUnreadNotificationCount(),
+    refetchInterval: 30000,
+  })
+}
+
+export function useUnreadMessageCount() {
+  return useQuery({
+    queryKey: ['messages', 'unread-count'],
+    queryFn: () => api.getUnreadMessageCount(),
+    refetchInterval: 30000,
+  })
+}
+
+export function useAssistantUnreadCount() {
+  return useQuery({
+    queryKey: ['assistant', 'unread-count'],
+    queryFn: () => api.getAssistantUnreadCount(),
     refetchInterval: 30000,
   })
 }

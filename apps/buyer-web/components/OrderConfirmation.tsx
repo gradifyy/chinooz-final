@@ -200,7 +200,7 @@ export default function OrderConfirmation({
           className="w-full max-w-sm space-y-2 pt-2"
         >
           <button
-            onClick={() => router.push('/profile/orders')}
+            onClick={() => router.push('/orders')}
             className="w-full bg-primary text-white h-12 rounded-xl font-bold text-sm hover:bg-primary-dark transition-colors"
             aria-label={t('orders.trackOrder')}
           >

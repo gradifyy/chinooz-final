@@ -2,18 +2,20 @@
 
 import { Container, Screen, Stack, Divider } from '@chinooz/ui-web'
 import { useTranslation } from 'react-i18next'
+import { useRouter } from 'next/navigation'
 import { useUIStore } from '@chinooz/state'
 
 const menuItems = [
-  { key: 'profile.myOrders', icon: '📦' },
-  { key: 'profile.wishlist', icon: '❤️' },
-  { key: 'profile.addresses', icon: '📍' },
-  { key: 'profile.settings', icon: '⚙️' },
-  { key: 'profile.help', icon: '❓' },
+  { key: 'profile.myOrders', icon: '📦', href: '/orders' },
+  { key: 'profile.wishlist', icon: '❤️', href: null },
+  { key: 'profile.addresses', icon: '📍', href: null },
+  { key: 'profile.settings', icon: '⚙️', href: null },
+  { key: 'profile.help', icon: '❓', href: null },
 ]
 
 export default function ProfilePage() {
   const { t } = useTranslation()
+  const router = useRouter()
   const locale = useUIStore(s => s.locale)
   const setLocale = useUIStore(s => s.setLocale)
 
@@ -47,6 +49,7 @@ export default function ProfilePage() {
           {menuItems.map(item => (
             <button
               key={item.key}
+              onClick={() => item.href && router.push(item.href)}
               className="flex items-center gap-3 w-full py-3.5 px-1 hover:bg-background rounded-lg transition-colors text-left"
             >
               <span className="text-xl">{item.icon}</span>
