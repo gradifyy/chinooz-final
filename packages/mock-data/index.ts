@@ -1,2 +1,4 @@
 export * from './fixtures'
 export * from './api'
+export { assistantService, SUGGESTED_PROMPTS } from './assistantService'
+export type { AssistantMessage } from './assistantService'

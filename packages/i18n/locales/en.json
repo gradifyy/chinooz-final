@@ -119,7 +119,22 @@
     "store": "Store",
     "yesterday": "Yesterday",
     "delivered": "Delivered",
-    "seen": "Seen"
+    "seen": "Seen",
+    "assistantGreeting": "Hi! I'm your shopping assistant. How can I help?",
+    "assistantGreetingNe": "नमस्ते! म तपाईंको किनमेल सहायक हुँ। कसरी मद्दत गर्न सक्छु?",
+    "suggestedGifts": "Find gifts under NPR 2,000",
+    "suggestedTrack": "Track my order",
+    "suggestedPhones": "Best phone deals",
+    "suggestedDeals": "Today's top deals",
+    "suggestedReturns": "Return policy",
+    "suggestedShipping": "Delivery options",
+    "clearConversation": "Clear conversation?",
+    "clearConfirm": "This will delete all messages in this conversation.",
+    "clear": "Clear",
+    "cancel": "Cancel",
+    "addToCart": "Add to cart",
+    "viewProduct": "View product",
+    "thinking": "Thinking..."
   },
   "profile": {
     "title": "Profile",

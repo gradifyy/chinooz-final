@@ -119,7 +119,22 @@
     "store": "पसल",
     "yesterday": "हिजो",
     "delivered": "पठाइयो",
-    "seen": "हेरियो"
+    "seen": "हेरियो",
+    "assistantGreeting": "नमस्ते! म तपाईंको किनमेल सहायक हुँ। कसरी मद्दत गर्न सक्छु?",
+    "assistantGreetingNe": "नमस्ते! म तपाईंको किनमेल सहायक हुँ। कसरी मद्दत गर्न सक्छु?",
+    "suggestedGifts": "रु. २,००० मुनि उपहार खोज्नुहोस्",
+    "suggestedTrack": "मेरो अर्डर ट्र्याक गर्नुहोस्",
+    "suggestedPhones": "उत्तम फोन सौदाहरू",
+    "suggestedDeals": "आजका शीर्ष सौदाहरू",
+    "suggestedReturns": "फिर्ता नीति",
+    "suggestedShipping": "डेलिभरी विकल्पहरू",
+    "clearConversation": "कुराकानी खाली गर्ने?",
+    "clearConfirm": "यसले यस कुराकानीका सबै सन्देशहरू मेटाउनेछ।",
+    "clear": "खाली गर्नुहोस्",
+    "cancel": "रद्द गर्नुहोस्",
+    "addToCart": "कार्टमा थप्नुहोस्",
+    "viewProduct": "उत्पादन हेर्नुहोस्",
+    "thinking": "सोच्दै..."
   },
   "profile": {
     "title": "प्रोफाइल",

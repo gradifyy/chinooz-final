@@ -23,6 +23,7 @@ import {
   useDeleteNotification,
 } from '@chinooz/hooks'
 import { useInboxStore } from '@chinooz/state'
+import { assistantService, type AssistantMessage, SUGGESTED_PROMPTS } from '@chinooz/mock-data'
 import { colors, spacing, radii, fontSize, fontFamily } from '@chinooz/theme'
 import Animated, {
   useSharedValue,
@@ -804,64 +805,288 @@ function mockReply(_input: string): string {
 
 function AssistantView({ threadId }: { threadId?: string }) {
   const { t } = useTranslation()
-  const [messages, setMessages] = useState<{ id: string; text: string; from: 'user' | 'assistant' }[]>([
-    { id: 'greeting', text: t('inbox.chatGreeting'), from: 'assistant' },
-  ])
+  const router = useRouter()
+  const [messages, setMessages] = useState<AssistantMessage[]>([])
   const [input, setInput] = useState('')
+  const [thinking, setThinking] = useState(false)
+  const [showClearDialog, setShowClearDialog] = useState(false)
+  const flatListRef = useRef<FlatList>(null)
+  const sendScale = useSharedValue(1)
+  const loaded = useRef(false)
 
-  const handleSend = () => {
-    const trimmed = input.trim()
-    if (!trimmed) return
-    setMessages(prev => [
-      ...prev,
-      { id: `u-${Date.now()}`, text: trimmed, from: 'user' },
-      { id: `a-${Date.now()}`, text: "I'm a mock assistant. This feature will be connected to a real AI soon!", from: 'assistant' },
-    ])
+  useEffect(() => {
+    if (loaded.current) return
+    loaded.current = true
+    try {
+      const stored = typeof window !== 'undefined' ? localStorage.getItem('chinooz-assistant') : null
+      if (stored) {
+        setMessages(JSON.parse(stored))
+      }
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    if (loaded.current && messages.length > 0) {
+      try { localStorage.setItem('chinooz-assistant', JSON.stringify(messages)) } catch {}
+    }
+  }, [messages])
+
+  const handleSend = useCallback(async (text?: string) => {
+    const trimmed = (text ?? input).trim()
+    if (!trimmed || thinking) return
     setInput('')
-  }
+
+    const userMsg: AssistantMessage = {
+      id: `user-${Date.now()}`,
+      from: 'user',
+      text: trimmed,
+      createdAt: new Date().toISOString(),
+    }
+    setMessages(prev => [...prev, userMsg])
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100)
+
+    setThinking(true)
+    try {
+      const reply = await assistantService.sendMessage(trimmed)
+      setMessages(prev => [...prev, reply])
+    } catch {
+      setMessages(prev => [...prev, {
+        id: `err-${Date.now()}`,
+        from: 'assistant',
+        text: 'Sorry, something went wrong. Please try again.',
+        createdAt: new Date().toISOString(),
+      }])
+    }
+    setThinking(false)
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100)
+  }, [input, thinking])
+
+  const handleClear = useCallback(() => {
+    setMessages([])
+    setShowClearDialog(false)
+    try { localStorage.removeItem('chinooz-assistant') } catch {}
+  }, [])
+
+  const handlePressIn = () => { sendScale.value = withTiming(0.95, { duration: 100 }) }
+  const handlePressOut = () => { sendScale.value = withSpring(1, { damping: 15, stiffness: 400 }) }
+  const sendBtnStyle = useAnimatedStyle(() => ({ transform: [{ scale: sendScale.value }] }))
+
+  const showIntro = messages.length === 0
 
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
+      <View style={styles.assistantHeader}>
+        <View style={styles.assistantAvatar}>
+          <Text style={{ fontSize: 20 }}>{'\u{1F916}'}</Text>
+        </View>
+        <Text style={styles.threadName}>{t('inbox.assistant')}</Text>
+        <View style={{ flex: 1 }} />
+        <TouchableOpacity
+          onPress={() => setShowClearDialog(true)}
+          accessibilityRole="button"
+          accessibilityLabel={t('inbox.clearConversation')}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text style={{ fontSize: 18, color: colors.textMuted }}>{'\u{1F5D1}'}</Text>
+        </TouchableOpacity>
+      </View>
+
       <FlatList
+        ref={flatListRef}
         data={messages}
         keyExtractor={item => item.id}
-        contentContainerStyle={{ padding: spacing[4], gap: spacing[2] }}
+        contentContainerStyle={{ padding: spacing[4], paddingBottom: spacing[2] }}
+        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+        ListHeaderComponent={
+          showIntro ? (
+            <View style={styles.introWrap}>
+              <View style={styles.introAvatar}>
+                <Text style={{ fontSize: 24 }}>{'\u{1F916}'}</Text>
+              </View>
+              <Text style={styles.introGreeting}>{t('inbox.assistantGreeting')}</Text>
+              <View style={styles.chipsWrap}>
+                {SUGGESTED_PROMPTS.map((p, i) => (
+                  <SuggestionChip
+                    key={p.key}
+                    label={t(`inbox.suggested${p.key.charAt(0).toUpperCase() + p.key.slice(1)}`)}
+                    delay={i * 50}
+                    onPress={() => handleSend(p.label)}
+                  />
+                ))}
+              </View>
+            </View>
+          ) : null
+        }
         renderItem={({ item }) => (
-          <View
-            style={[
-              styles.bubble,
-              item.from === 'user' ? styles.bubbleMine : styles.bubbleTheirs,
-            ]}
-          >
-            <Text
-              style={[
-                styles.bubbleText,
-                item.from === 'user' && { color: colors.white },
-              ]}
-            >
-              {item.text}
-            </Text>
-          </View>
+          <AssistantBubble msg={item} router={router} t={t} />
         )}
+        ListFooterComponent={thinking ? <TypingIndicator /> : null}
       />
+
       <View style={styles.inputBar}>
         <TextInput
           style={styles.chatInput}
-          placeholder={t('inbox.chatPlaceholder')}
+          placeholder={t('inbox.typeMessage')}
           placeholderTextColor={colors.textTertiary}
           value={input}
           onChangeText={setInput}
-          onSubmitEditing={handleSend}
+          onSubmitEditing={() => handleSend()}
           returnKeyType="send"
+          multiline
+          maxLength={1000}
+          accessibilityLabel={t('inbox.typeMessage')}
         />
-        <TouchableOpacity onPress={handleSend} style={styles.sendBtn}>
-          <Text style={{ fontSize: 18 }}>{'\u{27A4}'}</Text>
-        </TouchableOpacity>
+        <Animated.View style={sendBtnStyle}>
+          <TouchableOpacity
+            onPress={() => handleSend()}
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+            style={[styles.sendBtn, { opacity: input.trim() ? 1 : 0.5 }]}
+            disabled={!input.trim() || thinking}
+            accessibilityRole="button"
+            accessibilityLabel={t('inbox.send')}
+          >
+            <Text style={{ fontSize: 16, color: colors.white }}>{'\u{27A4}'}</Text>
+          </TouchableOpacity>
+        </Animated.View>
       </View>
+
+      {showClearDialog && (
+        <View style={styles.dialogOverlay}>
+          <View style={styles.dialogBox}>
+            <Text style={styles.dialogTitle}>{t('inbox.clearConversation')}</Text>
+            <Text style={styles.dialogBody}>{t('inbox.clearConfirm')}</Text>
+            <View style={styles.dialogActions}>
+              <TouchableOpacity onPress={() => setShowClearDialog(false)} style={styles.dialogBtn}>
+                <Text style={styles.dialogBtnCancel}>{t('inbox.cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleClear} style={[styles.dialogBtn, styles.dialogBtnDanger]}>
+                <Text style={styles.dialogBtnDangerText}>{t('inbox.clear')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
     </KeyboardAvoidingView>
+  )
+}
+
+function SuggestionChip({ label, delay, onPress }: { label: string; delay: number; onPress: () => void }) {
+  const scale = useSharedValue(0)
+
+  useEffect(() => {
+    scale.value = withDelay(delay, withSpring(1, { damping: 15, stiffness: 300 }))
+  }, [])
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }))
+
+  const pressIn = () => { scale.value = withTiming(0.97, { duration: 150 }) }
+  const pressOut = () => { scale.value = withSpring(1, { damping: 15, stiffness: 400 }) }
+
+  return (
+    <Animated.View style={animStyle}>
+      <TouchableOpacity
+        style={styles.chip}
+        onPress={onPress}
+        onPressIn={pressIn}
+        onPressOut={pressOut}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+      >
+        <Text style={styles.chipText}>{label}</Text>
+      </TouchableOpacity>
+    </Animated.View>
+  )
+}
+
+function AssistantBubble({ msg, router, t }: { msg: AssistantMessage; router: any; t: (k: string) => string }) {
+  const isMine = msg.from === 'user'
+  const bubbleScale = useSharedValue(0.9)
+  const bubbleOpacity = useSharedValue(0)
+
+  useEffect(() => {
+    bubbleScale.value = withSpring(1, { damping: 15, stiffness: 300 })
+    bubbleOpacity.value = withTiming(1, { duration: 300 })
+  }, [])
+
+  const bubbleAnim = useAnimatedStyle(() => ({
+    transform: [{ scale: bubbleScale.value }],
+    opacity: bubbleOpacity.value,
+  }))
+
+  return (
+    <Animated.View style={[{ alignItems: isMine ? 'flex-end' : 'flex-start', marginBottom: spacing[3] }, bubbleAnim]}>
+      <View style={[styles.bubble, isMine ? styles.bubbleMine : styles.assistantBubbleTheirs]}>
+        <Text style={[styles.bubbleText, isMine && { color: colors.white }]}>{msg.text}</Text>
+      </View>
+
+      {msg.products && msg.products.length > 0 && (
+        <FlatList
+          horizontal
+          data={msg.products}
+          keyExtractor={p => p.id}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: spacing[2], paddingHorizontal: spacing[1], marginTop: spacing[2] }}
+          renderItem={({ item: p }) => (
+            <TouchableOpacity
+              style={styles.carouselCard}
+              onPress={() => router.push(`/product/${p.slug}`)}
+              accessibilityRole="button"
+              accessibilityLabel={`${p.name}. NPR ${p.price.toLocaleString()}`}
+            >
+              <View style={styles.carouselImg}>
+                <Text style={{ fontSize: 24 }}>{'\u{1F4E6}'}</Text>
+              </View>
+              <Text style={styles.carouselName} numberOfLines={2}>{p.name}</Text>
+              <Text style={styles.carouselPrice}>NPR {p.price.toLocaleString()}</Text>
+            </TouchableOpacity>
+          )}
+        />
+      )}
+
+      {msg.quickLinks && msg.quickLinks.length > 0 && (
+        <View style={styles.quickLinksWrap}>
+          {msg.quickLinks.map((link, i) => (
+            <TouchableOpacity
+              key={i}
+              style={styles.quickLinkChip}
+              onPress={() => router.push(link.route)}
+              accessibilityRole="button"
+              accessibilityLabel={link.label}
+            >
+              <Text style={styles.quickLinkText}>{link.label} {'\u{203A}'}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {msg.actions && msg.actions.length > 0 && (
+        <View style={styles.actionsWrap}>
+          {msg.actions.map((action, i) => (
+            <TouchableOpacity
+              key={i}
+              style={styles.actionBtn}
+              onPress={() => {
+                if (action.type === 'view_product' && action.productId) router.push(`/product/${action.productId}`)
+                else if (action.type === 'open_deals') router.push('/deals')
+                else if (action.type === 'open_orders') router.push('/orders')
+                else if (action.type === 'open_categories') router.push('/categories')
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={action.label}
+            >
+              <Text style={styles.actionBtnText}>{action.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+    </Animated.View>
   )
 }
 
@@ -1349,5 +1574,196 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  assistantHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  assistantAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  introWrap: {
+    alignItems: 'center',
+    paddingVertical: spacing[6],
+    gap: spacing[3],
+  },
+  introAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  introGreeting: {
+    fontSize: fontSize.md[0],
+    fontFamily: fontFamily.sansSemiBold[0],
+    fontWeight: '600',
+    color: colors.text,
+    textAlign: 'center',
+    paddingHorizontal: spacing[6],
+  },
+  chipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: spacing[2],
+    paddingHorizontal: spacing[4],
+    marginTop: spacing[2],
+  },
+  chip: {
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[2],
+    borderRadius: radii.full,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  chipText: {
+    fontSize: fontSize.base[0],
+    fontFamily: fontFamily.sans[0],
+    fontWeight: '500',
+    color: colors.textSecondary,
+  },
+  assistantBubbleTheirs: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderBottomRightRadius: radii.sm,
+    maxWidth: '85%',
+  },
+  carouselCard: {
+    width: 140,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    padding: spacing[2.5],
+    gap: spacing[1],
+  },
+  carouselImg: {
+    width: '100%',
+    height: 80,
+    borderRadius: radii.md,
+    backgroundColor: colors.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  carouselName: {
+    fontSize: fontSize.sm[0],
+    fontFamily: fontFamily.sansSemiBold[0],
+    fontWeight: '600',
+    color: colors.text,
+  },
+  carouselPrice: {
+    fontSize: fontSize.sm[0],
+    fontFamily: fontFamily.sansSemiBold[0],
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  quickLinksWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing[2],
+    marginTop: spacing[2],
+  },
+  quickLinkChip: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1.5],
+    borderRadius: radii.full,
+    backgroundColor: colors.primary50,
+  },
+  quickLinkText: {
+    fontSize: fontSize.sm[0],
+    fontFamily: fontFamily.sansSemiBold[0],
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  actionsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing[2],
+    marginTop: spacing[2],
+  },
+  actionBtn: {
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[2],
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: 'transparent',
+  },
+  actionBtnText: {
+    fontSize: fontSize.base[0],
+    fontFamily: fontFamily.sansSemiBold[0],
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  dialogOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 100,
+  },
+  dialogBox: {
+    backgroundColor: colors.white,
+    borderRadius: radii.xl,
+    padding: spacing[6],
+    marginHorizontal: spacing[8],
+    gap: spacing[3],
+  },
+  dialogTitle: {
+    fontSize: fontSize.md[0],
+    fontFamily: fontFamily.sansSemiBold[0],
+    fontWeight: '600',
+    color: colors.text,
+  },
+  dialogBody: {
+    fontSize: fontSize.base[0],
+    color: colors.textMuted,
+    lineHeight: fontSize.base[1],
+  },
+  dialogActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing[3],
+    marginTop: spacing[2],
+  },
+  dialogBtn: {
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[2],
+    borderRadius: radii.md,
+  },
+  dialogBtnCancel: {
+    fontSize: fontSize.base[0],
+    fontFamily: fontFamily.sansSemiBold[0],
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  dialogBtnDanger: {
+    backgroundColor: colors.error,
+  },
+  dialogBtnDangerText: {
+    fontSize: fontSize.base[0],
+    fontFamily: fontFamily.sansSemiBold[0],
+    fontWeight: '600',
+    color: colors.white,
   },
 })
