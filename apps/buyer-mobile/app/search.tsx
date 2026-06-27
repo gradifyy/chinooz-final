@@ -4,6 +4,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  ScrollView,
   FlatList,
   StyleSheet,
   AccessibilityInfo,
@@ -15,20 +16,39 @@ import { useTranslation } from 'react-i18next'
 import Animated, {
   FadeIn,
   FadeOut,
+  FadeInDown,
   SlideInDown,
   Easing,
+  LinearTransition,
 } from 'react-native-reanimated'
-import { useSearchProducts, usePopularProducts, usePrefetchProduct } from '@chinooz/hooks'
+import { useSearchProducts, useCategories, usePrefetchProduct } from '@chinooz/hooks'
 import { colors, radii, spacing } from '@chinooz/theme'
 import { ProductCard } from '@chinooz/ui'
-import type { Product } from '@chinooz/types'
+import type { Product, Category } from '@chinooz/types'
+
+const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity)
 
 const MAX_RECENT = 8
 const DEBOUNCE_MS = 300
+const STAGGER_CAP = 8
+const STAGGER_DELAY = 50
 
 const POPULAR_TERMS = ['Headphones', 'Shoes', 'T-shirt', 'Backpack', 'Watch', 'Sunglasses']
 
+const POPULAR_CATEGORIES = [
+  { id: 'cat-electronics', name: 'Electronics', icon: '📱' },
+  { id: 'cat-fashion', name: 'Fashion', icon: '👗' },
+  { id: 'cat-home', name: 'Home', icon: '🏠' },
+  { id: 'cat-beauty', name: 'Beauty', icon: '💄' },
+  { id: 'cat-grocery', name: 'Grocery', icon: '🛒' },
+  { id: 'cat-sports', name: 'Sports', icon: '⚽' },
+]
+
 let inMemoryRecentSearches: string[] = []
+
+function staggerDelay(index: number): number {
+  return index < STAGGER_CAP ? index * STAGGER_DELAY : 0
+}
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value)
@@ -50,6 +70,8 @@ export default function SearchScreen() {
   const [inputFocused, setInputFocused] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [recentSearches, setRecentSearches] = useState<string[]>([])
+  const [pressedRow, setPressedRow] = useState<string | null>(null)
+  const [clearingAll, setClearingAll] = useState(false)
 
   const debouncedQuery = useDebounce(query, DEBOUNCE_MS)
 
@@ -85,6 +107,21 @@ export default function SearchScreen() {
     setRecentSearches([...inMemoryRecentSearches])
   }, [])
 
+  const handleRemoveRecent = useCallback((term: string) => {
+    inMemoryRecentSearches = inMemoryRecentSearches.filter(s => s !== term)
+    setRecentSearches([...inMemoryRecentSearches])
+    setPressedRow(null)
+  }, [])
+
+  const handleClearAll = useCallback(() => {
+    setClearingAll(true)
+    setTimeout(() => {
+      inMemoryRecentSearches = []
+      setRecentSearches([])
+      setClearingAll(false)
+    }, 200)
+  }, [])
+
   const handleQueryChange = useCallback((text: string) => {
     setQuery(text)
     setSubmitted(false)
@@ -104,17 +141,30 @@ export default function SearchScreen() {
     }
   }, [debouncedQuery, persistRecent])
 
-  const handleRecentPress = useCallback((term: string) => {
-    setQuery(term)
-    setSubmitted(true)
-    persistRecent(term)
-  }, [persistRecent])
+  const handleRecentPress = useCallback(
+    (term: string) => {
+      setQuery(term)
+      setSubmitted(true)
+      persistRecent(term)
+    },
+    [persistRecent],
+  )
 
-  const handlePopularPress = useCallback((term: string) => {
-    setQuery(term)
-    setSubmitted(true)
-    persistRecent(term)
-  }, [persistRecent])
+  const handlePopularPress = useCallback(
+    (term: string) => {
+      setQuery(term)
+      setSubmitted(true)
+      persistRecent(term)
+    },
+    [persistRecent],
+  )
+
+  const handleCategoryPress = useCallback(
+    (category: { id: string; name: string }) => {
+      router.push(`/category/${category.id}`)
+    },
+    [router],
+  )
 
   const handleProductPress = useCallback(
     (product: Product) => {
@@ -212,55 +262,137 @@ export default function SearchScreen() {
 
       <View style={styles.content}>
         {isEmpty && (
-          <Animated.View entering={FadeIn.duration(200)} style={styles.suggestionsContainer}>
-            {recentSearches.length > 0 && (
-              <View style={styles.section}>
+          <ScrollView
+            style={styles.suggestionsContainer}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {recentSearches.length > 0 && !clearingAll && (
+              <Animated.View
+                entering={FadeIn.duration(200)}
+                exiting={FadeOut.duration(200)}
+                style={styles.section}
+              >
                 <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>{t('search.recentSearches')}</Text>
+                  <Text style={styles.sectionTitle}>{t('search.recent')}</Text>
                   <TouchableOpacity
-                    onPress={() => {
-                      inMemoryRecentSearches = []
-                      setRecentSearches([])
-                    }}
+                    onPress={handleClearAll}
                     accessibilityRole="button"
+                    accessibilityLabel={t('search.clearAll')}
                   >
-                    <Text style={styles.clearAllText}>{t('common.close')}</Text>
+                    <Text style={styles.clearAllText}>{t('search.clearAll')}</Text>
                   </TouchableOpacity>
                 </View>
-                {recentSearches.map(term => (
-                  <TouchableOpacity
+                {recentSearches.map((term, index) => (
+                  <Animated.View
                     key={term}
-                    style={styles.suggestionRow}
-                    onPress={() => handleRecentPress(term)}
-                    activeOpacity={0.7}
-                    accessibilityRole="button"
-                    accessibilityLabel={term}
+                    entering={FadeInDown.duration(250)
+                      .easing(Easing.bezier(0.34, 1.56, 0.64, 1))
+                      .delay(staggerDelay(index))}
+                    exiting={FadeOut.duration(200)}
+                    layout={LinearTransition.springify()}
                   >
-                    <Text style={styles.suggestionIcon}>{'\u21BB'}</Text>
-                    <Text style={styles.suggestionText}>{term}</Text>
-                  </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.recentRow}
+                      onPress={() => handleRecentPress(term)}
+                      onLongPress={() => setPressedRow(pressedRow === term ? null : term)}
+                      onPressIn={() => setPressedRow(term)}
+                      activeOpacity={0.7}
+                      accessibilityRole="button"
+                      accessibilityLabel={term}
+                    >
+                      <Text style={styles.recentIcon}>{'\u{1F552}'}</Text>
+                      <Text style={styles.recentText} numberOfLines={1}>
+                        {term}
+                      </Text>
+                      {pressedRow === term && (
+                        <Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(100)}>
+                          <TouchableOpacity
+                            onPress={() => handleRemoveRecent(term)}
+                            style={styles.removeButton}
+                            activeOpacity={0.7}
+                            accessibilityRole="button"
+                            accessibilityLabel={t('search.removeSearch', { term })}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          >
+                            <Text style={styles.removeIcon}>{'\u00D7'}</Text>
+                          </TouchableOpacity>
+                        </Animated.View>
+                      )}
+                    </TouchableOpacity>
+                  </Animated.View>
                 ))}
-              </View>
+              </Animated.View>
             )}
 
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>{t('search.popularSearches')}</Text>
-              <View style={styles.popularChips}>
-                {POPULAR_TERMS.map(term => (
-                  <TouchableOpacity
+              <Animated.View
+                entering={FadeInDown.duration(250)
+                  .easing(Easing.bezier(0.34, 1.56, 0.64, 1))
+                  .delay(staggerDelay(recentSearches.length))}
+              >
+                <Text style={styles.sectionTitle}>{t('search.trending')}</Text>
+              </Animated.View>
+              <View style={styles.chipsWrap}>
+                {POPULAR_TERMS.map((term, index) => (
+                  <Animated.View
                     key={term}
-                    style={styles.chip}
-                    onPress={() => handlePopularPress(term)}
-                    activeOpacity={0.7}
-                    accessibilityRole="button"
-                    accessibilityLabel={term}
+                    entering={FadeInDown.duration(250)
+                      .easing(Easing.bezier(0.34, 1.56, 0.64, 1))
+                      .delay(staggerDelay(recentSearches.length + 1 + index))}
                   >
-                    <Text style={styles.chipText}>{term}</Text>
-                  </TouchableOpacity>
+                    <AnimatedTouchable
+                      style={styles.chip}
+                      onPress={() => handlePopularPress(term)}
+                      activeOpacity={0.7}
+                      accessibilityRole="button"
+                      accessibilityLabel={term}
+                    >
+                      <Text style={styles.chipText}>{term}</Text>
+                    </AnimatedTouchable>
+                  </Animated.View>
                 ))}
               </View>
             </View>
-          </Animated.View>
+
+            <View style={styles.section}>
+              <Animated.View
+                entering={FadeInDown.duration(250)
+                  .easing(Easing.bezier(0.34, 1.56, 0.64, 1))
+                  .delay(staggerDelay(recentSearches.length + 1 + POPULAR_TERMS.length))}
+              >
+                <Text style={styles.sectionTitle}>{t('search.popularCategories')}</Text>
+              </Animated.View>
+              <View style={styles.categoryGrid}>
+                {POPULAR_CATEGORIES.map((category, index) => (
+                  <Animated.View
+                    key={category.id}
+                    style={styles.categoryTileWrap}
+                    entering={FadeInDown.duration(250)
+                      .easing(Easing.bezier(0.34, 1.56, 0.64, 1))
+                      .delay(
+                        staggerDelay(
+                          recentSearches.length + 1 + POPULAR_TERMS.length + 1 + index,
+                        ),
+                      )}
+                  >
+                    <AnimatedTouchable
+                      style={styles.categoryTile}
+                      onPress={() => handleCategoryPress(category)}
+                      activeOpacity={0.7}
+                      accessibilityRole="button"
+                      accessibilityLabel={category.name}
+                    >
+                      <Text style={styles.categoryIcon}>{category.icon}</Text>
+                      <Text style={styles.categoryName} numberOfLines={1}>
+                        {category.name}
+                      </Text>
+                    </AnimatedTouchable>
+                  </Animated.View>
+                ))}
+              </View>
+            </View>
+          </ScrollView>
         )}
 
         {isTyping && (
@@ -393,19 +525,95 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: spacing[4],
-    marginBottom: spacing[3],
+    marginBottom: spacing[2],
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: '600',
-    color: colors.text,
+    color: colors.textMuted,
+    letterSpacing: 0.5,
     paddingHorizontal: spacing[4],
-    marginBottom: spacing[3],
+    marginBottom: spacing[2],
   },
   clearAllText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     color: colors.primary,
+  },
+  recentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    gap: spacing[3],
+  },
+  recentIcon: {
+    fontSize: 16,
+    color: colors.textMuted,
+    width: 20,
+    textAlign: 'center',
+  },
+  recentText: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '400',
+    color: colors.text,
+  },
+  removeButton: {
+    padding: spacing[1],
+  },
+  removeIcon: {
+    fontSize: 16,
+    color: colors.textMuted,
+    fontWeight: '600',
+  },
+  chipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: spacing[4],
+    gap: 6,
+  },
+  chip: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.full,
+    paddingHorizontal: spacing[4],
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  chipText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.primary,
+  },
+  categoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: spacing[4],
+    gap: spacing[3],
+  },
+  categoryTileWrap: {
+    width: '47%',
+  },
+  categoryTile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    borderRadius: radii.lg,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[3],
+    gap: spacing[2],
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  categoryIcon: {
+    fontSize: 32,
+  },
+  categoryName: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
   },
   suggestionRow: {
     flexDirection: 'row',
@@ -419,29 +627,10 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   suggestionText: {
+    flex: 1,
     fontSize: 16,
     fontWeight: '400',
     color: colors.text,
-    flex: 1,
-  },
-  popularChips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: spacing[4],
-    gap: spacing[2],
-  },
-  chip: {
-    backgroundColor: colors.background,
-    borderRadius: radii.full,
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[2],
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  chipText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.textSecondary,
   },
   loadingRow: {
     paddingHorizontal: spacing[4],

@@ -12,8 +12,19 @@ import type { Product } from '@chinooz/types'
 const RECENT_SEARCHES_KEY = 'chinooz_recent_searches'
 const MAX_RECENT = 8
 const DEBOUNCE_MS = 300
+const STAGGER_CAP = 8
+const STAGGER_DELAY = 0.05
 
 const POPULAR_TERMS = ['Headphones', 'Shoes', 'T-shirt', 'Backpack', 'Watch', 'Sunglasses']
+
+const POPULAR_CATEGORIES = [
+  { id: 'cat-electronics', name: 'Electronics', icon: '📱' },
+  { id: 'cat-fashion', name: 'Fashion', icon: '👗' },
+  { id: 'cat-home', name: 'Home', icon: '🏠' },
+  { id: 'cat-beauty', name: 'Beauty', icon: '💄' },
+  { id: 'cat-grocery', name: 'Grocery', icon: '🛒' },
+  { id: 'cat-sports', name: 'Sports', icon: '⚽' },
+]
 
 function getRecentSearches(): string[] {
   if (typeof window === 'undefined') return []
@@ -33,10 +44,21 @@ function saveRecentSearch(query: string) {
   } catch {}
 }
 
+function removeRecentSearch(term: string) {
+  try {
+    const recent = getRecentSearches().filter(s => s !== term)
+    localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(recent))
+  } catch {}
+}
+
 function clearRecentSearches() {
   try {
     localStorage.removeItem(RECENT_SEARCHES_KEY)
   } catch {}
+}
+
+function staggerDelay(index: number): number {
+  return index < STAGGER_CAP ? index * STAGGER_DELAY : 0
 }
 
 function useDebounce<T>(value: T, delay: number): T {
@@ -59,6 +81,7 @@ function SearchContent() {
   const [inputFocused, setInputFocused] = useState(false)
   const [submitted, setSubmitted] = useState(!!initialQuery)
   const [recentSearches, setRecentSearches] = useState<string[]>([])
+  const [hoveredRow, setHoveredRow] = useState<string | null>(null)
 
   const debouncedQuery = useDebounce(query, DEBOUNCE_MS)
   const searchEnabled = debouncedQuery.length >= 2
@@ -127,12 +150,29 @@ function SearchContent() {
     setRecentSearches(getRecentSearches())
   }, [])
 
+  const handleRemoveRecent = useCallback((term: string) => {
+    removeRecentSearch(term)
+    setRecentSearches(getRecentSearches())
+  }, [])
+
+  const handleClearAll = useCallback(() => {
+    clearRecentSearches()
+    setRecentSearches([])
+  }, [])
+
   const handlePopularPress = useCallback((term: string) => {
     setQuery(term)
     setSubmitted(true)
     saveRecentSearch(term)
     setRecentSearches(getRecentSearches())
   }, [])
+
+  const handleCategoryPress = useCallback(
+    (category: { id: string; name: string }) => {
+      router.push(`/category/${category.id}`)
+    },
+    [router],
+  )
 
   const handleProductPress = useCallback(
     (product: Product) => {
@@ -258,47 +298,154 @@ function SearchContent() {
               {recentSearches.length > 0 && (
                 <section className="mb-8">
                   <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-base font-semibold text-text">
-                      {t('search.recentSearches')}
+                    <h2 className="text-xs font-semibold text-text-muted uppercase tracking-wide">
+                      {t('search.recent')}
                     </h2>
                     <button
-                      onClick={() => {
-                        clearRecentSearches()
-                        setRecentSearches([])
-                      }}
-                      className="text-sm font-semibold text-primary hover:text-primary-dark transition-colors"
+                      onClick={handleClearAll}
+                      className="text-xs font-semibold text-primary hover:text-primary-dark transition-colors"
+                      aria-label={t('search.clearAll')}
                     >
-                      {t('common.close')}
+                      {t('search.clearAll')}
                     </button>
                   </div>
-                  <div className="space-y-1">
-                    {recentSearches.map(term => (
-                      <button
+                  <div className="space-y-0.5">
+                    {recentSearches.map((term, index) => (
+                      <motion.div
                         key={term}
-                        onClick={() => handleRecentPress(term)}
-                        className="flex items-center gap-3 w-full px-0 py-2.5 text-left hover:bg-background rounded-lg transition-colors"
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{
+                          delay: staggerDelay(index),
+                          duration: 0.25,
+                          ease: [0.34, 1.56, 0.64, 1],
+                        }}
+                        layout
                       >
-                        <span className="text-base text-text-muted">{'\u21BB'}</span>
-                        <span className="text-base text-text">{term}</span>
-                      </button>
+                        <div
+                          className="flex items-center gap-3 w-full group rounded-lg hover:bg-background transition-colors"
+                          onMouseEnter={() => setHoveredRow(term)}
+                          onMouseLeave={() => setHoveredRow(null)}
+                        >
+                          <button
+                            onClick={() => handleRecentPress(term)}
+                            className="flex items-center gap-3 flex-1 px-0 py-2.5 text-left"
+                            aria-label={term}
+                          >
+                            <span className="text-base text-text-muted w-5 text-center">
+                              {'\u{1F552}'}
+                            </span>
+                            <span className="text-base text-text">{term}</span>
+                          </button>
+                          <AnimatePresence>
+                            {hoveredRow === term && (
+                              <motion.button
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 0.15 }}
+                                onClick={() => handleRemoveRecent(term)}
+                                className="shrink-0 p-1.5 rounded-full hover:bg-border-light transition-colors"
+                                aria-label={t('search.removeSearch', { term })}
+                                type="button"
+                              >
+                                <svg
+                                  width="14"
+                                  height="14"
+                                  viewBox="0 0 14 14"
+                                  fill="none"
+                                  className="text-text-muted"
+                                >
+                                  <path
+                                    d="M4 4L10 10M10 4L4 10"
+                                    stroke="currentColor"
+                                    strokeWidth="1.5"
+                                    strokeLinecap="round"
+                                  />
+                                </svg>
+                              </motion.button>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      </motion.div>
                     ))}
                   </div>
                 </section>
               )}
 
-              <section>
-                <h2 className="text-base font-semibold text-text mb-3">
-                  {t('search.popularSearches')}
-                </h2>
-                <div className="flex flex-wrap gap-2">
-                  {POPULAR_TERMS.map(term => (
-                    <button
+              <section className="mb-8">
+                <motion.h2
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{
+                    delay: staggerDelay(recentSearches.length),
+                    duration: 0.25,
+                    ease: [0.34, 1.56, 0.64, 1],
+                  }}
+                  className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-3"
+                >
+                  {t('search.trending')}
+                </motion.h2>
+                <div className="flex flex-wrap gap-1.5">
+                  {POPULAR_TERMS.map((term, index) => (
+                    <motion.button
                       key={term}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{
+                        delay: staggerDelay(recentSearches.length + 1 + index),
+                        duration: 0.25,
+                        ease: [0.34, 1.56, 0.64, 1],
+                      }}
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.97 }}
                       onClick={() => handlePopularPress(term)}
-                      className="px-4 py-2 bg-background border border-border rounded-full text-sm font-medium text-text-secondary hover:border-primary/30 hover:text-primary transition-colors"
+                      className="px-4 py-2 bg-surface border border-primary rounded-full text-sm font-medium text-primary hover:bg-primary-50 transition-colors"
                     >
                       {term}
-                    </button>
+                    </motion.button>
+                  ))}
+                </div>
+              </section>
+
+              <section>
+                <motion.h2
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{
+                    delay: staggerDelay(recentSearches.length + 1 + POPULAR_TERMS.length),
+                    duration: 0.25,
+                    ease: [0.34, 1.56, 0.64, 1],
+                  }}
+                  className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-3"
+                >
+                  {t('search.popularCategories')}
+                </motion.h2>
+                <div className="grid grid-cols-2 gap-3">
+                  {POPULAR_CATEGORIES.map((category, index) => (
+                    <motion.button
+                      key={category.id}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{
+                        delay: staggerDelay(
+                          recentSearches.length + 1 + POPULAR_TERMS.length + 1 + index,
+                        ),
+                        duration: 0.25,
+                        ease: [0.34, 1.56, 0.64, 1],
+                      }}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => handleCategoryPress(category)}
+                      className="flex items-center gap-3 bg-background border border-border rounded-lg px-3 py-3 hover:border-primary/30 transition-colors text-left"
+                      aria-label={category.name}
+                    >
+                      <span className="text-[32px]">{category.icon}</span>
+                      <span className="text-sm font-semibold text-text truncate">
+                        {category.name}
+                      </span>
+                    </motion.button>
                   ))}
                 </div>
               </section>
