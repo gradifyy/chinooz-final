@@ -23,12 +23,24 @@ export default function InvoiceView({ visible, invoice, onClose }: InvoiceViewPr
     <AnimatePresence>
       {visible && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={`${t('orderActions.invoiceFor')} ${invoice.orderId}`}>
-          <div className="fixed inset-0 bg-black/40" onClick={onClose} />
           <motion.div
-            initial={reduced ? false : { opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={reduced ? undefined : { opacity: 0, scale: 0.95 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             transition={{ duration: reduced ? 0 : 0.2 }}
+            className="fixed inset-0 bg-black/40"
+            onClick={onClose}
+          />
+          <motion.div
+            initial={reduced ? false : { opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reduced ? undefined : { opacity: 0, y: 40 }}
+            transition={reduced ? { duration: 0 } : {
+              type: 'spring',
+              damping: 25,
+              stiffness: 300,
+              mass: 0.8,
+            }}
             className="relative bg-background rounded-2xl w-full max-w-[600px] max-h-[85vh] overflow-auto shadow-xl"
           >
             {/* Header */}

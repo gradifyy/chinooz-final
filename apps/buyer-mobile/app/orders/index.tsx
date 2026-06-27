@@ -20,6 +20,8 @@ import Animated, {
   FadeIn,
   Layout,
 } from 'react-native-reanimated'
+
+const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity)
 import NetInfo from '@react-native-community/netinfo'
 import { colors, radii, spacing, duration, easing } from '@chinooz/theme'
 import { formatNPR } from '@chinooz/utils'
@@ -220,17 +222,37 @@ function SellerBreakdown({ order }: { order: Order }) {
 
 function OrderCard({ order, onPress }: { order: Order; onPress: () => void }) {
   const { t } = useTranslation()
+  const reduced = useReducedMotion()
   const statusStyle = STATUS_COLORS[order.status]
   const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0)
   const firstItem = order.items[0]
 
+  const cardScale = useSharedValue(1)
+  const cardStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: cardScale.value }],
+  }))
+
+  const handlePressIn = useCallback(() => {
+    if (!reduced) {
+      cardScale.value = withSpring(0.98, { damping: 20, stiffness: 400, mass: 0.5 })
+    }
+  }, [reduced])
+
+  const handlePressOut = useCallback(() => {
+    if (!reduced) {
+      cardScale.value = withSpring(1, { damping: 20, stiffness: 400, mass: 0.5 })
+    }
+  }, [reduced])
+
   const statusLabel = t(`orders.${order.status}`)
 
   return (
-    <TouchableOpacity
+    <AnimatedTouchable
       onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
       activeOpacity={0.9}
-      style={styles.card}
+      style={[styles.card, cardStyle]}
       accessibilityRole="button"
       accessibilityLabel={`Order ${order.id}, ${statusLabel}`}
     >
@@ -281,7 +303,7 @@ function OrderCard({ order, onPress }: { order: Order; onPress: () => void }) {
           </Text>
         </View>
       )}
-    </TouchableOpacity>
+    </AnimatedTouchable>
   )
 }
 
