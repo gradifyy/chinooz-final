@@ -17,19 +17,22 @@ export function useSearchSuggestions(query: string) {
     queryKey: ['suggestions', 'products', query],
     queryFn: () => api.searchProducts(query),
     enabled,
-    staleTime: STALE_PRODUCTS,
+    staleTime: 0,
+    cancelRefetch: true,
   })
   const categoriesQ = useQuery({
     queryKey: ['suggestions', 'categories', query],
     queryFn: () => api.searchCategories(query),
     enabled,
-    staleTime: STALE_PRODUCTS,
+    staleTime: 0,
+    cancelRefetch: true,
   })
   const brandsQ = useQuery({
     queryKey: ['suggestions', 'brands', query],
     queryFn: () => api.searchBrands(query),
     enabled,
-    staleTime: STALE_PRODUCTS,
+    staleTime: 0,
+    cancelRefetch: true,
   })
 
   const isLoading = productsQ.isLoading || categoriesQ.isLoading || brandsQ.isLoading

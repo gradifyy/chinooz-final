@@ -146,26 +146,47 @@ export async function getCartItems(): Promise<CartItem[]> {
   return sampleCartItems
 }
 
+function norm(s: string): string {
+  return s.normalize('NFC').toLowerCase()
+}
+
 export async function searchProducts(query: string): Promise<Product[]> {
   await randomDelay(300, 800)
-  const q = query.toLowerCase()
+  const q = norm(query)
   return products.filter(
     p =>
-      p.name.toLowerCase().includes(q) ||
-      p.description.toLowerCase().includes(q) ||
-      p.tags.some(t => t.toLowerCase().includes(q)),
+      norm(p.name).includes(q) ||
+      norm(p.description).includes(q) ||
+      p.tags.some(t => norm(t).includes(q)),
   )
+}
+
+export async function searchProductsPaginated(
+  query: string,
+  params?: { limit?: number; offset?: number },
+): Promise<{ items: Product[]; total: number }> {
+  await randomDelay(300, 800)
+  const q = norm(query)
+  const filtered = products.filter(
+    p =>
+      norm(p.name).includes(q) ||
+      norm(p.description).includes(q) ||
+      p.tags.some(t => norm(t).includes(q)),
+  )
+  const offset = params?.offset ?? 0
+  const limit = params?.limit ?? 20
+  return { items: filtered.slice(offset, offset + limit), total: filtered.length }
 }
 
 export async function searchCategories(query: string): Promise<Category[]> {
   await randomDelay(100, 300)
-  const q = query.toLowerCase()
+  const q = norm(query)
   const results: Category[] = []
   for (const cat of categories) {
-    if (cat.name.toLowerCase().includes(q)) results.push(cat)
+    if (norm(cat.name).includes(q)) results.push(cat)
     if (cat.children) {
       for (const child of cat.children) {
-        if (child.name.toLowerCase().includes(q)) results.push(child)
+        if (norm(child.name).includes(q)) results.push(child)
       }
     }
   }
@@ -174,14 +195,14 @@ export async function searchCategories(query: string): Promise<Category[]> {
 
 export async function searchBrands(query: string): Promise<{ id: string; name: string }[]> {
   await randomDelay(100, 300)
-  const q = query.toLowerCase()
+  const q = norm(query)
   const brandMap = new Map<string, { id: string; name: string }>()
   for (const p of products) {
     if (!brandMap.has(p.sellerId)) {
       brandMap.set(p.sellerId, { id: p.sellerId, name: p.sellerName })
     }
   }
-  return [...brandMap.values()].filter(b => b.name.toLowerCase().includes(q))
+  return [...brandMap.values()].filter(b => norm(b.name).includes(q))
 }
 
 export async function getPopularProducts(): Promise<Product[]> {

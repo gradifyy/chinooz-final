@@ -19,7 +19,7 @@ const FilterPanel = lazy(() => import('@/components/FilterPanel'))
 const SortDropdown = lazy(() => import('@/components/SortDropdown'))
 
 const RECENT_SEARCHES_KEY = 'chinooz_recent_searches'
-const MAX_RECENT = 8
+const MAX_RECENT = 10
 const DEBOUNCE_MS = 250
 const STAGGER_CAP = 10
 const STAGGER_MS = 0.05
@@ -111,9 +111,9 @@ const POPULAR_TERMS = ['Headphones', 'Shoes', 'T-shirt', 'Backpack', 'Watch', 'S
 
 function getDidYouMean(query: string): string | null {
   if (!query || query.length < 2) return null
-  const q = query.toLowerCase()
+  const q = query.normalize('NFC').toLowerCase()
   for (const term of POPULAR_TERMS) {
-    const t = term.toLowerCase()
+    const t = term.normalize('NFC').toLowerCase()
     if (t.includes(q) || q.includes(t)) continue
     let diff = 0
     const len = Math.min(q.length, t.length)
@@ -180,7 +180,7 @@ function useDebounce<T>(value: T, delay: number): T {
 
 function HighlightText({ text, query }: { text: string; query: string }) {
   if (!query || query.length < 2) return <>{text}</>
-  const idx = text.toLowerCase().indexOf(query.toLowerCase())
+  const idx = text.normalize('NFC').toLowerCase().indexOf(query.normalize('NFC').toLowerCase())
   if (idx === -1) return <>{text}</>
   return (
     <>

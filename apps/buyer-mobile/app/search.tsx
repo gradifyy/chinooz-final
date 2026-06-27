@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react'
 import {
   View,
   Text,
@@ -32,18 +32,24 @@ import type { SuggestionItem } from '@chinooz/hooks'
 import { colors, radii, spacing, duration, easing } from '@chinooz/theme'
 import { ProductCard, ProductCardSkeleton, Skeleton, SafeImage, useReducedMotion } from '@chinooz/ui'
 import { formatNPR } from '@chinooz/utils'
-import { useCartStore } from '@chinooz/state'
+import { useCartStore, useRecentSearchesStore } from '@chinooz/state'
 import type { Product } from '@chinooz/types'
-import FilterSheet, { type FilterState } from '../components/FilterSheet'
-import SortSheet, { type SortOption } from '../components/SortSheet'
 import OfflineBanner from '../components/OfflineBanner'
+
+const FilterSheet = lazy(() => import('../components/FilterSheet'))
+const SortSheet = lazy(() => import('../components/SortSheet'))
+
+interface FilterState {
+  priceMin: number; priceMax: number; minRating: number
+  brands: Set<string>; inStock: boolean; onSale: boolean
+}
+interface SortOption { key: string; labelKey: string }
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity)
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 const EDGE_PADDING = 16
 const GAP = 12
-const MAX_RECENT = 8
 const DEBOUNCE_MS = 250
 const STAGGER_CAP = 10
 const STAGGER_MS = 50
@@ -160,8 +166,6 @@ const POPULAR_CATEGORIES = [
   { id: 'cat-sports', name: 'Sports', icon: '⚽' },
 ]
 
-let inMemoryRecentSearches: string[] = []
-
 function staggerDelay(index: number): number {
   return index < STAGGER_CAP ? index * STAGGER_MS : 0
 }
@@ -177,7 +181,7 @@ function useDebounce<T>(value: T, delay: number): T {
 
 function highlightMatch(text: string, query: string): React.ReactNode {
   if (!query || query.length < 2) return text
-  const idx = text.toLowerCase().indexOf(query.toLowerCase())
+  const idx = text.normalize('NFC').toLowerCase().indexOf(query.normalize('NFC').toLowerCase())
   if (idx === -1) return text
   return (
     <Text>
@@ -200,15 +204,15 @@ export default function SearchScreen() {
   const [query, setQuery] = useState('')
   const [inputFocused, setInputFocused] = useState(false)
   const [submitted, setSubmitted] = useState(false)
-  const [recentSearches, setRecentSearches] = useState<string[]>([])
   const [pressedRow, setPressedRow] = useState<string | null>(null)
   const [clearingAll, setClearingAll] = useState(false)
-  const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS)
+  const [filters, setFilters] = useState<FilterState>({ priceMin: 0, priceMax: 999999, minRating: 0, brands: new Set(), inStock: false, onSale: false })
   const [sortBy, setSortBy] = useState('relevance')
   const [showFilterSheet, setShowFilterSheet] = useState(false)
   const [showSortSheet, setShowSortSheet] = useState(false)
 
   const addItem = useCartStore(s => s.addItem)
+  const { searches: recentSearches, addSearch, removeSearch, clearAll: clearAllRecent } = useRecentSearchesStore()
 
   const debouncedQuery = useDebounce(query, DEBOUNCE_MS)
 
@@ -304,7 +308,6 @@ export default function SearchScreen() {
   const gridItemWidth = getGridItemWidth(gridColumns)
 
   useEffect(() => {
-    setRecentSearches([...inMemoryRecentSearches])
     const timer = setTimeout(() => inputRef.current?.focus(), 100)
     if (Platform.OS !== 'web') {
       AccessibilityInfo.announceForAccessibility(t('search.searchScreenOpened'))
@@ -312,28 +315,18 @@ export default function SearchScreen() {
     return () => clearTimeout(timer)
   }, [])
 
-  const persistRecent = useCallback((term: string) => {
-    inMemoryRecentSearches = [term, ...inMemoryRecentSearches.filter(s => s !== term)].slice(
-      0,
-      MAX_RECENT,
-    )
-    setRecentSearches([...inMemoryRecentSearches])
-  }, [])
-
   const handleRemoveRecent = useCallback((term: string) => {
-    inMemoryRecentSearches = inMemoryRecentSearches.filter(s => s !== term)
-    setRecentSearches([...inMemoryRecentSearches])
+    removeSearch(term)
     setPressedRow(null)
-  }, [])
+  }, [removeSearch])
 
   const handleClearAll = useCallback(() => {
     setClearingAll(true)
     setTimeout(() => {
-      inMemoryRecentSearches = []
-      setRecentSearches([])
+      clearAllRecent()
       setClearingAll(false)
     }, 200)
-  }, [])
+  }, [clearAllRecent])
 
   const handleQueryChange = useCallback((text: string) => {
     setQuery(text)
@@ -349,27 +342,27 @@ export default function SearchScreen() {
   const handleSubmit = useCallback(() => {
     if (debouncedQuery.trim().length >= 2) {
       setSubmitted(true)
-      persistRecent(debouncedQuery.trim())
+      addSearch(debouncedQuery.trim())
       inputRef.current?.blur()
     }
-  }, [debouncedQuery, persistRecent])
+  }, [debouncedQuery, addSearch])
 
   const handleRecentPress = useCallback(
     (term: string) => {
       setQuery(term)
       setSubmitted(true)
-      persistRecent(term)
+      addSearch(term)
     },
-    [persistRecent],
+    [addSearch],
   )
 
   const handlePopularPress = useCallback(
     (term: string) => {
       setQuery(term)
       setSubmitted(true)
-      persistRecent(term)
+      addSearch(term)
     },
-    [persistRecent],
+    [addSearch],
   )
 
   const handleCategoryPress = useCallback(
@@ -412,14 +405,14 @@ export default function SearchScreen() {
       } else if (item.type === 'brand') {
         setQuery(item.brand.name)
         setSubmitted(true)
-        persistRecent(item.brand.name)
+        addSearch(item.brand.name)
       } else if (item.type === 'term') {
         setQuery(item.term)
         setSubmitted(true)
-        persistRecent(item.term)
+        addSearch(item.term)
       }
     },
-    [prefetch, router, persistRecent],
+    [prefetch, router, addSearch],
   )
 
   const handleBack = useCallback(() => {
@@ -899,7 +892,7 @@ export default function SearchScreen() {
                         setDismissedSuggestion(didYouMean)
                         setQuery(didYouMean)
                         setSubmitted(true)
-                        persistRecent(didYouMean)
+                        addSearch(didYouMean)
                       }}
                       activeOpacity={0.7}
                       accessibilityRole="link"
@@ -984,21 +977,29 @@ export default function SearchScreen() {
           </Animated.View>
         )}
 
-        <FilterSheet
-          visible={showFilterSheet}
-          onClose={() => setShowFilterSheet(false)}
-          products={searchResults ?? []}
-          filters={filters}
-          onApply={f => { setFilters(f); setShowFilterSheet(false) }}
-          onReset={() => { setFilters(DEFAULT_FILTERS); setShowFilterSheet(false) }}
-        />
-        <SortSheet
-          visible={showSortSheet}
-          onClose={() => setShowSortSheet(false)}
-          options={SORT_OPTIONS}
-          activeKey={sortBy}
-          onSelect={setSortBy}
-        />
+        <Suspense fallback={null}>
+          {showFilterSheet && (
+            <FilterSheet
+              visible={showFilterSheet}
+              onClose={() => setShowFilterSheet(false)}
+              products={searchResults ?? []}
+              filters={filters}
+              onApply={f => { setFilters(f); setShowFilterSheet(false) }}
+              onReset={() => { setFilters(DEFAULT_FILTERS); setShowFilterSheet(false) }}
+            />
+          )}
+        </Suspense>
+        <Suspense fallback={null}>
+          {showSortSheet && (
+            <SortSheet
+              visible={showSortSheet}
+              onClose={() => setShowSortSheet(false)}
+              options={SORT_OPTIONS}
+              activeKey={sortBy}
+              onSelect={setSortBy}
+            />
+          )}
+        </Suspense>
         <OfflineBanner />
       </View>
     </Animated.View>
