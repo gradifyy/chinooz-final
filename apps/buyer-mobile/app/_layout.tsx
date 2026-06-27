@@ -25,6 +25,8 @@ export default function RootLayout() {
               <Stack.Screen name="wishlist" options={{ animation: 'slide_from_right' }} />
               <Stack.Screen name="addresses" options={{ animation: 'slide_from_right' }} />
               <Stack.Screen name="payments" options={{ animation: 'slide_from_right' }} />
+              <Stack.Screen name="edit-profile" options={{ animation: 'slide_from_right' }} />
+              <Stack.Screen name="settings" options={{ animation: 'slide_from_right' }} />
             </Stack>
           </SafeAreaProvider>
         </I18nProvider>

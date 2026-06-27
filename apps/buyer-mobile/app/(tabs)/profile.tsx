@@ -81,8 +81,8 @@ export default function ProfileScreen() {
       headerKey: 'profile.preferencesSection',
       items: [
         { key: 'language', labelKey: 'profile.language', icon: '🌐', onPress: () => {} },
-        { key: 'notifications', labelKey: 'profile.notifications', icon: '🔔', onPress: () => requireAuth(() => {}) },
-        { key: 'appearance', labelKey: 'profile.appearance', icon: '🌙', onPress: () => {} },
+        { key: 'notifications', labelKey: 'profile.notifications', icon: '🔔', onPress: () => requireAuth(() => router.push('/settings')) },
+        { key: 'appearance', labelKey: 'profile.appearance', icon: '🌙', onPress: () => router.push('/settings') },
       ],
     },
     {
@@ -170,13 +170,13 @@ export default function ProfileScreen() {
               <Text style={styles.contact}>
                 {profile?.phone ?? profile?.email ?? ''}
               </Text>
-              <TouchableOpacity
-                onPress={() => {}}
-                activeOpacity={0.7}
-                style={styles.editLink}
-                accessibilityRole="button"
-                accessibilityLabel={t('profile.editProfile')}
-              >
+          <TouchableOpacity
+            onPress={() => requireAuth(() => router.push('/edit-profile'))}
+            activeOpacity={0.7}
+            style={styles.editLink}
+            accessibilityRole="button"
+            accessibilityLabel={t('profile.editProfile')}
+          >
                 <Text style={styles.editText}>{t('profile.editProfile')}</Text>
                 <Text style={styles.chevron}>›</Text>
               </TouchableOpacity>

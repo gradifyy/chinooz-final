@@ -172,8 +172,8 @@ export default function ProfilePage() {
       headerKey: 'profile.preferencesSection',
       items: [
         { key: 'language', labelKey: 'profile.language', icon: '🌐' },
-        { key: 'notifications', labelKey: 'profile.notifications', icon: '🔔' },
-        { key: 'appearance', labelKey: 'profile.appearance', icon: '🌙' },
+        { key: 'notifications', labelKey: 'profile.notifications', icon: '🔔', href: '/profile/settings' },
+        { key: 'appearance', labelKey: 'profile.appearance', icon: '🌙', href: '/profile/settings' },
       ],
     },
     {
@@ -266,7 +266,7 @@ export default function ProfilePage() {
                   {profile?.phone ?? profile?.email ?? ''}
                 </p>
                 <button
-                  onClick={() => {}}
+                  onClick={() => router.push('/profile/edit')}
                   className="flex items-center gap-1 mt-3 group"
                   aria-label={t('profile.editProfile')}
                 >
