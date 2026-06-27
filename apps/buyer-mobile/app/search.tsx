@@ -21,7 +21,7 @@ import Animated, {
   FadeInDown,
   SlideInDown,
   Easing,
-  LinearTransition,
+  ReduceMotion,
 } from 'react-native-reanimated'
 import {
   useSearchProducts,
@@ -29,8 +29,8 @@ import {
   usePrefetchProduct,
 } from '@chinooz/hooks'
 import type { SuggestionItem } from '@chinooz/hooks'
-import { colors, radii, spacing } from '@chinooz/theme'
-import { ProductCard, ProductCardSkeleton, Skeleton, SafeImage } from '@chinooz/ui'
+import { colors, radii, spacing, duration, easing } from '@chinooz/theme'
+import { ProductCard, ProductCardSkeleton, Skeleton, SafeImage, useReducedMotion } from '@chinooz/ui'
 import { formatNPR } from '@chinooz/utils'
 import { useCartStore } from '@chinooz/state'
 import type { Product } from '@chinooz/types'
@@ -46,7 +46,35 @@ const GAP = 12
 const MAX_RECENT = 8
 const DEBOUNCE_MS = 250
 const STAGGER_CAP = 10
-const STAGGER_DELAY = 50
+const STAGGER_MS = 50
+
+const SPRING = { damping: 18, stiffness: 300, mass: 0.8 }
+const SPRING_GENTLE = { damping: 20, stiffness: 200, mass: 0.8 }
+
+function motion(reduced: boolean) {
+  return {
+    fadeIn: (d: number = duration.normal) =>
+      reduced ? FadeIn.duration(0) : FadeIn.duration(d),
+    fadeInDown: (d: number = duration.normal) =>
+      reduced ? FadeInDown.duration(0) : FadeInDown.duration(d).easing(Easing.bezier(...easing.spring)),
+    fadeOut: (d: number = duration.fast) =>
+      reduced ? FadeOut.duration(0) : FadeOut.duration(d),
+    slideInDown: () =>
+      reduced ? SlideInDown.duration(0) : SlideInDown.duration(duration.normal).easing(Easing.bezier(...easing.spring)),
+    staggerItem(index: number) {
+      const delay = reduced ? 0 : Math.min(index, STAGGER_CAP) * STAGGER_MS
+      return reduced
+        ? FadeInDown.duration(0)
+        : FadeInDown.duration(duration.normal).easing(Easing.bezier(...easing.spring)).delay(delay)
+    },
+    springIn(index: number) {
+      const delay = reduced ? 0 : Math.min(index, STAGGER_CAP) * STAGGER_MS
+      return reduced
+        ? FadeInDown.duration(0)
+        : FadeInDown.duration(duration.normal).delay(delay).springify().damping(SPRING.damping)
+    },
+  }
+}
 
 const SORT_OPTIONS: SortOption[] = [
   { key: 'relevance', labelKey: 'categories.relevance' },
@@ -135,7 +163,7 @@ const POPULAR_CATEGORIES = [
 let inMemoryRecentSearches: string[] = []
 
 function staggerDelay(index: number): number {
-  return index < STAGGER_CAP ? index * STAGGER_DELAY : 0
+  return index < STAGGER_CAP ? index * STAGGER_MS : 0
 }
 
 function useDebounce<T>(value: T, delay: number): T {
@@ -166,6 +194,8 @@ export default function SearchScreen() {
   const { t } = useTranslation()
   const inputRef = useRef<TextInput>(null)
   const prefetch = usePrefetchProduct()
+  const reduced = useReducedMotion()
+  const m = useMemo(() => motion(reduced), [reduced])
 
   const [query, setQuery] = useState('')
   const [inputFocused, setInputFocused] = useState(false)
@@ -402,9 +432,7 @@ export default function SearchScreen() {
         return (
           <Animated.View
             key={item.key}
-            entering={FadeInDown.duration(200)
-              .easing(Easing.bezier(0.34, 1.56, 0.64, 1))
-              .delay(staggerDelay(index))}
+            entering={m.staggerItem(index)}
             style={styles.suggestionLabel}
           >
             <Text style={styles.suggestionLabelText}>
@@ -419,9 +447,7 @@ export default function SearchScreen() {
         return (
           <Animated.View
             key={item.key}
-            entering={FadeInDown.duration(200)
-              .easing(Easing.bezier(0.34, 1.56, 0.64, 1))
-              .delay(staggerDelay(index))}
+            entering={m.staggerItem(index)}
           >
             <TouchableOpacity
               style={styles.suggestionRow}
@@ -451,9 +477,7 @@ export default function SearchScreen() {
         return (
           <Animated.View
             key={item.key}
-            entering={FadeInDown.duration(200)
-              .easing(Easing.bezier(0.34, 1.56, 0.64, 1))
-              .delay(staggerDelay(index))}
+            entering={m.staggerItem(index)}
           >
             <TouchableOpacity
               style={styles.suggestionRow}
@@ -476,9 +500,7 @@ export default function SearchScreen() {
         return (
           <Animated.View
             key={item.key}
-            entering={FadeInDown.duration(200)
-              .easing(Easing.bezier(0.34, 1.56, 0.64, 1))
-              .delay(staggerDelay(index))}
+            entering={m.staggerItem(index)}
           >
             <TouchableOpacity
               style={styles.suggestionRow}
@@ -504,7 +526,7 @@ export default function SearchScreen() {
   return (
     <Animated.View
       style={[styles.container, { paddingTop: insets.top }]}
-      entering={SlideInDown.duration(250).easing(Easing.bezier(0.34, 1.56, 0.64, 1))}
+      entering={m.slideInDown()}
     >
       <View style={styles.header}>
         <TouchableOpacity
@@ -543,7 +565,7 @@ export default function SearchScreen() {
             />
           )}
           {query.length > 0 && !showSpinner && (
-            <Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(100)}>
+            <Animated.View entering={m.fadeIn(duration.fast)} exiting={m.fadeOut()}>
               <TouchableOpacity
                 onPress={handleClear}
                 style={styles.clearButton}
@@ -568,8 +590,8 @@ export default function SearchScreen() {
           >
             {recentSearches.length > 0 && !clearingAll && (
               <Animated.View
-                entering={FadeIn.duration(200)}
-                exiting={FadeOut.duration(200)}
+                entering={m.fadeIn()}
+                exiting={m.fadeOut()}
                 style={styles.section}
               >
                 <View style={styles.sectionHeader}>
@@ -585,11 +607,8 @@ export default function SearchScreen() {
                 {recentSearches.map((term, index) => (
                   <Animated.View
                     key={term}
-                    entering={FadeInDown.duration(250)
-                      .easing(Easing.bezier(0.34, 1.56, 0.64, 1))
-                      .delay(staggerDelay(index))}
-                    exiting={FadeOut.duration(200)}
-                    layout={LinearTransition.springify()}
+                    entering={m.staggerItem(index)}
+                    exiting={m.fadeOut()}
                   >
                     <TouchableOpacity
                       style={styles.recentRow}
@@ -605,7 +624,7 @@ export default function SearchScreen() {
                         {term}
                       </Text>
                       {pressedRow === term && (
-                        <Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(100)}>
+            <Animated.View entering={m.fadeIn(duration.fast)} exiting={m.fadeOut()}>
                           <TouchableOpacity
                             onPress={() => handleRemoveRecent(term)}
                             style={styles.removeButton}
@@ -626,9 +645,7 @@ export default function SearchScreen() {
 
             <View style={styles.section}>
               <Animated.View
-                entering={FadeInDown.duration(250)
-                  .easing(Easing.bezier(0.34, 1.56, 0.64, 1))
-                  .delay(staggerDelay(recentSearches.length))}
+                entering={m.staggerItem(recentSearches.length)}
               >
                 <Text style={styles.sectionTitle}>{t('search.trending')}</Text>
               </Animated.View>
@@ -636,9 +653,7 @@ export default function SearchScreen() {
                 {POPULAR_TERMS.map((term, index) => (
                   <Animated.View
                     key={term}
-                    entering={FadeInDown.duration(250)
-                      .easing(Easing.bezier(0.34, 1.56, 0.64, 1))
-                      .delay(staggerDelay(recentSearches.length + 1 + index))}
+                    entering={m.staggerItem(recentSearches.length + 1 + index)}
                   >
                     <AnimatedTouchable
                       style={styles.chip}
@@ -656,9 +671,7 @@ export default function SearchScreen() {
 
             <View style={styles.section}>
               <Animated.View
-                entering={FadeInDown.duration(250)
-                  .easing(Easing.bezier(0.34, 1.56, 0.64, 1))
-                  .delay(staggerDelay(recentSearches.length + 1 + POPULAR_TERMS.length))}
+                entering={m.staggerItem(recentSearches.length + 1 + POPULAR_TERMS.length)}
               >
                 <Text style={styles.sectionTitle}>{t('search.popularCategories')}</Text>
               </Animated.View>
@@ -667,13 +680,7 @@ export default function SearchScreen() {
                   <Animated.View
                     key={category.id}
                     style={styles.categoryTileWrap}
-                    entering={FadeInDown.duration(250)
-                      .easing(Easing.bezier(0.34, 1.56, 0.64, 1))
-                      .delay(
-                        staggerDelay(
-                          recentSearches.length + 1 + POPULAR_TERMS.length + 1 + index,
-                        ),
-                      )}
+                    entering={m.staggerItem(recentSearches.length + 1 + POPULAR_TERMS.length + 1 + index)}
                   >
                     <AnimatedTouchable
                       style={styles.categoryTile}
@@ -695,13 +702,13 @@ export default function SearchScreen() {
         )}
 
         {isTyping && (
-          <Animated.View entering={FadeIn.duration(200)} style={styles.suggestionsContainer}>
+          <Animated.View entering={m.fadeIn()} style={styles.suggestionsContainer}>
             {suggestionsFetching && suggestionItems.length === 0 ? (
               <View style={styles.suggestionSkeletons} accessibilityState={{ busy: true }} accessibilityLabel={t('search.loadingSuggestions')}>
                 {Array.from({ length: 4 }).map((_, i) => (
                   <Animated.View
                     key={i}
-                    entering={FadeInDown.duration(200).delay(i * 50).springify().damping(18)}
+                    entering={m.staggerItem(i)}
                     style={styles.suggestionSkeletonRow}
                   >
                     <Skeleton width={40} height={40} borderRadius={radii.lg} />
@@ -725,7 +732,7 @@ export default function SearchScreen() {
         )}
 
         {isResults && (
-          <Animated.View entering={FadeIn.duration(200)} style={styles.resultsContainer}>
+          <Animated.View entering={m.fadeIn()} style={styles.resultsContainer}>
             {searchLoading ? (
               <View style={styles.skeletonGrid} accessibilityState={{ busy: true }} accessibilityLabel={t('search.loadingResults')}>
                 {Array.from({ length: 6 }).map((_, i) => (
@@ -742,7 +749,7 @@ export default function SearchScreen() {
                 ))}
               </View>
             ) : searchError ? (
-              <Animated.View entering={FadeInDown.duration(250).springify().damping(18)} style={styles.errorState}>
+              <Animated.View entering={m.fadeInDown()} style={styles.errorState}>
                 <Text style={styles.errorIcon}>{'\u{1F615}'}</Text>
                 <Text style={styles.errorTitle}>{t('search.errorTitle')}</Text>
                 <Text style={styles.errorSubtitle}>{t('search.errorSubtitle')}</Text>
@@ -809,9 +816,8 @@ export default function SearchScreen() {
                         {activeChips.map(chip => (
                           <Animated.View
                             key={chip.key}
-                            entering={FadeInDown.duration(200).springify().damping(18)}
-                            exiting={FadeOut.duration(200)}
-                            layout={LinearTransition.springify()}
+                            entering={m.fadeInDown()}
+                            exiting={m.fadeOut()}
                           >
                             <TouchableOpacity
                               style={styles.activeChip}
@@ -871,11 +877,7 @@ export default function SearchScreen() {
                 }
                 renderItem={({ item, index }) => (
                   <Animated.View
-                    entering={FadeInDown.duration(250)
-                      .delay(Math.min(index, 9) * 50)
-                      .springify()
-                      .damping(18)}
-                    layout={LinearTransition.springify().damping(18)}
+                    entering={m.springIn(index)}
                     style={{ width: gridItemWidth }}
                   >
                     <ProductCard
@@ -890,7 +892,7 @@ export default function SearchScreen() {
             ) : (
               <ScrollView contentContainerStyle={styles.emptyScrollContent} showsVerticalScrollIndicator={false}>
                 {didYouMean && (
-                  <Animated.View entering={FadeInDown.duration(200).springify().damping(18)} style={styles.didYouMeanBar}>
+                  <Animated.View entering={m.fadeInDown()} style={styles.didYouMeanBar}>
                     <Text style={styles.didYouMeanLabel}>{t('search.didYouMean')}: </Text>
                     <TouchableOpacity
                       onPress={() => {
@@ -907,9 +909,9 @@ export default function SearchScreen() {
                     </TouchableOpacity>
                   </Animated.View>
                 )}
-                <Animated.View entering={FadeIn.duration(400)} style={styles.emptyStateWrap}>
+                <Animated.View entering={m.fadeIn(duration.slow)} style={styles.emptyStateWrap}>
                   <Animated.View
-                    entering={FadeInDown.duration(600).springify().damping(15).stiffness(80)}
+                    entering={reduced ? FadeInDown.duration(0) : FadeInDown.duration(duration.slower).springify().damping(15).stiffness(80)}
                     style={styles.emptyIllustration}
                   >
                     <Text style={styles.emptyIllustrationIcon}>{'\u{1F50D}'}</Text>
@@ -930,14 +932,14 @@ export default function SearchScreen() {
                   )}
                 </Animated.View>
                 <View style={styles.emptyRecovery}>
-                  <Animated.View entering={FadeInDown.duration(250).delay(200).springify().damping(18)}>
+                  <Animated.View entering={m.staggerItem(0)}>
                     <Text style={styles.emptyRecoveryTitle}>{t('search.tryTrending')}</Text>
                   </Animated.View>
                   <View style={styles.emptyRecoveryChips}>
                     {POPULAR_TERMS.slice(0, 4).map((term, i) => (
                       <Animated.View
                         key={term}
-                        entering={FadeInDown.duration(250).delay(250 + i * 50).springify().damping(18)}
+                        entering={m.staggerItem(i + 1)}
                       >
                         <TouchableOpacity
                           style={styles.emptyChip}
@@ -951,7 +953,7 @@ export default function SearchScreen() {
                       </Animated.View>
                     ))}
                   </View>
-                  <Animated.View entering={FadeInDown.duration(250).delay(450).springify().damping(18)}>
+                  <Animated.View entering={m.staggerItem(5)}>
                     <Text style={[styles.emptyRecoveryTitle, { marginTop: spacing[4] }]}>
                       {t('search.browseCategories')}
                     </Text>
@@ -960,7 +962,7 @@ export default function SearchScreen() {
                     {POPULAR_CATEGORIES.slice(0, 4).map((cat, i) => (
                       <Animated.View
                         key={cat.id}
-                        entering={FadeInDown.duration(250).delay(500 + i * 50).springify().damping(18)}
+                        entering={m.staggerItem(i + 6)}
                         style={styles.emptyCategoryTileWrap}
                       >
                         <TouchableOpacity

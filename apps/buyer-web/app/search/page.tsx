@@ -11,6 +11,7 @@ import ProductCard from '@chinooz/ui-web/ProductCard'
 import { ProductCardSkeleton } from '@chinooz/ui-web/ProductCard'
 import SafeImage from '@chinooz/ui-web/SafeImage'
 import { formatNPR } from '@chinooz/utils'
+import { duration, easing } from '@chinooz/theme'
 import type { Product } from '@chinooz/types'
 import OfflineBanner from '@/components/OfflineBanner'
 
@@ -21,7 +22,36 @@ const RECENT_SEARCHES_KEY = 'chinooz_recent_searches'
 const MAX_RECENT = 8
 const DEBOUNCE_MS = 250
 const STAGGER_CAP = 10
-const STAGGER_DELAY = 0.05
+const STAGGER_MS = 0.05
+
+const SPRING = { type: 'spring' as const, damping: 18, stiffness: 300 }
+const SPRING_GENTLE = { type: 'spring' as const, damping: 20, stiffness: 200 }
+
+function webMotion(reduced: boolean) {
+  const D = (ms: number) => reduced ? 0 : ms / 1000
+  return {
+    fadeIn: (ms = duration.normal) => ({
+      duration: D(ms),
+      ease: easing.easeOut as any,
+    }),
+    fadeInUp: (ms = duration.normal) => ({
+      duration: D(ms),
+      ease: reduced ? undefined : (easing.spring as any),
+    }),
+    fadeOut: (ms = duration.fast) => ({
+      duration: D(ms),
+    }),
+    staggerItem: (index: number) => ({
+      duration: D(duration.normal),
+      delay: reduced ? 0 : Math.min(index, STAGGER_CAP) * STAGGER_MS,
+      ease: reduced ? undefined : (easing.spring as any),
+    }),
+    spring: (delay = 0) =>
+      reduced
+        ? { duration: 0 }
+        : { ...SPRING, delay },
+  }
+}
 
 const SORT_OPTIONS = [
   { key: 'relevance', labelKey: 'categories.relevance' },
@@ -136,7 +166,7 @@ function clearRecentSearches() {
 }
 
 function staggerDelay(index: number): number {
-  return index < STAGGER_CAP ? index * STAGGER_DELAY : 0
+  return index < STAGGER_CAP ? index * STAGGER_MS : 0
 }
 
 function useDebounce<T>(value: T, delay: number): T {
@@ -181,6 +211,7 @@ function SearchContent() {
   const [showFilterPanel, setShowFilterPanel] = useState(false)
   const [dismissedSuggestion, setDismissedSuggestion] = useState<string | null>(null)
   const reduced = useReducedMotion()
+  const m = useMemo(() => webMotion(reduced), [reduced])
 
   const debouncedQuery = useDebounce(query, DEBOUNCE_MS)
 
@@ -451,11 +482,7 @@ function SearchContent() {
           key={item.key}
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{
-            delay: staggerDelay(index),
-            duration: 0.2,
-            ease: [0.34, 1.56, 0.64, 1],
-          }}
+          transition={m.staggerItem(index)}
           className="px-4 pt-4 pb-2"
         >
           <span className="text-xs font-semibold text-text-muted uppercase tracking-wide">
@@ -476,11 +503,7 @@ function SearchContent() {
           data-suggestion-index={actionIndex}
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{
-            delay: staggerDelay(index),
-            duration: 0.2,
-            ease: [0.34, 1.56, 0.64, 1],
-          }}
+          transition={m.staggerItem(index)}
         >
           <button
             id={rowId}
@@ -521,11 +544,7 @@ function SearchContent() {
           data-suggestion-index={actionIndex}
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{
-            delay: staggerDelay(index),
-            duration: 0.2,
-            ease: [0.34, 1.56, 0.64, 1],
-          }}
+          transition={m.staggerItem(index)}
         >
           <button
             id={rowId}
@@ -557,11 +576,7 @@ function SearchContent() {
           data-suggestion-index={actionIndex}
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{
-            delay: staggerDelay(index),
-            duration: 0.2,
-            ease: [0.34, 1.56, 0.64, 1],
-          }}
+          transition={m.staggerItem(index)}
         >
           <button
             id={rowId}
@@ -682,7 +697,7 @@ function SearchContent() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    transition={{ duration: 0.15 }}
+                    transition={{ duration: reduced ? 0 : duration.fast / 1000 }}
                     onClick={handleClear}
                     className="shrink-0 p-1 ml-1 rounded-full hover:bg-background transition-colors"
                     aria-label={t('search.clearSearch')}
@@ -726,7 +741,7 @@ function SearchContent() {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
+              transition={m.fadeIn()}
             >
               {recentSearches.length > 0 && (
                 <section className="mb-8">
@@ -749,11 +764,7 @@ function SearchContent() {
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.95 }}
-                        transition={{
-                          delay: staggerDelay(index),
-                          duration: 0.25,
-                          ease: [0.34, 1.56, 0.64, 1],
-                        }}
+                        transition={m.staggerItem(index)}
                         layout
                       >
                         <div
@@ -777,7 +788,7 @@ function SearchContent() {
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
                                 exit={{ opacity: 0 }}
-                                transition={{ duration: 0.15 }}
+                                transition={{ duration: reduced ? 0 : duration.fast / 1000 }}
                                 onClick={() => handleRemoveRecent(term)}
                                 className="shrink-0 p-1.5 rounded-full hover:bg-border-light transition-colors"
                                 aria-label={t('search.removeSearch', { term })}
@@ -813,8 +824,8 @@ function SearchContent() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{
                     delay: staggerDelay(recentSearches.length),
-                    duration: 0.25,
-                    ease: [0.34, 1.56, 0.64, 1],
+                    duration: reduced ? 0 : duration.normal / 1000,
+                    ease: reduced ? undefined : (easing.spring as any),
                   }}
                   className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-3"
                 >
@@ -826,13 +837,9 @@ function SearchContent() {
                       key={term}
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{
-                        delay: staggerDelay(recentSearches.length + 1 + index),
-                        duration: 0.25,
-                        ease: [0.34, 1.56, 0.64, 1],
-                      }}
-                      whileHover={{ scale: 1.03 }}
-                      whileTap={{ scale: 0.97 }}
+                      transition={m.staggerItem(recentSearches.length + 1 + index)}
+                      whileHover={reduced ? {} : { scale: 1.03 }}
+                      whileTap={reduced ? {} : { scale: 0.97 }}
                       onClick={() => handlePopularPress(term)}
                       className="px-4 py-2 bg-surface border border-primary rounded-full text-sm font-medium text-primary hover:bg-primary-50 transition-colors"
                     >
@@ -848,8 +855,8 @@ function SearchContent() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{
                     delay: staggerDelay(recentSearches.length + 1 + POPULAR_TERMS.length),
-                    duration: 0.25,
-                    ease: [0.34, 1.56, 0.64, 1],
+                    duration: reduced ? 0 : duration.normal / 1000,
+                    ease: reduced ? undefined : (easing.spring as any),
                   }}
                   className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-3"
                 >
@@ -861,15 +868,9 @@ function SearchContent() {
                       key={category.id}
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{
-                        delay: staggerDelay(
-                          recentSearches.length + 1 + POPULAR_TERMS.length + 1 + index,
-                        ),
-                        duration: 0.25,
-                        ease: [0.34, 1.56, 0.64, 1],
-                      }}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.97 }}
+                      transition={m.staggerItem(recentSearches.length + 1 + POPULAR_TERMS.length + 1 + index)}
+                      whileHover={reduced ? {} : { scale: 1.02 }}
+                      whileTap={reduced ? {} : { scale: 0.97 }}
                       onClick={() => handleCategoryPress(category)}
                       className="flex items-center gap-3 bg-background border border-border rounded-lg px-3 py-3 hover:border-primary/30 transition-colors text-left"
                       aria-label={category.name}
@@ -891,7 +892,7 @@ function SearchContent() {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
+              transition={m.fadeIn()}
             >
               {suggestionsFetching && suggestionItems.length === 0 ? (
                 <div className="space-y-0" aria-busy="true" aria-label={t('search.loadingSuggestions')}>
@@ -900,7 +901,7 @@ function SearchContent() {
                       key={i}
                       initial={reduced ? false : { opacity: 0, y: 6 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.05, duration: 0.2 }}
+                      transition={m.staggerItem(i)}
                       className="flex items-center gap-3 px-4 py-3"
                     >
                       <div className="w-10 h-10 rounded-lg bg-border animate-pulse" />
@@ -938,7 +939,7 @@ function SearchContent() {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
+              transition={m.fadeIn()}
             >
               {searchLoading ? (
                 <div
@@ -956,7 +957,7 @@ function SearchContent() {
                 <motion.div
                   initial={reduced ? false : { opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  transition={reduced ? { duration: 0 } : { duration: 0.6, type: 'spring', damping: 18, stiffness: 120 }}
+                  transition={reduced ? { duration: 0 } : { duration: duration.slower / 1000, type: 'spring', damping: 18, stiffness: 120 }}
                   className="flex flex-col items-center py-16 gap-3"
                 >
                   <span className="text-6xl">{'\u{1F615}'}</span>
@@ -1031,11 +1032,7 @@ function SearchContent() {
                           initial={{ opacity: 0, scale: 0.8 }}
                           animate={{ opacity: 1, scale: 1 }}
                           exit={{ opacity: 0, scale: 0.8 }}
-                          transition={
-                            reduced
-                              ? { duration: 0 }
-                              : { type: 'spring', damping: 20, stiffness: 300 }
-                          }
+                          transition={m.spring()}
                           layout
                           onClick={() => removeChip(chip.key)}
                           className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary-50 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
@@ -1096,10 +1093,7 @@ function SearchContent() {
                         key={product.id}
                         initial={reduced ? false : { opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{
-                          duration: reduced ? 0 : 0.25,
-                          delay: reduced ? 0 : Math.min(i, 9) * 0.05,
-                        }}
+                        transition={m.staggerItem(i)}
                         layout={reduced ? false : true}
                         layoutId={`search-product-${product.id}`}
                       >
@@ -1117,7 +1111,7 @@ function SearchContent() {
                     <motion.div
                       initial={{ opacity: 0, y: -8 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.2 }}
+                      transition={m.fadeIn()}
                       className="flex items-center gap-1 px-0 py-3 bg-background rounded-lg mb-4"
                     >
                       <span className="text-sm font-medium text-text-muted">
@@ -1142,7 +1136,7 @@ function SearchContent() {
                   <motion.div
                     initial={reduced ? false : { opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    transition={reduced ? { duration: 0 } : { duration: 0.6, type: 'spring', damping: 15, stiffness: 80 }}
+                    transition={reduced ? { duration: 0 } : { duration: duration.slower / 1000, type: 'spring', damping: 15, stiffness: 80 }}
                     className="flex flex-col items-center py-12 gap-3"
                   >
                     <div className="w-24 h-24 rounded-full bg-primary-50 flex items-center justify-center mb-2">
@@ -1165,7 +1159,7 @@ function SearchContent() {
                     <motion.p
                       initial={reduced ? false : { opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.2, duration: 0.25 }}
+                      transition={m.staggerItem(0)}
                       className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-3"
                     >
                       {t('search.tryTrending')}
@@ -1176,13 +1170,9 @@ function SearchContent() {
                           key={term}
                           initial={reduced ? false : { opacity: 0, y: 8 }}
                           animate={{ opacity: 1, y: 0 }}
-                          transition={{
-                            delay: reduced ? 0 : 0.25 + i * 0.05,
-                            duration: 0.25,
-                            ease: [0.34, 1.56, 0.64, 1],
-                          }}
-                          whileHover={{ scale: 1.03 }}
-                          whileTap={{ scale: 0.97 }}
+                          transition={m.staggerItem(i + 6)}
+                          whileHover={reduced ? {} : { scale: 1.02 }}
+                          whileTap={reduced ? {} : { scale: 0.97 }}
                           onClick={() => handlePopularPress(term)}
                           className="px-4 py-2 bg-surface border border-primary rounded-full text-sm font-medium text-primary hover:bg-primary-50 transition-colors"
                         >
@@ -1193,7 +1183,7 @@ function SearchContent() {
                     <motion.p
                       initial={reduced ? false : { opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.45, duration: 0.25 }}
+                      transition={m.staggerItem(5)}
                       className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-3"
                     >
                       {t('search.browseCategories')}
@@ -1204,13 +1194,9 @@ function SearchContent() {
                           key={cat.id}
                           initial={reduced ? false : { opacity: 0, y: 8 }}
                           animate={{ opacity: 1, y: 0 }}
-                          transition={{
-                            delay: reduced ? 0 : 0.5 + i * 0.05,
-                            duration: 0.25,
-                            ease: [0.34, 1.56, 0.64, 1],
-                          }}
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.97 }}
+                          transition={m.staggerItem(i + 6)}
+                          whileHover={reduced ? {} : { scale: 1.02 }}
+                          whileTap={reduced ? {} : { scale: 0.97 }}
                           onClick={() => handleCategoryPress(cat)}
                           className="flex items-center gap-3 bg-background border border-border rounded-lg px-3 py-3 hover:border-primary/30 transition-colors text-left"
                           aria-label={cat.name}
