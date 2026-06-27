@@ -8,6 +8,7 @@ import { Container, Screen } from '@chinooz/ui-web'
 import { formatNPR } from '@chinooz/utils'
 import { useCartStore, useCheckoutStore, useUIStore } from '@chinooz/state'
 import { useReducedMotion } from '@chinooz/ui-web'
+import AddressStep from '@/components/AddressStep'
 import type { CheckoutStep } from '@chinooz/state'
 
 const STEPS: CheckoutStep[] = ['address', 'delivery', 'payment', 'review']
@@ -136,7 +137,7 @@ export default function CheckoutPage() {
                 exit={reduced ? undefined : { opacity: 0, x: -20 }}
                 transition={reduced ? { duration: 0 } : { type: 'spring', damping: 20, stiffness: 300 }}
               >
-                <StepContent step={currentStep} />
+                <StepContent step={currentStep} onValidChange={() => {}} />
               </motion.div>
             </AnimatePresence>
 
@@ -224,21 +225,11 @@ export default function CheckoutPage() {
   )
 }
 
-function StepContent({ step }: { step: CheckoutStep }) {
+function StepContent({ step, onValidChange }: { step: CheckoutStep; onValidChange?: (v: boolean) => void }) {
   const { t } = useTranslation()
 
   const content: Record<CheckoutStep, React.ReactNode> = {
-    address: (
-      <div className="space-y-3">
-        <h2 className="text-lg font-semibold text-text">{t('checkout.address')}</h2>
-        <div className="bg-surface rounded-xl p-4 space-y-2 border border-border">
-          <p className="text-sm text-text-muted">Select or add a delivery address</p>
-          <div className="h-12 bg-background rounded-xl border border-border flex items-center px-3">
-            <span className="text-sm text-text-tertiary">Home — Baneshwor-10, Kathmandu</span>
-          </div>
-        </div>
-      </div>
-    ),
+    address: <AddressStep onValidChange={onValidChange} />,
     delivery: (
       <div className="space-y-3">
         <h2 className="text-lg font-semibold text-text">{t('checkout.deliveryMethod')}</h2>

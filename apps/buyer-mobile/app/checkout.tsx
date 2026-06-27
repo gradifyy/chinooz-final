@@ -26,6 +26,7 @@ import { colors, spacing, radii } from '@chinooz/theme'
 import { formatNPR } from '@chinooz/utils'
 import { useCartStore, useCheckoutStore, useUIStore } from '@chinooz/state'
 import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
+import AddressStep from '../components/AddressStep'
 import type { CheckoutStep } from '@chinooz/state'
 
 const STEPS: CheckoutStep[] = ['address', 'delivery', 'payment', 'review']
@@ -187,7 +188,7 @@ export default function CheckoutScreen() {
           entering={reduced ? FadeIn.duration(0) : SlideInRight.duration(250).springify().damping(20)}
           exiting={reduced ? FadeOut.duration(0) : SlideOutLeft.duration(200)}
         >
-          <StepContent step={currentStep} />
+          <StepContent step={currentStep} onValidChange={() => {}} />
         </Animated.View>
       </ScrollView>
 
@@ -264,21 +265,11 @@ export default function CheckoutScreen() {
   )
 }
 
-function StepContent({ step }: { step: CheckoutStep }) {
+function StepContent({ step, onValidChange }: { step: CheckoutStep; onValidChange?: (v: boolean) => void }) {
   const { t } = useTranslation()
 
   const content: Record<CheckoutStep, React.ReactNode> = {
-    address: (
-      <View style={{ gap: spacing[3] }}>
-        <Text style={{ fontSize: 18, fontWeight: '600', color: colors.text }}>{t('checkout.address')}</Text>
-        <View style={{ backgroundColor: colors.surface, borderRadius: radii.lg, padding: spacing[4], gap: spacing[2] }}>
-          <Text style={{ fontSize: 14, color: colors.textMuted }}>Select or add a delivery address</Text>
-          <View style={{ height: 48, backgroundColor: colors.background, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, justifyContent: 'center', paddingHorizontal: spacing[3] }}>
-            <Text style={{ fontSize: 14, color: colors.textTertiary }}>Home — Baneshwor-10, Kathmandu</Text>
-          </View>
-        </View>
-      </View>
-    ),
+    address: <AddressStep onValidChange={onValidChange} />,
     delivery: (
       <View style={{ gap: spacing[3] }}>
         <Text style={{ fontSize: 18, fontWeight: '600', color: colors.text }}>{t('checkout.deliveryMethod')}</Text>
