@@ -42,6 +42,8 @@
     "nearYou": "Near You",
     "noProducts": "No products found",
     "loadMore": "Load more",
+    "gridView": "Grid view",
+    "listView": "List view",
     "connectionLost": "Connection lost — tap to retry",
     "connectionRestored": "Back online"
   },

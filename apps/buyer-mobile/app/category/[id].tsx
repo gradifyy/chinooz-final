@@ -16,6 +16,7 @@ import { EmptyState, ProductCard } from '@chinooz/ui'
 import { useCartStore } from '@chinooz/state'
 import FilterSheet, { type FilterState } from '../../components/FilterSheet'
 import SortSheet from '../../components/SortSheet'
+import CategoryResults from '../../components/CategoryResults'
 import type { Product } from '@chinooz/types'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
@@ -247,48 +248,9 @@ export default function CategoryListingScreen() {
       )}
 
       {/* Product grid */}
-      <Animated.ScrollView
-        onScroll={scrollHandler}
-        scrollEventThrottle={16}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingHorizontal: EDGE_PADDING,
-          paddingTop: spacing[2],
-          paddingBottom: insets.bottom + spacing[6],
-        }}
-      >
-        {filteredProducts.length === 0 && !isLoading ? (
-          <EmptyState
-            icon={<Text style={{ fontSize: 48 }}>🔍</Text>}
-            title={t('common.noResults')}
-            subtitle={t('emptyState.noItemsSubtitle')}
-          />
-        ) : (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP }}>
-            {filteredProducts.map((product, i) => (
-              <Animated.View
-                key={product.id}
-                entering={FadeInDown.duration(250).delay(Math.min(i, 9) * 50).springify().damping(18)}
-                style={{ width: cardWidth }}
-              >
-                <ProductCard
-                  product={product}
-                  onPress={(p) => router.push({ pathname: '/product/[id]', params: { id: p.id } })}
-                  onAddToCart={(p) => addItem({
-                    id: `ci-${p.id}`,
-                    productId: p.id,
-                    name: p.name,
-                    image: p.images?.[0]?.uri ?? '',
-                    price: p.price,
-                    quantity: 1,
-                    maxQuantity: 10,
-                  })}
-                />
-              </Animated.View>
-            ))}
-          </View>
-        )}
-      </Animated.ScrollView>
+      <View style={{ paddingHorizontal: EDGE_PADDING, paddingTop: spacing[2], paddingBottom: insets.bottom + spacing[6] }}>
+        <CategoryResults categoryId={id} />
+      </View>
 
       {/* Filter sheet */}
       <FilterSheet

@@ -9,6 +9,7 @@ import { ProductCard } from '@chinooz/ui-web'
 import { useCartStore } from '@chinooz/state'
 import FilterPanel, { type FilterState } from '@/components/FilterPanel'
 import SortDropdown from '@/components/SortDropdown'
+import CategoryResults from '@/components/CategoryResults'
 import type { Product, Category } from '@chinooz/types'
 
 const QUICK_FILTERS = [
@@ -273,41 +274,7 @@ export default function CategoryListingClient({
       </div>
 
       {/* Product grid */}
-      {filteredProducts.length === 0 ? (
-        <EmptyState
-          icon={<span className="text-5xl">🔍</span>}
-          title={t('common.noResults')}
-          subtitle={t('emptyState.noItemsSubtitle')}
-        />
-      ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-          {filteredProducts.map((product, i) => (
-            <motion.div
-              key={product.id}
-              initial={reduced ? false : { opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{
-                duration: reduced ? 0 : 0.25,
-                delay: reduced ? 0 : Math.min(i, 9) * 0.05,
-              }}
-            >
-              <ProductCard
-                product={product}
-                onPress={(p) => router.push(`/product/${p.id}`)}
-                onAddToCart={(p) => addItem({
-                  id: `ci-${p.id}`,
-                  productId: p.id,
-                  name: p.name,
-                  image: p.images?.[0]?.uri ?? '',
-                  price: p.price,
-                  quantity: 1,
-                  maxQuantity: 10,
-                })}
-              />
-            </motion.div>
-          ))}
-        </div>
-      )}
+      <CategoryResults categoryId={categoryId} />
 
       {/* Filter panel */}
       <FilterPanel
