@@ -12,6 +12,7 @@
     "build-storybook": "storybook build"
   },
   "dependencies": {
+    "@chinooz/hooks": "workspace:*",
     "@chinooz/i18n": "workspace:*",
     "@chinooz/state": "workspace:*",
     "@chinooz/utils": "workspace:*",

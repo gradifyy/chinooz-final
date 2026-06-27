@@ -1,28 +1,500 @@
-import { View, Text, TouchableOpacity } from 'react-native'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  FlatList,
+  StyleSheet,
+  AccessibilityInfo,
+  Platform,
+} from 'react-native'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Screen } from '@chinooz/ui'
+import { useTranslation } from 'react-i18next'
+import Animated, {
+  FadeIn,
+  FadeOut,
+  SlideInDown,
+  Easing,
+} from 'react-native-reanimated'
+import { useSearchProducts, usePopularProducts, usePrefetchProduct } from '@chinooz/hooks'
+import { colors, radii, spacing } from '@chinooz/theme'
+import { ProductCard } from '@chinooz/ui'
+import type { Product } from '@chinooz/types'
+
+const MAX_RECENT = 8
+const DEBOUNCE_MS = 300
+
+const POPULAR_TERMS = ['Headphones', 'Shoes', 'T-shirt', 'Backpack', 'Watch', 'Sunglasses']
+
+let inMemoryRecentSearches: string[] = []
+
+function useDebounce<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), delay)
+    return () => clearTimeout(id)
+  }, [value, delay])
+  return debounced
+}
 
 export default function SearchScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const { t } = useTranslation()
+  const inputRef = useRef<TextInput>(null)
+  const prefetch = usePrefetchProduct()
+
+  const [query, setQuery] = useState('')
+  const [inputFocused, setInputFocused] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
+  const [recentSearches, setRecentSearches] = useState<string[]>([])
+
+  const debouncedQuery = useDebounce(query, DEBOUNCE_MS)
+
+  const searchEnabled = debouncedQuery.length >= 2
+  const { data: searchResults, isLoading: searchLoading } = useSearchProducts(
+    searchEnabled ? debouncedQuery : '',
+  )
+
+  const typeaheadResults = searchEnabled && !submitted ? searchResults : undefined
+  const typeaheadLoading = searchEnabled && !submitted ? searchLoading : false
+
+  const resultsData = submitted && searchEnabled ? searchResults : undefined
+  const resultsLoading = submitted && searchEnabled ? searchLoading : false
+
+  const isTyping = searchEnabled && !submitted
+  const isResults = submitted && searchEnabled
+  const isEmpty = !searchEnabled
+
+  useEffect(() => {
+    setRecentSearches([...inMemoryRecentSearches])
+    const timer = setTimeout(() => inputRef.current?.focus(), 100)
+    if (Platform.OS !== 'web') {
+      AccessibilityInfo.announceForAccessibility(t('search.searchScreenOpened'))
+    }
+    return () => clearTimeout(timer)
+  }, [])
+
+  const persistRecent = useCallback((term: string) => {
+    inMemoryRecentSearches = [term, ...inMemoryRecentSearches.filter(s => s !== term)].slice(
+      0,
+      MAX_RECENT,
+    )
+    setRecentSearches([...inMemoryRecentSearches])
+  }, [])
+
+  const handleQueryChange = useCallback((text: string) => {
+    setQuery(text)
+    setSubmitted(false)
+  }, [])
+
+  const handleClear = useCallback(() => {
+    setQuery('')
+    setSubmitted(false)
+    inputRef.current?.focus()
+  }, [])
+
+  const handleSubmit = useCallback(() => {
+    if (debouncedQuery.trim().length >= 2) {
+      setSubmitted(true)
+      persistRecent(debouncedQuery.trim())
+      inputRef.current?.blur()
+    }
+  }, [debouncedQuery, persistRecent])
+
+  const handleRecentPress = useCallback((term: string) => {
+    setQuery(term)
+    setSubmitted(true)
+    persistRecent(term)
+  }, [persistRecent])
+
+  const handlePopularPress = useCallback((term: string) => {
+    setQuery(term)
+    setSubmitted(true)
+    persistRecent(term)
+  }, [persistRecent])
+
+  const handleProductPress = useCallback(
+    (product: Product) => {
+      prefetch(product.id)
+      router.push(`/product/${product.id}`)
+    },
+    [prefetch, router],
+  )
+
+  const handleBack = useCallback(() => {
+    router.back()
+  }, [router])
+
+  const renderTypeaheadItem = useCallback(
+    ({ item }: { item: Product }) => (
+      <TouchableOpacity
+        style={styles.suggestionRow}
+        onPress={() => {
+          setQuery(item.name)
+          setSubmitted(true)
+          persistRecent(item.name)
+        }}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel={item.name}
+      >
+        <Text style={styles.suggestionIcon}>{'\u2315'}</Text>
+        <Text style={styles.suggestionText} numberOfLines={1}>
+          {item.name}
+        </Text>
+      </TouchableOpacity>
+    ),
+    [persistRecent],
+  )
+
+  const renderResultItem = useCallback(
+    ({ item }: { item: Product }) => (
+      <View style={styles.resultCard}>
+        <ProductCard product={item} onPress={handleProductPress} variant="compact" />
+      </View>
+    ),
+    [handleProductPress],
+  )
 
   return (
-    <Screen safeArea={false}>
-      <View style={{ paddingTop: insets.top, backgroundColor: '#FFFFFF' }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#E5E5E5' }}>
-          <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 12 }}>
-            <Text style={{ fontSize: 18, color: '#8A1B57', fontWeight: '600' }}>Back</Text>
-          </TouchableOpacity>
-          <View style={{ flex: 1, backgroundColor: '#FAFAFA', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 }}>
-            <Text style={{ color: '#9CA3AF', fontSize: 14 }}>Search products...</Text>
-          </View>
+    <Animated.View
+      style={[styles.container, { paddingTop: insets.top }]}
+      entering={SlideInDown.duration(250).easing(Easing.bezier(0.34, 1.56, 0.64, 1))}
+    >
+      <View style={styles.header}>
+        <TouchableOpacity
+          onPress={handleBack}
+          style={styles.backButton}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.back')}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text style={styles.backText}>{t('common.cancel')}</Text>
+        </TouchableOpacity>
+
+        <View style={[styles.inputWrap, inputFocused && styles.inputWrapFocused]}>
+          <Text style={styles.searchIcon}>{'\u2315'}</Text>
+          <TextInput
+            ref={inputRef}
+            style={styles.input}
+            value={query}
+            onChangeText={handleQueryChange}
+            onSubmitEditing={handleSubmit}
+            onFocus={() => setInputFocused(true)}
+            onBlur={() => setInputFocused(false)}
+            placeholder={t('search.inputPlaceholder')}
+            placeholderTextColor={colors.textMuted}
+            returnKeyType="search"
+            autoCapitalize="none"
+            autoCorrect={false}
+            accessibilityLabel={t('common.search')}
+          />
+          {query.length > 0 && (
+            <Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(100)}>
+              <TouchableOpacity
+                onPress={handleClear}
+                style={styles.clearButton}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={t('search.clearSearch')}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={styles.clearIcon}>{'\u00D7'}</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          )}
         </View>
       </View>
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 80 }}>
-        <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#1F2937' }}>Search</Text>
-        <Text style={{ fontSize: 14, color: '#6B7280', marginTop: 8 }}>Find anything on Chinooz</Text>
+
+      <View style={styles.content}>
+        {isEmpty && (
+          <Animated.View entering={FadeIn.duration(200)} style={styles.suggestionsContainer}>
+            {recentSearches.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>{t('search.recentSearches')}</Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      inMemoryRecentSearches = []
+                      setRecentSearches([])
+                    }}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.clearAllText}>{t('common.close')}</Text>
+                  </TouchableOpacity>
+                </View>
+                {recentSearches.map(term => (
+                  <TouchableOpacity
+                    key={term}
+                    style={styles.suggestionRow}
+                    onPress={() => handleRecentPress(term)}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel={term}
+                  >
+                    <Text style={styles.suggestionIcon}>{'\u21BB'}</Text>
+                    <Text style={styles.suggestionText}>{term}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>{t('search.popularSearches')}</Text>
+              <View style={styles.popularChips}>
+                {POPULAR_TERMS.map(term => (
+                  <TouchableOpacity
+                    key={term}
+                    style={styles.chip}
+                    onPress={() => handlePopularPress(term)}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel={term}
+                  >
+                    <Text style={styles.chipText}>{term}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </Animated.View>
+        )}
+
+        {isTyping && (
+          <Animated.View entering={FadeIn.duration(200)} style={styles.suggestionsContainer}>
+            <Text style={styles.sectionTitle}>
+              {t('search.suggestionsFor', { query: debouncedQuery })}
+            </Text>
+            {typeaheadLoading ? (
+              <View style={styles.loadingRow}>
+                <Text style={styles.loadingText}>{t('common.loading')}</Text>
+              </View>
+            ) : typeaheadResults && typeaheadResults.length > 0 ? (
+              <FlatList
+                data={typeaheadResults.slice(0, 8)}
+                keyExtractor={item => item.id}
+                renderItem={renderTypeaheadItem}
+                keyboardShouldPersistTaps="handled"
+              />
+            ) : (
+              <View style={styles.emptyTypeahead}>
+                <Text style={styles.emptyText}>{t('search.noResults')}</Text>
+              </View>
+            )}
+          </Animated.View>
+        )}
+
+        {isResults && (
+          <Animated.View entering={FadeIn.duration(200)} style={styles.resultsContainer}>
+            {resultsLoading ? (
+              <View style={styles.loadingRow}>
+                <Text style={styles.loadingText}>{t('common.loading')}</Text>
+              </View>
+            ) : resultsData && resultsData.length > 0 ? (
+              <FlatList
+                data={resultsData}
+                keyExtractor={item => item.id}
+                renderItem={renderResultItem}
+                numColumns={2}
+                columnWrapperStyle={styles.resultsRow}
+                contentContainerStyle={styles.resultsList}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              />
+            ) : (
+              <View style={styles.emptyResults}>
+                <Text style={styles.emptyResultsIcon}>{'\u{1F50D}'}</Text>
+                <Text style={styles.emptyResultsTitle}>{t('search.noResults')}</Text>
+                <Text style={styles.emptyResultsSubtitle}>{t('search.noResultsSubtitle')}</Text>
+              </View>
+            )}
+          </Animated.View>
+        )}
       </View>
-    </Screen>
+    </Animated.View>
   )
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.surface,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.surface,
+    gap: spacing[3],
+  },
+  backButton: {
+    paddingVertical: spacing[2],
+  },
+  backText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  inputWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing[3],
+    height: 48,
+  },
+  inputWrapFocused: {
+    borderColor: colors.primary,
+    borderWidth: 2,
+  },
+  searchIcon: {
+    fontSize: 20,
+    color: colors.textMuted,
+    marginRight: spacing[2],
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '400',
+    color: colors.text,
+    height: '100%',
+    paddingVertical: 0,
+  },
+  clearButton: {
+    padding: spacing[1],
+    marginLeft: spacing[1],
+  },
+  clearIcon: {
+    fontSize: 18,
+    color: colors.textMuted,
+    fontWeight: '600',
+  },
+  content: {
+    flex: 1,
+  },
+  suggestionsContainer: {
+    flex: 1,
+    paddingTop: spacing[4],
+  },
+  section: {
+    marginBottom: spacing[6],
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing[4],
+    marginBottom: spacing[3],
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    paddingHorizontal: spacing[4],
+    marginBottom: spacing[3],
+  },
+  clearAllText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  suggestionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    gap: spacing[3],
+  },
+  suggestionIcon: {
+    fontSize: 16,
+    color: colors.textMuted,
+  },
+  suggestionText: {
+    fontSize: 16,
+    fontWeight: '400',
+    color: colors.text,
+    flex: 1,
+  },
+  popularChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: spacing[4],
+    gap: spacing[2],
+  },
+  chip: {
+    backgroundColor: colors.background,
+    borderRadius: radii.full,
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[2],
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  chipText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.textSecondary,
+  },
+  loadingRow: {
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[6],
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 14,
+    color: colors.textMuted,
+  },
+  emptyTypeahead: {
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[6],
+  },
+  emptyText: {
+    fontSize: 14,
+    color: colors.textMuted,
+  },
+  resultsContainer: {
+    flex: 1,
+  },
+  resultsRow: {
+    paddingHorizontal: spacing[4],
+    gap: spacing[3],
+  },
+  resultsList: {
+    paddingTop: spacing[4],
+    paddingBottom: spacing[8],
+  },
+  resultCard: {
+    flex: 1,
+  },
+  emptyResults: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing[8],
+    paddingVertical: spacing[16],
+  },
+  emptyResultsIcon: {
+    fontSize: 48,
+    marginBottom: spacing[4],
+  },
+  emptyResultsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: spacing[2],
+    textAlign: 'center',
+  },
+  emptyResultsSubtitle: {
+    fontSize: 14,
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
+})

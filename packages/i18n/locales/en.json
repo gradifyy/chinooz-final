@@ -138,7 +138,7 @@
     "addMoreForFree": "Add {{amount}} more for free delivery",
     "freeDeliveryUnlocked": "You've got free delivery!",
     "deliveryFee": "Delivery fee",
-    "sellerSubtotal": "{{seller}} subtotal"
+    "sellerSubtotal": "{{seller}} subtotal",
     "total": "Total",
     "checkout": "Checkout",
     "address": "Address",
@@ -279,8 +279,12 @@
   "search": {
     "title": "Search",
     "placeholder": "Find anything on Chinooz",
+    "inputPlaceholder": "Search products, brands, categories...",
     "recentSearches": "Recent Searches",
     "popularSearches": "Popular Searches",
+    "clearSearch": "Clear search",
+    "suggestionsFor": "Suggestions for \"{{query}}\"",
+    "searchScreenOpened": "Search screen opened",
     "noResults": "No products found",
     "noResultsSubtitle": "Try different keywords"
   },

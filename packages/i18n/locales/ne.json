@@ -138,7 +138,7 @@
     "addMoreForFree": "निःशुल्क डेलिभरीको लागि {{amount}} थप थप्नुहोस्",
     "freeDeliveryUnlocked": "तपाईंले निःशुल्क डेलिभरी प्राप्त गर्नुभयो!",
     "deliveryFee": "ढुवानी शुल्क",
-    "sellerSubtotal": "{{seller}} उपकुल"
+    "sellerSubtotal": "{{seller}} उपकुल",
     "total": "कुल",
     "checkout": "चेकआउट",
     "address": "ठेगाना",
@@ -279,8 +279,12 @@
   "search": {
     "title": "खोज्नुहोस्",
     "placeholder": "चिनुजमा केही पनि खोज्नुहोस्",
+    "inputPlaceholder": "उत्पादनहरू, ब्रान्डहरू, श्रेणीहरू खोज्नुहोस्...",
     "recentSearches": "हालका खोजहरू",
     "popularSearches": "लोकप्रिय खोजहरू",
+    "clearSearch": "खोज मेटाउनुहोस्",
+    "suggestionsFor": "\"{{query}}\" का लागि सुझावहरू",
+    "searchScreenOpened": "खोज स्क्रिन खुल्यो",
     "noResults": "कुनै उत्पादन भेटिएन",
     "noResultsSubtitle": "फरक शब्दहरू प्रयास गर्नुहोस्"
   },

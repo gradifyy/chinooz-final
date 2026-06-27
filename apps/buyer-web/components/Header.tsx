@@ -58,9 +58,26 @@ export function Header() {
         <div className="flex-1 max-w-md mx-4">
           <Link
             href="/search"
-            className="flex items-center bg-background rounded-xl px-3 h-10 border border-border text-text-muted text-sm hover:border-primary/30 transition-colors"
+            className="flex items-center bg-surface rounded-lg px-3 h-12 border border-border text-text-muted hover:border-primary/30 transition-colors group"
           >
-            {t('common.searchPlaceholder')}
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 20 20"
+              fill="none"
+              className="text-text-muted mr-2 shrink-0"
+            >
+              <circle cx="9" cy="9" r="6" stroke="currentColor" strokeWidth="2" />
+              <path
+                d="M13.5 13.5L17 17"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+            </svg>
+            <span className="text-base font-normal group-hover:text-text-secondary transition-colors">
+              {t('search.inputPlaceholder')}
+            </span>
           </Link>
         </div>
 
@@ -68,7 +85,7 @@ export function Header() {
           href="/cart"
           className="relative w-10 h-10 flex items-center justify-center rounded-full hover:bg-background transition-colors"
         >
-          <span className="text-xl">🛒</span>
+          <span className="text-xl">{'\u{1F6D2}'}</span>
           <CartBadge />
         </Link>
       </div>
