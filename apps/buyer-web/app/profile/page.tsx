@@ -164,7 +164,7 @@ export default function ProfilePage() {
     {
       headerKey: 'profile.accountSection',
       items: [
-        { key: 'addresses', labelKey: 'profile.addresses', icon: '📍' },
+        { key: 'addresses', labelKey: 'profile.addresses', icon: '📍', href: '/addresses' },
         { key: 'payment', labelKey: 'profile.paymentMethods', icon: '💳' },
       ],
     },

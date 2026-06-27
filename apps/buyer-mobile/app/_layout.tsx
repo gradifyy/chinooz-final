@@ -21,7 +21,9 @@ export default function RootLayout() {
               <Stack.Screen name="product/[id]" />
               <Stack.Screen name="cart" options={{ presentation: 'card' }} />
               <Stack.Screen name="orders" options={{ animation: 'slide_from_right' }} />
+              <Stack.Screen name="orders/[id]" options={{ animation: 'slide_from_right' }} />
               <Stack.Screen name="wishlist" options={{ animation: 'slide_from_right' }} />
+              <Stack.Screen name="addresses" options={{ animation: 'slide_from_right' }} />
             </Stack>
           </SafeAreaProvider>
         </I18nProvider>

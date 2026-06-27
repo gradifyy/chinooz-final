@@ -73,7 +73,7 @@ export default function ProfileScreen() {
     {
       headerKey: 'profile.accountSection',
       items: [
-        { key: 'addresses', labelKey: 'profile.addresses', icon: '📍', onPress: () => requireAuth(() => {}) },
+        { key: 'addresses', labelKey: 'profile.addresses', icon: '📍', onPress: () => requireAuth(() => router.push('/addresses')) },
         { key: 'payment', labelKey: 'profile.paymentMethods', icon: '💳', onPress: () => requireAuth(() => {}) },
       ],
     },
