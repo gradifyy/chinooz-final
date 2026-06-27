@@ -9,6 +9,7 @@ import { formatNPR } from '@chinooz/utils'
 import { useCartStore, useCheckoutStore, useUIStore } from '@chinooz/state'
 import { useReducedMotion } from '@chinooz/ui-web'
 import AddressStep from '@/components/AddressStep'
+import DeliveryStep from '@/components/DeliveryStep'
 import type { CheckoutStep } from '@chinooz/state'
 
 const STEPS: CheckoutStep[] = ['address', 'delivery', 'payment', 'review']
@@ -230,29 +231,7 @@ function StepContent({ step, onValidChange }: { step: CheckoutStep; onValidChang
 
   const content: Record<CheckoutStep, React.ReactNode> = {
     address: <AddressStep onValidChange={onValidChange} />,
-    delivery: (
-      <div className="space-y-3">
-        <h2 className="text-lg font-semibold text-text">{t('checkout.deliveryMethod')}</h2>
-        {(['standard', 'express'] as const).map(method => (
-          <button
-            key={method}
-            className={`w-full bg-surface rounded-xl p-4 border-[1.5px] flex items-center justify-between transition-colors ${
-              method === 'standard' ? 'border-primary' : 'border-border hover:border-primary/30'
-            }`}
-          >
-            <div>
-              <p className="text-sm font-semibold text-text">{t(`checkout.${method}Delivery`)}</p>
-              <p className="text-xs text-text-muted">
-                {method === 'standard' ? '2-4 business days' : 'Same day in Valley'}
-              </p>
-            </div>
-            <span className="text-sm font-semibold text-text">
-              {method === 'standard' ? 'NPR 150' : 'NPR 300'}
-            </span>
-          </button>
-        ))}
-      </div>
-    ),
+    delivery: <DeliveryStep onValidChange={onValidChange} />,
     payment: (
       <div className="space-y-3">
         <h2 className="text-lg font-semibold text-text">{t('checkout.payment')}</h2>

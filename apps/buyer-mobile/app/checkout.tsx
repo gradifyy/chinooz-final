@@ -27,6 +27,7 @@ import { formatNPR } from '@chinooz/utils'
 import { useCartStore, useCheckoutStore, useUIStore } from '@chinooz/state'
 import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
 import AddressStep from '../components/AddressStep'
+import DeliveryStep from '../components/DeliveryStep'
 import type { CheckoutStep } from '@chinooz/state'
 
 const STEPS: CheckoutStep[] = ['address', 'delivery', 'payment', 'review']
@@ -270,39 +271,7 @@ function StepContent({ step, onValidChange }: { step: CheckoutStep; onValidChang
 
   const content: Record<CheckoutStep, React.ReactNode> = {
     address: <AddressStep onValidChange={onValidChange} />,
-    delivery: (
-      <View style={{ gap: spacing[3] }}>
-        <Text style={{ fontSize: 18, fontWeight: '600', color: colors.text }}>{t('checkout.deliveryMethod')}</Text>
-        {(['standard', 'express'] as const).map(method => (
-          <TouchableOpacity
-            key={method}
-            style={{
-              backgroundColor: colors.surface,
-              borderRadius: radii.lg,
-              padding: spacing[4],
-              borderWidth: 1.5,
-              borderColor: method === 'standard' ? colors.primary : colors.border,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-            activeOpacity={0.7}
-          >
-            <View>
-              <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>
-                {t(`checkout.${method}Delivery`)}
-              </Text>
-              <Text style={{ fontSize: 12, color: colors.textMuted }}>
-                {method === 'standard' ? '2-4 business days' : 'Same day in Valley'}
-              </Text>
-            </View>
-            <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>
-              {method === 'standard' ? 'NPR 150' : 'NPR 300'}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    ),
+    delivery: <DeliveryStep onValidChange={onValidChange} />,
     payment: (
       <View style={{ gap: spacing[3] }}>
         <Text style={{ fontSize: 18, fontWeight: '600', color: colors.text }}>{t('checkout.payment')}</Text>
