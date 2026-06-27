@@ -20,7 +20,13 @@
     "ok": "OK",
     "yes": "Yes",
     "no": "No",
-    "off": "OFF"
+    "off": "OFF",
+    "offlineBanner": "You're offline. Showing cached data.",
+    "loadingProfile": "Loading profile",
+    "loadingOrders": "Loading orders",
+    "loadingWishlist": "Loading wishlist",
+    "loadingAddresses": "Loading addresses",
+    "loadingPayments": "Loading payment methods"
   },
   "nav": {
     "home": "Home",

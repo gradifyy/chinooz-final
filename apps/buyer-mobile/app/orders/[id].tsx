@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useRef, useCallback } from 'react'
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Image,
   ActivityIndicator,
+  findNodeHandle,
 } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -17,6 +18,7 @@ import { useSessionStore } from '@chinooz/state'
 import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
 import { OrderStatusTimeline } from '@chinooz/ui'
 import SectionReveal from '../../components/SectionReveal'
+import OrderActions from '../../components/OrderActions'
 import type { Order, OrderStatus, CartItem, TimelineStep, ShipmentTimeline } from '@chinooz/types'
 
 const STATUS_COLORS: Record<OrderStatus, { bg: string; text: string }> = {
@@ -356,6 +358,8 @@ export default function OrderDetailScreen() {
   const insets = useSafeAreaInsets()
   const reduced = useReducedMotion()
   const isLoggedIn = useSessionStore(s => s.isLoggedIn)
+  const scrollRef = useRef<ScrollView>(null)
+  const timelineY = useRef(0)
 
   const { data: order, isLoading, isError } = useOrderById(id || '')
 
@@ -384,6 +388,10 @@ export default function OrderDetailScreen() {
   }, [order, sellerGroups, timelineSteps])
 
   const statusStyle = order ? STATUS_COLORS[order.status] : null
+
+  const scrollToTimeline = useCallback(() => {
+    scrollRef.current?.scrollTo({ y: timelineY.current, animated: true })
+  }, [])
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>
@@ -454,6 +462,7 @@ export default function OrderDetailScreen() {
         </View>
       ) : (
         <ScrollView
+          ref={scrollRef}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
             padding: spacing[4],
@@ -523,7 +532,10 @@ export default function OrderDetailScreen() {
 
           {/* Status Timeline */}
           <SectionReveal delay={50}>
-            <View style={{ gap: spacing[3] }}>
+            <View
+              style={{ gap: spacing[3] }}
+              onLayout={e => { timelineY.current = e.nativeEvent.layout.y }}
+            >
               <SectionHeader title={t('orders.statusTimeline')} />
               <OrderStatusTimeline
                 steps={timelineSteps}
@@ -606,6 +618,11 @@ export default function OrderDetailScreen() {
               <SectionHeader title={t('orders.paymentSummary')} />
               <PriceBreakdown order={order} />
             </View>
+          </SectionReveal>
+
+          {/* Order Actions */}
+          <SectionReveal delay={250}>
+            <OrderActions order={order} onScrollToTimeline={scrollToTimeline} />
           </SectionReveal>
         </ScrollView>
       )}

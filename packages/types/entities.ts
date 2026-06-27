@@ -179,3 +179,31 @@ export interface UserProfile {
   defaultAddressId?: string
   addresses: Address[]
 }
+
+export type CancelReason = 'changed_mind' | 'cheaper_elsewhere' | 'ordered_by_mistake' | 'other'
+
+export interface ReturnRequest {
+  orderId: string
+  itemIds: string[]
+  reason: CancelReason
+  reasonDetail?: string
+  status: 'requested' | 'approved' | 'refund_processed'
+  createdAt: string
+}
+
+export interface OrderInvoice {
+  orderId: string
+  invoiceNumber: string
+  issuedAt: string
+  companyName: string
+  companyAddress: string
+  companyPan: string
+  customerName: string
+  customerAddress: string
+  items: { name: string; quantity: number; unitPrice: number; total: number }[]
+  subtotal: number
+  vat: number
+  deliveryFee: number
+  discount: number
+  grandTotal: number
+}

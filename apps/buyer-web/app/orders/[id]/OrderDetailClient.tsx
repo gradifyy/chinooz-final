@@ -1,12 +1,13 @@
 'use client'
 
-import React, { useMemo } from 'react'
+import React, { useMemo, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { formatNPR } from '@chinooz/utils'
 import { useReducedMotion, OrderStatusTimeline } from '@chinooz/ui-web'
 import { duration, easing } from '@chinooz/theme'
+import OrderActions from '../../components/OrderActions'
 import type { Order, OrderStatus, CartItem, TimelineStep, ShipmentTimeline } from '@chinooz/types'
 
 const STATUS_COLORS: Record<OrderStatus, { bg: string; text: string }> = {
@@ -388,6 +389,11 @@ export default function OrderDetailClient({ order }: { order: Order }) {
           <SectionHeader title={t('orders.paymentSummary')} id="payment-heading" />
           <PriceBreakdown order={order} />
         </div>
+      </SectionReveal>
+
+      {/* Order Actions */}
+      <SectionReveal delay={250}>
+        <OrderActions order={order} />
       </SectionReveal>
     </div>
   )
