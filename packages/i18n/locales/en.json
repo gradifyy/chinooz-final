@@ -52,6 +52,16 @@
     "breadcrumbPath": "Category path",
     "allCategories": "All Categories",
     "toggleSidebar": "Toggle sidebar",
+    "filters": "Filters",
+    "sortBy": "Sort",
+    "results": "{{count}} results",
+    "onSale": "On Sale",
+    "freeDelivery": "Free Delivery",
+    "topRated": "4★+",
+    "newArrivals": "New Arrivals",
+    "priceLowHigh": "Price: Low to High",
+    "priceHighLow": "Price: High to Low",
+    "mostPopular": "Most Popular",
     "browseAll": "Browse All Categories"
   },
   "deals": {

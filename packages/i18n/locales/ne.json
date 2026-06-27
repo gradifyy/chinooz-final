@@ -52,6 +52,16 @@
     "breadcrumbPath": "श्रेणी पथ",
     "allCategories": "सबै श्रेणीहरू",
     "toggleSidebar": "साइडबार टगल गर्नुहोस्",
+    "filters": "फिल्टर",
+    "sortBy": "क्रम",
+    "results": "{{count}} नतिजाहरू",
+    "onSale": "सेलमा",
+    "freeDelivery": "निःशुल्क डेलिभरी",
+    "topRated": "4★+",
+    "newArrivals": "नयाँ आगमन",
+    "priceLowHigh": "मूल्य: कम देखि उच्च",
+    "priceHighLow": "मूल्य: उच्च देखि कम",
+    "mostPopular": "सबैभन्दा लोकप्रिय",
     "browseAll": "सबै श्रेणीहरू ब्राउज गर्नुहोस्"
   },
   "deals": {
