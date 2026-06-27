@@ -105,7 +105,12 @@
     "markAllRead": "Mark all as read",
     "unread": "{{count}} unread",
     "chatPlaceholder": "Ask me anything about your orders...",
-    "chatGreeting": "Hi! How can I help you today?"
+    "chatGreeting": "Hi! How can I help you today?",
+    "today": "Today",
+    "thisWeek": "This week",
+    "earlier": "Earlier",
+    "delete": "Delete",
+    "settings": "Notification settings"
   },
   "profile": {
     "title": "Profile",
@@ -131,6 +136,13 @@
     "accountSection": "Account",
     "preferencesSection": "Preferences",
     "supportSection": "Support",
+    "welcomeTitle": "Welcome to Chinooz",
+    "welcomeSubtitle": "Sign in to access your orders, wishlist, and more",
+    "signIn": "Sign in",
+    "confirmSignOutTitle": "Sign out?",
+    "confirmSignOutMsg": "You will need to sign in again to access your account.",
+    "stay": "Stay",
+    "signOutAction": "Sign out",
     "help": "Help & Support",
     "logout": "Logout",
     "login": "Login",
@@ -439,5 +451,24 @@
     "saving": "Saving...",
     "saved": "Address saved!",
     "reminder": "Set a delivery address for faster checkout."
+  },
+  "orderCard": {
+    "multipleSellers": "Multiple sellers",
+    "shipments": "{{count}} shipments",
+    "item": "item",
+    "items": "items",
+    "payNow": "Pay now",
+    "track": "Track",
+    "buyAgain": "Buy again",
+    "viewDetails": "View details",
+    "status": {
+      "pending": "Pending",
+      "confirmed": "Confirmed",
+      "processing": "Processing",
+      "shipped": "Shipped",
+      "delivered": "Delivered",
+      "cancelled": "Cancelled",
+      "returned": "Returned"
+    }
   }
 }

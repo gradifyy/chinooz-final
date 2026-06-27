@@ -1,10 +1,12 @@
-import React, { useMemo } from 'react'
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native'
+import React, { useState, useMemo, useCallback } from 'react'
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Modal, Pressable } from 'react-native'
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated'
 import { useTranslation } from 'react-i18next'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useOrders, useUserProfile } from '@chinooz/hooks'
-import { colors, radii, spacing } from '@chinooz/theme'
+import { useSessionStore } from '@chinooz/state'
+import { colors, radii, spacing, duration } from '@chinooz/theme'
 import { Avatar } from '@chinooz/ui'
 import type { OrderStatus } from '@chinooz/types'
 
@@ -13,7 +15,6 @@ interface MenuItem {
   labelKey: string
   icon: string
   onPress: () => void
-  rightElement?: React.ReactNode
   destructive?: boolean
 }
 
@@ -27,8 +28,13 @@ export default function ProfileScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
 
+  const isLoggedIn = useSessionStore(s => s.isLoggedIn)
+  const logout = useSessionStore(s => s.logout)
+
   const { data: profile } = useUserProfile()
   const { data: allOrders } = useOrders()
+
+  const [showSignOut, setShowSignOut] = useState(false)
 
   const orderCounts = useMemo(() => {
     const orders = allOrders ?? []
@@ -40,58 +46,42 @@ export default function ProfileScreen() {
     }
   }, [allOrders])
 
+  const requireAuth = useCallback((onAuthed: () => void) => {
+    if (isLoggedIn) {
+      onAuthed()
+    } else {
+      router.push('/phone-entry')
+    }
+  }, [isLoggedIn, router])
+
   const statusChips = [
-    {
-      key: 'to_pay',
-      label: t('orders.tabToPay'),
-      count: orderCounts.toPay,
-      icon: '💳',
-      color: '#F59E0B',
-    },
-    {
-      key: 'processing',
-      label: t('orders.tabProcessing'),
-      count: orderCounts.processing,
-      icon: '⚙️',
-      color: '#2563EB',
-    },
-    {
-      key: 'shipped',
-      label: t('orders.tabShipped'),
-      count: orderCounts.shipped,
-      icon: '🚚',
-      color: '#2563EB',
-    },
-    {
-      key: 'delivered',
-      label: t('orders.tabDelivered'),
-      count: orderCounts.delivered,
-      icon: '✅',
-      color: '#16A34A',
-    },
+    { key: 'to_pay', label: t('orders.tabToPay'), count: orderCounts.toPay, icon: '💳', color: '#F59E0B' },
+    { key: 'processing', label: t('orders.tabProcessing'), count: orderCounts.processing, icon: '⚙️', color: '#2563EB' },
+    { key: 'shipped', label: t('orders.tabShipped'), count: orderCounts.shipped, icon: '🚚', color: '#2563EB' },
+    { key: 'delivered', label: t('orders.tabDelivered'), count: orderCounts.delivered, icon: '✅', color: '#16A34A' },
   ]
 
-  const sections: MenuSection[] = [
+  const authedSections: MenuSection[] = [
     {
       headerKey: 'profile.shoppingSection',
       items: [
-        { key: 'orders', labelKey: 'profile.myOrders', icon: '📦', onPress: () => router.push('/orders') },
-        { key: 'wishlist', labelKey: 'profile.wishlist', icon: '❤️', onPress: () => {} },
-        { key: 'reviews', labelKey: 'profile.reviews', icon: '⭐', onPress: () => {} },
+        { key: 'orders', labelKey: 'profile.myOrders', icon: '📦', onPress: () => requireAuth(() => router.push('/orders')) },
+        { key: 'wishlist', labelKey: 'profile.wishlist', icon: '❤️', onPress: () => requireAuth(() => {}) },
+        { key: 'reviews', labelKey: 'profile.reviews', icon: '⭐', onPress: () => requireAuth(() => {}) },
       ],
     },
     {
       headerKey: 'profile.accountSection',
       items: [
-        { key: 'addresses', labelKey: 'profile.addresses', icon: '📍', onPress: () => {} },
-        { key: 'payment', labelKey: 'profile.paymentMethods', icon: '💳', onPress: () => {} },
+        { key: 'addresses', labelKey: 'profile.addresses', icon: '📍', onPress: () => requireAuth(() => {}) },
+        { key: 'payment', labelKey: 'profile.paymentMethods', icon: '💳', onPress: () => requireAuth(() => {}) },
       ],
     },
     {
       headerKey: 'profile.preferencesSection',
       items: [
         { key: 'language', labelKey: 'profile.language', icon: '🌐', onPress: () => {} },
-        { key: 'notifications', labelKey: 'profile.notifications', icon: '🔔', onPress: () => {} },
+        { key: 'notifications', labelKey: 'profile.notifications', icon: '🔔', onPress: () => requireAuth(() => {}) },
         { key: 'appearance', labelKey: 'profile.appearance', icon: '🌙', onPress: () => {} },
       ],
     },
@@ -106,101 +96,177 @@ export default function ProfileScreen() {
     },
   ]
 
+  const safeItems: MenuItem[] = [
+    { key: 'language', labelKey: 'profile.language', icon: '🌐', onPress: () => {} },
+    { key: 'help', labelKey: 'profile.helpCenter', icon: '❓', onPress: () => {} },
+    { key: 'about', labelKey: 'profile.about', icon: 'ℹ️', onPress: () => {} },
+    { key: 'terms', labelKey: 'profile.termsPrivacy', icon: '📄', onPress: () => {} },
+  ]
+
+  const handleSignOut = () => {
+    setShowSignOut(false)
+    logout()
+  }
+
+  const renderMenuRow = (item: MenuItem, showDivider: boolean) => (
+    <React.Fragment key={item.key}>
+      <TouchableOpacity
+        onPress={item.onPress}
+        activeOpacity={0.7}
+        style={styles.menuRow}
+        accessibilityRole="button"
+        accessibilityLabel={t(item.labelKey)}
+      >
+        <Text style={styles.menuIcon}>{item.icon}</Text>
+        <Text style={[styles.menuLabel, item.destructive && { color: '#DC2626' }]}>
+          {t(item.labelKey)}
+        </Text>
+        <Text style={styles.menuChevron}>›</Text>
+      </TouchableOpacity>
+      {showDivider && <View style={styles.divider} />}
+    </React.Fragment>
+  )
+
   return (
-    <ScrollView
-      style={[styles.screen, { paddingTop: insets.top }]}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-    >
+    <View style={[styles.screen, { paddingTop: insets.top }]}>
       <View style={styles.topBar}>
         <Text style={styles.title}>{t('profile.title')}</Text>
       </View>
 
-      <View style={styles.headerCard}>
-        <Avatar
-          source={profile?.avatar}
-          name={profile?.name}
-          size="xl"
-        />
-        <Text style={styles.name}>{profile?.name ?? '—'}</Text>
-        <Text style={styles.contact}>
-          {profile?.phone ?? profile?.email ?? ''}
-        </Text>
-        <TouchableOpacity
-          onPress={() => {}}
-          activeOpacity={0.7}
-          style={styles.editLink}
-          accessibilityRole="button"
-          accessibilityLabel={t('profile.editProfile')}
-        >
-          <Text style={styles.editText}>{t('profile.editProfile')}</Text>
-          <Text style={styles.chevron}>›</Text>
-        </TouchableOpacity>
-      </View>
-
       <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.chipsRow}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
       >
-        {statusChips.map(chip => (
-          <TouchableOpacity
-            key={chip.key}
-            onPress={() => router.push({ pathname: '/orders', params: { status: chip.key } })}
-            activeOpacity={0.8}
-            style={styles.chip}
-            accessibilityRole="button"
-            accessibilityLabel={`${chip.label}: ${chip.count} orders`}
-          >
-            <Text style={[styles.chipIcon, { color: chip.color }]}>{chip.icon}</Text>
-            <Text style={styles.chipCount}>{chip.count}</Text>
-            <Text style={styles.chipLabel}>{chip.label}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+        {!isLoggedIn ? (
+          <Animated.View entering={FadeIn.duration(duration.normal)} exiting={FadeOut.duration(duration.normal)}>
+            <View style={styles.signInCard}>
+              <View style={styles.illustration}>
+                <Text style={styles.illustrationIcon}>👤</Text>
+              </View>
+              <Text style={styles.welcomeTitle}>{t('profile.welcomeTitle')}</Text>
+              <Text style={styles.welcomeSubtitle}>{t('profile.welcomeSubtitle')}</Text>
+              <TouchableOpacity
+                onPress={() => router.push('/phone-entry')}
+                activeOpacity={0.85}
+                style={styles.signInCta}
+                accessibilityRole="button"
+                accessibilityLabel={t('profile.signIn')}
+              >
+                <Text style={styles.signInCtaText}>{t('profile.signIn')}</Text>
+              </TouchableOpacity>
+            </View>
 
-      {sections.map((section, si) => (
-        <View key={section.headerKey} style={styles.section}>
-          <Text style={styles.sectionHeader}>{t(section.headerKey).toUpperCase()}</Text>
-          <View style={styles.sectionCard}>
-            {section.items.map((item, ii) => (
-              <React.Fragment key={item.key}>
+            <View style={styles.section}>
+              <View style={styles.sectionCard}>
+                {safeItems.map((item, ii) => renderMenuRow(item, ii < safeItems.length - 1))}
+              </View>
+            </View>
+          </Animated.View>
+        ) : (
+          <Animated.View entering={FadeIn.duration(duration.normal)} exiting={FadeOut.duration(duration.normal)}>
+            <View style={styles.headerCard}>
+              <Avatar source={profile?.avatar} name={profile?.name} size="xl" />
+              <Text style={styles.name}>{profile?.name ?? '—'}</Text>
+              <Text style={styles.contact}>
+                {profile?.phone ?? profile?.email ?? ''}
+              </Text>
+              <TouchableOpacity
+                onPress={() => {}}
+                activeOpacity={0.7}
+                style={styles.editLink}
+                accessibilityRole="button"
+                accessibilityLabel={t('profile.editProfile')}
+              >
+                <Text style={styles.editText}>{t('profile.editProfile')}</Text>
+                <Text style={styles.chevron}>›</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.chipsRow}
+            >
+              {statusChips.map(chip => (
                 <TouchableOpacity
-                  onPress={item.onPress}
+                  key={chip.key}
+                  onPress={() => router.push({ pathname: '/orders', params: { status: chip.key } })}
+                  activeOpacity={0.8}
+                  style={styles.chip}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${chip.label}: ${chip.count} orders`}
+                >
+                  <Text style={[styles.chipIcon, { color: chip.color }]}>{chip.icon}</Text>
+                  <Text style={styles.chipCount}>{chip.count}</Text>
+                  <Text style={styles.chipLabel}>{chip.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {authedSections.map(section => (
+              <View key={section.headerKey} style={styles.section}>
+                <Text style={styles.sectionHeader}>{t(section.headerKey).toUpperCase()}</Text>
+                <View style={styles.sectionCard}>
+                  {section.items.map((item, ii) => renderMenuRow(item, ii < section.items.length - 1))}
+                </View>
+              </View>
+            ))}
+
+            <View style={styles.section}>
+              <View style={styles.sectionCard}>
+                <TouchableOpacity
+                  onPress={() => setShowSignOut(true)}
                   activeOpacity={0.7}
                   style={styles.menuRow}
                   accessibilityRole="button"
-                  accessibilityLabel={t(item.labelKey)}
+                  accessibilityLabel={t('profile.signOut')}
                 >
-                  <Text style={styles.menuIcon}>{item.icon}</Text>
-                  <Text style={styles.menuLabel}>{t(item.labelKey)}</Text>
+                  <Text style={styles.menuIcon}>🚪</Text>
+                  <Text style={[styles.menuLabel, { color: '#DC2626' }]}>{t('profile.signOut')}</Text>
                   <Text style={styles.menuChevron}>›</Text>
                 </TouchableOpacity>
-                {ii < section.items.length - 1 && <View style={styles.divider} />}
-              </React.Fragment>
-            ))}
-          </View>
-        </View>
-      ))}
+              </View>
+            </View>
+          </Animated.View>
+        )}
 
-      <View style={styles.section}>
-        <View style={styles.sectionCard}>
-          <TouchableOpacity
-            onPress={() => {}}
-            activeOpacity={0.7}
-            style={styles.menuRow}
-            accessibilityRole="button"
-            accessibilityLabel={t('profile.signOut')}
-          >
-            <Text style={styles.menuIcon}>🚪</Text>
-            <Text style={[styles.menuLabel, { color: '#DC2626' }]}>{t('profile.signOut')}</Text>
-            <Text style={styles.menuChevron}>›</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+        <View style={{ height: spacing[8] }} />
+      </ScrollView>
 
-      <View style={{ height: spacing[8] }} />
-    </ScrollView>
+      <Modal
+        visible={showSignOut}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSignOut(false)}
+      >
+        <Pressable style={styles.overlay} onPress={() => setShowSignOut(false)}>
+          <Pressable style={styles.dialog} onPress={e => e.stopPropagation()}>
+            <Text style={styles.dialogTitle}>{t('profile.confirmSignOutTitle')}</Text>
+            <Text style={styles.dialogMsg}>{t('profile.confirmSignOutMsg')}</Text>
+            <View style={styles.dialogActions}>
+              <TouchableOpacity
+                onPress={() => setShowSignOut(false)}
+                activeOpacity={0.7}
+                style={styles.dialogStay}
+                accessibilityRole="button"
+                accessibilityLabel={t('profile.stay')}
+              >
+                <Text style={styles.dialogStayText}>{t('profile.stay')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleSignOut}
+                activeOpacity={0.7}
+                style={styles.dialogLeave}
+                accessibilityRole="button"
+                accessibilityLabel={t('profile.signOutAction')}
+              >
+                <Text style={styles.dialogLeaveText}>{t('profile.signOutAction')}</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </View>
   )
 }
 
@@ -224,6 +290,64 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.text,
   },
+
+  // --- Sign-in prompt ---
+  signInCard: {
+    marginHorizontal: spacing[4],
+    marginTop: spacing[4],
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    padding: spacing[5],
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  illustration: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.primary50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing[4],
+  },
+  illustrationIcon: {
+    fontSize: 36,
+  },
+  welcomeTitle: {
+    fontSize: 22,
+    fontWeight: '600',
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: spacing[2],
+  },
+  welcomeSubtitle: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: spacing[5],
+  },
+  signInCta: {
+    backgroundColor: colors.primary,
+    borderRadius: radii.lg,
+    height: 48,
+    paddingHorizontal: spacing[6],
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'stretch',
+  },
+  signInCtaText: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
+  // --- Logged-in header ---
   headerCard: {
     marginHorizontal: spacing[4],
     marginTop: spacing[4],
@@ -265,6 +389,8 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '600',
   },
+
+  // --- Status chips ---
   chipsRow: {
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[4],
@@ -284,19 +410,11 @@ const styles = StyleSheet.create({
     elevation: 1,
     gap: spacing[1],
   },
-  chipIcon: {
-    fontSize: 24,
-  },
-  chipCount: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  chipLabel: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: colors.textMuted,
-  },
+  chipIcon: { fontSize: 24 },
+  chipCount: { fontSize: 16, fontWeight: '600', color: colors.text },
+  chipLabel: { fontSize: 12, fontWeight: '400', color: colors.textMuted },
+
+  // --- Sections ---
   section: {
     marginTop: spacing[4],
     marginHorizontal: spacing[4],
@@ -325,25 +443,70 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[4],
     gap: spacing[3],
   },
-  menuIcon: {
-    fontSize: 24,
-    width: 32,
-    textAlign: 'center',
-  },
-  menuLabel: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '500',
-    color: colors.text,
-  },
-  menuChevron: {
-    fontSize: 20,
-    color: colors.textTertiary,
-    fontWeight: '300',
-  },
+  menuIcon: { fontSize: 24, width: 32, textAlign: 'center' },
+  menuLabel: { flex: 1, fontSize: 16, fontWeight: '500', color: colors.text },
+  menuChevron: { fontSize: 20, color: colors.textTertiary, fontWeight: '300' },
   divider: {
     height: 1,
     backgroundColor: '#E5E5E5',
     marginLeft: spacing[4] + 32 + spacing[3],
+  },
+
+  // --- Confirm dialog ---
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing[4],
+  },
+  dialog: {
+    backgroundColor: colors.surface,
+    borderRadius: radii['2xl'],
+    padding: spacing[5],
+    width: '100%',
+    maxWidth: 360,
+  },
+  dialogTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: spacing[2],
+  },
+  dialogMsg: {
+    fontSize: 14,
+    color: colors.textMuted,
+    lineHeight: 20,
+    marginBottom: spacing[5],
+  },
+  dialogActions: {
+    flexDirection: 'row',
+    gap: spacing[3],
+  },
+  dialogStay: {
+    flex: 1,
+    height: 44,
+    borderRadius: radii.lg,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dialogStayText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  dialogLeave: {
+    flex: 1,
+    height: 44,
+    borderRadius: radii.lg,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dialogLeaveText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.white,
   },
 })

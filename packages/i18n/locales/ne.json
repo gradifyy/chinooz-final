@@ -105,7 +105,12 @@
     "markAllRead": "सबै पढिएको चिन्ह लगाउनुहोस्",
     "unread": "{{count}} अपठित",
     "chatPlaceholder": "तपाईंको अर्डरबारे केही पनि सोध्नुहोस्...",
-    "chatGreeting": "नमस्ते! आज म तपाईंलाई कसरी मद्दत गर्न सक्छु?"
+    "chatGreeting": "नमस्ते! आज म तपाईंलाई कसरी मद्दत गर्न सक्छु?",
+    "today": "आज",
+    "thisWeek": "यो हप्ता",
+    "earlier": "अघि",
+    "delete": "मेटाउनुहोस्",
+    "settings": "सूचना सेटिङहरू"
   },
   "profile": {
     "title": "प्रोफाइल",
@@ -131,6 +136,13 @@
     "accountSection": "खाता",
     "preferencesSection": "प्राथमिकताहरू",
     "supportSection": "सहायता",
+    "welcomeTitle": "चिनुजमा स्वागत छ",
+    "welcomeSubtitle": "तपाईंको अर्डर, इच्छासूची, र थप पहुँच गर्न साइन इन गर्नुहोस्",
+    "signIn": "साइन इन",
+    "confirmSignOutTitle": "साइन आउट गर्नुहोस्?",
+    "confirmSignOutMsg": "तपाईंको खाता पहुँच गर्न फेरि साइन इन गर्नुपर्नेछ।",
+    "stay": "रहनुहोस्",
+    "signOutAction": "साइन आउट",
     "help": "सहायता र समर्थन",
     "logout": "लगआउट",
     "login": "लगइन",
@@ -439,5 +451,24 @@
     "saving": "सुरक्षित गर्दैछ...",
     "saved": "ठेगाना सुरक्षित भयो!",
     "reminder": "छिटो चेकआउटको लागि डेलिभरी ठेगाना सेट गर्नुहोस्।"
+  },
+  "orderCard": {
+    "multipleSellers": "धेरै विक्रेता",
+    "shipments": "{{count}} शिपमेन्टहरू",
+    "item": "सामान",
+    "items": "सामानहरू",
+    "payNow": "अहिले तिर्नुहोस्",
+    "track": "ट्र्याक गर्नुहोस्",
+    "buyAgain": "फेरि किन्नुहोस्",
+    "viewDetails": "विवरण हेर्नुहोस्",
+    "status": {
+      "pending": "पेन्डिङ",
+      "confirmed": "पुष्टि भयो",
+      "processing": "प्रशोधन",
+      "shipped": "पठाइयो",
+      "delivered": "डेलिभर भयो",
+      "cancelled": "रद्द भयो",
+      "returned": "फिर्ता भयो"
+    }
   }
 }

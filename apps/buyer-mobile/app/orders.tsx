@@ -23,6 +23,7 @@ import Animated, {
 import { colors, radii, spacing, duration, easing } from '@chinooz/theme'
 import { formatNPR } from '@chinooz/utils'
 import { getOrders } from '@chinooz/mock-data'
+import { useSessionStore } from '@chinooz/state'
 import type { Order, OrderStatus } from '@chinooz/types'
 import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
 
@@ -286,6 +287,15 @@ export default function OrdersScreen() {
   const params = useLocalSearchParams<{ status?: string }>()
   const insets = useSafeAreaInsets()
   const reduced = useReducedMotion()
+  const isLoggedIn = useSessionStore(s => s.isLoggedIn)
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      router.replace('/phone-entry')
+    }
+  }, [isLoggedIn])
+
+  if (!isLoggedIn) return null
 
   const initialTab: TabKey = (() => {
     const s = params.status

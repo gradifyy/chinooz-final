@@ -8,6 +8,7 @@ import { Container, Screen } from '@chinooz/ui-web'
 import { formatNPR } from '@chinooz/utils'
 import { getOrders } from '@chinooz/mock-data'
 import { useReducedMotion } from '@chinooz/ui-web'
+import { useSessionStore } from '@chinooz/state'
 import { duration, easing } from '@chinooz/theme'
 import type { Order, OrderStatus } from '@chinooz/types'
 
@@ -233,6 +234,15 @@ export default function OrdersPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const reduced = useReducedMotion()
+  const isLoggedIn = useSessionStore(s => s.isLoggedIn)
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      router.replace('/phone-entry')
+    }
+  }, [isLoggedIn])
+
+  if (!isLoggedIn) return null
 
   const initialTab: TabKey = (() => {
     const s = searchParams.get('status')
