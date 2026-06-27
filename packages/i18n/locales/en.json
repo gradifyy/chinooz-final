@@ -111,7 +111,15 @@
     "thisWeek": "This week",
     "earlier": "Earlier",
     "delete": "Delete",
-    "settings": "Notification settings"
+    "settings": "Notification settings",
+    "typeMessage": "Type a message",
+    "send": "Send",
+    "attachImage": "Attach image",
+    "loadEarlier": "Load earlier messages",
+    "store": "Store",
+    "yesterday": "Yesterday",
+    "delivered": "Delivered",
+    "seen": "Seen"
   },
   "profile": {
     "title": "Profile",
@@ -325,7 +333,24 @@
     "viewDetails": "View details",
     "ordersCount": "{{count}} orders",
     "dateFilter": "Date range",
-    "clearSearch": "Clear search"
+    "clearSearch": "Clear search",
+    "orderDetail": "Order Detail",
+    "statusTimeline": "Status Timeline",
+    "orderItems": "Order Items",
+    "deliveryAddress": "Delivery Address",
+    "paymentSummary": "Payment Summary",
+    "priceBreakdown": "Price Breakdown",
+    "subtotal": "Subtotal",
+    "vatInclusive": "Incl. 13% VAT",
+    "deliveryFee": "Delivery Fee",
+    "discount": "Discount",
+    "grandTotal": "Grand Total",
+    "shipment": "Shipment",
+    "quantity": "Qty",
+    "orderDate": "Order Date",
+    "notFound": "Order not found",
+    "errorLoading": "Error loading order details",
+    "paymentMethod": "Payment Method"
   },
   "wishlist": {
     "title": "Wishlist",

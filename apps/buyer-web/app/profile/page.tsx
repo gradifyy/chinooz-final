@@ -157,7 +157,7 @@ export default function ProfilePage() {
       headerKey: 'profile.shoppingSection',
       items: [
         { key: 'orders', labelKey: 'profile.myOrders', icon: '📦', href: '/orders' },
-        { key: 'wishlist', labelKey: 'profile.wishlist', icon: '❤️' },
+        { key: 'wishlist', labelKey: 'profile.wishlist', icon: '❤️', href: '/wishlist' },
         { key: 'reviews', labelKey: 'profile.reviews', icon: '⭐' },
       ],
     },

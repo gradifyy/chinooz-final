@@ -66,7 +66,7 @@ export default function ProfileScreen() {
       headerKey: 'profile.shoppingSection',
       items: [
         { key: 'orders', labelKey: 'profile.myOrders', icon: '📦', onPress: () => requireAuth(() => router.push('/orders')) },
-        { key: 'wishlist', labelKey: 'profile.wishlist', icon: '❤️', onPress: () => requireAuth(() => {}) },
+        { key: 'wishlist', labelKey: 'profile.wishlist', icon: '❤️', onPress: () => requireAuth(() => router.push('/wishlist')) },
         { key: 'reviews', labelKey: 'profile.reviews', icon: '⭐', onPress: () => requireAuth(() => {}) },
       ],
     },

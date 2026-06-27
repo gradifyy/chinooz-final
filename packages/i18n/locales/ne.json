@@ -111,7 +111,15 @@
     "thisWeek": "यो हप्ता",
     "earlier": "अघि",
     "delete": "मेटाउनुहोस्",
-    "settings": "सूचना सेटिङहरू"
+    "settings": "सूचना सेटिङहरू",
+    "typeMessage": "सन्देश लेख्नुहोस्",
+    "send": "पठाउनुहोस्",
+    "attachImage": "तस्बिर संलग्न गर्नुहोस्",
+    "loadEarlier": "पुराना सन्देशहरू लोड गर्नुहोस्",
+    "store": "पसल",
+    "yesterday": "हिजो",
+    "delivered": "पठाइयो",
+    "seen": "हेरियो"
   },
   "profile": {
     "title": "प्रोफाइल",
@@ -325,7 +333,24 @@
     "viewDetails": "विवरण हेर्नुहोस्",
     "ordersCount": "{{count}} अर्डरहरू",
     "dateFilter": "मिति सीमा",
-    "clearSearch": "खोज मेटाउनुहोस्"
+    "clearSearch": "खोज मेटाउनुहोस्",
+    "orderDetail": "अर्डर विवरण",
+    "statusTimeline": "स्थिति टाइमलाइन",
+    "orderItems": "अर्डर वस्तुहरू",
+    "deliveryAddress": "डेलिभरी ठेगाना",
+    "paymentSummary": "भुक्तानी सारांश",
+    "priceBreakdown": "मूल्य विवरण",
+    "subtotal": "उप-कुल",
+    "vatInclusive": "१३% VAT सहित",
+    "deliveryFee": "डेलिभरी शुल्क",
+    "discount": "छुट",
+    "grandTotal": "कुल जम्मा",
+    "shipment": "शिपमेन्ट",
+    "quantity": "परिमाण",
+    "orderDate": "अर्डर मिति",
+    "notFound": "अर्डर फेला भएन",
+    "errorLoading": "अर्डर विवरण लोड गर्दा त्रुटि",
+    "paymentMethod": "भुक्तानी विधि"
   },
   "wishlist": {
     "title": "इच्छासूची",
