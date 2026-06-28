@@ -3,6 +3,8 @@ import React from 'react'
 import { motion } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { Container, useReducedMotion } from '@chinooz/ui-web'
+import { TiltCard } from './TiltCard'
+import { MOTION_TOKENS } from '@/lib/motion'
 
 interface BentoTile {
   id: string
@@ -127,22 +129,24 @@ function BentoTileCard({
       : 'col-span-1 row-span-1'
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: reduced ? 0 : 30, scale: reduced ? 1 : 0.95 }}
-      whileInView={{ opacity: 1, y: 0, scale: 1 }}
-      viewport={{ once: true, margin: '-60px' }}
-      transition={{
-        duration: reduced ? 0 : 0.5,
-        delay: reduced ? 0 : index * 0.08,
-        ease: [0.16, 1, 0.3, 1],
-      }}
-      whileHover={
-        reduced
-          ? {}
-          : { y: -4, transition: { duration: 0.25, ease: [0.16, 1, 0.3, 1] } }
-      }
+    <TiltCard
       className={`group relative rounded-2xl md:rounded-3xl border border-border-light p-5 md:p-6 overflow-hidden transition-shadow duration-300 ${sizeClasses} ${tile.color} ${tile.hoverColor}`}
     >
+      <motion.div
+        initial={{ opacity: 0, y: reduced ? 0 : 30, scale: reduced ? 1 : 0.95 }}
+        whileInView={{ opacity: 1, y: 0, scale: 1 }}
+        viewport={{ once: true, margin: '-60px' }}
+        transition={{
+          duration: reduced ? 0 : MOTION_TOKENS.normal,
+          delay: reduced ? 0 : index * 0.08,
+          ease: MOTION_TOKENS.easeOut,
+        }}
+        whileHover={
+          reduced
+            ? {}
+            : { y: -4, transition: { duration: MOTION_TOKENS.fast, ease: MOTION_TOKENS.easeOut } }
+        }
+      >
       {/* Background decorative element */}
       <div className="absolute top-0 right-0 w-32 h-32 opacity-[0.04] group-hover:opacity-[0.08] transition-opacity duration-500">
         <div className="w-full h-full rounded-full bg-primary transform translate-x-8 -translate-y-8" />
@@ -166,15 +170,16 @@ function BentoTileCard({
         {t(tile.descKey)}
       </p>
 
-      {/* Hover reveal line */}
-      <motion.div
-        className="absolute bottom-0 left-0 right-0 h-[3px] bg-primary"
-        initial={{ scaleX: 0 }}
-        whileHover={{ scaleX: 1 }}
-        transition={{ duration: reduced ? 0 : 0.4, ease: [0.16, 1, 0.3, 1] }}
-        style={{ transformOrigin: 'left' }}
-      />
-    </motion.div>
+        {/* Hover reveal line */}
+        <motion.div
+          className="absolute bottom-0 left-0 right-0 h-[3px] bg-primary"
+          initial={{ scaleX: 0 }}
+          whileHover={{ scaleX: 1 }}
+          transition={{ duration: reduced ? 0 : MOTION_TOKENS.normal, ease: MOTION_TOKENS.easeOut }}
+          style={{ transformOrigin: 'left' }}
+        />
+      </motion.div>
+    </TiltCard>
   )
 }
 

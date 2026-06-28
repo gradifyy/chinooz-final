@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { submitWaitlist, validateEmail, validatePhone, type WaitlistFormData } from '@/lib/waitlist-submit'
 import { useReducedMotion } from '@chinooz/ui-web'
+import { revealVariants, staggerContainerVariants, staggerItemVariants, MOTION_TOKENS, getMotionVariants } from '@/lib/motion'
+import { MagneticButton } from './MagneticButton'
 
 interface FormErrors {
   email?: string
@@ -359,11 +361,8 @@ export function WaitlistSignup() {
                 )}
 
                 {/* Submit Button */}
-                <motion.button
-                  type="submit"
+                <MagneticButton
                   disabled={isLoading}
-                  whileHover={!isLoading ? { scale: 1.02 } : {}}
-                  whileTap={!isLoading ? { scale: 0.98 } : {}}
                   className="w-full py-3 px-4 bg-magenta-600 hover:bg-magenta-700 disabled:bg-gray-400 text-white font-semibold rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-magenta-500 focus:ring-offset-2 disabled:cursor-not-allowed"
                 >
                   {isLoading ? (
@@ -378,7 +377,7 @@ export function WaitlistSignup() {
                   ) : (
                     t('waitlist.joinButton')
                   )}
-                </motion.button>
+                </MagneticButton>
 
                 {/* Privacy Note */}
                 <p className="text-xs text-gray-500 text-center">{t('waitlist.privacyNote')}</p>
