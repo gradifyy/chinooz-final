@@ -1,0 +1,12 @@
+# Chinooz Robots.txt
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /.next
+Disallow: /api
+
+# Sitemaps
+Sitemap: https://chinooz.com/sitemap.xml
+
+# Crawl delay (optional, adjust as needed)
+Crawl-delay: 1
