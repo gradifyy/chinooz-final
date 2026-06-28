@@ -35,9 +35,18 @@ export interface PersonalDraft {
   emergencyRelation: string
 }
 
+export type VehicleType = 'bicycle' | 'motorbike' | 'scooter' | ''
+
+export interface VehicleDraft {
+  type: VehicleType
+  makeModel: string
+  plate: string
+  color: string
+}
+
 export interface OnboardingDraft {
   personal: PersonalDraft
-  vehicle: Record<string, unknown>
+  vehicle: VehicleDraft
   documents: Record<string, unknown>
 }
 
@@ -45,7 +54,7 @@ interface OnboardingState {
   currentStep: OnboardingStep
   draft: OnboardingDraft
   setPersonal: (data: Partial<PersonalDraft>) => void
-  setVehicle: (data: Record<string, unknown>) => void
+  setVehicle: (data: Partial<VehicleDraft>) => void
   setDocuments: (data: Record<string, unknown>) => void
   setCurrentStep: (step: OnboardingStep) => void
   reset: () => void
@@ -74,9 +83,16 @@ const emptyPersonal: PersonalDraft = {
   emergencyRelation: '',
 }
 
+const emptyVehicle: VehicleDraft = {
+  type: '',
+  makeModel: '',
+  plate: '',
+  color: '',
+}
+
 const emptyDraft: OnboardingDraft = {
   personal: { ...emptyPersonal },
-  vehicle: {},
+  vehicle: { ...emptyVehicle },
   documents: {},
 }
 
@@ -96,7 +112,10 @@ export const useOnboardingStore = create<OnboardingState>()(
 
       setVehicle: data =>
         set(state => ({
-          draft: { ...state.draft, vehicle: { ...state.draft.vehicle, ...data } },
+          draft: {
+            ...state.draft,
+            vehicle: { ...state.draft.vehicle, ...data },
+          },
         })),
 
       setDocuments: data =>

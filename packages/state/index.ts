@@ -44,5 +44,7 @@ export type {
   OnboardingStep,
   OnboardingDraft,
   PersonalDraft,
+  VehicleDraft,
+  VehicleType,
 } from './rider-onboarding'
 export { ONBOARDING_STEPS } from './rider-onboarding'
