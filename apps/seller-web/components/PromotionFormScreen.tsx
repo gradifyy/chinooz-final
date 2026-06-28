@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { useRouter, useParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, Check, AlertCircle, Tag, Target, Calendar, Save, Percent, DollarSign, Zap, Gift, Truck, RefreshCw, ShoppingCart } from 'lucide-react'
+import { ArrowLeft, Check, AlertCircle, Tag, Target, Calendar, Save, Percent, DollarSign, Zap, Gift, Truck, RefreshCw, ShoppingCart, X } from 'lucide-react'
 import { Container, Screen, useReducedMotion } from '@chinooz/ui-web'
 import { analytics } from '@chinooz/analytics'
 import {
@@ -129,6 +129,8 @@ export default function PromotionFormScreen() {
   const [showUnsaved, setShowUnsaved] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [snackbar, setSnackbar] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [notFound, setNotFound] = useState(false)
 
   const sectionRefs = useRef<Record<SectionKey, HTMLDivElement | null>>({
     typeValue: null,
@@ -137,11 +139,18 @@ export default function PromotionFormScreen() {
   })
   const snackbarTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const { data: existingPromo } = useQuery({
+  const { data: existingPromo, isLoading: isLoadingPromo } = useQuery({
     queryKey: ['promotion', editId],
     queryFn: () => (editId ? getPromotionById(editId) : Promise.resolve(null)),
     enabled: !!editId,
+    retry: false,
   })
+
+  useEffect(() => {
+    if (isEdit && !isLoadingPromo && !existingPromo) {
+      setNotFound(true)
+    }
+  }, [isEdit, isLoadingPromo, existingPromo])
 
   useEffect(() => {
     analytics.screen({ name: isEdit ? 'seller-promotion-edit' : 'seller-promotion-new' })
@@ -269,6 +278,7 @@ export default function PromotionFormScreen() {
 
   const handleSaveDraft = async () => {
     setSaveState('saving')
+    setSaveError(null)
     try {
       if (isEdit && editId) {
         await updatePromotion(editId, { ...buildPromoInput('draft'), id: editId })
@@ -281,7 +291,7 @@ export default function PromotionFormScreen() {
       setTimeout(() => setSaveState('idle'), 2000)
     } catch {
       setSaveState('idle')
-      showSnackbar(t('seller.promotions.builder.saveError'))
+      setSaveError(t('seller.promotions.saveErrorInline'))
     }
   }
 
@@ -291,6 +301,7 @@ export default function PromotionFormScreen() {
       return
     }
     setPublishing(true)
+    setSaveError(null)
     try {
       if (isEdit && editId) {
         await updatePromotion(editId, { ...buildPromoInput('active'), id: editId })
@@ -303,7 +314,7 @@ export default function PromotionFormScreen() {
       setTimeout(() => router.push('/promotions'), 1200)
     } catch {
       setPublishing(false)
-      showSnackbar(t('seller.promotions.builder.saveError'))
+      setSaveError(t('seller.promotions.activateErrorInline'))
     }
   }
 
@@ -344,6 +355,65 @@ export default function PromotionFormScreen() {
     }, 1000)
     return () => clearInterval(id)
   }, [previewData.endsAt])
+
+  if (notFound) {
+    return (
+      <Screen>
+        <Container>
+          <div className="py-20 flex flex-col items-center justify-center text-center">
+            <div className="w-20 h-20 rounded-full bg-primary-50 flex items-center justify-center mb-4">
+              <Tag size={32} className="text-primary" aria-hidden="true" />
+            </div>
+            <h1 className="text-xl font-bold text-text mb-1">{t('seller.promotions.notFoundTitle')}</h1>
+            <p className="text-sm text-text-muted max-w-sm mb-5">{t('seller.promotions.notFoundSubtitle')}</p>
+            <button
+              type="button"
+              onClick={() => router.push('/promotions')}
+              aria-label={t('seller.promotions.notFoundBackAria')}
+              className="h-10 px-5 rounded-md bg-primary text-white text-[14px] font-semibold hover:opacity-95 transition-opacity"
+            >
+              {t('seller.promotions.notFoundBack')}
+            </button>
+          </div>
+        </Container>
+      </Screen>
+    )
+  }
+
+  if (isEdit && isLoadingPromo) {
+    return (
+      <Screen>
+        <div className="sticky top-0 z-sticky bg-surface/95 backdrop-blur border-b border-border-light">
+          <Container>
+            <div className="py-3 flex items-center gap-3">
+              <div className="h-5 w-20 bg-shimmer rounded animate-pulse" />
+              <div className="flex-1"><div className="h-5 w-40 bg-shimmer rounded animate-pulse" /></div>
+            </div>
+          </Container>
+        </div>
+        <Container>
+          <div className="py-6 grid lg:grid-cols-[1fr_360px] gap-6">
+            <div className="flex flex-col gap-4">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="rounded-lg border border-border-light bg-surface p-5" aria-busy="true">
+                  <div className="h-5 w-40 bg-shimmer rounded animate-pulse mb-3" />
+                  <div className="h-10 w-full bg-shimmer rounded animate-pulse mb-4" />
+                  <div className="h-10 w-full bg-shimmer rounded animate-pulse" />
+                </div>
+              ))}
+            </div>
+            <div className="hidden lg:block">
+              <div className="rounded-xl border border-border-light bg-surface p-4" aria-busy="true">
+                <div className="h-32 bg-shimmer rounded animate-pulse mb-3" />
+                <div className="h-4 w-32 bg-shimmer rounded animate-pulse mb-2" />
+                <div className="h-6 w-20 bg-shimmer rounded animate-pulse" />
+              </div>
+            </div>
+          </div>
+        </Container>
+      </Screen>
+    )
+  }
 
   return (
     <Screen>
@@ -389,10 +459,11 @@ export default function PromotionFormScreen() {
               <button
                 type="button"
                 onClick={handleSaveDraft}
-                disabled={publishing}
+                disabled={publishing || saveState === 'saving'}
                 aria-label={t('seller.promotions.builder.saveDraftAria')}
-                className="h-9 px-4 rounded-md border border-border bg-surface text-[14px] font-semibold text-text hover:bg-background transition-colors disabled:opacity-50"
+                className="h-9 px-4 rounded-md border border-border bg-surface text-[14px] font-semibold text-text hover:bg-background transition-colors disabled:opacity-50 inline-flex items-center gap-2"
               >
+                {(saveState === 'saving') && <span className="w-3.5 h-3.5 border-2 border-text-muted border-t-transparent rounded-full animate-spin" aria-hidden="true" />}
                 {t('seller.promotions.builder.saveDraft')}
               </button>
               <button
@@ -400,9 +471,10 @@ export default function PromotionFormScreen() {
                 onClick={handleActivate}
                 disabled={publishing}
                 aria-label={t('seller.promotions.builder.activateAria')}
-                className="h-9 px-4 rounded-md bg-primary text-white text-[14px] font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
+                className="h-9 px-4 rounded-md bg-primary text-white text-[14px] font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 inline-flex items-center gap-2"
               >
-                {publishing ? '…' : t('seller.promotions.builder.activate')}
+                {publishing && <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" aria-hidden="true" />}
+                {publishing ? t('seller.promotions.builder.saving') : t('seller.promotions.builder.activate')}
               </button>
             </div>
           </div>
@@ -411,6 +483,47 @@ export default function PromotionFormScreen() {
 
       <Container>
         <div className="py-6">
+          {/* Save/activate error banner */}
+          <AnimatePresence>
+            {saveError && (
+              <motion.div
+                initial={reduced ? false : { opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reduced ? { opacity: 0 } : { opacity: 0, y: -8 }}
+                transition={reduced ? { duration: 0 } : { duration: 0.2 }}
+                role="alert"
+                aria-live="assertive"
+                className="mb-4 rounded-lg border border-error/30 bg-error/5 p-4 flex items-start gap-3"
+              >
+                <AlertCircle size={20} className="text-error shrink-0 mt-0.5" aria-hidden="true" />
+                <div className="flex-1">
+                  <p className="text-[14px] font-semibold text-error">{saveError}</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <button
+                      type="button"
+                      onClick={() => { setSaveError(null); handleSaveDraft() }}
+                      aria-label={t('seller.promotions.retrySaveAria')}
+                      className="h-8 px-3 rounded-md border border-error/40 text-error text-[13px] font-semibold hover:bg-error/5 transition-colors"
+                    >
+                      {t('seller.promotions.retrySave')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setSaveError(null); handleActivate() }}
+                      aria-label={t('seller.promotions.retryActivateAria')}
+                      className="h-8 px-3 rounded-md border border-primary text-primary text-[13px] font-semibold hover:bg-primary-50 transition-colors"
+                    >
+                      {t('seller.promotions.retryActivate')}
+                    </button>
+                  </div>
+                </div>
+                <button type="button" onClick={() => setSaveError(null)} aria-label="Dismiss" className="text-text-muted hover:text-text p-0.5">
+                  <X size={16} />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <div className="grid lg:grid-cols-[1fr_360px] gap-6">
             {/* Left: Form + section nav */}
             <div className="min-w-0">
@@ -492,10 +605,11 @@ export default function PromotionFormScreen() {
           <button
             type="button"
             onClick={handleSaveDraft}
-            disabled={publishing}
+            disabled={publishing || saveState === 'saving'}
             aria-label={t('seller.promotions.builder.saveDraftAria')}
-            className="flex-1 h-11 rounded-md border border-border bg-surface text-[14px] font-semibold text-text active:bg-background transition-colors disabled:opacity-50"
+            className="flex-1 h-11 rounded-md border border-border bg-surface text-[14px] font-semibold text-text active:bg-background transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-2"
           >
+            {saveState === 'saving' && <span className="w-3.5 h-3.5 border-2 border-text-muted border-t-transparent rounded-full animate-spin" aria-hidden="true" />}
             {t('seller.promotions.builder.saveDraft')}
           </button>
           <button
@@ -503,9 +617,10 @@ export default function PromotionFormScreen() {
             onClick={handleActivate}
             disabled={publishing}
             aria-label={t('seller.promotions.builder.activateAria')}
-            className="flex-1 h-11 rounded-md bg-primary text-white text-[14px] font-semibold active:opacity-90 transition-opacity disabled:opacity-50"
+            className="flex-1 h-11 rounded-md bg-primary text-white text-[14px] font-semibold active:opacity-90 transition-opacity disabled:opacity-50 inline-flex items-center justify-center gap-2"
           >
-            {publishing ? '…' : t('seller.promotions.builder.activate')}
+            {publishing && <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" aria-hidden="true" />}
+            {publishing ? t('seller.promotions.builder.saving') : t('seller.promotions.builder.activate')}
           </button>
         </div>
       </div>

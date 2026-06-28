@@ -366,24 +366,40 @@ export default function PromotionsScreen() {
             ))}
           </View>
         ) : isError ? (
-          <EmptyState
-            title={t('seller.promotions.error')}
-            action={{ label: t('seller.promotions.retry'), onPress: () => refetch() }}
-          />
+          <View style={styles.errorBox} accessibilityRole="alert" accessibilityLiveRegion="assertive">
+            <Text style={styles.errorIcon}>⚠</Text>
+            <Text style={styles.errorTitle}>{t('seller.promotions.error')}</Text>
+            <TouchableOpacity
+              onPress={() => refetch()}
+              accessibilityRole="button"
+              accessibilityLabel={t('seller.promotions.retry')}
+              style={styles.retryBtn}
+            >
+              <Text style={styles.retryBtnText}>{t('seller.promotions.retry')}</Text>
+            </TouchableOpacity>
+          </View>
         ) : items.length === 0 ? (
-          <EmptyState
-            title={hasFilters ? t('seller.promotions.emptyFilteredTitle') : t('seller.promotions.emptyTitle')}
-            subtitle={
-              hasFilters
-                ? t('seller.promotions.emptyFilteredSubtitle')
-                : t('seller.promotions.emptySubtitle')
-            }
-            action={
-              !hasFilters
-                ? { label: t('seller.promotions.emptyAction'), onPress: haptic }
-                : undefined
-            }
-          />
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconCircle}>
+              <Text style={styles.emptyIconText}>%</Text>
+            </View>
+            <Text style={styles.emptyTitle}>
+              {hasFilters ? t('seller.promotions.emptyFilteredTitle') : t('seller.promotions.emptyTabTitle', { status: t(`seller.promotions.status${status.charAt(0).toUpperCase()}${status.slice(1)}`) })}
+            </Text>
+            <Text style={styles.emptySubtitle}>
+              {hasFilters ? t('seller.promotions.emptyFilteredSubtitle') : t('seller.promotions.emptyTabSubtitle', { status: t(`seller.promotions.status${status.charAt(0).toUpperCase()}${status.slice(1)}`) })}
+            </Text>
+            {!hasFilters && (
+              <TouchableOpacity
+                onPress={() => { haptic(); router.push('/promotions/new') }}
+                accessibilityRole="button"
+                accessibilityLabel={t('seller.promotions.createAria')}
+                style={styles.emptyCta}
+              >
+                <Text style={styles.emptyCtaText}>{t('seller.promotions.emptyAction')}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         ) : (
           <>
             <Text style={styles.countText}>
@@ -647,6 +663,38 @@ const styles = StyleSheet.create({
   loadingText: { fontSize: fontSize.base[0], color: colors.textMuted, textAlign: 'center', marginTop: spacing[6] },
   countText: { fontSize: fontSize.sm[0], color: colors.textMuted, marginBottom: spacing[1] },
   skeletonWrap: { gap: spacing[3] },
+  errorBox: { alignItems: 'center', gap: spacing[3], paddingVertical: spacing[8], paddingHorizontal: spacing[4] },
+  errorIcon: { fontSize: 32, color: colors.error },
+  errorTitle: { fontSize: fontSize.md[0], fontWeight: '600', color: colors.error, textAlign: 'center' },
+  retryBtn: {
+    borderWidth: 2,
+    borderColor: colors.primary,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing[5],
+    paddingVertical: spacing[2.5],
+  },
+  retryBtnText: { fontSize: fontSize.base[0], fontWeight: '600', color: colors.primary },
+  emptyContainer: { alignItems: 'center', paddingVertical: spacing[10], paddingHorizontal: spacing[4], gap: spacing[2] },
+  emptyIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: radii.full,
+    backgroundColor: colors.primary50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing[2],
+  },
+  emptyIconText: { fontSize: 28, fontWeight: '700', color: colors.primary },
+  emptyTitle: { fontSize: fontSize.lg[0], fontWeight: '600', color: colors.text, textAlign: 'center' },
+  emptySubtitle: { fontSize: fontSize.base[0], color: colors.textMuted, textAlign: 'center', maxWidth: 280 },
+  emptyCta: {
+    backgroundColor: colors.primary,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing[5],
+    paddingVertical: spacing[3],
+    marginTop: spacing[2],
+  },
+  emptyCtaText: { fontSize: fontSize.base[0], fontWeight: '600', color: colors.white },
 
   sheetBody: { paddingHorizontal: spacing[4] },
   sheetSection: { fontSize: fontSize.base[0], fontWeight: '600', color: colors.text, marginBottom: spacing[2] },

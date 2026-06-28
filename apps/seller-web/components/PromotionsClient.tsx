@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence, type Transition } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { useRouter } from 'next/navigation'
-import { Search, SlidersHorizontal, Plus, X, ChevronDown, Tag, ArrowUpDown, CheckSquare, Zap } from 'lucide-react'
+import { Search, SlidersHorizontal, Plus, X, ChevronDown, Tag, ArrowUpDown, CheckSquare, Zap, AlertTriangle, WifiOff } from 'lucide-react'
 import { duration, easing } from '@chinooz/theme'
 import { useReducedMotion, SegmentedControl, EmptyState, Screen, Container, Toast } from '@chinooz/ui-web'
 import {
@@ -189,6 +189,16 @@ export default function PromotionsClient() {
     setSearch('')
   }, [])
 
+  const [isOffline, setIsOffline] = useState(false)
+
+  useEffect(() => {
+    const update = () => setIsOffline(!navigator.onLine)
+    update()
+    window.addEventListener('online', update)
+    window.addEventListener('offline', update)
+    return () => { window.removeEventListener('online', update); window.removeEventListener('offline', update) }
+  }, [])
+
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['promotions', status, debouncedSearch, type, dateFrom, dateTo, sort],
     queryFn: () =>
@@ -200,6 +210,7 @@ export default function PromotionsClient() {
         dateTo: dateTo || undefined,
         sort,
       }),
+    retry: false,
   })
 
   const items = data ?? []
@@ -390,6 +401,24 @@ export default function PromotionsClient() {
             </div>
           </div>
 
+          {/* Offline banner */}
+          <AnimatePresence>
+            {isOffline && (
+              <motion.div
+                initial={reduced ? false : { opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reduced ? { opacity: 0 } : { opacity: 0, y: -8 }}
+                transition={reduced ? { duration: 0 } : { duration: 0.2 }}
+                className="mt-3 rounded-md border border-warning/30 bg-warning-light px-4 py-2.5 flex items-center gap-2"
+                role="status"
+                aria-live="polite"
+              >
+                <WifiOff size={16} className="text-warning shrink-0" aria-hidden="true" />
+                <span className="text-[13px] font-semibold text-[#92400E]">{t('seller.promotions.offlineBanner')}</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <div className="mt-4">
             {isLoading ? (
               <>
@@ -418,25 +447,46 @@ export default function PromotionsClient() {
                 </div>
               </>
             ) : isError ? (
-              <EmptyState
-                title={t('seller.promotions.error')}
-                subtitle=""
-                action={{ label: t('seller.promotions.retry'), onPress: () => refetch() }}
-              />
+              <div role="alert" aria-live="assertive" className="mt-4 p-4 rounded-lg border border-error/30 bg-error/5 flex flex-col items-center gap-3 text-center">
+                <AlertTriangle size={28} className="text-error" aria-hidden="true" />
+                <p className="text-[15px] font-semibold text-error">{t('seller.promotions.error')}</p>
+                <button
+                  type="button"
+                  onClick={() => refetch()}
+                  aria-label={t('seller.promotions.retry')}
+                  className="h-10 px-5 rounded-md border-2 border-primary text-primary text-[14px] font-semibold hover:bg-primary-50 transition-colors"
+                >
+                  {t('seller.promotions.retry')}
+                </button>
+              </div>
             ) : items.length === 0 ? (
-              <EmptyState
-                title={hasFilters ? t('seller.promotions.emptyFilteredTitle') : t('seller.promotions.emptyTitle')}
-                subtitle={
-                  hasFilters
-                    ? t('seller.promotions.emptyFilteredSubtitle')
-                    : t('seller.promotions.emptySubtitle')
-                }
-                action={
-                  !hasFilters
-                    ? { label: t('seller.promotions.emptyAction'), onPress: () => {} }
-                    : undefined
-                }
-              />
+              <motion.div
+                initial={reduced ? false : { opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={reduced ? { duration: 0 } : { duration: 0.3, ease: 'easeOut' }}
+                className="flex flex-col items-center justify-center py-12 px-6 text-center"
+                aria-label={hasFilters ? t('seller.promotions.emptyFilteredTitle') : t('seller.promotions.emptyTabTitle', { status: t(`seller.promotions.status${status.charAt(0).toUpperCase()}${status.slice(1)}`) })}
+              >
+                <div className="w-20 h-20 rounded-full bg-primary-50 flex items-center justify-center mb-4" aria-hidden="true">
+                  <Tag size={32} className="text-primary" />
+                </div>
+                <h3 className="text-lg font-semibold text-text mb-1">
+                  {hasFilters ? t('seller.promotions.emptyFilteredTitle') : t('seller.promotions.emptyTabTitle', { status: t(`seller.promotions.status${status.charAt(0).toUpperCase()}${status.slice(1)}`) })}
+                </h3>
+                <p className="text-sm text-text-muted max-w-sm mb-4">
+                  {hasFilters ? t('seller.promotions.emptyFilteredSubtitle') : t('seller.promotions.emptyTabSubtitle', { status: t(`seller.promotions.status${status.charAt(0).toUpperCase()}${status.slice(1)}`) })}
+                </p>
+                {!hasFilters && (
+                  <button
+                    type="button"
+                    onClick={() => router.push('/promotions/new')}
+                    aria-label={t('seller.promotions.createAria')}
+                    className="h-10 px-5 rounded-md bg-primary text-white text-[14px] font-semibold hover:opacity-95 transition-opacity active:scale-[0.98]"
+                  >
+                    {t('seller.promotions.emptyAction')}
+                  </button>
+                )}
+              </motion.div>
             ) : (
               <>
                 <p className="text-xs text-text-muted mb-2">

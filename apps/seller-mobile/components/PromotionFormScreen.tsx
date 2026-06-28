@@ -156,6 +156,8 @@ export default function PromotionFormScreen() {
   const [initialForm, setInitialForm] = useState<FormState>(EMPTY_FORM)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [notFound, setNotFound] = useState(false)
   const [showUnsaved, setShowUnsaved] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [snackbar, setSnackbar] = useState<string | null>(null)
@@ -164,11 +166,18 @@ export default function PromotionFormScreen() {
   const snackbarTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const snackbarOpacity = useSharedValue(0)
 
-  const { data: existingPromo } = useQuery({
+  const { data: existingPromo, isLoading: isLoadingPromo } = useQuery({
     queryKey: ['promotion', editId],
     queryFn: () => (editId ? getPromotionById(editId) : Promise.resolve(null)),
     enabled: !!editId,
+    retry: false,
   })
+
+  useEffect(() => {
+    if (isEdit && !isLoadingPromo && !existingPromo) {
+      setNotFound(true)
+    }
+  }, [isEdit, isLoadingPromo, existingPromo])
 
   useEffect(() => {
     analytics.screen({ name: isEdit ? 'seller-promotion-edit' : 'seller-promotion-new' })
@@ -307,6 +316,7 @@ export default function PromotionFormScreen() {
 
   const handleSaveDraft = async () => {
     setSaveState('saving')
+    setSaveError(null)
     try {
       if (isEdit && editId) {
         await updatePromotion(editId, { ...buildPromoInput('draft'), id: editId })
@@ -319,7 +329,7 @@ export default function PromotionFormScreen() {
       setTimeout(() => setSaveState('idle'), 2000)
     } catch {
       setSaveState('idle')
-      showSnackbar(t('seller.promotions.builder.saveError'))
+      setSaveError(t('seller.promotions.saveErrorInline'))
     }
   }
 
@@ -329,6 +339,7 @@ export default function PromotionFormScreen() {
       return
     }
     setPublishing(true)
+    setSaveError(null)
     try {
       if (isEdit && editId) {
         await updatePromotion(editId, { ...buildPromoInput('active'), id: editId })
@@ -341,7 +352,7 @@ export default function PromotionFormScreen() {
       setTimeout(() => router.push('/promotions'), 1200)
     } catch {
       setPublishing(false)
-      showSnackbar(t('seller.promotions.builder.saveError'))
+      setSaveError(t('seller.promotions.activateErrorInline'))
     }
   }
 
@@ -384,8 +395,27 @@ export default function PromotionFormScreen() {
     { key: 'schedule', label: t('seller.promotions.builder.sectionSchedule'), hint: t('seller.promotions.builder.fieldStartsAtHint') },
   ]
 
+  if (notFound) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', gap: spacing[4] }]}>
+        <View style={styles.emptyIconCircle}>
+          <Text style={styles.emptyIconText}>%</Text>
+        </View>
+        <Text style={styles.notFoundTitle}>{t('seller.promotions.notFoundTitle')}</Text>
+        <Text style={styles.notFoundSubtitle}>{t('seller.promotions.notFoundSubtitle')}</Text>
+        <TouchableOpacity
+          onPress={() => router.push('/promotions')}
+          accessibilityRole="button"
+          accessibilityLabel={t('seller.promotions.notFoundBackAria')}
+          style={styles.notFoundBtn}
+        >
+          <Text style={styles.notFoundBtnText}>{t('seller.promotions.notFoundBack')}</Text>
+        </TouchableOpacity>
+      </View>
+    )
+  }
+
   return (
-    <View style={styles.container}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top }]}>
         <View style={styles.headerRow}>
@@ -424,6 +454,14 @@ export default function PromotionFormScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {/* Save/activate error banner */}
+          {saveError && (
+            <View style={styles.saveErrorBanner} accessibilityRole="alert" accessibilityLiveRegion="assertive">
+              <Text style={styles.saveErrorIcon}>⚠</Text>
+              <Text style={styles.saveErrorText}>{saveError}</Text>
+            </View>
+          )}
+
           {/* Live preview */}
           <PreviewCard data={previewData} countdown={countdown} t={t} />
 
@@ -1472,6 +1510,32 @@ const styles = StyleSheet.create({
   effectiveBadgeText: { fontSize: 10, fontWeight: '700', color: colors.white },
   timezoneText: { fontSize: fontSize.xs[0], color: colors.textTertiary, marginTop: spacing[1] },
   ruleSummaryText: { fontSize: fontSize.base[0], color: colors.text, lineHeight: 20, marginTop: spacing[2] },
+  notFoundTitle: { fontSize: fontSize.xl[0], fontWeight: '700', color: colors.text, textAlign: 'center' },
+  notFoundSubtitle: { fontSize: fontSize.base[0], color: colors.textMuted, textAlign: 'center', maxWidth: 280 },
+  notFoundBtn: { backgroundColor: colors.primary, borderRadius: radii.md, paddingHorizontal: spacing[5], paddingVertical: spacing[3], marginTop: spacing[2] },
+  notFoundBtnText: { fontSize: fontSize.base[0], fontWeight: '600', color: colors.white },
+  emptyIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: radii.full,
+    backgroundColor: colors.primary50,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyIconText: { fontSize: 28, fontWeight: '700', color: colors.primary },
+  saveErrorBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing[2],
+    borderWidth: 1,
+    borderColor: 'rgba(220,38,38,0.3)',
+    backgroundColor: 'rgba(220,38,38,0.05)',
+    borderRadius: radii.md,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[3],
+  },
+  saveErrorIcon: { fontSize: 16, color: colors.error, fontWeight: '700' },
+  saveErrorText: { flex: 1, fontSize: fontSize.sm[0], fontWeight: '600', color: colors.error, lineHeight: 18 },
 
   // Type grid
   typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
