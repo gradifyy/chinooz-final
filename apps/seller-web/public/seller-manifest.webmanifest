@@ -1,0 +1,17 @@
+{
+  "name": "Chinooz Seller",
+  "short_name": "Seller",
+  "description": "Sell on Chinooz — Nepal's marketplace for sellers.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAFAFA",
+  "theme_color": "#8A1B57",
+  "icons": [
+    {
+      "src": "/seller-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

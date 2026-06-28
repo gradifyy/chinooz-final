@@ -9,6 +9,15 @@ export {
   checkoutSchema,
   loginSchema,
   reviewSchema,
+  riderPersonalSchema,
+  storefrontSchema,
+  storeSetupSchema,
+  businessKycSchema,
+  productFormSchema,
+  productMediaSectionSchema,
+  productDetailsSectionSchema,
+  productPricingSectionSchema,
+  productDescriptionSectionSchema,
 } from './schemas'
 
 export type {
@@ -22,4 +31,9 @@ export type {
   CheckoutInput,
   LoginInput,
   ReviewInput,
+  RiderPersonalInput,
+  StorefrontInput,
+  StoreSetupInput,
+  BusinessKycInput,
+  ProductFormInput,
 } from './schemas'

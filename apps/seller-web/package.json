@@ -1,0 +1,38 @@
+{
+  "name": "seller-web",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "echo ok",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@chinooz/hooks": "workspace:*",
+    "@chinooz/i18n": "workspace:*",
+    "@chinooz/mock-data": "workspace:*",
+    "@chinooz/state": "workspace:*",
+    "@chinooz/theme": "workspace:*",
+    "@chinooz/types": "workspace:*",
+    "@chinooz/ui-web": "workspace:*",
+    "@chinooz/utils": "workspace:*",
+    "@chinooz/validation": "workspace:*",
+    "@tanstack/react-query": "^5.0.0",
+    "framer-motion": "^11.0.0",
+    "lucide-react": "^1.21.0",
+    "next": "^14.2.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.0",
+    "postcss": "^8.4.0",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.3.0"
+  }
+}

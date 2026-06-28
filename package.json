@@ -12,7 +12,9 @@
   "devDependencies": {
     "turbo": "latest",
     "prettier": "latest",
-    "eslint": "latest",
+    "eslint": "^8.57.0",
+    "eslint-plugin-security": "^2.1.0",
+    "eslint-plugin-jsx-a11y": "^6.8.0",
     "husky": "^9.0.0",
     "lint-staged": "^15.0.0",
     "@typescript-eslint/parser": "^7.0.0",

@@ -80,6 +80,19 @@ export interface Review {
   helpful: number
 }
 
+export interface SellerReviewResponse {
+  text: string
+  at: string
+}
+
+export interface SellerReview extends Review {
+  productName: string
+  productImage: string
+  response?: SellerReviewResponse
+  flagged?: boolean
+  verifiedPurchase?: boolean
+}
+
 export interface CartItem {
   id: string
   productId: string
@@ -168,6 +181,11 @@ export interface Conversation {
   lastMessage: string
   lastMessageAt: string
   unreadCount: number
+  contextType?: 'order' | 'product' | 'general'
+  orderId?: string
+  orderRef?: string
+  productId?: string
+  productName?: string
 }
 
 export interface UserProfile {
@@ -206,4 +224,355 @@ export interface OrderInvoice {
   deliveryFee: number
   discount: number
   grandTotal: number
+}
+
+export type SellerOrderStatusKey =
+  | 'new'
+  | 'to_pack'
+  | 'to_ship'
+  | 'shipped'
+  | 'completed'
+  | 'cancelled_returned'
+  | 'action_needed'
+
+export type SellerPaymentType = 'cod' | 'prepaid'
+export type SellerShippingMethod = 'standard' | 'express' | 'sameday' | 'pickup'
+export type SellerOrderSortKey = 'newest' | 'oldest' | 'value'
+
+export interface SellerSubOrderItem {
+  id: string
+  productId: string
+  name: string
+  image: string
+  price: number
+  quantity: number
+  sku?: string
+}
+
+export interface SellerSubOrder {
+  subOrderId: string
+  orderId: string
+  sellerId: string
+  buyerName: string
+  buyerPhone: string
+  city: string
+  district: string
+  items: SellerSubOrderItem[]
+  itemCount: number
+  total: number
+  currency: 'NPR'
+  status: OrderStatus
+  statusKey: SellerOrderStatusKey
+  paymentType: SellerPaymentType
+  shippingMethod: SellerShippingMethod
+  createdAt: string
+  estimatedDelivery?: string
+  actionNeeded: boolean
+  actionReason?: string
+}
+
+export type SellerProductStatus = 'active' | 'draft' | 'out_of_stock' | 'archived'
+
+export interface SellerProduct {
+  id: string
+  name: string
+  sku: string
+  image: string
+  price: number
+  compareAtPrice?: number
+  currency: 'NPR'
+  categoryId: string
+  categoryName: string
+  stock: StockStatus
+  stockCount: number
+  status: SellerProductStatus
+  salesCount: number
+  viewsCount: number
+  rating: number
+  reviewCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SellerInventoryVariant {
+  id: string
+  productId: string
+  name: string
+  sku: string
+  price: number
+  compareAtPrice?: number
+  currency: 'NPR'
+  stockCount: number
+  stock: StockStatus
+  attributes: Record<string, string>
+  image: string
+  salesCount: number
+  /** Low-stock threshold (units). Defaults to platform constant when absent. */
+  lowStockThreshold?: number
+  /** Committed/reserved units (not available to sell). */
+  committed?: number
+  /** Incoming replenishment units. */
+  incoming?: number
+  /** Parent product name (for row display). */
+  productName?: string
+}
+
+export interface SellerInventoryProduct {
+  id: string
+  name: string
+  slug: string
+  image: string
+  categoryId: string
+  categoryName: string
+  currency: 'NPR'
+  aggregateStock: number
+  stock: StockStatus
+  variantCount: number
+  salesCount: number
+  variants: SellerInventoryVariant[]
+}
+
+// ---- RS3 map / trip simulator + rider delivery ----
+
+// ---- Seller domain: store, payouts, transactions, staff, notifications, stats ----
+
+export interface SellerStoreProfile {
+  id: string
+  sellerId: string
+  name: string
+  nameNe?: string
+  slug: string
+  logo: string
+  banner: string
+  description: string
+  descriptionNe?: string
+  rating: number
+  reviewCount: number
+  followerCount: number
+  productCount: number
+  joinedAt: string
+  goLiveStatus: 'offline' | 'review' | 'live'
+  kycStatus: 'none' | 'pending' | 'verified' | 'rejected'
+  pan: string
+  email: string
+  phone: string
+  address: string
+  city: string
+  district: string
+  province: string
+  defaultPayoutMethod: 'esewa' | 'khalti' | 'bank'
+}
+
+export type PayoutStatus = 'pending' | 'processing' | 'completed' | 'failed'
+export type PayoutMethod = 'esewa' | 'khalti' | 'bank'
+
+export interface Payout {
+  id: string
+  sellerId: string
+  amount: number
+  currency: 'NPR'
+  status: PayoutStatus
+  method: PayoutMethod
+  reference: string
+  requestedAt: string
+  processedAt?: string
+  estimatedAt?: string
+  fee: number
+  net: number
+}
+
+export type TransactionType = 'sale' | 'refund' | 'payout' | 'fee' | 'adjustment'
+export type TransactionStatus = 'settled' | 'pending' | 'failed'
+
+export interface Transaction {
+  id: string
+  sellerId: string
+  type: TransactionType
+  amount: number
+  currency: 'NPR'
+  status: TransactionStatus
+  description: string
+  reference: string
+  orderId?: string
+  payoutId?: string
+  createdAt: string
+  vatAmount?: number
+  feeAmount?: number
+}
+
+export type StaffRole = 'owner' | 'admin' | 'manager' | 'staff'
+export type StaffStatus = 'active' | 'invited' | 'suspended'
+
+export interface StaffMember {
+  id: string
+  sellerId: string
+  name: string
+  email: string
+  phone: string
+  role: StaffRole
+  status: StaffStatus
+  avatar?: string
+  permissions: string[]
+  lastActiveAt?: string
+  invitedAt: string
+}
+
+export type SellerNotificationType = 'order' | 'review' | 'payout' | 'stock' | 'promotion' | 'system' | 'message'
+
+export interface SellerNotification {
+  id: string
+  sellerId: string
+  type: SellerNotificationType
+  title: string
+  body: string
+  read: boolean
+  createdAt: string
+  link?: string
+  priority: 'low' | 'normal' | 'high'
+}
+
+export type SellerStatsRange = 'today' | '7d' | '30d' | '90d' | 'custom'
+
+export interface SellerStatsKpi {
+  key: string
+  label: string
+  value: number
+  formattedValue: string
+  deltaPct: number
+  trend: 'up' | 'down' | 'flat'
+  hint: string
+}
+
+export interface SellerStatsChartPoint {
+  label: string
+  value: number
+  previous?: number
+}
+
+export interface SellerStats {
+  range: SellerStatsRange
+  kpis: SellerStatsKpi[]
+  chart: SellerStatsChartPoint[]
+  topProducts: { id: string; name: string; revenue: number; units: number }[]
+  recentOrders: { id: string; buyer: string; total: number; status: string; at: string }[]
+}
+
+export type PromotionStatus = 'active' | 'scheduled' | 'expired' | 'draft'
+export type PromotionType = 'percentage' | 'fixed' | 'flash_sale' | 'bogo' | 'free_shipping'
+
+export interface Promotion {
+  id: string
+  name: string
+  type: PromotionType
+  status: PromotionStatus
+  discountValue: number
+  code: string
+  startsAt: string
+  endsAt: string
+  redemptions: number
+  revenue: number
+  budget?: number
+  productsCount: number
+  createdAt: string
+}
+
+export type ExportReportType = 'sales' | 'orders' | 'payouts' | 'products' | 'reviews'
+
+export interface ExportReportResult {
+  id: string
+  type: ExportReportType
+  range: SellerStatsRange
+  status: 'processing' | 'ready' | 'failed'
+  downloadUrl?: string
+  requestedAt: string
+  completedAt?: string
+}
+
+// ---- RS3 map / trip simulator + rider delivery (below) ----
+
+export interface GeoPoint {
+  lat: number
+  lng: number
+}
+
+export interface MapBoundary {
+  id: string
+  label: string
+  minLat: number
+  maxLat: number
+  minLng: number
+  maxLng: number
+}
+
+export interface RouteStop extends GeoPoint {
+  label: string
+  address: string
+  contactName: string
+  contactPhone: string
+}
+
+export interface DeliveryLeg {
+  /** Ordered points from the start of the leg to its end (inclusive). */
+  points: GeoPoint[]
+  distanceMeters: number
+  etaSeconds: number
+}
+
+export type DeliveryStatus =
+  | 'assigned'
+  | 'heading_to_pickup'
+  | 'at_pickup'
+  | 'picked_up'
+  | 'in_transit'
+  | 'at_dropoff'
+  | 'delivered'
+  | 'cancelled'
+  | 'failed'
+
+export interface RiderJob {
+  id: string
+  orderRef: string
+  customerName: string
+  pickup: RouteStop
+  dropoff: RouteStop
+  legToPickup: DeliveryLeg
+  legToDropoff: DeliveryLeg
+  payout: number
+  isCod: boolean
+  codAmount: number
+  currency: 'NPR'
+  createdAt: string
+}
+
+export interface ActiveDelivery {
+  jobId: string
+  orderRef: string
+  customerName: string
+  pickup: RouteStop
+  dropoff: RouteStop
+  legToPickup: DeliveryLeg
+  legToDropoff: DeliveryLeg
+  payout: number
+  isCod: boolean
+  codAmount: number
+  currency: 'NPR'
+  status: DeliveryStatus
+  /** 0..1 progress within the currently active leg. */
+  legProgress: number
+  currentPoint: GeoPoint
+  etaSeconds: number
+  distanceMeters: number
+  minimized: boolean
+  startedAt: number
+  updatedAt: number
+  cancelReason?: string
+  failureReason?: string
+  /** Pickup label (store / seller name) — RJ5 Jobs tab compat. */
+  pickupLabel: string
+  /** Drop-off label (buyer area / tole) — RJ5 Jobs tab compat. */
+  dropoffLabel: string
+  /** Epoch ms when the job was accepted — RJ5 Jobs tab compat. */
+  acceptedAt: number
+  /** Epoch ms of the ETA at drop-off, if known — RJ5 Jobs tab compat. */
+  etaDropoffMs: number | null
 }

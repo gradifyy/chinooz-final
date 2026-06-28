@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "Chinooz Rider",
+    "slug": "chinooz-rider",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "chinooz-rider",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.chinooz.rider"
+    },
+    "android": {
+      "package": "com.chinooz.rider",
+      "adaptiveIcon": {
+        "backgroundColor": "#8A1B57"
+      }
+    },
+    "plugins": ["expo-router"],
+    "newArchEnabled": true,
+    "experiments": {
+      "autolinkingModuleResolution": true
+    }
+  }
+}

@@ -61,6 +61,10 @@ export default function SegmentedControl({
         />
         {segments.map(seg => {
           const isActive = seg.key === activeKey
+          const hasBadge = seg.badge != null && seg.badge > 0
+          const a11yLabel = hasBadge
+            ? `${seg.label}, ${seg.badge! > 99 ? '99+' : seg.badge}`
+            : seg.label
           return (
             <TouchableOpacity
               key={seg.key}
@@ -68,13 +72,14 @@ export default function SegmentedControl({
               style={styles.segment}
               accessibilityRole="tab"
               accessibilityState={{ selected: isActive }}
+              accessibilityLabel={a11yLabel}
               activeOpacity={0.7}
             >
               <Text style={[styles.label, isActive && styles.labelActive]}>
                 {seg.label}
               </Text>
-              {seg.badge != null && seg.badge > 0 && (
-                <UnreadBadge count={seg.badge} reduced={reduced} />
+              {hasBadge && (
+                <UnreadBadge count={seg.badge!} isActive={isActive} reduced={reduced} />
               )}
             </TouchableOpacity>
           )
@@ -84,7 +89,7 @@ export default function SegmentedControl({
   )
 }
 
-function UnreadBadge({ count, reduced }: { count: number; reduced: boolean }) {
+function UnreadBadge({ count, isActive, reduced }: { count: number; isActive: boolean; reduced: boolean }) {
   const scale = useSharedValue(1)
   const opacity = useSharedValue(1)
 
@@ -117,8 +122,10 @@ function UnreadBadge({ count, reduced }: { count: number; reduced: boolean }) {
   if (count <= 0) return null
 
   return (
-    <Animated.View style={[styles.badge, animStyle]}>
-      <Text style={styles.badgeText}>{count > 99 ? '99+' : count}</Text>
+    <Animated.View style={[styles.badge, isActive && styles.badgeActive, animStyle]}>
+      <Text style={[styles.badgeText, isActive && styles.badgeTextActive]}>
+        {count > 99 ? '99+' : count}
+      </Text>
     </Animated.View>
   )
 }
@@ -169,10 +176,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  badgeActive: {
+    backgroundColor: colors.white,
+  },
   badgeText: {
     fontSize: fontSize.sm[0],
     fontFamily: fontFamily.sansSemiBold[0],
     fontWeight: '600',
     color: colors.white,
+  },
+  badgeTextActive: {
+    color: colors.primary,
   },
 })

@@ -1,4 +1,13 @@
 export { formatNPR, formatNPRCompact } from './currency'
+export {
+  PAISA_PER_NPR,
+  paisaToNPR,
+  nprToPaisa,
+  addPaisa,
+  subPaisa,
+  formatNPRFromPaisa,
+  formatNPRFromPaisaCompact,
+} from './currency'
 export { calcCartTotals } from './cartTotals'
 export {
   sanitizeString,
