@@ -9,13 +9,13 @@ import {
   AccessibilityInfo,
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ChevronLeft, ArrowDownWideNarrow, Target } from 'lucide-react-native'
 import { colors, spacing, radii, fontFamily, fontSize } from '@chinooz/theme'
 import { analytics } from '@chinooz/analytics'
-import { getIncentives, type RiderQuest, type QuestStatus } from '@chinooz/mock-data'
+import { useIncentives } from '@chinooz/hooks'
+import { type RiderQuest, type QuestStatus } from '@chinooz/mock-data'
 import { useRiderIncentivesStore, useRiderTripsStore, computeQuestProgress } from '@chinooz/state'
 import { SegmentedControl } from '@chinooz/ui'
 import QuestCard from '../../components/QuestCard'
@@ -56,10 +56,7 @@ export default function QuestsListScreen() {
   const { connectivity } = useAppState()
   const isOffline = connectivity === 'offline'
 
-  const { data, isLoading, isError, refetch, isRefetching } = useQuery({
-    queryKey: ['rider-incentives'],
-    queryFn: getIncentives,
-  })
+  const { data, isLoading, isError, refetch, isRefetching } = useIncentives()
 
   useEffect(() => {
     analytics.screen({ name: 'rider-quests-list' })

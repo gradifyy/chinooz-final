@@ -9,7 +9,6 @@ import {
   AccessibilityInfo,
 } from 'react-native'
 import { useFocusEffect, useRouter } from 'expo-router'
-import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
@@ -23,7 +22,8 @@ import {
 } from 'lucide-react-native'
 import { colors, spacing, radii, fontFamily, fontSize } from '@chinooz/theme'
 import { analytics } from '@chinooz/analytics'
-import { getIncentives, type RiderQuest } from '@chinooz/mock-data'
+import { useIncentives } from '@chinooz/hooks'
+import { type RiderQuest } from '@chinooz/mock-data'
 import { useRiderIncentivesStore, useOnlineStatusStore } from '@chinooz/state'
 import QuestCard from '../components/QuestCard'
 import {
@@ -64,12 +64,13 @@ export default function IncentivesHubScreen() {
   const onlineStatus = useOnlineStatusStore(s => s.status)
   const setOnlineStatus = useOnlineStatusStore(s => s.setOnlineStatus)
 
-  const { data, isLoading, isError, refetch, isRefetching } = useQuery({
-    queryKey: ['rider-incentives'],
-    queryFn: getIncentives,
-  })
+  const { data, isLoading, isError, refetch, isRefetching } = useIncentives()
 
   // Seed the shared "earned this week" total so the Earnings tab can read it.
+  useEffect(() => {
+    analytics.screen({ name: 'rider-incentives' })
+  }, [])
+
   useEffect(() => {
     if (data) {
       const weekOf = new Date().toISOString().slice(0, 10)

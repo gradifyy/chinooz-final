@@ -9,7 +9,6 @@ import {
   AccessibilityInfo,
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Animated, {
@@ -40,7 +39,8 @@ import {
 import { colors, spacing, radii, fontFamily, fontSize, shadow } from '@chinooz/theme'
 import { useReducedMotion } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
-import { getRiderStreaks, type RiderTierRung, type RiderMilestone } from '@chinooz/mock-data'
+import { useRiderStreaks } from '@chinooz/hooks'
+import { type RiderTierRung, type RiderMilestone, type RiderStreaksDetail } from '@chinooz/mock-data'
 import {
   StreaksSkeleton,
   ErrorState,
@@ -94,10 +94,7 @@ export default function StreaksScreen() {
   const { connectivity } = useAppState()
   const isOffline = connectivity === 'offline'
 
-  const { data, isLoading, isError, refetch, isRefetching } = useQuery({
-    queryKey: ['rider-streaks'],
-    queryFn: getRiderStreaks,
-  })
+  const { data, isLoading, isError, refetch, isRefetching } = useRiderStreaks()
 
   useEffect(() => {
     analytics.screen({ name: 'rider-streaks' })
@@ -422,7 +419,7 @@ function StreakTracker({
   t,
   reduced,
 }: {
-  data: NonNullable<ReturnType<typeof getRiderStreaks> extends Promise<infer T> ? T : never>
+  data: RiderStreaksDetail
   t: (k: string, opts?: Record<string, unknown>) => string
   reduced?: boolean
 }) {

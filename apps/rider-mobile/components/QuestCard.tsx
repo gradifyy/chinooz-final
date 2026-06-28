@@ -144,7 +144,7 @@ const STATUS_META: Record<
   },
 }
 
-export default function QuestCard({
+const QuestCardBase = React.memo(function QuestCard({
   quest,
   labels,
   onPress,
@@ -369,7 +369,9 @@ export default function QuestCard({
       </View>
     </AnimatedPressable>
   )
-}
+})
+
+export default QuestCardBase
 
 function buildCardAria(
   quest: RiderQuest,

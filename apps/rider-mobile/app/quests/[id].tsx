@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import { useRouter, useLocalSearchParams } from 'expo-router'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, useMutation } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Animated, {
@@ -35,10 +35,9 @@ import {
 } from 'lucide-react-native'
 import { colors, spacing, radii, fontFamily, fontSize, shadow } from '@chinooz/theme'
 import { useReducedMotion } from '@chinooz/ui'
+import { useQuestDetail, useClaimQuest } from '@chinooz/hooks'
 import { analytics } from '@chinooz/analytics'
 import {
-  getQuestById,
-  claimQuestReward,
   joinQuest,
   type RiderQuest,
   type QuestKind,
@@ -121,11 +120,7 @@ export default function QuestDetailScreen() {
   const { connectivity } = useAppState()
   const isOffline = connectivity === 'offline'
 
-  const { data: quest, isLoading, isError, refetch, isRefetching } = useQuery({
-    queryKey: ['rider-quest', params.id],
-    queryFn: () => getQuestById(params.id),
-    enabled: !!params.id,
-  })
+  const { data: quest, isLoading, isError, refetch, isRefetching } = useQuestDetail(params.id)
 
   useEffect(() => {
     analytics.screen({ name: 'rider-quest-detail', properties: { questId: params.id } })
@@ -145,23 +140,21 @@ export default function QuestDetailScreen() {
   const isOptIn = quest?.terms.optIn ?? false
   const canClaim = isCompleted && !alreadyClaimed && !isQuestClaimed(quest?.id ?? '')
 
-  // Claim mutation — mock claimQuestReward → record to store.
-  const claimMutation = useMutation({
-    mutationFn: async () => {
-      if (!quest) return null
-      // Offline guard: can't claim while offline.
-      if (isOffline) throw new Error('offline')
-      return claimQuestReward(quest.id)
-    },
-    onSuccess: result => {
-      if (!result || !quest) return
+  // Claim mutation — uses useClaimQuest hook (optimistic + rollback, idempotent via opRef).
+  const claimMutation = useClaimQuest()
+
+  // Handle claim success/error locally (the hook handles cache invalidation).
+  useEffect(() => {
+    if (claimMutation.isSuccess && claimMutation.data?.success && claimState === 'claiming') {
+      const rewardNpr = claimMutation.data.rewardNpr
+      if (!quest) return
       // Idempotency guard: if already claimed in the store, show already-claimed state.
       if (isQuestClaimed(quest.id)) {
         setClaimState('idle')
         setClaimResultVisible(true)
         return
       }
-      claimQuestStore(quest.id, result.rewardNpr)
+      claimQuestStore(quest.id, rewardNpr)
       setClaimState('claimed')
       setClaimResultVisible(true)
       try {
@@ -169,25 +162,21 @@ export default function QuestDetailScreen() {
       } catch {}
       try {
         AccessibilityInfo.announceForAccessibility(
-          t('rider.incentives.questDetailClaimedAria', { title: quest.title, amount: result.rewardNpr }),
+          t('rider.incentives.questDetailClaimedAria', { title: quest.title, amount: rewardNpr }),
         )
       } catch {}
-      analytics.track({ name: 'rider_quest_claimed', properties: { questId: quest.id, rewardNpr: result.rewardNpr } })
-      queryClient.invalidateQueries({ queryKey: ['rider-incentives'] })
+      analytics.track({ name: 'rider_quest_claimed', properties: { questId: quest.id, rewardNpr } })
       setTimeout(() => setClaimResultVisible(false), 4000)
-    },
-    onError: () => {
+    } else if (claimMutation.isError && claimState === 'claiming') {
       setClaimState('failed')
       try {
         if (!reduced) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
       } catch {}
       try {
-        AccessibilityInfo.announceForAccessibility(
-          t('rider.incentives.states.claimFailAria'),
-        )
+        AccessibilityInfo.announceForAccessibility(t('rider.incentives.states.claimFailAria'))
       } catch {}
-    },
-  })
+    }
+  }, [claimMutation.isSuccess, claimMutation.isError, claimMutation.data, claimState, quest, isQuestClaimed, claimQuestStore, reduced, t])
 
   // Join mutation — mock joinQuest.
   const joinMutation = useMutation({
@@ -213,11 +202,13 @@ export default function QuestDetailScreen() {
   })
 
   const handleClaim = useCallback(() => {
-    if (claimState !== 'idle' || !canClaim) return
+    if (claimState !== 'idle' || !canClaim || !quest) return
     if (isOffline) return // Offline claim blocked state is shown in the action bar
     setClaimState('claiming')
-    claimMutation.mutate()
-  }, [claimState, canClaim, claimMutation, isOffline])
+    // Idempotent opRef: questId + timestamp ensures retries never double-claim.
+    const opRef = `claim-${quest.id}-${Date.now()}`
+    claimMutation.mutate({ questId: quest.id, opRef })
+  }, [claimState, canClaim, claimMutation, isOffline, quest])
 
   const handleJoin = useCallback(() => {
     if (joinState !== 'idle') return
@@ -411,7 +402,7 @@ export default function QuestDetailScreen() {
           </Text>
           <View accessibilityRole="list">
             {quest.terms.howToQualify.map((step, i) => (
-              <View key={i} style={styles.termsRow} accessibilityRole="listitem">
+              <View key={i} style={styles.termsRow}>
                 <View style={styles.termsBullet}>
                   <Text style={styles.termsBulletText}>{i + 1}</Text>
                 </View>
@@ -432,7 +423,7 @@ export default function QuestDetailScreen() {
           </Text>
           <View accessibilityRole="list">
             {quest.terms.finePrint.map((note, i) => (
-              <View key={i} style={styles.termsRow} accessibilityRole="listitem">
+              <View key={i} style={styles.termsRow}>
                 <View style={styles.termsDot} />
                 <Text style={styles.termsText}>{note}</Text>
               </View>
@@ -454,7 +445,6 @@ export default function QuestDetailScreen() {
         {claimResultVisible && quest ? (
           <Animated.View
             style={[styles.claimResult, resultAnimStyle]}
-            accessibilityRole="status"
             accessibilityLiveRegion="polite"
           >
             <CheckCircle2 size={16} color={colors.success} />
@@ -475,8 +465,11 @@ export default function QuestDetailScreen() {
             retryLabel={t('rider.incentives.states.claimFailRetry')}
             retryAria={t('rider.incentives.states.claimFailRetryAria')}
             onRetry={() => {
-              setClaimState('idle')
-              claimMutation.mutate()
+              setClaimState('claiming')
+              if (quest) {
+                const opRef = `claim-${quest.id}-${Date.now()}`
+                claimMutation.mutate({ questId: quest.id, opRef })
+              }
             }}
           />
         ) : null}
