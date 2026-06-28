@@ -53,6 +53,12 @@ interface VariantRow {
   stock: string
 }
 
+interface SpecRow {
+  id: string
+  key: string
+  value: string
+}
+
 interface FormState {
   images: string[]
   videoUrl: string
@@ -69,11 +75,16 @@ interface FormState {
   options: VariantOption[]
   variants: VariantRow[]
   description: string
+  descriptionNe: string
+  specRows: SpecRow[]
   specs: string
   weight: string
   shippingWidth: string
   shippingHeight: string
   shippingLength: string
+  handlingTime: string
+  returnPolicy: string
+  pickupLocation: string
   status: 'active' | 'draft'
 }
 
@@ -93,11 +104,16 @@ const EMPTY_FORM: FormState = {
   options: [],
   variants: [],
   description: '',
+  descriptionNe: '',
+  specRows: [],
   specs: '',
   weight: '',
   shippingWidth: '',
   shippingHeight: '',
   shippingLength: '',
+  handlingTime: '',
+  returnPolicy: 'accept',
+  pickupLocation: '',
   status: 'draft',
 }
 
@@ -167,11 +183,16 @@ export default function ProductFormScreen() {
         options: [],
         variants: [],
         description: product.name + ' — ' + product.categoryName,
+        descriptionNe: '',
+        specRows: [],
         specs: '',
         weight: '',
         shippingWidth: '',
         shippingHeight: '',
         shippingLength: '',
+        handlingTime: '1-2',
+        returnPolicy: 'accept',
+        pickupLocation: '',
         status: product.status === 'active' ? 'active' : 'draft',
       }
       setForm(loaded)
@@ -217,7 +238,7 @@ export default function ProductFormScreen() {
     transform: [{ translateY: snackbarOpacity.value === 1 ? 0 : 20 }],
   }))
 
-  const updateField = useCallback((field: keyof FormState, value: string | string[] | VariantOption[] | VariantRow[]) => {
+  const updateField = useCallback((field: keyof FormState, value: string | string[] | VariantOption[] | VariantRow[] | SpecRow[]) => {
     setForm(prev => ({ ...prev, [field]: value }))
     setErrors(prev => {
       const next = { ...prev }
@@ -402,7 +423,7 @@ export default function ProductFormScreen() {
               {s.key === 'media' && <MediaSection form={form} errors={errors} updateField={updateField} t={t} reduced={reducedMotion} />}
               {s.key === 'details' && <DetailsSection form={form} errors={errors} updateField={updateField} t={t} categories={sellerCats} categoryTree={categoryTree} reduced={reducedMotion} />}
               {s.key === 'pricing' && <PricingSection form={form} errors={errors} updateField={updateField} t={t} reduced={reducedMotion} />}
-              {s.key === 'description' && <DescriptionSection form={form} errors={errors} updateField={updateField} t={t} />}
+              {s.key === 'description' && <DescriptionSection form={form} errors={errors} updateField={updateField} t={t} reduced={reducedMotion} />}
             </CollapsibleSection>
           ))}
         </ScrollView>
@@ -1406,33 +1427,169 @@ function PricingSection({ form, errors, updateField, t, reduced }: { form: FormS
   )
 }
 
-function DescriptionSection({ form, errors, updateField, t }: { form: FormState; errors: Record<string, string>; updateField: (f: keyof FormState, v: string) => void; t: any }) {
+const CATEGORY_SPECS: Record<string, { key: string; value: string }[]> = {
+  'cat-electronics': [{ key: 'Warranty', value: '' }, { key: 'Brand', value: '' }, { key: 'Model', value: '' }],
+  'cat-phones': [{ key: 'Storage', value: '' }, { key: 'RAM', value: '' }, { key: 'Screen Size', value: '' }],
+  'cat-fashion': [{ key: 'Material', value: '' }, { key: 'Size', value: '' }, { key: 'Color', value: '' }],
+  'cat-home': [{ key: 'Material', value: '' }, { key: 'Dimensions', value: '' }],
+  'cat-grocery': [{ key: 'Weight', value: '' }, { key: 'Shelf Life', value: '' }],
+  'cat-beauty': [{ key: 'Skin Type', value: '' }, { key: 'Volume', value: '' }],
+}
+
+function getSuggestedSpecs(categoryId: string): { key: string; value: string }[] {
+  if (!categoryId) return []
+  if (CATEGORY_SPECS[categoryId]) return CATEGORY_SPECS[categoryId]
+  for (const key of Object.keys(CATEGORY_SPECS)) {
+    if (categoryId.startsWith(key.slice(0, 12))) return CATEGORY_SPECS[key]
+  }
+  return []
+}
+
+function DescriptionSection({ form, errors, updateField, t, reduced }: { form: FormState; errors: Record<string, string>; updateField: (f: keyof FormState, v: string | string[] | VariantOption[] | VariantRow[] | SpecRow[]) => void; t: any; reduced: boolean }) {
+  const [descLang, setDescLang] = useState<'en' | 'ne'>('en')
+  const [specsPrefilled, setSpecsPrefilled] = useState(false)
+
+  useEffect(() => {
+    if (!specsPrefilled && form.categoryId && form.specRows.length === 0) {
+      const suggested = getSuggestedSpecs(form.categoryId)
+      if (suggested.length > 0) {
+        const rows: SpecRow[] = suggested.map((s, i) => ({
+          id: `spec-${Date.now()}-${i}`,
+          key: s.key,
+          value: s.value,
+        }))
+        updateField('specRows', rows)
+        setSpecsPrefilled(true)
+      }
+    }
+  }, [form.categoryId, form.specRows.length, specsPrefilled, updateField])
+
+  const addSpecRow = () => {
+    updateField('specRows', [...form.specRows, { id: `spec-${Date.now()}`, key: '', value: '' }])
+  }
+
+  const updateSpecRow = (id: string, field: 'key' | 'value', value: string) => {
+    updateField('specRows', form.specRows.map(r => r.id === id ? { ...r, [field]: value } : r))
+  }
+
+  const removeSpecRow = (id: string) => {
+    updateField('specRows', form.specRows.filter(r => r.id !== id))
+  }
+
+  const descValue = descLang === 'en' ? form.description : form.descriptionNe
+  const setDescValue = (v: string) => {
+    if (descLang === 'en') updateField('description', v)
+    else updateField('descriptionNe', v)
+  }
+
+  const handlingOptions = [
+    { value: '1', label: t('seller.products.formFieldHandlingTime1d') },
+    { value: '1-2', label: t('seller.products.formFieldHandlingTime2d') },
+    { value: '2-3', label: t('seller.products.formFieldHandlingTime3d') },
+    { value: '7', label: t('seller.products.formFieldHandlingTime7d') },
+  ]
+
+  const returnOptions = [
+    { value: 'accept', label: t('seller.products.formFieldReturnPolicyAccept') },
+    { value: 'accept14', label: t('seller.products.formFieldReturnPolicyAccept14') },
+    { value: 'no_return', label: t('seller.products.formFieldReturnPolicyNoReturn') },
+  ]
+
   return (
     <View style={styles.sectionContent}>
-      <Field label={t('seller.products.formFieldDescription')} hint={t('seller.products.formFieldDescriptionHint')} error={errors.description}>
+      {/* Description with bilingual toggle */}
+      <Field
+        label={descLang === 'en' ? t('seller.products.formFieldDescription') : t('seller.products.formFieldDescriptionNe')}
+        hint={descLang === 'en' ? t('seller.products.formFieldDescriptionHint') : t('seller.products.formFieldDescriptionNeHint')}
+        error={errors.description}
+      >
+        {/* Language toggle */}
+        <View style={styles.langToggleWrap} accessibilityRole="tablist" accessibilityLabel={t('seller.products.formFieldLangToggleAria')}>
+          {(['en', 'ne'] as const).map(lang => {
+            const active = descLang === lang
+            return (
+              <TouchableOpacity
+                key={lang}
+                onPress={() => setDescLang(lang)}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: active }}
+                style={[styles.langToggleBtn, active && styles.langToggleBtnActive]}
+              >
+                <Text style={[styles.langToggleText, active && styles.langToggleTextActive]}>
+                  {lang === 'en' ? t('seller.products.formFieldLangEn') : t('seller.products.formFieldLangNe')}
+                </Text>
+              </TouchableOpacity>
+            )
+          })}
+        </View>
+
+        {/* Editor toolbar */}
+        <View style={styles.editorToolbar}>
+          <Text style={styles.editorToolbarHint}>B  I  •  H</Text>
+        </View>
+
+        {/* Editor */}
         <TextInput
-          style={[styles.input, styles.textarea]}
-          value={form.description}
-          onChangeText={v => updateField('description', v)}
-          placeholder="Describe your product in detail..."
+          style={[styles.input, styles.textarea, { borderTopLeftRadius: 0, borderTopRightRadius: 0, borderWidth: 1, marginTop: -1 }]}
+          value={descValue}
+          onChangeText={setDescValue}
+          placeholder={descLang === 'en' ? 'Describe your product...' : 'उत्पादन वर्णन गर्नुहोस्...'}
           placeholderTextColor={colors.textTertiary}
           multiline
-          numberOfLines={5}
-          accessibilityLabel={t('seller.products.formFieldDescription')}
+          numberOfLines={6}
+          accessibilityLabel={descLang === 'en' ? t('seller.products.formFieldDescription') : t('seller.products.formFieldDescriptionNe')}
         />
       </Field>
-      <Field label={t('seller.products.formFieldSpecs')} hint={t('seller.products.formFieldSpecsHint')} error={errors.specs}>
-        <TextInput
-          style={[styles.input, styles.textarea, { minHeight: 80 }]}
-          value={form.specs}
-          onChangeText={v => updateField('specs', v)}
-          placeholder="Material: Cotton, Dimensions: 30cm x 20cm..."
-          placeholderTextColor={colors.textTertiary}
-          multiline
-          numberOfLines={3}
-          accessibilityLabel={t('seller.products.formFieldSpecs')}
-        />
+
+      {/* Specs key-value rows */}
+      <Field label={t('seller.products.formFieldSpecs')} hint={t('seller.products.formFieldSpecsHint')}>
+        <View style={styles.specRowsWrap}>
+          {form.specRows.map(row => (
+            <View key={row.id} style={styles.specRow}>
+              <TextInput
+                style={[styles.input, { flex: 1 }]}
+                value={row.key}
+                onChangeText={v => updateSpecRow(row.id, 'key', v)}
+                placeholder={t('seller.products.formFieldSpecsKeyPlaceholder')}
+                placeholderTextColor={colors.textTertiary}
+                accessibilityLabel={`${t('seller.products.formFieldSpecsKey')} ${row.key || ''}`}
+              />
+              <TextInput
+                style={[styles.input, { flex: 1 }]}
+                value={row.value}
+                onChangeText={v => updateSpecRow(row.id, 'value', v)}
+                placeholder={t('seller.products.formFieldSpecsValuePlaceholder')}
+                placeholderTextColor={colors.textTertiary}
+                accessibilityLabel={`${t('seller.products.formFieldSpecsValue')} ${row.key || ''}`}
+              />
+              <TouchableOpacity
+                onPress={() => removeSpecRow(row.id)}
+                accessibilityRole="button"
+                accessibilityLabel={t('seller.products.formFieldSpecsRemoveAria', { key: row.key || t('seller.products.formFieldSpecsKeyPlaceholder') })}
+                style={styles.specRemoveBtn}
+              >
+                <Text style={styles.specRemoveIcon}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+          <TouchableOpacity
+            onPress={addSpecRow}
+            accessibilityRole="button"
+            accessibilityLabel={t('seller.products.formFieldSpecsAddAria')}
+            style={styles.specAddBtn}
+          >
+            <Text style={styles.specAddBtnText}>+ {t('seller.products.formFieldSpecsAdd')}</Text>
+          </TouchableOpacity>
+          {form.specRows.length === 0 && (
+            <Text style={styles.fieldHint}>{t('seller.products.formFieldSpecsEmpty')}</Text>
+          )}
+          {specsPrefilled && form.specRows.length > 0 && (
+            <Text style={styles.specPrefilledText}>{t('seller.products.formFieldSpecsPrefilled')}</Text>
+          )}
+        </View>
       </Field>
+
+      {/* Shipping: weight + dimensions */}
       <Field label={t('seller.products.formFieldWeight')}>
         <TextInput
           style={styles.input}
@@ -1442,7 +1599,7 @@ function DescriptionSection({ form, errors, updateField, t }: { form: FormState;
           placeholderTextColor={colors.textTertiary}
           keyboardType="numeric"
           inputMode="numeric"
-          accessibilityLabel={t('seller.products.formFieldWeight')}
+          accessibilityLabel={`${t('seller.products.formFieldWeight')} (grams)`}
         />
       </Field>
       <Text style={styles.dimsLabel}>{t('seller.products.formFieldShippingDims')}</Text>
@@ -1456,7 +1613,7 @@ function DescriptionSection({ form, errors, updateField, t }: { form: FormState;
             placeholderTextColor={colors.textTertiary}
             keyboardType="numeric"
             inputMode="numeric"
-            accessibilityLabel={t('seller.products.formFieldShippingWidth')}
+            accessibilityLabel={`${t('seller.products.formFieldShippingWidth')} (cm)`}
           />
         </View>
         <View style={{ flex: 1 }}>
@@ -1468,7 +1625,7 @@ function DescriptionSection({ form, errors, updateField, t }: { form: FormState;
             placeholderTextColor={colors.textTertiary}
             keyboardType="numeric"
             inputMode="numeric"
-            accessibilityLabel={t('seller.products.formFieldShippingHeight')}
+            accessibilityLabel={`${t('seller.products.formFieldShippingHeight')} (cm)`}
           />
         </View>
         <View style={{ flex: 1 }}>
@@ -1480,10 +1637,62 @@ function DescriptionSection({ form, errors, updateField, t }: { form: FormState;
             placeholderTextColor={colors.textTertiary}
             keyboardType="numeric"
             inputMode="numeric"
-            accessibilityLabel={t('seller.products.formFieldShippingLength')}
+            accessibilityLabel={`${t('seller.products.formFieldShippingLength')} (cm)`}
           />
         </View>
       </View>
+
+      {/* Handling time */}
+      <Field label={t('seller.products.formFieldHandlingTime')} hint={t('seller.products.formFieldHandlingTimeHint')}>
+        <View style={styles.selectList}>
+          {handlingOptions.map(opt => {
+            const selected = form.handlingTime === opt.value
+            return (
+              <TouchableOpacity
+                key={opt.value}
+                onPress={() => updateField('handlingTime', opt.value)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+                style={[styles.selectChip, selected && styles.selectChipActive]}
+              >
+                <Text style={[styles.selectChipText, selected && styles.selectChipTextActive]}>{opt.label}</Text>
+              </TouchableOpacity>
+            )
+          })}
+        </View>
+      </Field>
+
+      {/* Return policy */}
+      <Field label={t('seller.products.formFieldReturnPolicy')} hint={t('seller.products.formFieldReturnPolicyHint')}>
+        <View style={styles.selectList}>
+          {returnOptions.map(opt => {
+            const selected = form.returnPolicy === opt.value
+            return (
+              <TouchableOpacity
+                key={opt.value}
+                onPress={() => updateField('returnPolicy', opt.value)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+                style={[styles.selectChip, selected && styles.selectChipActive]}
+              >
+                <Text style={[styles.selectChipText, selected && styles.selectChipTextActive]}>{opt.label}</Text>
+              </TouchableOpacity>
+            )
+          })}
+        </View>
+      </Field>
+
+      {/* Pickup location */}
+      <Field label={t('seller.products.formFieldPickupLocation')} hint={t('seller.products.formFieldPickupLocationHint')}>
+        <TextInput
+          style={styles.input}
+          value={form.pickupLocation}
+          onChangeText={v => updateField('pickupLocation', v)}
+          placeholder={t('seller.products.formFieldPickupLocationPlaceholder')}
+          placeholderTextColor={colors.textTertiary}
+          accessibilityLabel={t('seller.products.formFieldPickupLocation')}
+        />
+      </Field>
     </View>
   )
 }
@@ -1940,6 +2149,83 @@ const styles = StyleSheet.create({
 
   dimsLabel: { fontSize: 14, fontWeight: '600', color: colors.text },
   dimsRow: { flexDirection: 'row', gap: spacing[2] },
+
+  langToggleWrap: {
+    flexDirection: 'row',
+    backgroundColor: colors.surface,
+    borderRadius: radii.full,
+    padding: 2,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    marginBottom: spacing[2],
+    alignSelf: 'flex-start',
+  },
+  langToggleBtn: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1],
+    borderRadius: radii.full,
+  },
+  langToggleBtnActive: { backgroundColor: colors.primary },
+  langToggleText: { fontSize: 12, fontWeight: '600', color: colors.textMuted },
+  langToggleTextActive: { color: colors.white },
+
+  editorToolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1.5],
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderBottomWidth: 0,
+    borderRadius: radii.md,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    backgroundColor: colors.surface,
+  },
+  editorToolbarHint: { fontSize: 13, fontWeight: '700', color: colors.textMuted, letterSpacing: 4 },
+
+  specRowsWrap: { gap: spacing[2] },
+  specRow: { flexDirection: 'row', gap: spacing[2], alignItems: 'center' },
+  specRemoveBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  specRemoveIcon: { fontSize: 14, color: colors.textMuted },
+  specAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+    alignSelf: 'flex-start',
+  },
+  specAddBtnText: { fontSize: 13, fontWeight: '500', color: colors.textMuted },
+  specPrefilledText: { fontSize: 12, color: colors.success, marginTop: spacing[1] },
+
+  selectList: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
+  selectChip: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1.5],
+    borderRadius: radii.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+    minHeight: 32,
+  },
+  selectChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  selectChipText: { fontSize: 13, fontWeight: '500', color: colors.text },
+  selectChipTextActive: { color: colors.white },
 
   saveBar: {
     flexDirection: 'row',

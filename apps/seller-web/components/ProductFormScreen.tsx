@@ -37,6 +37,12 @@ interface VariantRow {
   stock: string
 }
 
+interface SpecRow {
+  id: string
+  key: string
+  value: string
+}
+
 interface FormState {
   images: string[]
   videoUrl: string
@@ -53,11 +59,16 @@ interface FormState {
   options: VariantOption[]
   variants: VariantRow[]
   description: string
+  descriptionNe: string
+  specRows: SpecRow[]
   specs: string
   weight: string
   shippingWidth: string
   shippingHeight: string
   shippingLength: string
+  handlingTime: string
+  returnPolicy: string
+  pickupLocation: string
   status: 'active' | 'draft'
 }
 
@@ -77,11 +88,16 @@ const EMPTY_FORM: FormState = {
   options: [],
   variants: [],
   description: '',
+  descriptionNe: '',
+  specRows: [],
   specs: '',
   weight: '',
   shippingWidth: '',
   shippingHeight: '',
   shippingLength: '',
+  handlingTime: '',
+  returnPolicy: 'accept',
+  pickupLocation: '',
   status: 'draft',
 }
 
@@ -164,11 +180,16 @@ export default function ProductFormScreen() {
         options: [],
         variants: [],
         description: product.name + ' — ' + product.categoryName,
+        descriptionNe: '',
+        specRows: [],
         specs: '',
         weight: '',
         shippingWidth: '',
         shippingHeight: '',
         shippingLength: '',
+        handlingTime: '1-2',
+        returnPolicy: 'accept',
+        pickupLocation: '',
         status: product.status === 'active' ? 'active' : 'draft',
       }
       setForm(loaded)
@@ -217,7 +238,7 @@ export default function ProductFormScreen() {
     snackbarTimer.current = setTimeout(() => setSnackbar(null), 3000)
   }
 
-  const updateField = useCallback((field: keyof FormState, value: string | string[] | VariantOption[] | VariantRow[]) => {
+  const updateField = useCallback((field: keyof FormState, value: string | string[] | VariantOption[] | VariantRow[] | SpecRow[]) => {
     setForm(prev => ({ ...prev, [field]: value }))
     setErrors(prev => {
       const next = { ...prev }
@@ -483,7 +504,7 @@ export default function ProductFormScreen() {
                       <PricingSection form={form} errors={errors} updateField={updateField} t={t} reduced={reduced} />
                     )}
                     {s.key === 'description' && (
-                      <DescriptionSection form={form} errors={errors} updateField={updateField} t={t} />
+                      <DescriptionSection form={form} errors={errors} updateField={updateField} t={t} reduced={reduced} />
                     )}
                   </SectionCard>
                 ))}
@@ -513,7 +534,7 @@ export default function ProductFormScreen() {
             <div className="hidden lg:block">
               <div className="sticky top-20">
                 <p className="text-[13px] font-semibold text-text-muted mb-2">{t('seller.products.formPreview')}</p>
-                <PreviewCard product={previewProduct} t={t} />
+                <PreviewCard product={previewProduct} t={t} specRows={debouncedForm.specRows} />
               </div>
             </div>
           </div>
@@ -1732,31 +1753,226 @@ function PricingSection({ form, errors, updateField, t, reduced }: { form: FormS
   )
 }
 
-function DescriptionSection({ form, errors, updateField, t }: { form: FormState; errors: Record<string, string>; updateField: (f: keyof FormState, v: string) => void; t: any }) {
+// Category-suggested specs
+const CATEGORY_SPECS: Record<string, { key: string; value: string }[]> = {
+  'cat-electronics': [{ key: 'Warranty', value: '' }, { key: 'Brand', value: '' }, { key: 'Model', value: '' }],
+  'cat-phones': [{ key: 'Storage', value: '' }, { key: 'RAM', value: '' }, { key: 'Screen Size', value: '' }],
+  'cat-fashion': [{ key: 'Material', value: '' }, { key: 'Size', value: '' }, { key: 'Color', value: '' }],
+  'cat-home': [{ key: 'Material', value: '' }, { key: 'Dimensions', value: '' }],
+  'cat-grocery': [{ key: 'Weight', value: '' }, { key: 'Shelf Life', value: '' }],
+  'cat-beauty': [{ key: 'Skin Type', value: '' }, { key: 'Volume', value: '' }],
+}
+
+function getSuggestedSpecs(categoryId: string): { key: string; value: string }[] {
+  if (!categoryId) return []
+  // Check direct match then parent
+  if (CATEGORY_SPECS[categoryId]) return CATEGORY_SPECS[categoryId]
+  // Check if it's a child of a known parent
+  for (const key of Object.keys(CATEGORY_SPECS)) {
+    if (categoryId.startsWith(key.replace('cat-', 'cat-').slice(0, 8))) return CATEGORY_SPECS[key]
+  }
+  return []
+}
+
+function DescriptionSection({ form, errors, updateField, t, reduced }: { form: FormState; errors: Record<string, string>; updateField: (f: keyof FormState, v: string | string[] | VariantOption[] | VariantRow[] | SpecRow[]) => void; t: any; reduced: boolean }) {
+  const [descLang, setDescLang] = useState<'en' | 'ne'>('en')
+  const [specsPrefilled, setSpecsPrefilled] = useState(false)
+
+  // Prefill specs from category
+  useEffect(() => {
+    if (!specsPrefilled && form.categoryId && form.specRows.length === 0) {
+      const suggested = getSuggestedSpecs(form.categoryId)
+      if (suggested.length > 0) {
+        const rows: SpecRow[] = suggested.map((s, i) => ({
+          id: `spec-${Date.now()}-${i}`,
+          key: s.key,
+          value: s.value,
+        }))
+        updateField('specRows', rows)
+        setSpecsPrefilled(true)
+      }
+    }
+  }, [form.categoryId, form.specRows.length, specsPrefilled, updateField])
+
+  const addSpecRow = () => {
+    const row: SpecRow = { id: `spec-${Date.now()}`, key: '', value: '' }
+    updateField('specRows', [...form.specRows, row])
+  }
+
+  const updateSpecRow = (id: string, field: 'key' | 'value', value: string) => {
+    updateField('specRows', form.specRows.map(r => r.id === id ? { ...r, [field]: value } : r))
+  }
+
+  const removeSpecRow = (id: string) => {
+    updateField('specRows', form.specRows.filter(r => r.id !== id))
+  }
+
+  // Rich-text toolbar helpers (simple markdown insertion)
+  const descRef = useRef<HTMLTextAreaElement>(null)
+  const insertMarkdown = (before: string, after: string = '') => {
+    const el = descRef.current
+    if (!el) return
+    const start = el.selectionStart
+    const end = el.selectionEnd
+    const text = descLang === 'en' ? form.description : form.descriptionNe
+    const selected = text.slice(start, end)
+    const newText = text.slice(0, start) + before + selected + after + text.slice(end)
+    if (descLang === 'en') {
+      updateField('description', newText)
+    } else {
+      updateField('descriptionNe', newText)
+    }
+    // Restore cursor
+    setTimeout(() => {
+      el.focus()
+      el.setSelectionRange(start + before.length, end + before.length)
+    }, 0)
+  }
+
+  const descValue = descLang === 'en' ? form.description : form.descriptionNe
+  const setDescValue = (v: string) => {
+    if (descLang === 'en') updateField('description', v)
+    else updateField('descriptionNe', v)
+  }
+
+  const toolbarBtns = [
+    { key: 'bold', label: t('seller.products.editorBold'), aria: t('seller.products.editorBoldAria'), icon: 'B', action: () => insertMarkdown('**', '**') },
+    { key: 'italic', label: t('seller.products.editorItalic'), aria: t('seller.products.editorItalicAria'), icon: 'I', action: () => insertMarkdown('*', '*') },
+    { key: 'heading', label: t('seller.products.editorHeading'), aria: t('seller.products.editorHeadingAria'), icon: 'H', action: () => insertMarkdown('## ') },
+    { key: 'bullet', label: t('seller.products.editorBulletList'), aria: t('seller.products.editorBulletListAria'), icon: '•', action: () => insertMarkdown('- ') },
+  ]
+
   return (
     <div className="flex flex-col gap-4">
-      <Field label={t('seller.products.formFieldDescription')} hint={t('seller.products.formFieldDescriptionHint')} error={errors.description} errorId="error-description">
+      {/* Description with bilingual toggle + toolbar */}
+      <Field
+        label={descLang === 'en' ? t('seller.products.formFieldDescription') : t('seller.products.formFieldDescriptionNe')}
+        hint={descLang === 'en' ? t('seller.products.formFieldDescriptionHint') : t('seller.products.formFieldDescriptionNeHint')}
+        error={errors.description}
+        errorId="error-description"
+      >
+        {/* Language toggle */}
+        <div
+          className="inline-flex bg-surface rounded-full h-8 p-0.5 border border-border-light mb-2"
+          role="tablist"
+          aria-label={t('seller.products.formFieldLangToggleAria')}
+        >
+          {(['en', 'ne'] as const).map(lang => {
+            const active = descLang === lang
+            return (
+              <button
+                key={lang}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setDescLang(lang)}
+                className={`relative flex items-center justify-center h-7 px-3 rounded-full text-[12px] font-semibold transition-colors ${
+                  active ? 'text-white' : 'text-text-muted hover:text-text'
+                }`}
+              >
+                {active && (
+                  <motion.span
+                    layoutId="desc-lang-pill"
+                    className="absolute inset-0 -z-10 rounded-full bg-primary"
+                    transition={reduced ? { duration: 0 } : { type: 'spring', stiffness: 350, damping: 30, mass: 0.8 }}
+                  />
+                )}
+                {lang === 'en' ? t('seller.products.formFieldLangEn') : t('seller.products.formFieldLangNe')}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Toolbar */}
+        <div className="flex items-center gap-1 rounded-t-md border border-border border-b-0 bg-surface px-2 py-1.5">
+          {toolbarBtns.map(btn => (
+            <button
+              key={btn.key}
+              type="button"
+              onClick={btn.action}
+              aria-label={btn.aria}
+              className="inline-flex items-center justify-center w-7 h-7 rounded-md text-[14px] font-bold text-text-muted hover:bg-primary-50 hover:text-primary transition-colors"
+            >
+              {btn.icon}
+            </button>
+          ))}
+        </div>
+
+        {/* Editor */}
         <textarea
-          value={form.description}
-          onChange={e => updateField('description', e.target.value)}
-          placeholder="Describe your product in detail..."
-          rows={5}
-          aria-label={t('seller.products.formFieldDescription')}
+          ref={descRef}
+          value={descValue}
+          onChange={e => setDescValue(e.target.value)}
+          placeholder={descLang === 'en' ? 'Describe your product in detail...' : 'उत्पादन विस्तृत वर्णन गर्नुहोस्...'}
+          rows={6}
+          aria-label={descLang === 'en' ? t('seller.products.formFieldDescription') : t('seller.products.formFieldDescriptionNe')}
           aria-describedby={errors.description ? 'error-description' : undefined}
           aria-invalid={!!errors.description}
-          className={`${inputCls(!!errors.description)} min-h-[120px] py-3 resize-y`}
+          className="w-full min-h-[140px] px-3 py-3 rounded-b-md border border-border bg-surface text-[14px] text-text outline-none focus:border-primary transition-colors resize-y placeholder:text-text-tertiary"
         />
       </Field>
-      <Field label={t('seller.products.formFieldSpecs')} hint={t('seller.products.formFieldSpecsHint')} error={errors.specs} errorId="error-specs">
-        <textarea
-          value={form.specs}
-          onChange={e => updateField('specs', e.target.value)}
-          placeholder="Material: Cotton, Dimensions: 30cm x 20cm..."
-          rows={3}
-          aria-label={t('seller.products.formFieldSpecs')}
-          className={`${inputCls(!!errors.specs)} min-h-[80px] py-3 resize-y`}
-        />
+
+      {/* Specs as key-value rows */}
+      <Field label={t('seller.products.formFieldSpecs')} hint={t('seller.products.formFieldSpecsHint')}>
+        <div className="flex flex-col gap-2">
+          <AnimatePresence>
+            {form.specRows.map(row => (
+              <motion.div
+                key={row.id}
+                initial={reduced ? false : { opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reduced ? { opacity: 0 } : { opacity: 0, x: -8 }}
+                transition={reduced ? { duration: 0 } : { duration: 0.2 }}
+                className="flex items-center gap-2"
+              >
+                <input
+                  type="text"
+                  value={row.key}
+                  onChange={e => updateSpecRow(row.id, 'key', e.target.value)}
+                  placeholder={t('seller.products.formFieldSpecsKeyPlaceholder')}
+                  aria-label={`${t('seller.products.formFieldSpecsKey')} — ${row.key || t('seller.products.formFieldSpecsKeyPlaceholder')}`}
+                  className={`${inputCls(false)} flex-1`}
+                />
+                <input
+                  type="text"
+                  value={row.value}
+                  onChange={e => updateSpecRow(row.id, 'value', e.target.value)}
+                  placeholder={t('seller.products.formFieldSpecsValuePlaceholder')}
+                  aria-label={`${t('seller.products.formFieldSpecsValue')} — ${row.key || t('seller.products.formFieldSpecsKeyPlaceholder')}`}
+                  className={`${inputCls(false)} flex-1`}
+                />
+                <button
+                  type="button"
+                  onClick={() => removeSpecRow(row.id)}
+                  aria-label={t('seller.products.formFieldSpecsRemoveAria', { key: row.key || t('seller.products.formFieldSpecsKeyPlaceholder') })}
+                  className="w-9 h-9 rounded-md border border-border bg-surface text-text-muted hover:text-error hover:border-error/30 transition-colors shrink-0"
+                >
+                  ✕
+                </button>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+
+          {/* Add spec row */}
+          <button
+            type="button"
+            onClick={addSpecRow}
+            aria-label={t('seller.products.formFieldSpecsAddAria')}
+            className="flex items-center gap-1.5 h-9 px-3 rounded-md border border-dashed border-border bg-background text-[13px] font-medium text-text-muted hover:border-primary hover:text-primary transition-colors self-start"
+          >
+            + {t('seller.products.formFieldSpecsAdd')}
+          </button>
+
+          {form.specRows.length === 0 && (
+            <p className="text-[12px] text-text-muted">{t('seller.products.formFieldSpecsEmpty')}</p>
+          )}
+          {specsPrefilled && form.specRows.length > 0 && (
+            <p className="text-[12px] text-success">{t('seller.products.formFieldSpecsPrefilled')}</p>
+          )}
+        </div>
       </Field>
+
+      {/* Shipping: weight + dimensions */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <Field label={t('seller.products.formFieldWeight')}>
           <input
@@ -1765,7 +1981,7 @@ function DescriptionSection({ form, errors, updateField, t }: { form: FormState;
             value={form.weight}
             onChange={e => updateField('weight', e.target.value)}
             placeholder="0"
-            aria-label={t('seller.products.formFieldWeight')}
+            aria-label={`${t('seller.products.formFieldWeight')} (grams)`}
             className={`${inputCls()} tabular-nums`}
           />
         </Field>
@@ -1776,7 +1992,7 @@ function DescriptionSection({ form, errors, updateField, t }: { form: FormState;
             value={form.shippingWidth}
             onChange={e => updateField('shippingWidth', e.target.value)}
             placeholder="0"
-            aria-label={t('seller.products.formFieldShippingWidth')}
+            aria-label={`${t('seller.products.formFieldShippingWidth')} (cm)`}
             className={`${inputCls()} tabular-nums`}
           />
         </Field>
@@ -1787,7 +2003,7 @@ function DescriptionSection({ form, errors, updateField, t }: { form: FormState;
             value={form.shippingHeight}
             onChange={e => updateField('shippingHeight', e.target.value)}
             placeholder="0"
-            aria-label={t('seller.products.formFieldShippingHeight')}
+            aria-label={`${t('seller.products.formFieldShippingHeight')} (cm)`}
             className={`${inputCls()} tabular-nums`}
           />
         </Field>
@@ -1798,18 +2014,59 @@ function DescriptionSection({ form, errors, updateField, t }: { form: FormState;
             value={form.shippingLength}
             onChange={e => updateField('shippingLength', e.target.value)}
             placeholder="0"
-            aria-label={t('seller.products.formFieldShippingLength')}
+            aria-label={`${t('seller.products.formFieldShippingLength')} (cm)`}
             className={`${inputCls()} tabular-nums`}
           />
         </Field>
       </div>
+
+      {/* Handling time + return policy */}
+      <div className="grid sm:grid-cols-2 gap-4">
+        <Field label={t('seller.products.formFieldHandlingTime')} hint={t('seller.products.formFieldHandlingTimeHint')}>
+          <select
+            value={form.handlingTime}
+            onChange={e => updateField('handlingTime', e.target.value)}
+            aria-label={t('seller.products.formFieldHandlingTime')}
+            className={inputCls()}
+          >
+            <option value="1">{t('seller.products.formFieldHandlingTime1d')}</option>
+            <option value="1-2">{t('seller.products.formFieldHandlingTime2d')}</option>
+            <option value="2-3">{t('seller.products.formFieldHandlingTime3d')}</option>
+            <option value="7">{t('seller.products.formFieldHandlingTime7d')}</option>
+          </select>
+        </Field>
+        <Field label={t('seller.products.formFieldReturnPolicy')} hint={t('seller.products.formFieldReturnPolicyHint')}>
+          <select
+            value={form.returnPolicy}
+            onChange={e => updateField('returnPolicy', e.target.value)}
+            aria-label={t('seller.products.formFieldReturnPolicy')}
+            className={inputCls()}
+          >
+            <option value="accept">{t('seller.products.formFieldReturnPolicyAccept')}</option>
+            <option value="accept14">{t('seller.products.formFieldReturnPolicyAccept14')}</option>
+            <option value="no_return">{t('seller.products.formFieldReturnPolicyNoReturn')}</option>
+          </select>
+        </Field>
+      </div>
+
+      {/* Pickup location */}
+      <Field label={t('seller.products.formFieldPickupLocation')} hint={t('seller.products.formFieldPickupLocationHint')}>
+        <input
+          type="text"
+          value={form.pickupLocation}
+          onChange={e => updateField('pickupLocation', e.target.value)}
+          placeholder={t('seller.products.formFieldPickupLocationPlaceholder')}
+          aria-label={t('seller.products.formFieldPickupLocation')}
+          className={inputCls()}
+        />
+      </Field>
     </div>
   )
 }
 
 // ---- Live preview ----
 
-function PreviewCard({ product, t }: { product: Product; t: any }) {
+function PreviewCard({ product, t, specRows }: { product: Product; t: any; specRows?: SpecRow[] }) {
   const hasData = product.name !== 'Product name' || product.price > 0 || product.images.length > 0
   if (!hasData) {
     return (
@@ -1818,9 +2075,10 @@ function PreviewCard({ product, t }: { product: Product; t: any }) {
       </div>
     )
   }
+  const hasSpecs = specRows && specRows.some(r => r.key && r.value)
   return (
-    <div className="bg-surface rounded-xl border border-border-light overflow-hidden shadow-sm">
-      {/* Image */}
+    <div className="bg-surface rounded-xl border border-border-light overflow-hidden shadow-sm max-h-[calc(100vh-120px)] overflow-y-auto">
+      {/* PD3: Gallery / cover image */}
       <div className="relative aspect-square bg-border-light">
         {product.images.length > 0 ? (
           <SafeImage src={product.images[0].uri} alt={product.name} className="w-full h-full object-cover" />
@@ -1837,20 +2095,40 @@ function PreviewCard({ product, t }: { product: Product; t: any }) {
           </div>
         )}
       </div>
-      {/* Info */}
-      <div className="p-3 space-y-1.5">
-        <p className="text-[14px] font-semibold text-text line-clamp-2">{product.name}</p>
+      {/* PD3: Product info */}
+      <div className="p-4 space-y-2">
+        <p className="text-[16px] font-semibold text-text">{product.name}</p>
         <div className="flex items-baseline gap-2">
-          <span className="text-[16px] font-bold text-text tabular-nums">{formatNPR(product.price)}</span>
+          <span className="text-[18px] font-bold text-text tabular-nums">{formatNPR(product.price)}</span>
           {product.compareAtPrice && product.compareAtPrice > product.price && (
-            <span className="text-[12px] text-text-tertiary line-through tabular-nums">{formatNPR(product.compareAtPrice)}</span>
+            <span className="text-[13px] text-text-tertiary line-through tabular-nums">{formatNPR(product.compareAtPrice)}</span>
           )}
         </div>
+        {product.price > 0 && (
+          <p className="text-[11px] text-text-muted tabular-nums">{t('seller.products.vatInclusive')}</p>
+        )}
         <p className="text-[12px] text-text-muted truncate">{product.sellerName}</p>
+        {/* Description preview */}
         {product.description && (
-          <p className="text-[12px] text-text-muted line-clamp-2">{product.description}</p>
+          <div className="pt-2 border-t border-border-light">
+            <p className="text-[12px] text-text-muted line-clamp-3">{product.description.replace(/[#*-]/g, '')}</p>
+          </div>
         )}
       </div>
+      {/* PD6: Specs table */}
+      {hasSpecs && (
+        <div className="px-4 pb-4 border-t border-border-light pt-3">
+          <p className="text-[12px] font-semibold text-text-muted uppercase mb-2">{t('seller.products.formFieldSpecs')}</p>
+          <dl className="space-y-1.5">
+            {specRows!.filter(r => r.key && r.value).map(r => (
+              <div key={r.id} className="flex items-baseline gap-2">
+                <dt className="text-[13px] font-medium text-text-secondary shrink-0">{r.key}</dt>
+                <dd className="text-[13px] text-text-muted flex-1">{r.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      )}
     </div>
   )
 }
