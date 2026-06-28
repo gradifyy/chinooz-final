@@ -41,6 +41,12 @@ import { colors, spacing, radii, fontFamily, fontSize, shadow } from '@chinooz/t
 import { useReducedMotion } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
 import { getRiderStreaks, type RiderTierRung, type RiderMilestone } from '@chinooz/mock-data'
+import {
+  StreaksSkeleton,
+  ErrorState,
+  OfflineBanner,
+} from '../components/IncentiveStates'
+import { useAppState } from '../components/AppStateProvider'
 
 const AnimatedPressable = Animated.createAnimatedComponent(TouchableOpacity)
 
@@ -84,6 +90,8 @@ export default function StreaksScreen() {
   const reduced = useReducedMotion()
 
   const [nudgeDismissed, setNudgeDismissed] = useState(false)
+  const { connectivity } = useAppState()
+  const isOffline = connectivity === 'offline'
 
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ['rider-streaks'],
@@ -113,14 +121,8 @@ export default function StreaksScreen() {
           style={styles.scroll}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + spacing[8] }]}
           showsVerticalScrollIndicator={false}
-          accessible
-          accessibilityRole="progressbar"
-          accessibilityLabel={t('rider.streaks.skeletonAria')}
-          accessibilityLiveRegion="polite"
         >
-          <View style={styles.skeletonBlock} />
-          <View style={styles.skeletonBlock} />
-          <View style={styles.skeletonBlock} />
+          <StreaksSkeleton ariaLabel={t('rider.streaks.skeletonAria')} />
         </ScrollView>
       </View>
     )
@@ -130,13 +132,13 @@ export default function StreaksScreen() {
     return (
       <View style={[styles.root, { paddingTop: insets.top }]}>
         <StreaksHeader title={t('rider.streaks.title')} subtitle={t('rider.streaks.subtitle')} onBack={() => router.back()} backLabel={t('rider.streaks.back')} />
-        <View style={styles.errorWrap}>
-          <Text style={styles.errorTitle}>{t('rider.streaks.errorTitle')}</Text>
-          <Text style={styles.errorSub}>{t('rider.streaks.errorSubtitle')}</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={() => refetch()}>
-            <Text style={styles.retryText}>{t('rider.streaks.retry')}</Text>
-          </TouchableOpacity>
-        </View>
+        <ErrorState
+          title={t('rider.streaks.errorTitle')}
+          subtitle={t('rider.streaks.errorSubtitle')}
+          retryLabel={t('rider.streaks.retry')}
+          retryAria={t('rider.incentives.states.retryAria')}
+          onRetry={() => refetch()}
+        />
       </View>
     )
   }
@@ -164,6 +166,15 @@ export default function StreaksScreen() {
           <RefreshControl refreshing={isRefetching} onRefresh={() => refetch()} tintColor={colors.primary} />
         }
       >
+        {/* Offline banner */}
+        {isOffline ? (
+          <OfflineBanner
+            title={t('rider.streaks.states.offlineTitle')}
+            body={t('rider.streaks.states.offlineBody')}
+            ariaLabel={t('rider.streaks.states.offlineAria')}
+          />
+        ) : null}
+
         {/* Gentle nudge — dismissible, never coercive */}
         {showNudge ? (
           <NudgeCard

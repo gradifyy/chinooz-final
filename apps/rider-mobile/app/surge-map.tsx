@@ -29,7 +29,14 @@ import { useSurgeDetail, useDemandZones, useSurgeZones } from '@chinooz/hooks'
 import { useOnlineStatusStore } from '@chinooz/state'
 import { analytics } from '@chinooz/analytics'
 import { useA11y } from '../components/A11yProvider'
+import { useAppState } from '../components/AppStateProvider'
 import DemandHeatmap from '../components/DemandHeatmap'
+import {
+  SurgeSkeleton,
+  ErrorState,
+  OfflineBanner,
+  NoSurgeState,
+} from '../components/IncentiveStates'
 import type { DemandZone, DemandLevel } from '@chinooz/mock-data'
 
 /**
@@ -74,6 +81,8 @@ export default function SurgeMapScreen() {
   const surgeZonesQuery = useSurgeZones()
 
   const [refreshing, setRefreshing] = useState(false)
+  const { connectivity } = useAppState()
+  const isOffline = connectivity === 'offline'
 
   const status = useOnlineStatusStore(s => s.status)
   const setOnlineStatus = useOnlineStatusStore(s => s.setOnlineStatus)
@@ -143,12 +152,8 @@ export default function SurgeMapScreen() {
           style={styles.scroll}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + spacing[8] }]}
           showsVerticalScrollIndicator={false}
-          accessibilityRole="progressbar"
-          accessibilityLabel={t('rider.surge.skeletonAria')}
         >
-          <View style={styles.skeletonBlock} />
-          <View style={styles.skeletonBlock} />
-          <View style={styles.skeletonBlock} />
+          <SurgeSkeleton ariaLabel={t('rider.surge.skeletonAria')} />
         </ScrollView>
       </View>
     )
@@ -159,13 +164,13 @@ export default function SurgeMapScreen() {
     return (
       <View style={[styles.root, { paddingTop: insets.top }]}>
         <SurgeHeader title={t('rider.surge.title')} subtitle={t('rider.surge.subtitle')} onBack={() => router.back()} backLabel={t('rider.surge.back')} />
-        <View style={styles.errorWrap}>
-          <Text style={styles.errorTitle}>{t('rider.surge.errorTitle')}</Text>
-          <Text style={styles.errorSub}>{t('rider.surge.errorSubtitle')}</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={() => surgeDetailQuery.refetch()}>
-            <Text style={styles.retryText}>{t('rider.surge.retry')}</Text>
-          </TouchableOpacity>
-        </View>
+        <ErrorState
+          title={t('rider.surge.errorTitle')}
+          subtitle={t('rider.surge.errorSubtitle')}
+          retryLabel={t('rider.surge.retry')}
+          retryAria={t('rider.incentives.states.retryAria')}
+          onRetry={() => surgeDetailQuery.refetch()}
+        />
       </View>
     )
   }
@@ -212,6 +217,15 @@ export default function SurgeMapScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }
       >
+        {/* Offline banner */}
+        {isOffline ? (
+          <OfflineBanner
+            title={t('rider.surge.states.offlineTitle')}
+            body={t('rider.surge.states.offlineBody')}
+            ariaLabel={t('rider.surge.states.offlineAria')}
+          />
+        ) : null}
+
         {/* Surge status banner */}
         {detail.surgeLive ? (
           <View

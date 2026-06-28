@@ -18,7 +18,14 @@ import { analytics } from '@chinooz/analytics'
 import { getIncentives, type RiderQuest, type QuestStatus } from '@chinooz/mock-data'
 import { useRiderIncentivesStore, useRiderTripsStore, computeQuestProgress } from '@chinooz/state'
 import { SegmentedControl } from '@chinooz/ui'
-import QuestCard, { QuestCardSkeleton } from '../../components/QuestCard'
+import QuestCard from '../../components/QuestCard'
+import {
+  QuestsListSkeleton,
+  ErrorState,
+  NoActiveQuestsState,
+  OfflineBanner,
+} from '../../components/IncentiveStates'
+import { useAppState } from '../../components/AppStateProvider'
 
 type QuestTab = 'active' | 'available' | 'completed'
 type QuestSort = 'ending_soon' | 'reward'
@@ -46,6 +53,8 @@ export default function QuestsListScreen() {
     streakDays: s.streakDays,
     peakRidesToday: s.peakRidesToday,
   }))
+  const { connectivity } = useAppState()
+  const isOffline = connectivity === 'offline'
 
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ['rider-incentives'],
@@ -178,18 +187,27 @@ export default function QuestsListScreen() {
 
   const renderQuests = () => {
     if (currentQuests.length === 0) {
-      const emptyTitle = tab === 'active'
-        ? t('rider.incentives.questListEmptyActive')
-        : tab === 'available'
-          ? t('rider.incentives.questListEmptyAvailable')
-          : t('rider.incentives.questListEmptyCompleted')
-      const emptySub = tab === 'active'
-        ? t('rider.incentives.questListEmptyActiveSub')
-        : tab === 'available'
-          ? t('rider.incentives.questListEmptyAvailableSub')
-          : t('rider.incentives.questListEmptyCompletedSub')
+      // Encouraging empty states per tab.
+      if (tab === 'active') {
+        return (
+          <NoActiveQuestsState
+            title={t('rider.incentives.states.noActiveQuestsTitle')}
+            body={t('rider.incentives.states.noActiveQuestsBody')}
+            ariaLabel={t('rider.incentives.states.noActiveQuestsAria')}
+            ctaLabel={t('rider.incentives.states.noActiveQuestsCta')}
+            ctaAria={t('rider.incentives.states.noActiveQuestsCtaAria')}
+            onCta={() => setTab('available')}
+          />
+        )
+      }
+      const emptyTitle = tab === 'available'
+        ? t('rider.incentives.questListEmptyAvailable')
+        : t('rider.incentives.questListEmptyCompleted')
+      const emptySub = tab === 'available'
+        ? t('rider.incentives.questListEmptyAvailableSub')
+        : t('rider.incentives.questListEmptyCompletedSub')
       return (
-        <View style={styles.emptyWrap}>
+        <View style={styles.emptyWrap} accessibilityRole="status" accessibilityLiveRegion="polite" accessible>
           <Target size={32} color={colors.textTertiary} />
           <Text style={styles.emptyTitle}>{emptyTitle}</Text>
           <Text style={styles.emptySub}>{emptySub}</Text>
@@ -260,23 +278,26 @@ export default function QuestsListScreen() {
         }
       >
         {isLoading ? (
-          <View style={styles.skeletonWrap}>
-            <QuestCardSkeleton ariaLabel={t('rider.incentives.questListSkeletonAria')} />
-            <View style={{ height: spacing[2.5] }} />
-            <QuestCardSkeleton ariaLabel={t('rider.incentives.questListSkeletonAria')} />
-            <View style={{ height: spacing[2.5] }} />
-            <QuestCardSkeleton ariaLabel={t('rider.incentives.questListSkeletonAria')} />
-          </View>
+          <QuestsListSkeleton ariaLabel={t('rider.incentives.questListSkeletonAria')} />
         ) : isError ? (
-          <View style={styles.errorWrap}>
-            <Text style={styles.errorTitle}>{t('rider.incentives.questListErrorTitle')}</Text>
-            <Text style={styles.errorSub}>{t('rider.incentives.questListErrorSub')}</Text>
-            <TouchableOpacity style={styles.retryBtn} onPress={() => refetch()}>
-              <Text style={styles.retryText}>{t('rider.incentives.questListRetry')}</Text>
-            </TouchableOpacity>
-          </View>
+          <ErrorState
+            title={t('rider.incentives.questListErrorTitle')}
+            subtitle={t('rider.incentives.questListErrorSub')}
+            retryLabel={t('rider.incentives.questListRetry')}
+            retryAria={t('rider.incentives.states.retryAria')}
+            onRetry={() => refetch()}
+          />
         ) : (
-          renderQuests()
+          <>
+            {isOffline ? (
+              <OfflineBanner
+                title={t('rider.incentives.states.offlineTitle')}
+                body={t('rider.incentives.states.offlineBody')}
+                ariaLabel={t('rider.incentives.states.offlineAria')}
+              />
+            ) : null}
+            {renderQuests()}
+          </>
         )}
       </ScrollView>
     </View>
@@ -353,9 +374,6 @@ const styles = StyleSheet.create({
     gap: spacing[2.5],
     paddingTop: spacing[2],
   },
-  skeletonWrap: {
-    paddingTop: spacing[2],
-  },
   emptyWrap: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -377,40 +395,5 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: 'center',
     fontFamily: fontFamily.sans[0],
-  },
-  errorWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing[12],
-    paddingHorizontal: spacing[6],
-    gap: spacing[2],
-  },
-  errorTitle: {
-    fontSize: fontSize.lg[0],
-    fontWeight: '700',
-    color: colors.text,
-    fontFamily: fontFamily.sansBold[0],
-  },
-  errorSub: {
-    fontSize: 14,
-    color: colors.textMuted,
-    textAlign: 'center',
-    fontFamily: fontFamily.sans[0],
-  },
-  retryBtn: {
-    marginTop: spacing[3],
-    paddingHorizontal: spacing[5],
-    paddingVertical: spacing[2.5],
-    borderRadius: radii.lg,
-    backgroundColor: colors.primary,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  retryText: {
-    color: colors.white,
-    fontSize: 14,
-    fontWeight: '600',
-    fontFamily: fontFamily.sansSemiBold[0],
   },
 })

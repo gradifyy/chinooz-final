@@ -45,6 +45,16 @@ import {
   type QuestStatus,
 } from '@chinooz/mock-data'
 import { useRiderIncentivesStore, useRiderTripsStore, computeQuestProgress } from '@chinooz/state'
+import {
+  QuestDetailSkeleton,
+  ErrorState,
+  ClaimFailState,
+  AlreadyClaimedState,
+  ExpiredMidViewState,
+  ProgressRaceState,
+  OfflineClaimBlockedState,
+} from '../../components/IncentiveStates'
+import { useAppState } from '../../components/AppStateProvider'
 
 const AnimatedPressable = Animated.createAnimatedComponent(TouchableOpacity)
 
@@ -105,8 +115,10 @@ export default function QuestDetailScreen() {
   }))
 
   const [joinState, setJoinState] = useState<'idle' | 'joining' | 'joined'>('idle')
-  const [claimState, setClaimState] = useState<'idle' | 'claiming' | 'claimed'>('idle')
+  const [claimState, setClaimState] = useState<'idle' | 'claiming' | 'claimed' | 'failed'>('idle')
   const [claimResultVisible, setClaimResultVisible] = useState(false)
+  const { connectivity } = useAppState()
+  const isOffline = connectivity === 'offline'
 
   const { data: quest, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ['rider-quest', params.id],
@@ -136,10 +148,18 @@ export default function QuestDetailScreen() {
   const claimMutation = useMutation({
     mutationFn: async () => {
       if (!quest) return null
+      // Offline guard: can't claim while offline.
+      if (isOffline) throw new Error('offline')
       return claimQuestReward(quest.id)
     },
     onSuccess: result => {
       if (!result || !quest) return
+      // Idempotency guard: if already claimed in the store, show already-claimed state.
+      if (isQuestClaimed(quest.id)) {
+        setClaimState('idle')
+        setClaimResultVisible(true)
+        return
+      }
       claimQuestStore(quest.id, result.rewardNpr)
       setClaimState('claimed')
       setClaimResultVisible(true)
@@ -154,6 +174,17 @@ export default function QuestDetailScreen() {
       analytics.track({ name: 'rider_quest_claimed', properties: { questId: quest.id, rewardNpr: result.rewardNpr } })
       queryClient.invalidateQueries({ queryKey: ['rider-incentives'] })
       setTimeout(() => setClaimResultVisible(false), 4000)
+    },
+    onError: () => {
+      setClaimState('failed')
+      try {
+        if (!reduced) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+      } catch {}
+      try {
+        AccessibilityInfo.announceForAccessibility(
+          t('rider.incentives.states.claimFailAria'),
+        )
+      } catch {}
     },
   })
 
@@ -182,9 +213,10 @@ export default function QuestDetailScreen() {
 
   const handleClaim = useCallback(() => {
     if (claimState !== 'idle' || !canClaim) return
+    if (isOffline) return // Offline claim blocked state is shown in the action bar
     setClaimState('claiming')
     claimMutation.mutate()
-  }, [claimState, canClaim, claimMutation])
+  }, [claimState, canClaim, claimMutation, isOffline])
 
   const handleJoin = useCallback(() => {
     if (joinState !== 'idle') return
@@ -228,14 +260,8 @@ export default function QuestDetailScreen() {
           style={styles.scroll}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + spacing[8] }]}
           showsVerticalScrollIndicator={false}
-          accessible
-          accessibilityRole="progressbar"
-          accessibilityLabel={t('rider.incentives.questDetailSkeletonAria')}
-          accessibilityLiveRegion="polite"
         >
-          <View style={styles.skeletonBlock} />
-          <View style={styles.skeletonBlock} />
-          <View style={styles.skeletonBlock} />
+          <QuestDetailSkeleton ariaLabel={t('rider.incentives.questDetailSkeletonAria')} />
         </ScrollView>
       </View>
     )
@@ -245,13 +271,13 @@ export default function QuestDetailScreen() {
     return (
       <View style={[styles.root, { paddingTop: insets.top }]}>
         <DetailHeader title={t('rider.incentives.questDetailTitle')} onBack={() => router.back()} backLabel={t('rider.incentives.questDetailBack')} />
-        <View style={styles.errorWrap}>
-          <Text style={styles.errorTitle}>{t('rider.incentives.questDetailNotFound')}</Text>
-          <Text style={styles.errorSub}>{t('rider.incentives.questDetailNotFoundSub')}</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={() => router.back()}>
-            <Text style={styles.retryText}>{t('rider.incentives.questDetailBack')}</Text>
-          </TouchableOpacity>
-        </View>
+        <ErrorState
+          title={t('rider.incentives.questDetailNotFound')}
+          subtitle={t('rider.incentives.questDetailNotFoundSub')}
+          retryLabel={t('rider.incentives.questDetailBack')}
+          retryAria={t('rider.incentives.states.retryAria')}
+          onRetry={() => router.back()}
+        />
       </View>
     )
   }
@@ -311,6 +337,24 @@ export default function QuestDetailScreen() {
             </View>
           </View>
         </View>
+
+        {/* Edge case: quest expired mid-view */}
+        {quest.status === 'expired' ? (
+          <ExpiredMidViewState
+            title={t('rider.incentives.states.expiredMidViewTitle')}
+            body={t('rider.incentives.states.expiredMidViewBody')}
+            ariaLabel={t('rider.incentives.states.expiredMidViewAria')}
+          />
+        ) : null}
+
+        {/* Edge case: progress race (completed elsewhere, ready to claim) */}
+        {quest.status === 'completed' && alreadyClaimed ? (
+          <ProgressRaceState
+            title={t('rider.incentives.states.progressRaceTitle')}
+            body={t('rider.incentives.states.progressRaceBody')}
+            ariaLabel={t('rider.incentives.states.progressRaceAria')}
+          />
+        ) : null}
 
         {/* Live progress */}
         {quest.status !== 'expired' ? (
@@ -413,9 +457,35 @@ export default function QuestDetailScreen() {
           >
             <CheckCircle2 size={16} color={colors.success} />
             <Text style={styles.claimResultText}>
-              {t('rider.incentives.questDetailClaimResult', { amount: quest.rewardNpr.toLocaleString('en-IN') })}
+              {alreadyClaimed
+                ? t('rider.incentives.states.claimAlreadyDoneAria')
+                : t('rider.incentives.questDetailClaimResult', { amount: quest.rewardNpr.toLocaleString('en-IN') })}
             </Text>
           </Animated.View>
+        ) : null}
+
+        {/* Claim failure: role=alert, progress preserved, no double-claim */}
+        {claimState === 'failed' ? (
+          <ClaimFailState
+            title={t('rider.incentives.states.claimFailTitle')}
+            body={t('rider.incentives.states.claimFailBody')}
+            ariaLabel={t('rider.incentives.states.claimFailAria')}
+            retryLabel={t('rider.incentives.states.claimFailRetry')}
+            retryAria={t('rider.incentives.states.claimFailRetryAria')}
+            onRetry={() => {
+              setClaimState('idle')
+              claimMutation.mutate()
+            }}
+          />
+        ) : null}
+
+        {/* Offline claim blocked: role=alert, progress saved */}
+        {isOffline && canClaim && claimState === 'idle' ? (
+          <OfflineClaimBlockedState
+            title={t('rider.incentives.states.offlineClaimBlocked')}
+            body={t('rider.incentives.states.offlineClaimBlockedAria')}
+            ariaLabel={t('rider.incentives.states.offlineClaimBlockedAria')}
+          />
         ) : null}
 
         {isAvailable && isOptIn && joinState !== 'joined' ? (
@@ -445,11 +515,11 @@ export default function QuestDetailScreen() {
             onPress={handleClaim}
             onPressIn={handlePressIn}
             onPressOut={handlePressOut}
-            disabled={claimState !== 'idle'}
+            disabled={claimState !== 'idle' || isOffline}
             accessibilityRole="button"
             accessibilityLabel={t('rider.incentives.questDetailClaimAria', { title: quest.title, amount: quest.rewardNpr })}
-            accessibilityState={{ disabled: claimState !== 'idle', busy: claimState === 'claiming' }}
-            style={[styles.actionBtn, styles.claimBtn, btnAnimStyle]}
+            accessibilityState={{ disabled: claimState !== 'idle' || isOffline, busy: claimState === 'claiming' }}
+            style={[styles.actionBtn, styles.claimBtn, btnAnimStyle, isOffline && styles.actionBtnDisabled]}
           >
             {claimState === 'claiming' ? (
               <ActivityIndicator size="small" color={colors.white} />
@@ -803,6 +873,9 @@ const styles = StyleSheet.create({
   },
   claimedBtn: {
     backgroundColor: colors.success,
+  },
+  actionBtnDisabled: {
+    opacity: 0.5,
   },
   actionBtnText: {
     fontSize: 16,

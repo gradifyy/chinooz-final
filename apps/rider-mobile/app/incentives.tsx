@@ -25,9 +25,16 @@ import {
 import { colors, spacing, radii, fontFamily, fontSize } from '@chinooz/theme'
 import { analytics } from '@chinooz/analytics'
 import { getIncentives, type RiderQuest } from '@chinooz/mock-data'
-import { useRiderIncentivesStore } from '@chinooz/state'
-import Skeleton from '@chinooz/ui/Skeleton'
+import { useRiderIncentivesStore, useOnlineStatusStore } from '@chinooz/state'
 import QuestCard from '../components/QuestCard'
+import {
+  IncentivesHubSkeleton,
+  ErrorState,
+  OfflineBanner,
+  NewRiderState,
+  NoActiveQuestsState,
+} from '../components/IncentiveStates'
+import { useAppState } from '../components/AppStateProvider'
 
 const RING_SIZE = 88
 const RING_STROKE = 8
@@ -52,6 +59,10 @@ export default function IncentivesHubScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const setThisWeek = useRiderIncentivesStore(s => s.setThisWeek)
+  const { connectivity } = useAppState()
+  const isOffline = connectivity === 'offline'
+  const onlineStatus = useOnlineStatusStore(s => s.status)
+  const setOnlineStatus = useOnlineStatusStore(s => s.setOnlineStatus)
 
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ['rider-incentives'],
@@ -167,20 +178,31 @@ export default function IncentivesHubScreen() {
   }
 
   if (isLoading) {
-    return <IncentivesSkeleton t={t} insets={insets} />
+    return (
+      <View style={[styles.root, { paddingTop: insets.top }]}>
+        <HeaderBar title={t('rider.incentives.title')} onBack={() => router.back()} backLabel={t('rider.incentives.back')} />
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + spacing[8] }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <IncentivesHubSkeleton ariaLabel={t('rider.incentives.skeletonAria')} />
+        </ScrollView>
+      </View>
+    )
   }
 
   if (isError || !data) {
     return (
       <View style={[styles.root, { paddingTop: insets.top }]}>
         <HeaderBar title={t('rider.incentives.title')} onBack={() => router.back()} backLabel={t('rider.incentives.back')} />
-        <View style={styles.errorWrap}>
-          <Text style={styles.errorTitle}>{t('rider.incentives.errorTitle')}</Text>
-          <Text style={styles.errorSub}>{t('rider.incentives.errorSubtitle')}</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={() => refetch()}>
-            <Text style={styles.retryText}>{t('rider.incentives.retry')}</Text>
-          </TouchableOpacity>
-        </View>
+        <ErrorState
+          title={t('rider.incentives.errorTitle')}
+          subtitle={t('rider.incentives.errorSubtitle')}
+          retryLabel={t('rider.incentives.retry')}
+          retryAria={t('rider.incentives.states.retryAria')}
+          onRetry={() => refetch()}
+        />
       </View>
     )
   }
@@ -223,6 +245,30 @@ export default function IncentivesHubScreen() {
           <RefreshControl refreshing={isRefetching} onRefresh={() => refetch()} tintColor={colors.primary} />
         }
       >
+        {/* Offline banner */}
+        {isOffline ? (
+          <OfflineBanner
+            title={t('rider.incentives.states.offlineTitle')}
+            body={t('rider.incentives.states.offlineBody')}
+            ariaLabel={t('rider.incentives.states.offlineAria')}
+          />
+        ) : null}
+
+        {/* New rider intro (when no active + no available quests and offline) */}
+        {activeQuests.length === 0 && availableQuests.length === 0 && onlineStatus !== 'online' ? (
+          <NewRiderState
+            title={t('rider.incentives.states.newRiderTitle')}
+            body={t('rider.incentives.states.newRiderBody')}
+            ariaLabel={t('rider.incentives.states.newRiderAria')}
+            ctaLabel={t('rider.incentives.states.newRiderCta')}
+            ctaAria={t('rider.incentives.states.newRiderCtaAria')}
+            onCta={() => {
+              setOnlineStatus('online')
+              AccessibilityInfo.announceForAccessibility(t('rider.incentives.states.newRiderCtaAria'))
+            }}
+          />
+        ) : null}
+
         {/* Header progress summary */}
         <View
           style={styles.summaryCard}
@@ -570,57 +616,6 @@ function EntryRow({
       </View>
       <ChevronRight size={18} color={colors.textTertiary} />
     </TouchableOpacity>
-  )
-}
-
-/* ---------- Skeleton ---------- */
-
-function IncentivesSkeleton({
-  t,
-  insets,
-}: {
-  t: (k: string) => string
-  insets: { top: number; bottom: number }
-}) {
-  return (
-    <View style={[styles.root, { paddingTop: insets.top }]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-      <HeaderBar title={t('rider.incentives.title')} onBack={() => {}} backLabel={t('rider.incentives.back')} />
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + spacing[8] }]}
-        showsVerticalScrollIndicator={false}
-        accessible
-        accessibilityRole="summary"
-        accessibilityLabel={t('rider.incentives.skeletonAria')}
-        accessibilityLiveRegion="polite"
-      >
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryTop}>
-            <Skeleton width={92} height={48} borderRadius={radii.full} />
-            <Skeleton width={RING_SIZE} height={RING_SIZE} borderRadius={radii.full} />
-            <Skeleton width={110} height={36} borderRadius={radii.full} />
-          </View>
-          <Skeleton width="80%" height={20} />
-        </View>
-        <View style={styles.section}>
-          <Skeleton width={140} height={20} />
-          <View style={{ height: spacing[2] }} />
-          <Skeleton width="100%" height={170} borderRadius={radii.xl} />
-        </View>
-        <View style={styles.section}>
-          <Skeleton width={140} height={20} />
-          <View style={{ height: spacing[2] }} />
-          <Skeleton width="100%" height={130} borderRadius={radii.xl} />
-          <View style={{ height: spacing[2] }} />
-          <Skeleton width="100%" height={130} borderRadius={radii.xl} />
-        </View>
-        <View style={styles.section}>
-          <Skeleton width={200} height={20} />
-          <View style={{ height: spacing[2] }} />
-          <Skeleton width="100%" height={180} borderRadius={radii.xl} />
-        </View>
-      </ScrollView>
-    </View>
   )
 }
 
