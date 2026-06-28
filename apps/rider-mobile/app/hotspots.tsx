@@ -431,7 +431,87 @@ export default function HotspotsScreen() {
     [t],
   )
 
-  const topZone = zones[0]
+  const skeletonLabels = useMemo<SkeletonLabels>(
+    () => ({
+      loadingMap: t('rider.hotspots.stateLoadingMap'),
+      loadingRecs: t('rider.hotspots.stateLoadingRecs'),
+      loadingForecast: t('rider.hotspots.stateLoadingForecast'),
+    }),
+    [t],
+  )
+
+  const stateLabels = useMemo<StateLabels>(
+    () => ({
+      quietTitle: t('rider.hotspots.stateQuietTitle'),
+      quietBody: (time: string) => t('rider.hotspots.stateQuietBody', { time }),
+      quietAria: (time: string) => t('rider.hotspots.stateQuietAria', { time }),
+      noDataTitle: t('rider.hotspots.stateNoDataTitle'),
+      noDataBody: t('rider.hotspots.stateNoDataBody'),
+      noDataAria: t('rider.hotspots.stateNoDataAria'),
+      noDataPickArea: t('rider.hotspots.stateNoDataPickArea'),
+      errorTitle: t('rider.hotspots.stateErrorTitle'),
+      errorBody: t('rider.hotspots.stateErrorBody'),
+      errorAria: t('rider.hotspots.stateErrorAria'),
+      errorRetry: t('rider.hotspots.stateErrorRetry'),
+      errorRetryAria: t('rider.hotspots.stateErrorRetryAria'),
+      gpsDeniedTitle: t('rider.hotspots.stateGpsDeniedTitle'),
+      gpsDeniedBody: t('rider.hotspots.stateGpsDeniedBody'),
+      gpsDeniedAria: t('rider.hotspots.stateGpsDeniedAria'),
+      gpsDeniedPickArea: t('rider.hotspots.stateGpsDeniedPickArea'),
+      gpsDeniedPickAreaAria: t('rider.hotspots.stateGpsDeniedPickAreaAria'),
+      gpsDeniedEnableLocation: t('rider.hotspots.stateGpsDeniedEnableLocation'),
+      gpsDeniedEnableLocationAria: t('rider.hotspots.stateGpsDeniedEnableLocationAria'),
+      offlineTitle: t('rider.hotspots.stateOfflineTitle'),
+      offlineBody: (time: string) => t('rider.hotspots.stateOfflineBody', { time }),
+      offlineAria: (time: string) => t('rider.hotspots.stateOfflineAria', { time }),
+      staleTitle: (minutes: number) => t('rider.hotspots.stateStaleTitle', { minutes }),
+      staleAria: (minutes: number) => t('rider.hotspots.stateStaleAria', { minutes }),
+      staleRefresh: t('rider.hotspots.stateStaleRefresh'),
+      staleRefreshAria: t('rider.hotspots.stateStaleRefreshAria'),
+    }),
+    [t],
+  )
+
+  // RD5 — Derived state from queries
+  const isOffline = connectivity === 'offline'
+  const isLoading = demandQuery.isLoading || surgeQuery.isLoading
+  const isError = demandQuery.isError || surgeQuery.isError
+  const quiet = isQuietDemand(zones)
+  const lastUpdated = demandQuery.dataUpdatedAt
+  const staleMinutes = useMemo(() => {
+    if (!lastUpdated) return 0
+    return Math.floor((Date.now() - lastUpdated) / 60000)
+  }, [lastUpdated])
+  const isStale = staleMinutes >= 5
+  const cachedTimeStr = useMemo(() => {
+    if (!lastUpdated) return ''
+    const d = new Date(lastUpdated)
+    return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0')
+  }, [lastUpdated])
+  const nextPeakLabel = useMemo(() => {
+    if (!forecast?.nextPeak) return ''
+    const np = forecast.nextPeak
+    if (np.minutesUntil <= 0) return np.label
+    const h = Math.floor(np.minutesUntil / 60)
+    const m = np.minutesUntil % 60
+    return h > 0 ? np.label + ' in ' + h + 'h ' + m + 'm' : np.label + ' in ' + m + 'm'
+  }, [forecast])
+
+  const handleRetry = useCallback(() => {
+    AccessibilityInfo.announceForAccessibility(t('rider.hotspots.stateErrorRetry'))
+    demandQuery.refetch()
+    surgeQuery.refetch()
+    forecastQuery.refetch()
+  }, [demandQuery, surgeQuery, forecastQuery, t])
+
+  const handleStaleRefresh = useCallback(() => {
+    demandQuery.refetch()
+    surgeQuery.refetch()
+    forecastQuery.refetch()
+    AccessibilityInfo.announceForAccessibility(t('rider.hotspots.stateStaleRefresh'))
+  }, [demandQuery, surgeQuery, forecastQuery, t])
+
+    const topZone = zones[0]
   const mapAria = topZone
     ? t('rider.hotspots.mapAria', {
         count: zones.length,
@@ -492,16 +572,48 @@ export default function HotspotsScreen() {
           />
         }
       >
+        {/* RD5 state machine: loading skeleton -> error -> loaded content */}
+        {isLoading ? (
+          <HotspotsSkeleton labels={skeletonLabels} />
+        ) : isError ? (
+          <DataErrorState labels={stateLabels} onRetry={handleRetry} />
+        ) : zones.length === 0 ? (
+          <NoDataState labels={stateLabels} onPickArea={handleRetry} />
+        ) : (
+          <>
+          {/* Offline banner (cached data + timestamp) */}
+          {isOffline ? (
+            <OfflineState cachedTime={cachedTimeStr} labels={stateLabels} />
+          ) : null}
+
+          {/* Stale data indicator (>5 min old) */}
+          {isStale && !isOffline ? (
+            <StaleIndicator
+              minutes={staleMinutes}
+              labels={stateLabels}
+              onRefresh={handleStaleRefresh}
+            />
+          ) : null}
+
+          {/* Quiet demand: honest state, no fabricated hotspots */}
+          {quiet ? (
+            <QuietDemandState
+              nextPeakTime={nextPeakLabel || t('rider.hotspots.forecastNoPeak')}
+              labels={stateLabels}
+            />
+          ) : null}
+
         {/* Map */}
         <View style={styles.mapWrap}>
-          <View
+          <Animated.View
             style={{
               width: mapW,
               height: mapH,
               transform: [{ scale: zoom }],
               alignSelf: 'center',
-            }}
+            } as ViewStyle}
           >
+            <Animated.View style={[{ width: mapW, height: mapH } as ViewStyle, recenterStyle]}>
             <DemandHeatmap
               zones={zones}
               surgeZones={surgeZones}
@@ -512,8 +624,10 @@ export default function HotspotsScreen() {
               width={mapW}
               height={mapH}
               selectedZoneId={selectedZone?.id}
+              reducedMotion={reducedMotion}
             />
-          </View>
+            </Animated.View>
+          </Animated.View>
 
           {/* Floating controls: recenter + zoom (e2) */}
           <View style={[styles.floatingControls, { top: spacing[2], right: spacing[2] }]}>
@@ -576,6 +690,7 @@ export default function HotspotsScreen() {
             <DemandForecastChart
               forecast={forecast}
               labels={forecastLabels}
+              reducedMotion={reducedMotion}
             />
           </View>
         ) : null}
@@ -635,8 +750,11 @@ export default function HotspotsScreen() {
             onNavigate={handleNavigate}
             onRefresh={handleRefreshRecs}
             labels={recLabels}
+            reducedMotion={reducedMotion}
           />
         </View>
+          </>
+        )}
       </ScrollView>
 
       {/* Bottom slot: zone detail sheet (RD2) + recommendations (RD3) */}

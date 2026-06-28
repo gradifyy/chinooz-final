@@ -344,6 +344,23 @@ export function useRiderEarningsLedger() {
   })
 }
 
+export function useRiderTripLedger() {
+  return useQuery({
+    queryKey: ['rider', 'trip-ledger'] as const,
+    queryFn: () => getRiderTripLedger(),
+    staleTime: STALE_EARNINGS,
+  })
+}
+
+export function useRiderTripDetail(tripId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['rider', 'trip-detail', tripId ?? ''] as const,
+    queryFn: () => getRiderTripDetail(tripId!),
+    enabled: !!tripId,
+    staleTime: STALE_EARNINGS,
+  })
+}
+
 export function useRiderRequestWithdrawal() {
   const qc = useQueryClient()
   return useMutation({
