@@ -100,6 +100,8 @@ export default function ReviewsScreen() {
     if (!isLoggedIn) router.replace('/onboarding')
   }, [isLoggedIn, router])
 
+  if (!isLoggedIn) return null
+
   // Distribution bars fill on load (SV6).
   useEffect(() => {
     const id = requestAnimationFrame(() => setMounted(true))

@@ -38,6 +38,8 @@ import {
   useBulkUpdateSellerReviews,
 } from '@chinooz/hooks'
 import { analytics } from '@chinooz/analytics'
+import { useSellerSessionStore } from '@chinooz/state'
+import { Redirect } from 'expo-router'
 import { reviewResponseSchema } from '@chinooz/validation'
 import { REVIEW_RESPONSE_TEMPLATES } from '@chinooz/mock-data'
 import type {
@@ -63,6 +65,9 @@ export default function SellerReviews() {
   const { t } = useTranslation()
   const router = useRouter()
   const { reducedMotion, minTouchTarget } = useA11y()
+  const isLoggedIn = useSellerSessionStore(s => s.isLoggedIn)
+
+  if (!isLoggedIn) return <Redirect href="/onboarding" />
 
   const [status, setStatus] = useState<SellerReviewStatus>('all')
   const [rating, setRating] = useState<RatingFilter>('all')

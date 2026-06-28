@@ -492,7 +492,7 @@ export function useSellerReviews(filter: SellerReviewFilter) {
   return useQuery({
     queryKey: ['seller-reviews', filter],
     queryFn: () => api.getSellerReviews(filter),
-    staleTime: 1000 * 30,
+    staleTime: 1000 * 60,
   })
 }
 
@@ -682,6 +682,7 @@ export function useFlagSellerReview() {
 
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['seller-reviews'] })
+      queryClient.invalidateQueries({ queryKey: ['reviews'] })
     },
   })
 }
@@ -716,6 +717,7 @@ export function useUnflagSellerReview() {
 
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['seller-reviews'] })
+      queryClient.invalidateQueries({ queryKey: ['reviews'] })
     },
   })
 }
@@ -770,6 +772,7 @@ export function useBulkUpdateSellerReviews() {
 
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['seller-reviews'] })
+      queryClient.invalidateQueries({ queryKey: ['reviews'] })
     },
   })
 }

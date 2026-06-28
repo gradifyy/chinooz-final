@@ -32,20 +32,20 @@ const AVATAR_SIZE = 40
 const THUMB_SIZE = 32
 const PHOTO_SIZE = 64
 
-function timeAgo(iso: string): string {
+function timeAgo(iso: string, t: (k: string, o?: Record<string, unknown>) => string): string {
   const diff = Date.now() - +new Date(iso)
   const day = 24 * 60 * 60 * 1000
-  if (diff < 0) return 'just now'
+  if (diff < 0) return t('reviewCard.timeJustNow')
   if (diff < day) {
     const hrs = Math.floor(diff / (60 * 60 * 1000))
-    if (hrs < 1) return 'just now'
-    return `${hrs}h ago`
+    if (hrs < 1) return t('reviewCard.timeJustNow')
+    return t('reviewCard.timeHoursAgo', { count: hrs })
   }
   const days = Math.floor(diff / day)
-  if (days < 7) return `${days}d ago`
-  if (days < 30) return `${Math.floor(days / 7)}w ago`
-  if (days < 365) return `${Math.floor(days / 30)}mo ago`
-  return `${Math.floor(days / 365)}y ago`
+  if (days < 7) return t('reviewCard.timeDaysAgo', { count: days })
+  if (days < 30) return t('reviewCard.timeWeeksAgo', { count: Math.floor(days / 7) })
+  if (days < 365) return t('reviewCard.timeMonthsAgo', { count: Math.floor(days / 30) })
+  return t('reviewCard.timeYearsAgo', { count: Math.floor(days / 365) })
 }
 
 export interface ReviewCardProps {
@@ -62,7 +62,7 @@ export interface ReviewCardProps {
   testID?: string
 }
 
-export default function ReviewCard({
+function ReviewCard({
   review,
   onRespond,
   onEditResponse,
@@ -174,7 +174,7 @@ export default function ReviewCard({
                   fill={i < review.rating ? colors.gold : 'none'}
                 />
               ))}
-              <Text style={styles.date}>{timeAgo(review.createdAt)}</Text>
+              <Text style={styles.date}>{timeAgo(review.createdAt, t)}</Text>
             </View>
           </View>
 
@@ -844,3 +844,5 @@ const photoViewerStyles = StyleSheet.create({
   navPrev: { left: spacing[2] },
   navNext: { right: spacing[2] },
 })
+
+export default React.memo(ReviewCard)
