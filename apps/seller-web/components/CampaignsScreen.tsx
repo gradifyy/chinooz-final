@@ -1,21 +1,14 @@
 'use client'
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import React, { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, Check, AlertCircle, Zap, Calendar, Users, ChevronRight, X } from 'lucide-react'
+import { ArrowLeft, Check, AlertCircle, Zap, Users, X } from 'lucide-react'
 import { Container, Screen, useReducedMotion, EmptyState, Toast } from '@chinooz/ui-web'
 import { analytics } from '@chinooz/analytics'
-import {
-  getCampaigns,
-  optIntoCampaign,
-  withdrawFromCampaign,
-  getCampaignStatusPill,
-  type Campaign,
-} from '@chinooz/mock-data'
-import { useSellerProducts } from '@chinooz/hooks'
+import { getCampaignStatusPill, type Campaign } from '@chinooz/mock-data'
+import { useCampaigns, useOptIntoCampaign, useWithdrawFromCampaign, useSellerProducts } from '@chinooz/hooks'
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
@@ -29,7 +22,6 @@ export default function CampaignsScreen() {
   const { t } = useTranslation()
   const router = useRouter()
   const reduced = useReducedMotion()
-  const queryClient = useQueryClient()
 
   const [optInCampaign, setOptInCampaign] = useState<Campaign | null>(null)
   const [withdrawCampaign, setWithdrawCampaign] = useState<Campaign | null>(null)
@@ -44,28 +36,25 @@ export default function CampaignsScreen() {
     analytics.screen({ name: 'seller-campaigns' })
   }, [])
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['campaigns'],
-    queryFn: getCampaigns,
-  })
+  const { data, isLoading, isError, refetch } = useCampaigns()
+  const optInMutation = useOptIntoCampaign()
+  const withdrawMutation = useWithdrawFromCampaign()
 
   const campaigns = data ?? []
 
   const handleOptInSuccess = useCallback(async (campaignId: string, productIds: string[], discountValue: number) => {
-    await optIntoCampaign({ campaignId, productIds, discountValue })
-    queryClient.invalidateQueries({ queryKey: ['campaigns'] })
+    await optInMutation.mutateAsync({ campaignId, productIds, discountValue })
     setOptInCampaign(null)
     const camp = campaigns.find(c => c.id === campaignId)
     showToast(t('seller.promotions.campaigns.optInSuccess', { name: camp?.name ?? '' }))
-  }, [queryClient, campaigns, showToast, t])
+  }, [optInMutation, campaigns, showToast, t])
 
   const handleWithdraw = useCallback(async (campaignId: string) => {
-    await withdrawFromCampaign(campaignId)
-    queryClient.invalidateQueries({ queryKey: ['campaigns'] })
+    await withdrawMutation.mutateAsync(campaignId)
     setWithdrawCampaign(null)
     const camp = campaigns.find(c => c.id === campaignId)
     showToast(t('seller.promotions.campaigns.withdrawSuccess', { name: camp?.name ?? '' }))
-  }, [queryClient, campaigns, showToast, t])
+  }, [withdrawMutation, campaigns, showToast, t])
 
   return (
     <Screen>

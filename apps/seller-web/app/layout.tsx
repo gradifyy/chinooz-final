@@ -11,6 +11,7 @@ export const metadata: Metadata = {
   title: 'Chinooz Seller — Grow your business on Chinooz',
   description:
     'Sell across Nepal on Chinooz. Easy listings, fast payouts, and insights to grow your store.',
+  robots: { index: false, follow: false },
   openGraph: {
     title: 'Chinooz Seller — Grow your business on Chinooz',
     description:

@@ -543,6 +543,73 @@ export function useBulkFulfillOrders() {
   })
 }
 
+// --- Label printed (mock, front-end only) ---
+
+/**
+ * Mark one or more sub-orders as having their shipping label printed.
+ * Mock / front-end only: patches the TanStack Query cache optimistically,
+ * no backend call. Used by the packing-slip / shipping-label generation flow.
+ */
+export function useMarkLabelPrinted() {
+  const qc = useQueryClient()
+  type Vars = { subOrderIds: string[]; trackingNumbers?: Record<string, string>; carriers?: Record<string, string> }
+
+  return useMutation({
+    mutationFn: async (vars: Vars) => {
+      // Mock: resolve immediately, no network.
+      return { succeeded: vars.subOrderIds.length, failed: 0 }
+    },
+    onMutate: async (vars: Vars) => {
+      await qc.cancelQueries({ queryKey: ['seller-orders'] })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const prevOrders = qc.getQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] })
+      const now = new Date().toISOString()
+      const idSet = new Set(vars.subOrderIds)
+      qc.setQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] }, (old) => {
+        if (!old) return old
+        return old.map((o) =>
+          idSet.has(o.subOrderId)
+            ? {
+                ...o,
+                labelPrinted: true,
+                labelPrintedAt: now,
+                trackingNumber: vars.trackingNumbers?.[o.subOrderId] ?? o.trackingNumber,
+                carrier: vars.carriers?.[o.subOrderId] ?? o.carrier,
+              }
+            : o,
+        )
+      })
+      // Also patch the single-order detail cache.
+      for (const id of vars.subOrderIds) {
+        const prev = qc.getQueryData<SellerSubOrder | null>(['seller-order', undefined, id])
+        if (prev) {
+          qc.setQueryData<SellerSubOrder | null>(['seller-order', undefined, id], {
+            ...prev,
+            labelPrinted: true,
+            labelPrintedAt: now,
+            trackingNumber: vars.trackingNumbers?.[id] ?? prev.trackingNumber,
+            carrier: vars.carriers?.[id] ?? prev.carrier,
+          })
+        }
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return { prevOrders }
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (_err: Error, _vars: Vars, ctx: any) => {
+      if (ctx?.prevOrders) {
+        for (const [key, data] of ctx.prevOrders) {
+          qc.setQueryData(key, data)
+        }
+      }
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['seller-orders'] })
+      qc.invalidateQueries({ queryKey: ['seller-order'] })
+    },
+  })
+}
+
 // --- Promotions (CRUD) ---
 
 export function usePromotions(
@@ -845,5 +912,64 @@ export function useChangePassword() {
 export function useExportReport() {
   return useMutation<ExportReportResult, Error, { range: SellerStatsRange; type: ExportReportType }>({
     mutationFn: (vars) => api.exportReport(vars.range, vars.type),
+  })
+}
+
+// --- Campaigns ---
+
+export function useCampaigns() {
+  return useQuery<api.Campaign[]>({
+    queryKey: ['seller-campaigns'],
+    queryFn: () => api.campaignService.list(),
+    staleTime: STALE.promotions,
+  })
+}
+
+export function useOptIntoCampaign() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: { campaignId: string; productIds: string[]; discountValue: number }) =>
+      api.campaignService.optIn(input),
+    onMutate: async (input) => {
+      await qc.cancelQueries({ queryKey: ['seller-campaigns'] })
+      const prev = qc.getQueryData<{ id: string; participation?: { status: string } }[]>(['seller-campaigns'])
+      qc.setQueryData(['seller-campaigns'], (old: any) => {
+        if (!old) return old
+        return old.map((c: any) => c.id === input.campaignId
+          ? { ...c, participation: { status: 'applied', productIds: input.productIds, discountValue: input.discountValue, appliedAt: new Date().toISOString() } }
+          : c)
+      })
+      return { prev }
+    },
+    onError: (_err, _input, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['seller-campaigns'], ctx.prev)
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['seller-campaigns'] })
+    },
+  })
+}
+
+export function useWithdrawFromCampaign() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (campaignId: string) => api.campaignService.withdraw(campaignId),
+    onMutate: async (campaignId) => {
+      await qc.cancelQueries({ queryKey: ['seller-campaigns'] })
+      const prev = qc.getQueryData(['seller-campaigns'])
+      qc.setQueryData(['seller-campaigns'], (old: any) => {
+        if (!old) return old
+        return old.map((c: any) => c.id === campaignId
+          ? { ...c, participation: { status: 'upcoming', productIds: [], discountValue: 0, appliedAt: '' } }
+          : c)
+      })
+      return { prev }
+    },
+    onError: (_err, _campaignId, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['seller-campaigns'], ctx.prev)
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['seller-campaigns'] })
+    },
   })
 }
