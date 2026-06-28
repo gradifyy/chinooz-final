@@ -12,9 +12,12 @@ import type { StockStatus } from '@chinooz/types'
 
 const DEFAULT_THRESHOLD = 10
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type IconType = any
+
 const STATUS_META: Record<
   StockStatus,
-  { bg: string; text: string; dot: string; Icon: React.ComponentType<{ size?: number; className?: string }>; labelKey: string }
+  { bg: string; text: string; dot: string; Icon: IconType; labelKey: string }
 > = {
   in_stock: { bg: 'bg-success/10', text: 'text-success', dot: 'bg-success', Icon: Boxes, labelKey: 'seller.inventory.inStock' },
   low_stock: { bg: 'bg-warning/10', text: 'text-warning', dot: 'bg-warning', Icon: AlertTriangle, labelKey: 'seller.inventory.lowStock' },
@@ -32,7 +35,7 @@ const TABNUM = { fontVariant: 'tabular-nums' } as React.CSSProperties
 function useDebouncedCommit(value: number, onCommit?: (v: number) => void) {
   const [local, setLocal] = useState(value)
   const [focused, setFocused] = useState(false)
-  const timer = useRef<ReturnType<typeof setTimeout>>()
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   useEffect(() => { if (!focused) setLocal(value) }, [value, focused])
 

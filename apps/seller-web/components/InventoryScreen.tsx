@@ -12,7 +12,7 @@ import {
   PackageSearch,
   RotateCw,
 } from 'lucide-react'
-import { Container, Screen, SafeImage, Spinner, EmptyState } from '@chinooz/ui-web'
+import { Container, Screen, SafeImage, Spinner, EmptyState, InventoryRow } from '@chinooz/ui-web'
 import { useReducedMotion } from '@chinooz/ui-web'
 import { useSellerInventory, useSellerCategories } from '@chinooz/hooks'
 import { useSellerSessionStore } from '@chinooz/state'
@@ -20,7 +20,7 @@ import { analytics } from '@chinooz/analytics'
 import { formatNPR } from '@chinooz/utils'
 import { easing } from '@chinooz/theme'
 import type { SellerInventoryProduct, SellerInventoryVariant, StockStatus } from '@chinooz/types'
-import type { InventorySort } from '@chinooz/mock-data'
+import { LOW_STOCK_THRESHOLD, type InventorySort } from '@chinooz/mock-data'
 
 type TabKey = 'all' | 'in_stock' | 'low_stock' | 'out_of_stock'
 
@@ -380,20 +380,7 @@ function ProductGroupRow({
 const VARIANT_GRID = 'grid grid-cols-[1.4fr_1fr_120px_110px_70px_130px] items-center'
 
 function VariantRow({ v }: { v: SellerInventoryVariant }) {
-  return (
-    <div role="row" className="bg-surface border-b border-border-light">
-      <div className={`${VARIANT_GRID} px-4 h-14`}>
-        <span className="text-sm text-text-muted">—</span>
-        <span className="text-sm text-text-secondary truncate pr-2">{v.name}</span>
-        <span className="text-xs font-medium text-text-muted tabular-nums truncate" style={TABNUM}>{v.sku}</span>
-        <span className="text-sm font-semibold text-text tabular-nums" style={TABNUM}>{formatNPR(v.price)}</span>
-        <span className="text-sm font-semibold text-text tabular-nums" style={TABNUM}>{v.stockCount}</span>
-        <div className="flex justify-end">
-          <StatusPill status={v.stock} />
-        </div>
-      </div>
-    </div>
-  )
+  return <InventoryRow variant={v} lowStockThreshold={LOW_STOCK_THRESHOLD} layout="table" showOptionalColumns />
 }
 
 function ProductGroupCard({

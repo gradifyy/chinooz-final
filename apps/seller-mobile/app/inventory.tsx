@@ -22,13 +22,12 @@ import Animated, {
 } from 'react-native-reanimated'
 import { ChevronDown, Search, SlidersHorizontal, X, ArrowUpDown, PackageSearch, RotateCw } from 'lucide-react-native'
 import { colors, radii, spacing, fontFamily } from '@chinooz/theme'
-import { SafeImage, BottomSheet, EmptyState, useReducedMotion } from '@chinooz/ui'
+import { SafeImage, BottomSheet, EmptyState, InventoryRow, useReducedMotion } from '@chinooz/ui'
 import { useSellerInventory, useSellerCategories } from '@chinooz/hooks'
 import { useSellerSessionStore } from '@chinooz/state'
 import { analytics } from '@chinooz/analytics'
-import { formatNPR } from '@chinooz/utils'
 import type { SellerInventoryProduct, SellerInventoryVariant, StockStatus } from '@chinooz/types'
-import type { InventorySort } from '@chinooz/mock-data'
+import { LOW_STOCK_THRESHOLD, type InventorySort } from '@chinooz/mock-data'
 
 type TabKey = 'all' | 'in_stock' | 'low_stock' | 'out_of_stock'
 
@@ -165,19 +164,7 @@ function Collapsible({ open, reduced, children }: { open: boolean; reduced: bool
 }
 
 function VariantRowCard({ v }: { v: SellerInventoryVariant }) {
-  return (
-    <View style={styles.variantRow}>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={styles.variantName} numberOfLines={1}>{v.name}</Text>
-        <Text style={styles.variantSku}>{v.sku}</Text>
-      </View>
-      <Text style={styles.variantPrice}>{formatNPR(v.price)}</Text>
-      <View style={styles.variantRight}>
-        <Text style={styles.variantStock}>{v.stockCount}</Text>
-        <StatusPill status={v.stock} />
-      </View>
-    </View>
-  )
+  return <InventoryRow variant={v} lowStockThreshold={LOW_STOCK_THRESHOLD} layout="compact" />
 }
 
 function ProductGroupCard({

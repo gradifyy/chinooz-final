@@ -5,8 +5,6 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  withTiming,
-  Easing,
 } from 'react-native-reanimated'
 import { Check, Minus, Plus, AlertTriangle, PackageX, Boxes } from 'lucide-react-native'
 import { colors, radii, spacing, fontFamily } from '@chinooz/theme'
@@ -85,15 +83,13 @@ function StepperButton({
 function StockControl({
   value,
   onCommit,
-  reduced,
 }: {
   value: number
   onCommit?: (v: number) => void
-  reduced: boolean
 }) {
   const [local, setLocal] = useState(value)
   const [focused, setFocused] = useState(false)
-  const timer = useRef<ReturnType<typeof setTimeout>>()
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   useEffect(() => { if (!focused) setLocal(value) }, [value, focused])
 
@@ -224,7 +220,7 @@ export default function InventoryRow({
       </View>
 
       {/* Quick stock control */}
-      <StockControl value={variant.stockCount} onCommit={onStockChange} reduced={reduced} />
+      <StockControl value={variant.stockCount} onCommit={onStockChange} />
 
       <View style={styles.statusCol}>
         <StatusPill status={variant.stock} />
