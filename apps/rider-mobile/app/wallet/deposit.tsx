@@ -35,6 +35,11 @@ import { useReducedMotion } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
 import { useCODWalletStore, useCodLimitStatus } from '@chinooz/state'
 import { useA11y } from '../../components/A11yProvider'
+import { useAppState } from '../../components/AppStateProvider'
+import {
+  DepositErrorState,
+  OfflineQueuedBanner,
+} from '../../components/WalletStates'
 import {
   DEPOSIT_METHODS,
   getDepositInstructions,
@@ -50,7 +55,7 @@ import {
   type GeoPoint,
 } from '@chinooz/mock-data'
 
-type Step = 'method' | 'amount' | 'instructions' | 'confirm' | 'pending' | 'success' | 'error'
+type Step = 'method' | 'amount' | 'instructions' | 'confirm' | 'pending' | 'success' | 'error' | 'verifyError'
 
 const SCREEN_WIDTH = Dimensions.get('window').width
 const MAP_HEIGHT = 180
@@ -77,6 +82,8 @@ export default function DepositScreen() {
   const insets = useSafeAreaInsets()
   const { minTouchTarget } = useA11y()
   const reduced = useReducedMotion()
+  const { connectivity } = useAppState()
+  const isOffline = connectivity === 'offline'
 
   const cashInHand = useCODWalletStore(s => s.cashInHand)
   const recordDeposit = useCODWalletStore(s => s.recordDeposit)
@@ -117,10 +124,12 @@ export default function DepositScreen() {
           setStep('success')
           if (!reduced) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
         } else {
-          setStep('error')
+          setStep('verifyError')
+          if (!reduced) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
         }
       } catch {
-        if (!cancelled) setStep('error')
+        if (!cancelled) setStep('verifyError')
+        if (!cancelled && !reduced) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
       } finally {
         if (!cancelled) setVerifying(false)
       }
@@ -226,6 +235,7 @@ export default function DepositScreen() {
         reference: result.reference,
       })
     } catch {
+      // Preserve amount + method — never lose the user's input.
       setStep('error')
     }
   }, [method, instructions, amountStr, reduced])
@@ -242,13 +252,28 @@ export default function DepositScreen() {
         setStep('instructions')
         break
       case 'error':
-        setStep('method')
+        setStep('confirm')
+        break
+      case 'verifyError':
+        setStep('pending')
         break
       default:
         router.back()
     }
   }, [step, router])
 
+  // Retry deposit submission — preserves amount + method.
+  const handleRetrySubmit = useCallback(() => {
+    setStep('confirm')
+  }, [])
+
+  // Retry verification.
+  const handleRetryVerify = useCallback(() => {
+    if (!depositResult) return
+    setStep('pending')
+  }, [depositResult])
+
+  // Full reset.
   const handleRetry = useCallback(() => {
     setStep('method')
     setDepositResult(null)
@@ -361,11 +386,57 @@ export default function DepositScreen() {
           />
         )}
 
+        {/* Deposit submit error — preserves amount + method, no double-count */}
         {step === 'error' && (
-          <ErrorStep
-            t={t}
-            onRetry={handleRetry}
-            minTouchTarget={minTouchTarget}
+          <DepositErrorState
+            title={t('rider.wallet.states.errorDepositSubmitTitle')}
+            body={t('rider.wallet.states.errorDepositSubmitBody')}
+            ariaLabel={t('rider.wallet.states.errorDepositSubmitAria')}
+            preservedNote={t('rider.wallet.states.errorDepositSubmitPreserved', {
+              amount: formatRiderNPRAmount(amount),
+              method: methodLabel,
+            })}
+            retryLabel={t('rider.wallet.states.errorDepositSubmitRetry')}
+            retryAria={t('rider.wallet.states.errorDepositSubmitRetryAria', {
+              amount: formatRiderNPRAmount(amount),
+              method: methodLabel,
+            })}
+            onRetry={handleRetrySubmit}
+            onBack={handleRetry}
+            backLabel={t('rider.wallet.deposit.back')}
+          />
+        )}
+
+        {/* Verification failure — cash is safe, will retry */}
+        {step === 'verifyError' && depositResult && (
+          <DepositErrorState
+            title={t('rider.wallet.states.errorVerificationTitle')}
+            body={t('rider.wallet.states.errorVerificationBody')}
+            ariaLabel={t('rider.wallet.states.errorVerificationAria')}
+            preservedNote={t('rider.wallet.states.errorVerificationPreserved', {
+              amount: formatRiderNPRAmount(depositResult.amount),
+              method: methodLabel,
+              reference: depositResult.reference,
+            })}
+            retryLabel={t('rider.wallet.states.errorVerificationRetry')}
+            retryAria={t('rider.wallet.states.errorVerificationRetryAria')}
+            onRetry={handleRetryVerify}
+            onBack={handleDone}
+            backLabel={t('rider.wallet.deposit.successDone')}
+          />
+        )}
+
+        {/* Offline queued deposit banner */}
+        {isOffline && step === 'pending' && depositResult && (
+          <OfflineQueuedBanner
+            title={t('rider.wallet.states.offlineQueuedTitle')}
+            body={t('rider.wallet.states.offlineQueuedBody', {
+              amount: formatRiderNPRAmount(depositResult.amount),
+              method: methodLabel,
+            })}
+            ariaLabel={t('rider.wallet.states.offlineQueuedAria', {
+              amount: formatRiderNPRAmount(depositResult.amount),
+            })}
           />
         )}
       </ScrollView>
@@ -387,7 +458,7 @@ function StepIndicator({
   t: (key: string) => string
 }) {
   const currentIdx = STEP_ORDER.indexOf(step)
-  const isStatus = step === 'pending' || step === 'success' || step === 'error'
+  const isStatus = step === 'pending' || step === 'success' || step === 'error' || step === 'verifyError'
 
   return (
     <View style={styles.stepBar}>
@@ -1152,43 +1223,6 @@ function StatusStep({
 // ---------------------------------------------------------------------------
 // Error step
 // ---------------------------------------------------------------------------
-
-function ErrorStep({
-  t,
-  onRetry,
-  minTouchTarget,
-}: {
-  t: (key: string) => string
-  onRetry: () => void
-  minTouchTarget: number
-}) {
-  return (
-    <View
-      style={styles.statusSection}
-      accessibilityRole="summary"
-      accessibilityLiveRegion="polite"
-      accessibilityLabel={t('rider.wallet.deposit.errorAria')}
-    >
-      <View style={styles.statusIconWrapError}>
-        <AlertTriangle size={36} color={colors.error} />
-      </View>
-      <Text style={styles.statusTitleError}>{t('rider.wallet.deposit.errorTitle')}</Text>
-      <Text style={styles.statusSubtitle}>
-        {t('rider.wallet.deposit.errorSubtitle')}
-      </Text>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={t('rider.wallet.deposit.errorRetry')}
-        onPress={onRetry}
-        style={[styles.primaryBtn, { minHeight: minTouchTarget }]}
-      >
-        <Text style={styles.primaryBtnText}>
-          {t('rider.wallet.deposit.errorRetry')}
-        </Text>
-      </Pressable>
-    </View>
-  )
-}
 
 // ---------------------------------------------------------------------------
 // Shared: detail row
