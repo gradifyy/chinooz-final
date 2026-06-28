@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { useRouter, useParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, Check, AlertCircle, Tag, Target, Calendar, Save, Percent, DollarSign, Zap, Gift, Truck } from 'lucide-react'
+import { ArrowLeft, Check, AlertCircle, Tag, Target, Calendar, Save, Percent, DollarSign, Zap, Gift, Truck, RefreshCw, ShoppingCart } from 'lucide-react'
 import { Container, Screen, useReducedMotion } from '@chinooz/ui-web'
 import { analytics } from '@chinooz/analytics'
 import {
@@ -38,6 +38,13 @@ interface FormState {
   endsAt: string
   budget: string
   status: 'active' | 'scheduled' | 'expired' | 'draft'
+  bogoBuyQty: string
+  bogoGetQty: string
+  minOrderValue: string
+  minQty: string
+  firstOrderOnly: boolean
+  perCustomerLimit: string
+  combinable: boolean
 }
 
 const EMPTY_FORM: FormState = {
@@ -52,6 +59,13 @@ const EMPTY_FORM: FormState = {
   endsAt: '',
   budget: '',
   status: 'draft',
+  bogoBuyQty: '2',
+  bogoGetQty: '1',
+  minOrderValue: '',
+  minQty: '',
+  firstOrderOnly: false,
+  perCustomerLimit: '',
+  combinable: false,
 }
 
 function useDebounced<T>(value: T, delay = 250): T {
@@ -147,6 +161,13 @@ export default function PromotionFormScreen() {
       endsAt: existingPromo.endsAt.slice(0, 10),
       budget: existingPromo.budget ? String(existingPromo.budget) : '',
       status: existingPromo.status,
+      bogoBuyQty: '2',
+      bogoGetQty: '1',
+      minOrderValue: '',
+      minQty: '',
+      firstOrderOnly: false,
+      perCustomerLimit: '',
+      combinable: false,
     }
     setForm(loaded)
     setInitialForm(loaded)
@@ -182,6 +203,13 @@ export default function PromotionFormScreen() {
     discountValue: form.discountValue ? Number(form.discountValue) : 0,
     budget: form.budget ? Number(form.budget) : undefined,
     productsCount: 0,
+    bogoBuyQty: form.bogoBuyQty ? Number(form.bogoBuyQty) : undefined,
+    bogoGetQty: form.bogoGetQty ? Number(form.bogoGetQty) : undefined,
+    minOrderValue: form.minOrderValue ? Number(form.minOrderValue) : undefined,
+    minQty: form.minQty ? Number(form.minQty) : undefined,
+    perCustomerLimit: form.perCustomerLimit ? Number(form.perCustomerLimit) : undefined,
+    firstOrderOnly: form.firstOrderOnly,
+    combinable: form.combinable,
   } as any), [form])
 
   const sectionErrors = useMemo(() => {
@@ -236,7 +264,7 @@ export default function PromotionFormScreen() {
     startsAt: form.startsAt ? new Date(form.startsAt).toISOString() : new Date().toISOString(),
     endsAt: form.endsAt ? new Date(form.endsAt).toISOString() : new Date(Date.now() + 7 * 86400000).toISOString(),
     budget: form.budget ? Number(form.budget) : undefined,
-    productsCount: form.scope === 'products' ? 0 : 0,
+    productsCount: 0,
   })
 
   const handleSaveDraft = async () => {
@@ -424,8 +452,8 @@ export default function PromotionFormScreen() {
                     reduced={reduced}
                     refCallback={(el) => { sectionRefs.current[s.key] = el }}
                   >
-                    {s.key === 'typeValue' && <TypeValueSection form={form} errors={errors} updateField={updateField} t={t} />}
-                    {s.key === 'targets' && <TargetsSection form={form} errors={errors} updateField={updateField} t={t} />}
+                    {s.key === 'typeValue' && <TypeValueSection form={form} errors={errors} updateField={updateField} t={t} reduced={reduced} />}
+                    {s.key === 'targets' && <TargetsSection form={form} errors={errors} updateField={updateField} t={t} reduced={reduced} />}
                     {s.key === 'schedule' && <ScheduleSection form={form} errors={errors} updateField={updateField} t={t} />}
                   </SectionCard>
                 ))}
@@ -586,7 +614,23 @@ function inputCls(hasError?: boolean) {
   }`
 }
 
-function TypeValueSection({ form, errors, updateField, t }: { form: FormState; errors: Record<string, string>; updateField: (f: keyof FormState, v: string | boolean) => void; t: TT }) {
+function TypeValueSection({ form, errors, updateField, t, reduced }: { form: FormState; errors: Record<string, string>; updateField: (f: keyof FormState, v: string | boolean) => void; t: TT; reduced: boolean }) {
+  const [codeAnnounce, setCodeAnnounce] = useState('')
+
+  const generateCode = useCallback(() => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+    let code = ''
+    for (let i = 0; i < 8; i++) code += chars[Math.floor(Math.random() * chars.length)]
+    updateField('code', code)
+    setCodeAnnounce(t('seller.promotions.builder.codeGenerated', { code }))
+    setTimeout(() => setCodeAnnounce(''), 3000)
+  }, [updateField, t])
+
+  const isPercent = form.type === 'percentage' || form.type === 'flash_sale'
+  const isFixed = form.type === 'fixed'
+  const isBogo = form.type === 'bogo'
+  const isFreeShip = form.type === 'free_shipping'
+
   return (
     <div className="flex flex-col gap-4">
       <Field label={t('seller.promotions.builder.fieldName')} hint={t('seller.promotions.builder.fieldNameHint')} error={errors.name} errorId="error-name">
@@ -601,45 +645,119 @@ function TypeValueSection({ form, errors, updateField, t }: { form: FormState; e
         />
       </Field>
 
-      <Field label={t('seller.promotions.builder.fieldType')} hint={t('seller.promotions.builder.fieldTypeHint')}>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {PROMOTION_TYPES.map(tt => (
-            <button
-              key={tt.key}
-              type="button"
-              onClick={() => updateField('type', tt.key)}
-              aria-pressed={form.type === tt.key}
-              className={`flex items-center gap-2 px-3 h-10 rounded-md border text-[13px] font-medium transition-colors ${
-                form.type === tt.key
-                  ? 'border-primary bg-primary-50 text-primary'
-                  : 'border-border bg-surface text-text-muted hover:bg-background'
-              }`}
-            >
-              {TYPE_ICONS[tt.key]}
-              <span className="truncate">{t(`seller.promotions.type${tt.key.charAt(0).toUpperCase()}${tt.key.slice(1).replace('_', '')}`)}</span>
-            </button>
-          ))}
+      {/* Type chooser — selectable cards */}
+      <div role="radiogroup" aria-label={t('seller.promotions.builder.fieldType')}>
+        <label className="text-[14px] font-semibold text-text mb-1.5 block">{t('seller.promotions.builder.fieldType')}</label>
+        <p className="text-[12px] font-normal text-text-muted mb-2.5">{t('seller.promotions.builder.fieldTypeHint')}</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+          {PROMOTION_TYPES.map(tt => {
+            const selected = form.type === tt.key
+            const shortKey = tt.key === 'percentage' ? 'typePercentageShort' : tt.key === 'fixed' ? 'typeFixedShort' : tt.key === 'flash_sale' ? 'typeFlashSaleShort' : tt.key === 'bogo' ? 'typeBogoShort' : 'typeFreeShippingShort'
+            return (
+              <button
+                key={tt.key}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                onClick={() => updateField('type', tt.key)}
+                className={`relative flex flex-col items-center gap-2 p-3.5 rounded-lg border transition-all duration-200 ${
+                  selected
+                    ? 'border-primary ring-2 ring-primary/20 bg-primary-50'
+                    : 'border-border bg-surface hover:border-primary/30 hover:bg-background'
+                }`}
+              >
+                <span className={`w-10 h-10 rounded-full flex items-center justify-center ${selected ? 'bg-primary text-white' : 'bg-background text-text-muted'}`}>
+                  {TYPE_ICONS[tt.key]}
+                </span>
+                <span className={`text-[13px] font-semibold text-center ${selected ? 'text-primary' : 'text-text'}`}>
+                  {t(`seller.promotions.${shortKey}`)}
+                </span>
+                {selected && (
+                  <span className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+                    <Check size={12} className="text-white" aria-hidden="true" />
+                  </span>
+                )}
+              </button>
+            )
+          })}
         </div>
-      </Field>
+      </div>
 
-      <Field label={t('seller.promotions.builder.fieldDiscountValue')} hint={t('seller.promotions.builder.fieldDiscountValueHint')} error={errors.discountValue} errorId="error-discountValue">
-        <div className="relative">
-          <input
-            type="number"
-            inputMode="numeric"
-            value={form.discountValue}
-            onChange={e => updateField('discountValue', e.target.value)}
-            placeholder="0"
-            aria-label={t('seller.promotions.builder.fieldDiscountValue')}
-            aria-describedby={errors.discountValue ? 'error-discountValue' : undefined}
-            className={inputCls(!!errors.discountValue)}
-          />
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[14px] font-semibold text-text-muted">
-            {form.type === 'percentage' || form.type === 'flash_sale' ? '%' : 'NPR'}
-          </span>
-        </div>
-      </Field>
+      {/* Adapted value inputs */}
+      <AnimatePresence initial={!reduced}>
+        {!isFreeShip && !isBogo && (
+          <motion.div
+            key="discount-value"
+            initial={reduced ? false : { opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={reduced ? { opacity: 0 } : { opacity: 0, height: 0 }}
+            transition={{ duration: reduced ? 0 : 0.25 }}
+            className="overflow-hidden"
+          >
+            <Field label={t('seller.promotions.builder.fieldDiscountValue')} hint={isPercent ? t('seller.promotions.builder.fieldDiscountValueHint') : undefined} error={errors.discountValue} errorId="error-discountValue">
+              <div className="relative">
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={form.discountValue}
+                  onChange={e => updateField('discountValue', e.target.value)}
+                  placeholder="0"
+                  aria-label={t('seller.promotions.builder.fieldDiscountValue')}
+                  aria-describedby={errors.discountValue ? 'error-discountValue' : undefined}
+                  className={inputCls(!!errors.discountValue)}
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[14px] font-semibold text-text-muted">
+                  {isPercent ? '%' : 'NPR'}
+                </span>
+              </div>
+              {isPercent && Number(form.discountValue) > 100 && (
+                <p className="text-[12px] text-error mt-1" role="alert">Percentage cannot exceed 100</p>
+              )}
+            </Field>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
+      {/* BOGO qty pickers */}
+      <AnimatePresence initial={!reduced}>
+        {isBogo && (
+          <motion.div
+            key="bogo-qty"
+            initial={reduced ? false : { opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={reduced ? { opacity: 0 } : { opacity: 0, height: 0 }}
+            transition={{ duration: reduced ? 0 : 0.25 }}
+            className="overflow-hidden"
+          >
+            <div className="grid grid-cols-2 gap-4">
+              <Field label={t('seller.promotions.builder.fieldBogoBuyQty')} hint={t('seller.promotions.builder.fieldBogoBuyQtyHint')}>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={form.bogoBuyQty}
+                  onChange={e => updateField('bogoBuyQty', e.target.value)}
+                  placeholder="2"
+                  aria-label={t('seller.promotions.builder.fieldBogoBuyQty')}
+                  className={inputCls()}
+                />
+              </Field>
+              <Field label={t('seller.promotions.builder.fieldBogoGetQty')} hint={t('seller.promotions.builder.fieldBogoGetQtyHint')}>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={form.bogoGetQty}
+                  onChange={e => updateField('bogoGetQty', e.target.value)}
+                  placeholder="1"
+                  aria-label={t('seller.promotions.builder.fieldBogoGetQty')}
+                  className={inputCls()}
+                />
+              </Field>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Coupon toggle + code generator */}
       <div className="flex items-center gap-3 pt-1">
         <label className="flex items-center gap-2 cursor-pointer">
           <input
@@ -653,64 +771,258 @@ function TypeValueSection({ form, errors, updateField, t }: { form: FormState; e
       </div>
       <p className="text-[12px] font-normal text-text-muted -mt-2">{t('seller.promotions.builder.fieldIsCouponHint')}</p>
 
-      {form.isCoupon && (
-        <Field label={t('seller.promotions.builder.fieldCode')} hint={t('seller.promotions.builder.fieldCodeHint')} error={errors.code} errorId="error-code">
-          <input
-            type="text"
-            value={form.code}
-            onChange={e => updateField('code', e.target.value.toUpperCase())}
-            placeholder="DASHAIN25"
-            aria-label={t('seller.promotions.builder.fieldCode')}
-            aria-describedby={errors.code ? 'error-code' : undefined}
-            className={`font-mono ${inputCls(!!errors.code)}`}
-          />
-        </Field>
-      )}
+      <AnimatePresence initial={!reduced}>
+        {form.isCoupon && (
+          <motion.div
+            key="coupon-code"
+            initial={reduced ? false : { opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={reduced ? { opacity: 0 } : { opacity: 0, height: 0 }}
+            transition={{ duration: reduced ? 0 : 0.25 }}
+            className="overflow-hidden"
+          >
+            <Field label={t('seller.promotions.builder.fieldCode')} hint={t('seller.promotions.builder.fieldCodeHint')} error={errors.code} errorId="error-code">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={form.code}
+                  onChange={e => updateField('code', e.target.value.toUpperCase())}
+                  placeholder="DASHAIN25"
+                  aria-label={t('seller.promotions.builder.fieldCode')}
+                  aria-describedby={errors.code ? 'error-code' : undefined}
+                  className={`font-mono flex-1 ${inputCls(!!errors.code)}`}
+                />
+                <button
+                  type="button"
+                  onClick={generateCode}
+                  aria-label={t('seller.promotions.builder.generateCodeAria')}
+                  className="shrink-0 inline-flex items-center gap-1.5 h-10 px-3 rounded-md border border-border bg-background text-[13px] font-semibold text-text hover:bg-surface transition-colors"
+                >
+                  <RefreshCw size={14} aria-hidden="true" />
+                  <span className="hidden sm:inline">{t('seller.promotions.builder.generateCode')}</span>
+                </button>
+              </div>
+            </Field>
+            {codeAnnounce && (
+              <p className="text-[12px] font-semibold text-success mt-1.5" role="status" aria-live="polite">{codeAnnounce}</p>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Effective price example */}
+      <EffectivePriceCard form={form} t={t} />
     </div>
   )
 }
 
-function TargetsSection({ form, errors, updateField, t }: { form: FormState; errors: Record<string, string>; updateField: (f: keyof FormState, v: string | boolean) => void; t: TT }) {
-  const scopeOptions: { key: PromotionScope; label: string }[] = [
-    { key: 'all', label: t('seller.promotions.builder.fieldScopeAll') },
-    { key: 'category', label: t('seller.promotions.builder.fieldScopeCategory') },
-    { key: 'products', label: t('seller.promotions.builder.fieldScopeProducts') },
+function TargetsSection({ form, errors, updateField, t, reduced }: { form: FormState; errors: Record<string, string>; updateField: (f: keyof FormState, v: string | boolean) => void; t: TT; reduced: boolean }) {
+  const scopeOptions: { key: PromotionScope; label: string; icon: React.ReactNode }[] = [
+    { key: 'all', label: t('seller.promotions.builder.fieldScopeAll'), icon: <Tag size={16} aria-hidden="true" /> },
+    { key: 'category', label: t('seller.promotions.builder.fieldScopeCategory'), icon: <Tag size={16} aria-hidden="true" /> },
+    { key: 'products', label: t('seller.promotions.builder.fieldScopeProducts'), icon: <Tag size={16} aria-hidden="true" /> },
+    { key: 'order', label: t('seller.promotions.builder.fieldScopeOrder'), icon: <ShoppingCart size={16} aria-hidden="true" /> },
   ]
   return (
     <div className="flex flex-col gap-4">
-      <Field label={t('seller.promotions.builder.fieldScope')}>
-        <div className="flex flex-col sm:flex-row gap-2">
-          {scopeOptions.map(opt => (
-            <button
-              key={opt.key}
-              type="button"
-              onClick={() => updateField('scope', opt.key)}
-              aria-pressed={form.scope === opt.key}
-              className={`flex-1 h-10 rounded-md border text-[14px] font-medium transition-colors ${
-                form.scope === opt.key
-                  ? 'border-primary bg-primary-50 text-primary'
-                  : 'border-border bg-surface text-text-muted hover:bg-background'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
+      {/* Scope chooser */}
+      <div role="radiogroup" aria-label={t('seller.promotions.builder.fieldScope')}>
+        <label className="text-[14px] font-semibold text-text mb-1.5 block">{t('seller.promotions.builder.fieldScope')}</label>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {scopeOptions.map(opt => {
+            const selected = form.scope === opt.key
+            return (
+              <button
+                key={opt.key}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                aria-label={opt.label}
+                onClick={() => updateField('scope', opt.key)}
+                className={`flex items-center gap-2 px-3 h-10 rounded-md border text-[13px] font-medium transition-colors ${
+                  selected ? 'border-primary bg-primary-50 text-primary' : 'border-border bg-surface text-text-muted hover:bg-background'
+                }`}
+              >
+                {opt.icon}
+                <span className="truncate">{opt.label}</span>
+              </button>
+            )
+          })}
         </div>
-      </Field>
+      </div>
 
-      {form.scope === 'category' && (
-        <Field label={t('seller.promotions.builder.fieldScopeLabel')} hint={t('seller.promotions.builder.fieldScopeLabelHint')} error={errors.scopeLabel} errorId="error-scopeLabel">
-          <input
-            type="text"
-            value={form.scopeLabel}
-            onChange={e => updateField('scopeLabel', e.target.value)}
-            placeholder="e.g. Electronics"
-            aria-label={t('seller.promotions.builder.fieldScopeLabel')}
-            aria-describedby={errors.scopeLabel ? 'error-scopeLabel' : undefined}
-            className={inputCls(!!errors.scopeLabel)}
-          />
-        </Field>
+      {/* Conditional scope label */}
+      <AnimatePresence initial={!reduced}>
+        {form.scope === 'category' && (
+          <motion.div
+            key="scope-label"
+            initial={reduced ? false : { opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={reduced ? { opacity: 0 } : { opacity: 0, height: 0 }}
+            transition={{ duration: reduced ? 0 : 0.25 }}
+            className="overflow-hidden"
+          >
+            <Field label={t('seller.promotions.builder.fieldScopeLabel')} hint={t('seller.promotions.builder.fieldScopeLabelHint')} error={errors.scopeLabel} errorId="error-scopeLabel">
+              <input
+                type="text"
+                value={form.scopeLabel}
+                onChange={e => updateField('scopeLabel', e.target.value)}
+                placeholder="e.g. Electronics"
+                aria-label={t('seller.promotions.builder.fieldScopeLabel')}
+                aria-describedby={errors.scopeLabel ? 'error-scopeLabel' : undefined}
+                className={inputCls(!!errors.scopeLabel)}
+              />
+            </Field>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {form.scope === 'products' && (
+        <div className="rounded-md border border-dashed border-border bg-background p-4 text-center">
+          <p className="text-[13px] text-text-muted">Product picker — select specific products to include in this promotion.</p>
+        </div>
       )}
+
+      {/* Conditions group */}
+      <div className="mt-2 pt-4 border-t border-border-light">
+        <p className="text-[14px] font-semibold text-text mb-1">{t('seller.promotions.builder.conditionsTitle')}</p>
+        <p className="text-[12px] font-normal text-text-muted mb-3">{t('seller.promotions.builder.conditionsHint')}</p>
+        <div className="flex flex-col gap-4">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Field label={t('seller.promotions.builder.fieldMinOrderValue')} hint={t('seller.promotions.builder.fieldMinOrderValueHint')}>
+              <div className="relative">
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={form.minOrderValue}
+                  onChange={e => updateField('minOrderValue', e.target.value)}
+                  placeholder="0"
+                  aria-label={t('seller.promotions.builder.fieldMinOrderValue')}
+                  className={inputCls()}
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[14px] font-semibold text-text-muted">NPR</span>
+              </div>
+            </Field>
+            <Field label={t('seller.promotions.builder.fieldMinQty')} hint={t('seller.promotions.builder.fieldMinQtyHint')}>
+              <input
+                type="number"
+                inputMode="numeric"
+                value={form.minQty}
+                onChange={e => updateField('minQty', e.target.value)}
+                placeholder="0"
+                aria-label={t('seller.promotions.builder.fieldMinQty')}
+                className={inputCls()}
+              />
+            </Field>
+          </div>
+          <Field label={t('seller.promotions.builder.fieldPerCustomerLimit')} hint={t('seller.promotions.builder.fieldPerCustomerLimitHint')}>
+            <input
+              type="number"
+              inputMode="numeric"
+              value={form.perCustomerLimit}
+              onChange={e => updateField('perCustomerLimit', e.target.value)}
+              placeholder="0 = unlimited"
+              aria-label={t('seller.promotions.builder.fieldPerCustomerLimit')}
+              className={inputCls()}
+            />
+          </Field>
+          <ToggleRow
+            label={t('seller.promotions.builder.fieldFirstOrderOnly')}
+            hint={t('seller.promotions.builder.fieldFirstOrderOnlyHint')}
+            checked={form.firstOrderOnly}
+            onChange={v => updateField('firstOrderOnly', v)}
+          />
+          <ToggleRow
+            label={t('seller.promotions.builder.fieldCombinable')}
+            hint={t('seller.promotions.builder.fieldCombinableHint')}
+            checked={form.combinable}
+            onChange={v => updateField('combinable', v)}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ToggleRow({ label, hint, checked, onChange }: { label: string; hint: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div className="flex-1 min-w-0">
+        <p className="text-[14px] font-semibold text-text">{label}</p>
+        <p className="text-[12px] font-normal text-text-muted mt-0.5">{hint}</p>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        onClick={() => onChange(!checked)}
+        className={`shrink-0 relative w-11 h-6 rounded-full transition-colors ${checked ? 'bg-primary' : 'bg-border'}`}
+      >
+        <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${checked ? 'translate-x-5' : ''}`} />
+      </button>
+    </div>
+  )
+}
+
+function EffectivePriceCard({ form, t }: { form: FormState; t: TT }) {
+  const original = 2000
+  const dv = Number(form.discountValue) || 0
+  let discounted = original
+  let youSave = 0
+  let label = t('seller.promotions.builder.effectiveNoDiscount')
+
+  if (form.type === 'percentage' || form.type === 'flash_sale') {
+    discounted = Math.round(original * (1 - Math.min(dv, 100) / 100))
+    youSave = original - discounted
+    label = `${dv}% OFF`
+  } else if (form.type === 'fixed') {
+    discounted = Math.max(0, original - dv)
+    youSave = original - discounted
+    label = `NPR ${formatNPR(dv)} OFF`
+  } else if (form.type === 'bogo') {
+    label = t('seller.promotions.builder.effectiveBogo', { buy: form.bogoBuyQty || '2', get: form.bogoGetQty || '1' })
+  } else if (form.type === 'free_shipping') {
+    label = t('seller.promotions.builder.effectiveFreeShip')
+  }
+
+  const vat = Math.round(discounted * 0.13 / 1.13)
+  const showPrice = form.type !== 'bogo' && form.type !== 'free_shipping'
+
+  return (
+    <div
+      className="rounded-lg border border-gold/30 bg-gold/5 p-4"
+      aria-label={t('seller.promotions.builder.effectivePriceTitle')}
+    >
+      <p className="text-[13px] font-semibold text-text mb-1">{t('seller.promotions.builder.effectivePriceTitle')}</p>
+      <p className="text-[12px] font-normal text-text-muted mb-3">{t('seller.promotions.builder.effectivePriceSubtitle')}</p>
+      <div className="flex items-center gap-3">
+        <div className="flex-1">
+          {showPrice ? (
+            <>
+              <div className="flex items-baseline gap-2">
+                <span className="text-[20px] font-bold text-gold tabular-nums">NPR {formatNPR(discounted)}</span>
+                {original > discounted && (
+                  <span className="text-[14px] text-text-muted line-through tabular-nums">NPR {formatNPR(original)}</span>
+                )}
+              </div>
+              {youSave > 0 && (
+                <p className="text-[12px] font-semibold text-success mt-0.5">
+                  {t('seller.promotions.builder.effectiveYouSave', { amount: formatNPR(youSave) })}
+                </p>
+              )}
+              <p className="text-[11px] font-normal text-text-muted mt-0.5">
+                {t('seller.promotions.builder.effectiveVat')} · NPR {formatNPR(vat)}
+              </p>
+            </>
+          ) : (
+            <p className="text-[14px] font-semibold text-text">{label}</p>
+          )}
+        </div>
+        <span className="inline-flex items-center text-[10px] font-bold tracking-wide text-white bg-gold rounded-full px-2.5 py-1">
+          {label}
+        </span>
+      </div>
     </div>
   )
 }

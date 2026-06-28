@@ -404,13 +404,20 @@ export const promotionFormSchema = z.object({
   discountValue: z.number().min(1, 'Discount value must be at least 1').max(100, 'Percentage cannot exceed 100'),
   code: z.string().max(30, 'Code is too long').optional().or(z.literal('')),
   isCoupon: z.boolean(),
-  scope: z.enum(['all', 'category', 'products']),
+  scope: z.enum(['all', 'category', 'products', 'order']),
   scopeLabel: z.string().max(100).optional().or(z.literal('')),
   startsAt: z.string().min(1, 'Start date is required'),
   endsAt: z.string().min(1, 'End date is required'),
   budget: z.number().min(0).optional(),
   productsCount: z.number().min(0).optional(),
   status: z.enum(['active', 'scheduled', 'expired', 'draft']),
+  bogoBuyQty: z.number().min(1, 'Buy quantity must be at least 1').max(99).optional(),
+  bogoGetQty: z.number().min(1, 'Get quantity must be at least 1').max(99).optional(),
+  minOrderValue: z.number().min(0).optional(),
+  minQty: z.number().min(0).optional(),
+  firstOrderOnly: z.boolean().optional(),
+  perCustomerLimit: z.number().min(0).optional(),
+  combinable: z.boolean().optional(),
 }).superRefine((data, ctx) => {
   if (data.type === 'percentage' || data.type === 'flash_sale') {
     if (data.discountValue > 100) {
@@ -440,8 +447,13 @@ export const promotionTypeValueSectionSchema = z.object({
 })
 
 export const promotionTargetsSectionSchema = z.object({
-  scope: z.enum(['all', 'category', 'products']),
+  scope: z.enum(['all', 'category', 'products', 'order']),
   scopeLabel: z.string().max(100).optional().or(z.literal('')),
+  minOrderValue: z.number().min(0).optional(),
+  minQty: z.number().min(0).optional(),
+  firstOrderOnly: z.boolean().optional(),
+  perCustomerLimit: z.number().min(0).optional(),
+  combinable: z.boolean().optional(),
 })
 
 export const promotionScheduleSectionSchema = z.object({

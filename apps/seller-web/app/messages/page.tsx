@@ -188,7 +188,7 @@ export default function SellerMessagesPage() {
                     ))}
                   </div>
                 ) : sorted.length === 0 ? (
-                  <div className={`flex-1 flex flex-col items-center justify-center gap-2 ${reduced ? '' : 'animate-[fadeIn_300ms_ease-out]'}`}  aria-label={`${list.length === 0 ? t('seller.messages.emptyTitle') : t('seller.messages.emptyFilteredTitle')}. ${list.length === 0 ? t('seller.messages.emptySubtitle') : t('seller.messages.emptyFilteredSubtitle')}`}>
+                  <div className={`flex-1 flex flex-col items-center justify-center gap-2 ${reduced ? '' : 'anim-fade-in-up'}`}  aria-label={`${list.length === 0 ? t('seller.messages.emptyTitle') : t('seller.messages.emptyFilteredTitle')}. ${list.length === 0 ? t('seller.messages.emptySubtitle') : t('seller.messages.emptyFilteredSubtitle')}`}>
                     <EmptyState
                       icon={<span className="text-5xl">{'\u{1F4AC}'}</span>}
                       title={list.length === 0 ? t('seller.messages.emptyTitle') : t('seller.messages.emptyFilteredTitle')}
@@ -206,7 +206,7 @@ export default function SellerMessagesPage() {
                       if (contextLabel) parts.push(contextLabel)
                       const ariaLabel = parts.join('. ')
                       return (
-                        <li key={item.id}>
+                        <li key={item.id} className={reduced ? '' : 'anim-row-reorder'}>
                           <button
                             onClick={() => handleOpen(item)}
                             className={`relative flex items-center gap-3 w-full px-4 text-left border-b transition-all duration-150 hover:bg-background active:scale-[0.98] ${reduced ? '' : 'motion-reduce:transition-none'} ${isUnread ? 'bg-[rgba(138,27,87,0.04)]' : 'bg-surface'} ${isSelected ? 'ring-2 ring-inset ring-primary-50' : ''}`}
@@ -228,7 +228,7 @@ export default function SellerMessagesPage() {
                                 <p className="text-sm text-text-muted truncate flex-1">{item.lastMessage}</p>
                                 {isUnread && (
                                   <span
-                                    className="inline-flex items-center justify-center bg-primary text-white text-xs font-semibold rounded-full min-w-[20px] h-5 px-1.5 shrink-0"
+                                    className={`inline-flex items-center justify-center bg-primary text-white text-xs font-semibold rounded-full min-w-[20px] h-5 px-1.5 shrink-0 ${reduced ? '' : 'anim-badge-bounce'}`}
                                     aria-label={t('seller.messages.unreadAria', { count: item.unreadCount })}
                                   >
                                     {item.unreadCount}
@@ -346,6 +346,7 @@ function ThreadView({
   const [typing, setTyping] = useState(false)
   const [isOffline, setIsOffline] = useState(false)
   const [failedIds, setFailedIds] = useState<Set<string>>(new Set())
+  const [composerHighlight, setComposerHighlight] = useState(false)
   const [showTemplates, setShowTemplates] = useState(false)
   const [showTemplateManager, setShowTemplateManager] = useState(false)
   const [showAttachPicker, setShowAttachPicker] = useState(false)
@@ -468,7 +469,11 @@ function ThreadView({
       textareaRef.current.style.height = '40px'
       textareaRef.current.style.height = Math.min(120, textareaRef.current.scrollHeight) + 'px'
     }
-  }, [orderCtx, convo])
+    if (!reduced) {
+      setComposerHighlight(true)
+      setTimeout(() => setComposerHighlight(false), 600)
+    }
+  }, [orderCtx, convo, reduced])
 
   const handleShareProduct = useCallback(() => {
     if (!productCtx) return
@@ -681,7 +686,7 @@ function ThreadView({
               const rp = item.richProduct
               const aria = t('seller.messages.richProductAria', { name: rp.name, price: rp.price })
               return (
-                <div key={item.id} className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} ${reduced ? '' : 'animate-[fadeIn_200ms_ease-out]'}`} aria-label={aria}>
+                <div key={item.id} className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} ${reduced ? '' : 'anim-fade-in'}`} aria-label={aria}>
                   <button
                     onClick={() => router.push('/products')}
                     className={`flex items-center gap-2 max-w-[78%] p-2 rounded-2xl text-left ${isMine ? 'bg-primary' : 'bg-background border border-border-light'}`}
@@ -702,7 +707,7 @@ function ThreadView({
               const ro = item.richOrder
               const aria = t('seller.messages.richOrderAria', { ref: ro.orderRef, status: ro.status, total: ro.total })
               return (
-                <div key={item.id} className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} ${reduced ? '' : 'animate-[fadeIn_200ms_ease-out]'}`} aria-label={aria}>
+                <div key={item.id} className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} ${reduced ? '' : 'anim-fade-in'}`} aria-label={aria}>
                   <div className={`min-w-[200px] max-w-[78%] p-2 rounded-2xl ${isMine ? 'bg-primary' : 'bg-background border border-border-light'}`} aria-label={aria}>
                     <p className={`text-[10px] font-semibold uppercase ${isMine ? 'text-primary-50' : 'text-text-muted'}`}>{t('seller.messages.richOrder')}</p>
                     <p className={`text-sm font-medium truncate ${isMine ? 'text-white' : 'text-text'}`}>{ro.orderRef}</p>
@@ -720,7 +725,7 @@ function ThreadView({
               const rt = item.richTracking
               const aria = t('seller.messages.richTrackingAria', { carrier: rt.carrier, tracking: rt.trackingNumber })
               return (
-                <div key={item.id} className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} ${reduced ? '' : 'animate-[fadeIn_200ms_ease-out]'}`} aria-label={aria}>
+                <div key={item.id} className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} ${reduced ? '' : 'anim-fade-in'}`} aria-label={aria}>
                   <div className={`min-w-[200px] max-w-[78%] px-3 py-2 rounded-2xl ${isMine ? 'bg-primary text-white' : 'bg-background text-text border border-border-light'}`} aria-label={aria}>
                     <p className={`text-[10px] font-semibold uppercase ${isMine ? 'text-primary-50' : 'text-text-muted'}`}>{t('seller.messages.richTracking')}</p>
                     <p className="text-sm">{item.body}</p>
@@ -741,7 +746,7 @@ function ThreadView({
             return (
               <div
                 key={item.id}
-                className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} ${reduced ? '' : 'animate-[fadeIn_200ms_ease-out]'}`}
+                className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} ${reduced ? '' : 'anim-fade-in'}`}
                 aria-label={ariaParts.join('. ')}
                 role={isFailed ? 'alert' : undefined}
               >
@@ -781,7 +786,7 @@ function ThreadView({
             </div>
           )}
           {localMessages.length === 0 && !typing && (
-            <div className={`m-auto flex flex-col items-center gap-2 text-center px-6 ${reduced ? '' : 'animate-[fadeIn_300ms_ease-out]'}`}  aria-label={`${t('seller.messages.threadStart')}. ${t('seller.messages.threadStartSubtitle')}`}>
+            <div className={`m-auto flex flex-col items-center gap-2 text-center px-6 ${reduced ? '' : 'anim-fade-in-up'}`}  aria-label={`${t('seller.messages.threadStart')}. ${t('seller.messages.threadStartSubtitle')}`}>
               <span className="text-5xl">{'\u{1F44B}'}</span>
               <p className="text-lg font-semibold text-text">{t('seller.messages.threadStart')}</p>
               <p className="text-sm text-text-muted max-w-xs">{t('seller.messages.threadStartSubtitle')}</p>
@@ -860,7 +865,7 @@ function ThreadView({
             <button
               key={q.id}
               onClick={() => handleInsertTemplate(isNe ? q.bodyNe : q.body)}
-              className="shrink-0 rounded-full border border-border bg-surface px-3 py-1.5 text-sm font-medium text-text hover:border-primary hover:text-primary active:scale-[0.96] transition-all"
+              className="shrink-0 rounded-full border border-border bg-surface px-3 py-1.5 text-sm font-medium text-text hover:border-primary hover:text-primary active:scale-[0.96] transition-all duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]"
               aria-label={t('seller.messages.quickReplyAria', { label: isNe ? q.labelNe : q.label })}
             >
               {isNe ? q.labelNe : q.label}
@@ -885,7 +890,7 @@ function ThreadView({
           </button>
           <textarea
             ref={textareaRef}
-            className="flex-1 min-h-[40px] max-h-[120px] resize-none rounded-2xl bg-background px-3 py-2 text-sm text-text outline-none border border-border-light focus:border-primary"
+            className={`flex-1 min-h-[40px] max-h-[120px] resize-none rounded-2xl bg-background px-3 py-2 text-sm text-text outline-none border transition-colors ${composerHighlight ? 'border-primary bg-primary-50' : 'border-border-light focus:border-primary'}`}
             placeholder={t('seller.messages.threadTypeMessage')}
             value={input}
             onChange={handleTextareaInput}
@@ -896,7 +901,7 @@ function ThreadView({
           <button
             onClick={() => handleSend()}
             disabled={!input.trim()}
-            className="h-10 w-10 rounded-full bg-primary text-white flex items-center justify-center disabled:opacity-50 hover:bg-primary-dark active:scale-95 transition-all shrink-0"
+            className="h-10 w-10 rounded-full bg-primary text-white flex items-center justify-center disabled:opacity-50 hover:bg-primary-dark active:scale-95 transition-all duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] shrink-0"
             aria-label={t('seller.messages.threadSend')}
           >
             <span aria-hidden="true">{'\u{27A4}'}</span>
@@ -983,7 +988,7 @@ function ContextPanel({
   const isProduct = convo?.contextType === 'product'
 
   return (
-    <div className={`p-4 flex flex-col gap-2 ${reduced ? '' : 'animate-[fadeIn_250ms_ease-out]'}`}>
+    <div className={`p-4 flex flex-col gap-2 ${reduced ? '' : 'anim-fade-in-250'}`}>
       {isOrder && (
         <section className="bg-surface rounded-lg border border-border-light p-4 flex flex-col gap-2" aria-labelledby="ctx-order-title">
           <div className="flex items-center justify-between">

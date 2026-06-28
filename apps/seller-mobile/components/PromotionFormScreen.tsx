@@ -55,6 +55,13 @@ interface FormState {
   endsAt: string
   budget: string
   status: 'active' | 'scheduled' | 'expired' | 'draft'
+  bogoBuyQty: string
+  bogoGetQty: string
+  minOrderValue: string
+  minQty: string
+  firstOrderOnly: boolean
+  perCustomerLimit: string
+  combinable: boolean
 }
 
 const EMPTY_FORM: FormState = {
@@ -69,6 +76,13 @@ const EMPTY_FORM: FormState = {
   endsAt: '',
   budget: '',
   status: 'draft',
+  bogoBuyQty: '2',
+  bogoGetQty: '1',
+  minOrderValue: '',
+  minQty: '',
+  firstOrderOnly: false,
+  perCustomerLimit: '',
+  combinable: false,
 }
 
 const SECTION_ICONS: Record<SectionKey, string> = {
@@ -164,6 +178,13 @@ export default function PromotionFormScreen() {
       endsAt: existingPromo.endsAt.slice(0, 10),
       budget: existingPromo.budget ? String(existingPromo.budget) : '',
       status: existingPromo.status,
+      bogoBuyQty: '2',
+      bogoGetQty: '1',
+      minOrderValue: '',
+      minQty: '',
+      firstOrderOnly: false,
+      perCustomerLimit: '',
+      combinable: false,
     }
     setForm(loaded)
     setInitialForm(loaded)
@@ -211,6 +232,13 @@ export default function PromotionFormScreen() {
     discountValue: form.discountValue ? Number(form.discountValue) : 0,
     budget: form.budget ? Number(form.budget) : undefined,
     productsCount: 0,
+    bogoBuyQty: form.bogoBuyQty ? Number(form.bogoBuyQty) : undefined,
+    bogoGetQty: form.bogoGetQty ? Number(form.bogoGetQty) : undefined,
+    minOrderValue: form.minOrderValue ? Number(form.minOrderValue) : undefined,
+    minQty: form.minQty ? Number(form.minQty) : undefined,
+    perCustomerLimit: form.perCustomerLimit ? Number(form.perCustomerLimit) : undefined,
+    firstOrderOnly: form.firstOrderOnly,
+    combinable: form.combinable,
   } as any), [form])
 
   const sectionErrors = useMemo(() => {
@@ -573,6 +601,21 @@ function Field({ label, hint, error, errorId, children }: { label: string; hint?
 }
 
 function TypeValueSection({ form, errors, updateField, t }: { form: FormState; errors: Record<string, string>; updateField: (f: keyof FormState, v: string | boolean) => void; t: TT }) {
+  const [codeAnnounce, setCodeAnnounce] = useState('')
+
+  const generateCode = useCallback(() => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+    let code = ''
+    for (let i = 0; i < 8; i++) code += chars[Math.floor(Math.random() * chars.length)]
+    updateField('code', code)
+    setCodeAnnounce(t('seller.promotions.builder.codeGenerated', { code }))
+    setTimeout(() => setCodeAnnounce(''), 3000)
+  }, [updateField, t])
+
+  const isPercent = form.type === 'percentage' || form.type === 'flash_sale'
+  const isBogo = form.type === 'bogo'
+  const isFreeShip = form.type === 'free_shipping'
+
   return (
     <View style={styles.sectionContent}>
       <Field label={t('seller.promotions.builder.fieldName')} hint={t('seller.promotions.builder.fieldNameHint')} error={errors.name}>
@@ -586,43 +629,98 @@ function TypeValueSection({ form, errors, updateField, t }: { form: FormState; e
         />
       </Field>
 
-      <Field label={t('seller.promotions.builder.fieldType')} hint={t('seller.promotions.builder.fieldTypeHint')}>
+      {/* Type chooser — selectable cards */}
+      <View>
+        <Text style={styles.fieldLabel}>{t('seller.promotions.builder.fieldType')}</Text>
+        <Text style={styles.fieldHint}>{t('seller.promotions.builder.fieldTypeHint')}</Text>
         <View style={styles.typeGrid}>
-          {PROMOTION_TYPES.map(tt => (
-            <TouchableOpacity
-              key={tt.key}
-              onPress={() => updateField('type', tt.key)}
-              accessibilityRole="button"
-              accessibilityState={{ selected: form.type === tt.key }}
-              style={[styles.typeChip, form.type === tt.key && styles.typeChipActive]}
-            >
-              <Text style={styles.typeChipIcon}>{TYPE_ICONS[tt.key]}</Text>
-              <Text style={[styles.typeChipText, form.type === tt.key && styles.typeChipTextActive]} numberOfLines={1}>
-                {t(`seller.promotions.type${tt.key.charAt(0).toUpperCase()}${tt.key.slice(1).replace('_', '')}`)}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          {PROMOTION_TYPES.map(tt => {
+            const selected = form.type === tt.key
+            const shortKey = tt.key === 'percentage' ? 'typePercentageShort' : tt.key === 'fixed' ? 'typeFixedShort' : tt.key === 'flash_sale' ? 'typeFlashSaleShort' : tt.key === 'bogo' ? 'typeBogoShort' : 'typeFreeShippingShort'
+            return (
+              <TouchableOpacity
+                key={tt.key}
+                onPress={() => updateField('type', tt.key)}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: selected }}
+                accessibilityLabel={t(`seller.promotions.${shortKey}`)}
+                style={[styles.typeCard, selected && styles.typeCardActive]}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.typeCardIcon, selected && styles.typeCardIconActive]}>
+                  <Text style={[styles.typeCardIconText, selected && styles.typeCardIconTextActive]}>{TYPE_ICONS[tt.key]}</Text>
+                </View>
+                <Text style={[styles.typeCardLabel, selected && styles.typeCardLabelActive]} numberOfLines={1}>
+                  {t(`seller.promotions.${shortKey}`)}
+                </Text>
+                {selected && (
+                  <View style={styles.typeCardCheck}>
+                    <Text style={styles.typeCardCheckText}>✓</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            )
+          })}
         </View>
-      </Field>
+      </View>
 
-      <Field label={t('seller.promotions.builder.fieldDiscountValue')} hint={t('seller.promotions.builder.fieldDiscountValueHint')} error={errors.discountValue}>
-        <View style={styles.inputWithSuffix}>
-          <TextInput
-            value={form.discountValue}
-            onChangeText={v => updateField('discountValue', v)}
-            placeholder="0"
-            placeholderTextColor={colors.textTertiary}
-            accessibilityLabel={t('seller.promotions.builder.fieldDiscountValue')}
-            keyboardType="numeric"
-            inputMode="numeric"
-            style={[styles.input, styles.inputWithSuffixInput, errors.discountValue && styles.inputError]}
-          />
-          <Text style={styles.suffixText}>
-            {form.type === 'percentage' || form.type === 'flash_sale' ? '%' : 'NPR'}
-          </Text>
+      {/* Adapted value inputs */}
+      {!isFreeShip && !isBogo && (
+        <Field label={t('seller.promotions.builder.fieldDiscountValue')} hint={isPercent ? t('seller.promotions.builder.fieldDiscountValueHint') : undefined} error={errors.discountValue}>
+          <View style={styles.inputWithSuffix}>
+            <TextInput
+              value={form.discountValue}
+              onChangeText={v => updateField('discountValue', v)}
+              placeholder="0"
+              placeholderTextColor={colors.textTertiary}
+              accessibilityLabel={t('seller.promotions.builder.fieldDiscountValue')}
+              keyboardType="numeric"
+              inputMode="numeric"
+              style={[styles.input, styles.inputWithSuffixInput, errors.discountValue && styles.inputError]}
+            />
+            <Text style={styles.suffixText}>{isPercent ? '%' : 'NPR'}</Text>
+          </View>
+          {isPercent && Number(form.discountValue) > 100 && (
+            <Text style={styles.fieldError}>Percentage cannot exceed 100</Text>
+          )}
+        </Field>
+      )}
+
+      {/* BOGO qty pickers */}
+      {isBogo && (
+        <View style={{ flexDirection: 'row', gap: spacing[3] }}>
+          <View style={{ flex: 1 }}>
+            <Field label={t('seller.promotions.builder.fieldBogoBuyQty')} hint={t('seller.promotions.builder.fieldBogoBuyQtyHint')}>
+              <TextInput
+                value={form.bogoBuyQty}
+                onChangeText={v => updateField('bogoBuyQty', v)}
+                placeholder="2"
+                placeholderTextColor={colors.textTertiary}
+                accessibilityLabel={t('seller.promotions.builder.fieldBogoBuyQty')}
+                keyboardType="numeric"
+                inputMode="numeric"
+                style={styles.input}
+              />
+            </Field>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Field label={t('seller.promotions.builder.fieldBogoGetQty')} hint={t('seller.promotions.builder.fieldBogoGetQtyHint')}>
+              <TextInput
+                value={form.bogoGetQty}
+                onChangeText={v => updateField('bogoGetQty', v)}
+                placeholder="1"
+                placeholderTextColor={colors.textTertiary}
+                accessibilityLabel={t('seller.promotions.builder.fieldBogoGetQty')}
+                keyboardType="numeric"
+                inputMode="numeric"
+                style={styles.input}
+              />
+            </Field>
+          </View>
         </View>
-      </Field>
+      )}
 
+      {/* Coupon toggle */}
       <TouchableOpacity
         onPress={() => updateField('isCoupon', !form.isCoupon)}
         accessibilityRole="checkbox"
@@ -636,19 +734,37 @@ function TypeValueSection({ form, errors, updateField, t }: { form: FormState; e
       </TouchableOpacity>
       <Text style={styles.checkboxHint}>{t('seller.promotions.builder.fieldIsCouponHint')}</Text>
 
+      {/* Code generator */}
       {form.isCoupon && (
         <Field label={t('seller.promotions.builder.fieldCode')} hint={t('seller.promotions.builder.fieldCodeHint')} error={errors.code}>
-          <TextInput
-            value={form.code}
-            onChangeText={v => updateField('code', v.toUpperCase())}
-            placeholder="DASHAIN25"
-            placeholderTextColor={colors.textTertiary}
-            accessibilityLabel={t('seller.promotions.builder.fieldCode')}
-            autoCapitalize="characters"
-            style={[styles.input, styles.codeInput, errors.code && styles.inputError]}
-          />
+          <View style={styles.codeRow}>
+            <TextInput
+              value={form.code}
+              onChangeText={v => updateField('code', v.toUpperCase())}
+              placeholder="DASHAIN25"
+              placeholderTextColor={colors.textTertiary}
+              accessibilityLabel={t('seller.promotions.builder.fieldCode')}
+              autoCapitalize="characters"
+              style={[styles.input, styles.codeInput, styles.codeInputFlex, errors.code && styles.inputError]}
+            />
+            <TouchableOpacity
+              onPress={generateCode}
+              accessibilityRole="button"
+              accessibilityLabel={t('seller.promotions.builder.generateCodeAria')}
+              style={styles.generateBtn}
+            >
+              <Text style={styles.generateBtnIcon}>↻</Text>
+              <Text style={styles.generateBtnText}>{t('seller.promotions.builder.generateCode')}</Text>
+            </TouchableOpacity>
+          </View>
+          {codeAnnounce ? (
+            <Text style={styles.codeAnnounce} accessibilityRole="alert" accessibilityLiveRegion="polite">{codeAnnounce}</Text>
+          ) : null}
         </Field>
       )}
+
+      {/* Effective price example */}
+      <EffectivePriceCard form={form} t={t} />
     </View>
   )
 }
@@ -658,17 +774,21 @@ function TargetsSection({ form, errors, updateField, t }: { form: FormState; err
     { key: 'all', label: t('seller.promotions.builder.fieldScopeAll') },
     { key: 'category', label: t('seller.promotions.builder.fieldScopeCategory') },
     { key: 'products', label: t('seller.promotions.builder.fieldScopeProducts') },
+    { key: 'order', label: t('seller.promotions.builder.fieldScopeOrder') },
   ]
   return (
     <View style={styles.sectionContent}>
-      <Field label={t('seller.promotions.builder.fieldScope')}>
+      {/* Scope chooser */}
+      <View>
+        <Text style={styles.fieldLabel}>{t('seller.promotions.builder.fieldScope')}</Text>
         <View style={styles.scopeRow}>
           {scopeOptions.map(opt => (
             <TouchableOpacity
               key={opt.key}
               onPress={() => updateField('scope', opt.key)}
-              accessibilityRole="button"
-              accessibilityState={{ selected: form.scope === opt.key }}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: form.scope === opt.key }}
+              accessibilityLabel={opt.label}
               style={[styles.scopeChip, form.scope === opt.key && styles.scopeChipActive]}
             >
               <Text style={[styles.scopeChipText, form.scope === opt.key && styles.scopeChipTextActive]} numberOfLines={1}>
@@ -677,7 +797,7 @@ function TargetsSection({ form, errors, updateField, t }: { form: FormState; err
             </TouchableOpacity>
           ))}
         </View>
-      </Field>
+      </View>
 
       {form.scope === 'category' && (
         <Field label={t('seller.promotions.builder.fieldScopeLabel')} hint={t('seller.promotions.builder.fieldScopeLabelHint')} error={errors.scopeLabel}>
@@ -691,6 +811,156 @@ function TargetsSection({ form, errors, updateField, t }: { form: FormState; err
           />
         </Field>
       )}
+
+      {form.scope === 'products' && (
+        <View style={styles.productPickerPlaceholder}>
+          <Text style={styles.productPickerText}>Product picker — select specific products to include.</Text>
+        </View>
+      )}
+
+      {/* Conditions group */}
+      <View style={styles.conditionsGroup}>
+        <Text style={styles.conditionsTitle}>{t('seller.promotions.builder.conditionsTitle')}</Text>
+        <Text style={styles.conditionsHint}>{t('seller.promotions.builder.conditionsHint')}</Text>
+        <View style={{ gap: spacing[3], marginTop: spacing[3] }}>
+          <View style={{ flexDirection: 'row', gap: spacing[3] }}>
+            <View style={{ flex: 1 }}>
+              <Field label={t('seller.promotions.builder.fieldMinOrderValue')} hint={t('seller.promotions.builder.fieldMinOrderValueHint')}>
+                <View style={styles.inputWithSuffix}>
+                  <TextInput
+                    value={form.minOrderValue}
+                    onChangeText={v => updateField('minOrderValue', v)}
+                    placeholder="0"
+                    placeholderTextColor={colors.textTertiary}
+                    accessibilityLabel={t('seller.promotions.builder.fieldMinOrderValue')}
+                    keyboardType="numeric"
+                    inputMode="numeric"
+                    style={[styles.input, styles.inputWithSuffixInput]}
+                  />
+                  <Text style={styles.suffixText}>NPR</Text>
+                </View>
+              </Field>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Field label={t('seller.promotions.builder.fieldMinQty')} hint={t('seller.promotions.builder.fieldMinQtyHint')}>
+                <TextInput
+                  value={form.minQty}
+                  onChangeText={v => updateField('minQty', v)}
+                  placeholder="0"
+                  placeholderTextColor={colors.textTertiary}
+                  accessibilityLabel={t('seller.promotions.builder.fieldMinQty')}
+                  keyboardType="numeric"
+                  inputMode="numeric"
+                  style={styles.input}
+                />
+              </Field>
+            </View>
+          </View>
+          <Field label={t('seller.promotions.builder.fieldPerCustomerLimit')} hint={t('seller.promotions.builder.fieldPerCustomerLimitHint')}>
+            <TextInput
+              value={form.perCustomerLimit}
+              onChangeText={v => updateField('perCustomerLimit', v)}
+              placeholder="0 = unlimited"
+              placeholderTextColor={colors.textTertiary}
+              accessibilityLabel={t('seller.promotions.builder.fieldPerCustomerLimit')}
+              keyboardType="numeric"
+              inputMode="numeric"
+              style={styles.input}
+            />
+          </Field>
+          <ToggleRow
+            label={t('seller.promotions.builder.fieldFirstOrderOnly')}
+            hint={t('seller.promotions.builder.fieldFirstOrderOnlyHint')}
+            checked={form.firstOrderOnly}
+            onChange={v => updateField('firstOrderOnly', v)}
+          />
+          <ToggleRow
+            label={t('seller.promotions.builder.fieldCombinable')}
+            hint={t('seller.promotions.builder.fieldCombinableHint')}
+            checked={form.combinable}
+            onChange={v => updateField('combinable', v)}
+          />
+        </View>
+      </View>
+    </View>
+  )
+}
+
+function ToggleRow({ label, hint, checked, onChange }: { label: string; hint: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <View style={styles.toggleRow}>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={styles.toggleLabel}>{label}</Text>
+        <Text style={styles.toggleHint}>{hint}</Text>
+      </View>
+      <TouchableOpacity
+        onPress={() => onChange(!checked)}
+        accessibilityRole="switch"
+        accessibilityState={{ checked }}
+        accessibilityLabel={label}
+        style={[styles.toggleSwitch, checked && styles.toggleSwitchActive]}
+      >
+        <View style={[styles.toggleKnob, checked && styles.toggleKnobActive]} />
+      </TouchableOpacity>
+    </View>
+  )
+}
+
+function EffectivePriceCard({ form, t }: { form: FormState; t: TT }) {
+  const original = 2000
+  const dv = Number(form.discountValue) || 0
+  let discounted = original
+  let youSave = 0
+  let label = t('seller.promotions.builder.effectiveNoDiscount')
+
+  if (form.type === 'percentage' || form.type === 'flash_sale') {
+    discounted = Math.round(original * (1 - Math.min(dv, 100) / 100))
+    youSave = original - discounted
+    label = `${dv}% OFF`
+  } else if (form.type === 'fixed') {
+    discounted = Math.max(0, original - dv)
+    youSave = original - discounted
+    label = `NPR ${fmtNPR(dv)} OFF`
+  } else if (form.type === 'bogo') {
+    label = t('seller.promotions.builder.effectiveBogo', { buy: form.bogoBuyQty || '2', get: form.bogoGetQty || '1' })
+  } else if (form.type === 'free_shipping') {
+    label = t('seller.promotions.builder.effectiveFreeShip')
+  }
+
+  const vat = Math.round(discounted * 0.13 / 1.13)
+  const showPrice = form.type !== 'bogo' && form.type !== 'free_shipping'
+
+  return (
+    <View style={styles.effectiveCard} accessibilityLabel={t('seller.promotions.builder.effectivePriceTitle')}>
+      <Text style={styles.effectiveTitle}>{t('seller.promotions.builder.effectivePriceTitle')}</Text>
+      <Text style={styles.effectiveSubtitle}>{t('seller.promotions.builder.effectivePriceSubtitle')}</Text>
+      <View style={styles.effectiveBody}>
+        <View style={{ flex: 1 }}>
+          {showPrice ? (
+            <>
+              <View style={styles.effectivePriceRow}>
+                <Text style={styles.effectivePrice}>NPR {fmtNPR(discounted)}</Text>
+                {original > discounted && (
+                  <Text style={styles.effectiveOriginal}>NPR {fmtNPR(original)}</Text>
+                )}
+              </View>
+              {youSave > 0 && (
+                <Text style={styles.effectiveSave}>
+                  {t('seller.promotions.builder.effectiveYouSave', { amount: fmtNPR(youSave) })}
+                </Text>
+              )}
+              <Text style={styles.effectiveVat}>
+                {t('seller.promotions.builder.effectiveVat')} · NPR {fmtNPR(vat)}
+              </Text>
+            </>
+          ) : (
+            <Text style={styles.effectiveLabel}>{label}</Text>
+          )}
+        </View>
+        <View style={styles.effectiveBadge}>
+          <Text style={styles.effectiveBadgeText}>{label}</Text>
+        </View>
+      </View>
     </View>
   )
 }
@@ -950,25 +1220,131 @@ const styles = StyleSheet.create({
   inputWithSuffixInput: { flex: 1, borderWidth: 0, backgroundColor: 'transparent' },
   suffixText: { fontSize: fontSize.base[0], fontWeight: '600', color: colors.textMuted, paddingHorizontal: spacing[3] },
   codeInput: { fontFamily: 'monospace' },
-
-  // Type grid
-  typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
-  typeChip: {
+  codeInputFlex: { flex: 1 },
+  codeRow: { flexDirection: 'row', gap: spacing[2], alignItems: 'stretch' },
+  generateBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[1.5],
+    gap: spacing[1],
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radii.md,
-    paddingHorizontal: spacing[3],
+    backgroundColor: colors.background,
+    paddingHorizontal: spacing[2.5],
     paddingVertical: spacing[2.5],
-    minWidth: '48%',
-    flex: 1,
   },
-  typeChipActive: { borderColor: colors.primary, backgroundColor: colors.primary50 },
-  typeChipIcon: { fontSize: 16, fontWeight: '700', color: colors.primary },
-  typeChipText: { fontSize: fontSize.sm[0], fontWeight: '500', color: colors.textMuted },
-  typeChipTextActive: { color: colors.primary, fontWeight: '600' },
+  generateBtnIcon: { fontSize: 16, color: colors.text },
+  generateBtnText: { fontSize: fontSize.sm[0], fontWeight: '600', color: colors.text },
+  codeAnnounce: { fontSize: fontSize.sm[0], fontWeight: '600', color: colors.success, marginTop: spacing[1] },
+
+  // Product picker placeholder
+  productPickerPlaceholder: {
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    backgroundColor: colors.background,
+    padding: spacing[4],
+    alignItems: 'center',
+  },
+  productPickerText: { fontSize: fontSize.sm[0], color: colors.textMuted, textAlign: 'center' },
+
+  // Conditions
+  conditionsGroup: { marginTop: spacing[2], paddingTop: spacing[4], borderTopWidth: 1, borderTopColor: colors.borderLight },
+  conditionsTitle: { fontSize: fontSize.base[0], fontWeight: '600', color: colors.text },
+  conditionsHint: { fontSize: fontSize.sm[0], color: colors.textMuted, marginTop: 2 },
+
+  // Toggle row
+  toggleRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing[3] },
+  toggleLabel: { fontSize: fontSize.base[0], fontWeight: '600', color: colors.text },
+  toggleHint: { fontSize: fontSize.sm[0], color: colors.textMuted, marginTop: 2 },
+  toggleSwitch: {
+    width: 44,
+    height: 24,
+    borderRadius: radii.full,
+    backgroundColor: colors.border,
+    justifyContent: 'center',
+    paddingHorizontal: 2,
+  },
+  toggleSwitchActive: { backgroundColor: colors.primary },
+  toggleKnob: {
+    width: 20,
+    height: 20,
+    borderRadius: radii.full,
+    backgroundColor: colors.white,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
+  },
+  toggleKnobActive: { transform: [{ translateX: 20 }] },
+
+  // Effective price card
+  effectiveCard: {
+    borderWidth: 1,
+    borderColor: 'rgba(224,169,59,0.3)',
+    backgroundColor: 'rgba(224,169,59,0.05)',
+    borderRadius: radii.md,
+    padding: spacing[4],
+  },
+  effectiveTitle: { fontSize: fontSize.sm[0], fontWeight: '600', color: colors.text },
+  effectiveSubtitle: { fontSize: fontSize.xs[0], color: colors.textMuted, marginTop: 2, marginBottom: spacing[3] },
+  effectiveBody: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
+  effectivePriceRow: { flexDirection: 'row', alignItems: 'baseline', gap: spacing[2] },
+  effectivePrice: { fontSize: fontSize.lg[0], fontWeight: '700', color: colors.gold, fontVariant: ['tabular-nums'] },
+  effectiveOriginal: { fontSize: fontSize.base[0], color: colors.textMuted, textDecorationLine: 'line-through', fontVariant: ['tabular-nums'] },
+  effectiveSave: { fontSize: fontSize.sm[0], fontWeight: '600', color: colors.success, marginTop: 2 },
+  effectiveVat: { fontSize: fontSize.xs[0], color: colors.textMuted, marginTop: 2 },
+  effectiveLabel: { fontSize: fontSize.base[0], fontWeight: '600', color: colors.text },
+  effectiveBadge: {
+    backgroundColor: colors.gold,
+    borderRadius: radii.full,
+    paddingHorizontal: spacing[2.5],
+    paddingVertical: 4,
+  },
+  effectiveBadgeText: { fontSize: 10, fontWeight: '700', color: colors.white },
+
+  // Type grid
+  typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
+  typeCard: {
+    alignItems: 'center',
+    gap: spacing[2],
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[3],
+    minWidth: '47%',
+    flex: 1,
+    position: 'relative',
+  },
+  typeCardActive: { borderColor: colors.primary, backgroundColor: colors.primary50 },
+  typeCardIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: radii.full,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  typeCardIconActive: { backgroundColor: colors.primary },
+  typeCardIconText: { fontSize: 16, fontWeight: '700', color: colors.textMuted },
+  typeCardIconTextActive: { color: colors.white },
+  typeCardLabel: { fontSize: fontSize.sm[0], fontWeight: '600', color: colors.textMuted, textAlign: 'center' },
+  typeCardLabelActive: { color: colors.primary },
+  typeCardCheck: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 18,
+    height: 18,
+    borderRadius: radii.full,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  typeCardCheckText: { fontSize: 10, fontWeight: '700', color: colors.white },
 
   // Checkbox
   checkboxRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[2.5], paddingVertical: spacing[1] },

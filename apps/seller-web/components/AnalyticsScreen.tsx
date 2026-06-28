@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useTranslation } from 'react-i18next'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowLeft, TrendingUp, TrendingDown, Minus, X } from 'lucide-react'
+import { ArrowLeft, TrendingUp, TrendingDown, Minus, X, Download } from 'lucide-react'
 import { Container, Screen, useReducedMotion } from '@chinooz/ui-web'
 import { useSellerCategories, useSellerProducts } from '@chinooz/hooks'
 import { useSellerSessionStore } from '@chinooz/state'
@@ -14,6 +14,7 @@ import SalesSection from './SalesSection'
 import TrafficSection from './TrafficSection'
 import ProductsSection from './ProductsSection'
 import CustomersSection from './CustomersSection'
+import ExportPanel, { type SavedReport } from './ExportPanel'
 import {
   getAnalytics,
   ANALYTICS_RANGES,
@@ -61,6 +62,8 @@ export default function AnalyticsScreen() {
   const [compare, setCompare] = useState(false)
   const [categoryId, setCategoryId] = useState<string | undefined>(undefined)
   const [productId, setProductId] = useState<string | undefined>(undefined)
+  const [savedReports, setSavedReports] = useState<SavedReport[]>([])
+  const [exportOpen, setExportOpen] = useState(false)
 
   useEffect(() => {
     tracker.screen({ name: 'seller-analytics' })
@@ -129,6 +132,34 @@ export default function AnalyticsScreen() {
     section === 'sales' || section === 'products' || section === 'customers'
   const showProductFilter = section === 'products' || section === 'traffic'
 
+  const exportContext = {
+    section,
+    rangeKey,
+    rangeLabel: t(`seller.analytics.${RANGE_LABEL_KEY[rangeKey]}`),
+    filters: activeFilters.map(f => f.label).join(', '),
+    rowCount:
+      section === 'products' && data.products
+        ? data.products.length
+        : section === 'customers' && data.customers
+          ? data.customers.length
+          : data.kpis.length + data.chart.length,
+    data,
+  }
+
+  const handleSaveReport = (report: SavedReport) => setSavedReports(r => [...r, report])
+  const handleLoadReport = (report: SavedReport) => {
+    setSection(report.section)
+    setRangeKey(report.rangeKey)
+    setCompare(report.compare)
+    if (report.categoryId) setCategoryId(report.categoryId)
+    if (report.productId) setProductId(report.productId)
+  }
+  const handleRenameReport = (id: string, name: string) =>
+    setSavedReports(r => r.map(rp => (rp.id === id ? { ...rp, name } : rp)))
+  const handleDeleteReport = (id: string) => setSavedReports(r => r.filter(rp => rp.id !== id))
+  const handleUpdateReport = (id: string, updates: Partial<SavedReport>) =>
+    setSavedReports(r => r.map(rp => (rp.id === id ? { ...rp, ...updates } : rp)))
+
   return (
     <Screen>
       {/* Sticky header bar: title + section tabs + range + compare */}
@@ -146,7 +177,16 @@ export default function AnalyticsScreen() {
             <h1 className="text-base font-bold text-text truncate">
               {t('seller.analytics.title')}
             </h1>
-            <div className="w-8 sm:w-24" aria-hidden="true" />
+            <button
+              type="button"
+              onClick={() => setExportOpen(o => !o)}
+              aria-label={t('seller.analytics.export.title')}
+              aria-expanded={exportOpen}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] font-semibold text-text hover:border-primary/40 transition-colors min-touch"
+            >
+              <Download size={14} aria-hidden="true" />
+              <span className="hidden sm:inline">{t('seller.analytics.export.title')}</span>
+            </button>
           </div>
 
           {/* Section tabs — underline tab bar (web) */}
@@ -345,6 +385,21 @@ export default function AnalyticsScreen() {
               )}
             </motion.div>
           </AnimatePresence>
+
+          {/* Export + saved reports */}
+          {exportOpen && (
+            <div className="mt-6">
+              <ExportPanel
+                context={exportContext}
+                savedReports={savedReports}
+                onSaveReport={handleSaveReport}
+                onLoadReport={handleLoadReport}
+                onRenameReport={handleRenameReport}
+                onDeleteReport={handleDeleteReport}
+                onUpdateReport={handleUpdateReport}
+              />
+            </div>
+          )}
         </div>
       </Container>
 

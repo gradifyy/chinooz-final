@@ -7,7 +7,7 @@ export type PromotionType =
   | 'bogo'
   | 'free_shipping'
 
-export type PromotionScope = 'all' | 'category' | 'products'
+export type PromotionScope = 'all' | 'category' | 'products' | 'order'
 
 export interface Promotion {
   id: string

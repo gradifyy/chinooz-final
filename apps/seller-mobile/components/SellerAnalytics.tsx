@@ -10,7 +10,7 @@ import {
 } from 'react-native'
 import { useTranslation } from 'react-i18next'
 import { useRouter } from 'expo-router'
-import { ArrowLeft, TrendingUp, TrendingDown, Minus, X } from 'lucide-react-native'
+import { ArrowLeft, TrendingUp, TrendingDown, Minus, X, Download } from 'lucide-react-native'
 import { colors, spacing, radii, fontSize } from '@chinooz/theme'
 import { useA11y } from './A11yProvider'
 import { useSellerCategories, useSellerProducts } from '@chinooz/hooks'
@@ -18,6 +18,7 @@ import SalesSection from './SalesSection'
 import TrafficSection from './TrafficSection'
 import ProductsSection from './ProductsSection'
 import CustomersSection from './CustomersSection'
+import ExportPanel, { type SavedReport } from './ExportPanel'
 import {
   getAnalytics,
   ANALYTICS_RANGES,
@@ -63,6 +64,8 @@ export default function SellerAnalytics() {
   const [compare, setCompare] = useState(false)
   const [categoryId, setCategoryId] = useState<string | undefined>(undefined)
   const [productId, setProductId] = useState<string | undefined>(undefined)
+  const [savedReports, setSavedReports] = useState<SavedReport[]>([])
+  const [exportOpen, setExportOpen] = useState(false)
   const fadeAnim = React.useRef(new Animated.Value(1)).current
 
   useEffect(() => {
@@ -139,6 +142,33 @@ export default function SellerAnalytics() {
 
   const compareLabel = compare ? t('seller.analytics.compareOn') : t('seller.analytics.compareOff')
 
+  const exportContext = {
+    section,
+    rangeKey,
+    rangeLabel: range.label,
+    filters: activeFilters.map(f => f.label).join(', '),
+    rowCount:
+      section === 'products' && data.products
+        ? data.products.length
+        : section === 'customers' && data.customers
+          ? data.customers.length
+          : data.kpis.length + data.chart.length,
+  }
+
+  const handleSaveReport = (report: SavedReport) => setSavedReports(r => [...r, report])
+  const handleLoadReport = (report: SavedReport) => {
+    setSection(report.section)
+    setRangeKey(report.rangeKey)
+    setCompare(report.compare)
+    if (report.categoryId) setCategoryId(report.categoryId)
+    if (report.productId) setProductId(report.productId)
+  }
+  const handleRenameReport = (id: string, name: string) =>
+    setSavedReports(r => r.map(rp => (rp.id === id ? { ...rp, name } : rp)))
+  const handleDeleteReport = (id: string) => setSavedReports(r => r.filter(rp => rp.id !== id))
+  const handleUpdateReport = (id: string, updates: Partial<SavedReport>) =>
+    setSavedReports(r => r.map(rp => (rp.id === id ? { ...rp, ...updates } : rp)))
+
   return (
     <View style={styles.container}>
       {/* Sticky header bar */}
@@ -153,6 +183,15 @@ export default function SellerAnalytics() {
           >
             <ArrowLeft size={20} color={colors.text} />
             <Text style={styles.backText}>{t('seller.analytics.title')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setExportOpen(o => !o)}
+            accessibilityRole="button"
+            accessibilityLabel={t('seller.analytics.export.title')}
+            hitSlop={8}
+            style={[styles.exportBtn, { minWidth: minTouchTarget, minHeight: minTouchTarget }]}
+          >
+            <Download size={18} color={colors.primary} />
           </TouchableOpacity>
         </View>
 
@@ -307,6 +346,18 @@ export default function SellerAnalytics() {
             <SectionContent section={section} data={data} compare={compare} />
           )}
         </Animated.View>
+
+        {exportOpen && (
+          <ExportPanel
+            context={exportContext}
+            savedReports={savedReports}
+            onSaveReport={handleSaveReport}
+            onLoadReport={handleLoadReport}
+            onRenameReport={handleRenameReport}
+            onDeleteReport={handleDeleteReport}
+            onUpdateReport={handleUpdateReport}
+          />
+        )}
 
         <View style={{ height: spacing[8] }} />
       </ScrollView>
@@ -591,6 +642,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[2.5],
   },
   backBtn: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  exportBtn: { alignItems: 'center', justifyContent: 'center', borderRadius: radii.full },
   backText: { fontSize: fontSize.lg[0], fontWeight: '700', color: colors.text },
   tabsScroll: { flexGrow: 0 },
   tabsContent: {
