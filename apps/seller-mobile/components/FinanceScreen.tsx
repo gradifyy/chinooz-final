@@ -155,8 +155,9 @@ export default function FinanceScreen() {
 
   const withdraw = useCallback(() => {
     try {
-      if (!reducedMotion) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+      if (!reducedMotion) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     } catch {}
+    setWithdrawOpen(true)
   }, [reducedMotion])
 
   return (
@@ -300,6 +301,17 @@ export default function FinanceScreen() {
 
         <View style={{ height: spacing[8] }} />
       </ScrollView>
+      <WithdrawSheet
+        open={withdrawOpen}
+        onClose={() => setWithdrawOpen(false)}
+        availableBalance={summary?.availableBalance ?? 0}
+        pendingBalance={summary?.pendingBalance ?? 0}
+        onBalancesUpdate={(avail, pend) => {
+          setSummary(prev =>
+            prev ? { ...prev, availableBalance: avail, pendingBalance: pend } : prev,
+          )
+        }}
+      />
     </View>
   )
 }
