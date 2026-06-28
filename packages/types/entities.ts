@@ -80,6 +80,19 @@ export interface Review {
   helpful: number
 }
 
+export interface SellerReviewResponse {
+  text: string
+  at: string
+}
+
+export interface SellerReview extends Review {
+  productName: string
+  productImage: string
+  response?: SellerReviewResponse
+  flagged?: boolean
+  verifiedPurchase?: boolean
+}
+
 export interface CartItem {
   id: string
   productId: string
@@ -312,6 +325,162 @@ export interface SellerInventoryProduct {
 }
 
 // ---- RS3 map / trip simulator + rider delivery ----
+
+// ---- Seller domain: store, payouts, transactions, staff, notifications, stats ----
+
+export interface SellerStoreProfile {
+  id: string
+  sellerId: string
+  name: string
+  nameNe?: string
+  slug: string
+  logo: string
+  banner: string
+  description: string
+  descriptionNe?: string
+  rating: number
+  reviewCount: number
+  followerCount: number
+  productCount: number
+  joinedAt: string
+  goLiveStatus: 'offline' | 'review' | 'live'
+  kycStatus: 'none' | 'pending' | 'verified' | 'rejected'
+  pan: string
+  email: string
+  phone: string
+  address: string
+  city: string
+  district: string
+  province: string
+  defaultPayoutMethod: 'esewa' | 'khalti' | 'bank'
+}
+
+export type PayoutStatus = 'pending' | 'processing' | 'completed' | 'failed'
+export type PayoutMethod = 'esewa' | 'khalti' | 'bank'
+
+export interface Payout {
+  id: string
+  sellerId: string
+  amount: number
+  currency: 'NPR'
+  status: PayoutStatus
+  method: PayoutMethod
+  reference: string
+  requestedAt: string
+  processedAt?: string
+  estimatedAt?: string
+  fee: number
+  net: number
+}
+
+export type TransactionType = 'sale' | 'refund' | 'payout' | 'fee' | 'adjustment'
+export type TransactionStatus = 'settled' | 'pending' | 'failed'
+
+export interface Transaction {
+  id: string
+  sellerId: string
+  type: TransactionType
+  amount: number
+  currency: 'NPR'
+  status: TransactionStatus
+  description: string
+  reference: string
+  orderId?: string
+  payoutId?: string
+  createdAt: string
+  vatAmount?: number
+  feeAmount?: number
+}
+
+export type StaffRole = 'owner' | 'admin' | 'manager' | 'staff'
+export type StaffStatus = 'active' | 'invited' | 'suspended'
+
+export interface StaffMember {
+  id: string
+  sellerId: string
+  name: string
+  email: string
+  phone: string
+  role: StaffRole
+  status: StaffStatus
+  avatar?: string
+  permissions: string[]
+  lastActiveAt?: string
+  invitedAt: string
+}
+
+export type SellerNotificationType = 'order' | 'review' | 'payout' | 'stock' | 'promotion' | 'system' | 'message'
+
+export interface SellerNotification {
+  id: string
+  sellerId: string
+  type: SellerNotificationType
+  title: string
+  body: string
+  read: boolean
+  createdAt: string
+  link?: string
+  priority: 'low' | 'normal' | 'high'
+}
+
+export type SellerStatsRange = 'today' | '7d' | '30d' | '90d' | 'custom'
+
+export interface SellerStatsKpi {
+  key: string
+  label: string
+  value: number
+  formattedValue: string
+  deltaPct: number
+  trend: 'up' | 'down' | 'flat'
+  hint: string
+}
+
+export interface SellerStatsChartPoint {
+  label: string
+  value: number
+  previous?: number
+}
+
+export interface SellerStats {
+  range: SellerStatsRange
+  kpis: SellerStatsKpi[]
+  chart: SellerStatsChartPoint[]
+  topProducts: { id: string; name: string; revenue: number; units: number }[]
+  recentOrders: { id: string; buyer: string; total: number; status: string; at: string }[]
+}
+
+export type PromotionStatus = 'active' | 'scheduled' | 'expired' | 'draft'
+export type PromotionType = 'percentage' | 'fixed' | 'flash_sale' | 'bogo' | 'free_shipping'
+
+export interface Promotion {
+  id: string
+  name: string
+  type: PromotionType
+  status: PromotionStatus
+  discountValue: number
+  code: string
+  startsAt: string
+  endsAt: string
+  redemptions: number
+  revenue: number
+  budget?: number
+  productsCount: number
+  createdAt: string
+}
+
+export type ExportReportType = 'sales' | 'orders' | 'payouts' | 'products' | 'reviews'
+
+export interface ExportReportResult {
+  id: string
+  type: ExportReportType
+  range: SellerStatsRange
+  status: 'processing' | 'ready' | 'failed'
+  downloadUrl?: string
+  requestedAt: string
+  completedAt?: string
+}
+
+// ---- RS3 map / trip simulator + rider delivery (below) ----
 
 export interface GeoPoint {
   lat: number
