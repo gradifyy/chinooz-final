@@ -456,6 +456,37 @@ export function useStockHistory(variantId?: string) {
   })
 }
 
+export function useLowStockAlerts() {
+  return useQuery({
+    queryKey: ['low-stock-alerts'],
+    queryFn: () => api.getLowStockAlerts(),
+    staleTime: 1000 * 30,
+  })
+}
+
+export function useUpdateThreshold() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ variantId, threshold }: { variantId: string; threshold: number }) =>
+      api.updateThreshold(variantId, threshold),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['seller-inventory'] })
+      queryClient.invalidateQueries({ queryKey: ['low-stock-alerts'] })
+    },
+  })
+}
+
+export function useSetRestockReminder() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ variantId, enabled }: { variantId: string; enabled: boolean }) =>
+      api.setRestockReminder(variantId, enabled),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['seller-inventory'] })
+    },
+  })
+}
+
 export function useSellerReviews(filter: SellerReviewFilter) {
   return useQuery({
     queryKey: ['seller-reviews', filter],
@@ -748,15 +779,6 @@ export function useSellerOrders(sellerId: string | null, status?: SellerOrderSta
     queryFn: () => api.getSellerOrders(sellerId as string, status),
     enabled: !!sellerId,
     staleTime: 1000 * 30,
-  })
-}
-
-export function useSellerOrderById(sellerId: string | null, subOrderId: string | null) {
-  return useQuery({
-    queryKey: ['seller-order', sellerId, subOrderId],
-    queryFn: () => api.getSellerOrderById(sellerId as string, subOrderId as string),
-    enabled: !!sellerId && !!subOrderId,
-    staleTime: 1000 * 60,
   })
 }
 

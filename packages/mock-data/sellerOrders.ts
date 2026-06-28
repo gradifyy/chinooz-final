@@ -45,10 +45,6 @@ function seeded(n: number, seed: number): number {
   return x - Math.floor(x)
 }
 
-function pick<T>(arr: T[], n: number, seed: number): T {
-  return arr[Math.floor(seeded(n, seed) * arr.length)]
-}
-
 interface SeedSpec {
   key: SellerOrderStatusKey
   orderStatus: OrderStatus
@@ -240,15 +236,6 @@ export async function getSellerOrders(
     return all.filter(o => o.actionNeeded)
   }
   return all
-}
-
-export async function getSellerOrderById(
-  sellerId: string,
-  subOrderId: string,
-): Promise<SellerSubOrder | null> {
-  await randomDelay(150, 350)
-  const all = [...fromFixtureOrders(sellerId), ...buildSeededSubOrders(sellerId)]
-  return all.find(o => o.subOrderId === subOrderId || o.orderId === subOrderId) ?? null
 }
 
 export const SELLER_ORDER_STATUS_KEYS: SellerOrderStatusKey[] = [
