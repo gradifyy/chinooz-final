@@ -6,7 +6,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft, Check, AlertCircle, Image as ImageIcon, Tag, DollarSign, FileText, Save, Plus, Trash2, ChevronLeft, ChevronRight, Star, Video } from 'lucide-react'
 import { Container, Screen, SafeImage, useReducedMotion } from '@chinooz/ui-web'
-import { useSellerCategories, useSellerProducts } from '@chinooz/hooks'
+import { useSellerCategories, useSellerProducts, useCategories } from '@chinooz/hooks'
 import { analytics } from '@chinooz/analytics'
 import { useSellerSessionStore } from '@chinooz/state'
 import { formatNPR } from '@chinooz/utils'
@@ -17,7 +17,7 @@ import {
   productPricingSectionSchema,
   productDescriptionSectionSchema,
 } from '@chinooz/validation'
-import type { Product } from '@chinooz/types'
+import type { Product, Category } from '@chinooz/types'
 
 type SectionKey = 'media' | 'details' | 'pricing' | 'description'
 
@@ -25,8 +25,11 @@ interface FormState {
   images: string[]
   videoUrl: string
   name: string
+  brand: string
   sku: string
   categoryId: string
+  tags: string[]
+  condition: 'new' | 'used'
   price: string
   compareAtPrice: string
   stockCount: string
@@ -43,8 +46,11 @@ const EMPTY_FORM: FormState = {
   images: [],
   videoUrl: '',
   name: '',
+  brand: '',
   sku: '',
   categoryId: '',
+  tags: [],
+  condition: 'new',
   price: '',
   compareAtPrice: '',
   stockCount: '',
@@ -84,6 +90,7 @@ export default function ProductFormScreen() {
   const isEdit = !!editId
 
   const { data: sellerCats } = useSellerCategories()
+  const { data: categoryTree } = useCategories()
   const { data: productData } = useSellerProducts({})
 
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
@@ -123,8 +130,11 @@ export default function ProductFormScreen() {
         images: product.image ? [product.image] : [],
         videoUrl: '',
         name: product.name,
+        brand: '',
         sku: product.sku,
         categoryId: product.categoryId,
+        tags: [],
+        condition: 'new' as const,
         price: String(product.price),
         compareAtPrice: product.compareAtPrice ? String(product.compareAtPrice) : '',
         stockCount: String(product.stockCount),
@@ -442,7 +452,7 @@ export default function ProductFormScreen() {
                       <MediaSection form={form} errors={errors} updateField={updateField} t={t} reduced={reduced} />
                     )}
                     {s.key === 'details' && (
-                      <DetailsSection form={form} errors={errors} updateField={updateField} t={t} categories={sellerCats} />
+                      <DetailsSection form={form} errors={errors} updateField={updateField} t={t} categories={sellerCats} categoryTree={categoryTree} reduced={reduced} />
                     )}
                     {s.key === 'pricing' && (
                       <PricingSection form={form} errors={errors} updateField={updateField} t={t} />
@@ -925,9 +935,95 @@ function MediaSection({ form, errors, updateField, t, reduced }: { form: FormSta
   )
 }
 
-function DetailsSection({ form, errors, updateField, t, categories }: { form: FormState; errors: Record<string, string>; updateField: (f: keyof FormState, v: string) => void; t: any; categories?: { id: string; name: string }[] }) {
+function generateSkuFromName(name: string): string {
+  if (!name.trim()) return ''
+  const words = name.trim().toLowerCase().split(/\s+/).slice(0, 3)
+  const prefix = words.map(w => w.replace(/[^a-z0-9]/g, '').slice(0, 4)).join('-').toUpperCase()
+  const suffix = Math.random().toString(36).slice(2, 5).toUpperCase()
+  return `${prefix}-${suffix}`
+}
+
+function findCategoryPath(tree: Category[] | undefined, targetId: string): Category[] {
+  if (!tree) return []
+  for (const cat of tree) {
+    if (cat.id === targetId) return [cat]
+    if (cat.children) {
+      const sub = findCategoryPath(cat.children, targetId)
+      if (sub.length > 0) return [cat, ...sub]
+    }
+  }
+  return []
+}
+
+function flattenCategories(tree: Category[] | undefined): { id: string; name: string; parentId: string | null; level: number }[] {
+  if (!tree) return []
+  const result: { id: string; name: string; parentId: string | null; level: number }[] = []
+  const walk = (cats: Category[], level: number) => {
+    for (const c of cats) {
+      result.push({ id: c.id, name: c.name, parentId: c.parentId, level })
+      if (c.children) walk(c.children, level + 1)
+    }
+  }
+  walk(tree, 0)
+  return result
+}
+
+function DetailsSection({ form, errors, updateField, t, categories, categoryTree, reduced }: { form: FormState; errors: Record<string, string>; updateField: (f: keyof FormState, v: string | string[]) => void; t: any; categories?: { id: string; name: string }[]; categoryTree?: Category[]; reduced: boolean }) {
+  const [catPickerOpen, setCatPickerOpen] = useState(false)
+  const [catSearch, setCatSearch] = useState('')
+  const [tagInput, setTagInput] = useState('')
+  const [skuEdited, setSkuEdited] = useState(false)
+  const catRef = useRef<HTMLDivElement>(null)
+  const flatCats = useMemo(() => flattenCategories(categoryTree), [categoryTree])
+  const selectedPath = useMemo(() => findCategoryPath(categoryTree, form.categoryId), [categoryTree, form.categoryId])
+  const pathString = selectedPath.map(c => c.name).join(' › ')
+
+  const suggestedSku = useMemo(() => generateSkuFromName(form.name), [form.name])
+
+  // Auto-suggest SKU when name changes (if user hasn't manually edited SKU)
+  useEffect(() => {
+    if (!skuEdited && form.name && !form.sku) {
+      updateField('sku', suggestedSku)
+    }
+  }, [suggestedSku, skuEdited, form.name, form.sku, updateField])
+
+  // Close cat picker on outside click
+  useEffect(() => {
+    if (!catPickerOpen) return
+    const onClick = (e: MouseEvent) => {
+      if (catRef.current && !catRef.current.contains(e.target as Node)) setCatPickerOpen(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [catPickerOpen])
+
+  const filteredCats = useMemo(() => {
+    if (!catSearch.trim()) return flatCats
+    const q = catSearch.toLowerCase()
+    return flatCats.filter(c => c.name.toLowerCase().includes(q))
+  }, [flatCats, catSearch])
+
+  const handleAddTag = () => {
+    const tag = tagInput.trim().replace(/,/g, '')
+    if (!tag) return
+    if (form.tags.length >= 10) return
+    if (form.tags.includes(tag)) { setTagInput(''); return }
+    updateField('tags', [...form.tags, tag])
+    setTagInput('')
+  }
+
+  const handleRemoveTag = (tag: string) => {
+    updateField('tags', form.tags.filter(t => t !== tag))
+  }
+
+  const handleSkuAutoSuggest = () => {
+    setSkuEdited(false)
+    updateField('sku', suggestedSku)
+  }
+
   return (
     <div className="flex flex-col gap-4">
+      {/* Product name */}
       <Field label={t('seller.products.formFieldName')} hint={t('seller.products.formFieldNameHint')} error={errors.name} errorId="error-name">
         <input
           type="text"
@@ -940,32 +1036,244 @@ function DetailsSection({ form, errors, updateField, t, categories }: { form: Fo
           className={inputCls(!!errors.name)}
         />
       </Field>
-      <Field label={t('seller.products.formFieldSku')} hint={t('seller.products.formFieldSkuHint')} error={errors.sku} errorId="error-sku">
+
+      {/* Brand */}
+      <Field label={t('seller.products.formFieldBrand')} hint={t('seller.products.formFieldBrandHint')}>
         <input
           type="text"
-          value={form.sku}
-          onChange={e => updateField('sku', e.target.value)}
-          placeholder="e.g. TOP-RED-STD"
-          aria-label={t('seller.products.formFieldSku')}
-          aria-describedby={errors.sku ? 'error-sku' : undefined}
-          aria-invalid={!!errors.sku}
-          className={`${inputCls(!!errors.sku)} font-mono`}
+          value={form.brand}
+          onChange={e => updateField('brand', e.target.value)}
+          placeholder="e.g. Samsung"
+          aria-label={t('seller.products.formFieldBrand')}
+          className={inputCls(false)}
         />
       </Field>
+
+      {/* SKU + auto-suggest */}
+      <Field label={t('seller.products.formFieldSku')} hint={t('seller.products.formFieldSkuHint')} error={errors.sku} errorId="error-sku">
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={form.sku}
+            onChange={e => { setSkuEdited(true); updateField('sku', e.target.value) }}
+            placeholder="e.g. TOP-RED-STD"
+            aria-label={t('seller.products.formFieldSku')}
+            aria-describedby={errors.sku ? 'error-sku' : undefined}
+            aria-invalid={!!errors.sku}
+            className={`${inputCls(!!errors.sku)} font-mono flex-1`}
+          />
+          <button
+            type="button"
+            onClick={handleSkuAutoSuggest}
+            aria-label={t('seller.products.formFieldSkuAutoSuggestBtnAria')}
+            className="h-10 px-3 rounded-md border border-border bg-surface text-[13px] font-medium text-text-muted hover:bg-background hover:text-text transition-colors shrink-0"
+          >
+            {t('seller.products.formFieldSkuAutoSuggestBtn')}
+          </button>
+        </div>
+        {suggestedSku && skuEdited && (
+          <p className="text-[12px] text-text-muted mt-1">
+            <button
+              type="button"
+              onClick={handleSkuAutoSuggest}
+              className="text-primary hover:text-primary-dark underline"
+              aria-label={t('seller.products.formFieldSkuAutoSuggestAria', { sku: suggestedSku })}
+            >
+              {t('seller.products.formFieldSkuAutoSuggest', { sku: suggestedSku })}
+            </button>
+          </p>
+        )}
+      </Field>
+
+      {/* Category picker (searchable popover) */}
       <Field label={t('seller.products.formFieldCategory')} error={errors.categoryId} errorId="error-categoryId">
-        <select
-          value={form.categoryId}
-          onChange={e => updateField('categoryId', e.target.value)}
-          aria-label={t('seller.products.formFieldCategory')}
-          aria-describedby={errors.categoryId ? 'error-categoryId' : undefined}
-          aria-invalid={!!errors.categoryId}
-          className={inputCls(!!errors.categoryId)}
+        <div ref={catRef} className="relative">
+          <button
+            type="button"
+            onClick={() => { setCatPickerOpen(o => !o); setCatSearch('') }}
+            aria-label={t('seller.products.formFieldCategory')}
+            aria-describedby={errors.categoryId ? 'error-categoryId' : undefined}
+            aria-expanded={catPickerOpen}
+            aria-haspopup="listbox"
+            className={`${inputCls(!!errors.categoryId)} text-left flex items-center justify-between`}
+          >
+            <span className={form.categoryId ? 'text-text' : 'text-text-tertiary'}>
+              {pathString || t('seller.products.formFieldCategoryPlaceholder')}
+            </span>
+            <Tag size={15} className="text-text-muted ml-2 shrink-0" aria-hidden="true" />
+          </button>
+          {pathString && (
+            <p
+              className="text-[12px] text-text-muted mt-1"
+              aria-label={t('seller.products.formFieldCategoryPathAria', { path: pathString })}
+            >
+              {t('seller.products.formFieldCategoryPath', { path: pathString })}
+            </p>
+          )}
+          <AnimatePresence>
+            {catPickerOpen && (
+              <motion.div
+                role="listbox"
+                initial={reduced ? false : { opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reduced ? { opacity: 0 } : { opacity: 0, y: -4 }}
+                transition={reduced ? { duration: 0 } : { duration: 0.15 }}
+                className="absolute z-dropdown mt-1 w-full bg-surface border border-border rounded-md shadow-lg max-h-64 overflow-hidden flex flex-col"
+              >
+                <div className="p-2 border-b border-border-light">
+                  <input
+                    type="text"
+                    value={catSearch}
+                    onChange={e => setCatSearch(e.target.value)}
+                    placeholder={t('seller.products.formFieldCategorySearch')}
+                    aria-label={t('seller.products.formFieldCategorySearch')}
+                    className="w-full h-8 px-2 rounded-md border border-border bg-background text-[13px] text-text outline-none focus:border-primary"
+                  />
+                </div>
+                <div className="overflow-y-auto flex-1">
+                  {filteredCats.map(c => {
+                    const isSelected = form.categoryId === c.id
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        role="option"
+                        aria-selected={isSelected}
+                        onClick={() => {
+                          updateField('categoryId', c.id)
+                          setCatPickerOpen(false)
+                        }}
+                        className={`w-full text-left px-3 py-2 text-[14px] flex items-center justify-between transition-colors hover:bg-background ${
+                          isSelected ? 'text-primary font-semibold' : 'text-text'
+                        }`}
+                        style={{ paddingLeft: `${12 + c.level * 16}px` }}
+                      >
+                        <span className="truncate">{c.level > 0 ? '› ' : ''}{c.name}</span>
+                        {isSelected && <Check size={14} className="text-primary" aria-hidden="true" />}
+                      </button>
+                    )
+                  })}
+                  {filteredCats.length === 0 && (
+                    <p className="px-3 py-4 text-[13px] text-text-muted text-center">No categories found</p>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </Field>
+
+      {/* Tags / keywords chip input */}
+      <Field label={t('seller.products.formFieldTags')} hint={t('seller.products.formFieldTagsHint')}>
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface p-2 min-h-[44px] focus-within:border-primary transition-colors">
+          <AnimatePresence mode="popLayout">
+            {form.tags.map(tag => (
+              <motion.span
+                key={tag}
+                initial={reduced ? false : { opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.8 }}
+                transition={reduced ? { duration: 0 } : { type: 'spring', stiffness: 400, damping: 25 }}
+                className="inline-flex items-center gap-1 rounded-full bg-primary text-white text-[13px] font-medium pl-2.5 pr-1 py-0.5"
+              >
+                {tag}
+                <button
+                  type="button"
+                  onClick={() => handleRemoveTag(tag)}
+                  aria-label={t('seller.products.formFieldTagRemoveAria', { tag })}
+                  className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-white/25 hover:bg-white/40 transition-colors"
+                >
+                  <span className="text-[10px]">✕</span>
+                </button>
+              </motion.span>
+            ))}
+          </AnimatePresence>
+          <input
+            type="text"
+            value={tagInput}
+            onChange={e => setTagInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); handleAddTag() }
+              if (e.key === 'Backspace' && !tagInput && form.tags.length > 0) {
+                handleRemoveTag(form.tags[form.tags.length - 1])
+              }
+            }}
+            placeholder={form.tags.length === 0 ? t('seller.products.formFieldTagsPlaceholder') : ''}
+            aria-label={t('seller.products.formFieldTagsAria')}
+            className="flex-1 min-w-[100px] h-7 bg-transparent text-[14px] text-text outline-none placeholder:text-text-tertiary"
+          />
+        </div>
+        {form.tags.length >= 10 && (
+          <p className="text-[12px] text-warning mt-1">Maximum 10 tags</p>
+        )}
+      </Field>
+
+      {/* Condition segmented control */}
+      <Field label={t('seller.products.formFieldCondition')}>
+        <div
+          className="inline-flex bg-surface rounded-full h-10 p-1 border border-border-light"
+          role="radiogroup"
+          aria-label={t('seller.products.formFieldConditionAria')}
         >
-          <option value="">{t('seller.products.formFieldCategoryPlaceholder')}</option>
-          {categories?.map(c => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
+          {(['new', 'used'] as const).map(c => {
+            const active = form.condition === c
+            return (
+              <button
+                key={c}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() => updateField('condition', c)}
+                className={`relative flex items-center justify-center h-8 px-5 rounded-full text-[14px] font-semibold transition-colors ${
+                  active ? 'text-white' : 'text-text-muted hover:text-text'
+                }`}
+              >
+                {active && (
+                  <motion.span
+                    layoutId="condition-pill"
+                    className="absolute inset-0 -z-10 rounded-full bg-primary"
+                    transition={reduced ? { duration: 0 } : { type: 'spring', stiffness: 350, damping: 30, mass: 0.8 }}
+                  />
+                )}
+                {t(`seller.products.formFieldCondition${c.charAt(0).toUpperCase() + c.slice(1)}`)}
+              </button>
+            )
+          })}
+        </div>
+      </Field>
+
+      {/* Status / visibility segmented control */}
+      <Field label={t('seller.products.formFieldStatus')}>
+        <div
+          className="inline-flex bg-surface rounded-full h-10 p-1 border border-border-light"
+          role="radiogroup"
+          aria-label={t('seller.products.formFieldStatusAria')}
+        >
+          {(['draft', 'active'] as const).map(s => {
+            const active = form.status === s
+            return (
+              <button
+                key={s}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() => updateField('status', s)}
+                className={`relative flex items-center justify-center h-8 px-5 rounded-full text-[14px] font-semibold transition-colors ${
+                  active ? 'text-white' : 'text-text-muted hover:text-text'
+                }`}
+              >
+                {active && (
+                  <motion.span
+                    layoutId="status-vis-pill"
+                    className="absolute inset-0 -z-10 rounded-full bg-primary"
+                    transition={reduced ? { duration: 0 } : { type: 'spring', stiffness: 350, damping: 30, mass: 0.8 }}
+                  />
+                )}
+                {t(`seller.products.formFieldStatus${s.charAt(0).toUpperCase() + s.slice(1)}`)}
+              </button>
+            )
+          })}
+        </div>
       </Field>
     </div>
   )

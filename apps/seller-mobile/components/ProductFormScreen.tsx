@@ -21,7 +21,7 @@ import Animated, {
 } from 'react-native-reanimated'
 import { colors, spacing, radii, fontSize, fontFamily } from '@chinooz/theme'
 import { BottomSheet, SafeImage } from '@chinooz/ui'
-import { useSellerCategories, useSellerProducts } from '@chinooz/hooks'
+import { useSellerCategories, useSellerProducts, useCategories } from '@chinooz/hooks'
 import { useSellerSessionStore } from '@chinooz/state'
 import { analytics } from '@chinooz/analytics'
 import { formatNPR } from '@chinooz/utils'
@@ -32,6 +32,7 @@ import {
   productPricingSectionSchema,
   productDescriptionSectionSchema,
 } from '@chinooz/validation'
+import type { Category } from '@chinooz/types'
 import { useA11y } from './A11yProvider'
 
 type SectionKey = 'media' | 'details' | 'pricing' | 'description'
@@ -40,8 +41,11 @@ interface FormState {
   images: string[]
   videoUrl: string
   name: string
+  brand: string
   sku: string
   categoryId: string
+  tags: string[]
+  condition: 'new' | 'used'
   price: string
   compareAtPrice: string
   stockCount: string
@@ -58,8 +62,11 @@ const EMPTY_FORM: FormState = {
   images: [],
   videoUrl: '',
   name: '',
+  brand: '',
   sku: '',
   categoryId: '',
+  tags: [],
+  condition: 'new',
   price: '',
   compareAtPrice: '',
   stockCount: '',
@@ -92,6 +99,7 @@ export default function ProductFormScreen() {
   const isEdit = !!editId
 
   const { data: sellerCats } = useSellerCategories()
+  const { data: categoryTree } = useCategories()
   const { data: productData } = useSellerProducts({})
 
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
@@ -125,8 +133,11 @@ export default function ProductFormScreen() {
         images: product.image ? [product.image] : [],
         videoUrl: '',
         name: product.name,
+        brand: '',
         sku: product.sku,
         categoryId: product.categoryId,
+        tags: [],
+        condition: 'new' as const,
         price: String(product.price),
         compareAtPrice: product.compareAtPrice ? String(product.compareAtPrice) : '',
         stockCount: String(product.stockCount),
@@ -364,7 +375,7 @@ export default function ProductFormScreen() {
               reduced={reducedMotion}
             >
               {s.key === 'media' && <MediaSection form={form} errors={errors} updateField={updateField} t={t} reduced={reducedMotion} />}
-              {s.key === 'details' && <DetailsSection form={form} errors={errors} updateField={updateField} t={t} categories={sellerCats} />}
+              {s.key === 'details' && <DetailsSection form={form} errors={errors} updateField={updateField} t={t} categories={sellerCats} categoryTree={categoryTree} reduced={reducedMotion} />}
               {s.key === 'pricing' && <PricingSection form={form} errors={errors} updateField={updateField} t={t} />}
               {s.key === 'description' && <DescriptionSection form={form} errors={errors} updateField={updateField} t={t} />}
             </CollapsibleSection>
@@ -755,9 +766,83 @@ function MediaSection({ form, errors, updateField, t, reduced }: { form: FormSta
   )
 }
 
-function DetailsSection({ form, errors, updateField, t, categories }: { form: FormState; errors: Record<string, string>; updateField: (f: keyof FormState, v: string) => void; t: any; categories?: { id: string; name: string }[] }) {
+function generateSkuFromName(name: string): string {
+  if (!name.trim()) return ''
+  const words = name.trim().toLowerCase().split(/\s+/).slice(0, 3)
+  const prefix = words.map(w => w.replace(/[^a-z0-9]/g, '').slice(0, 4)).join('-').toUpperCase()
+  const suffix = Math.random().toString(36).slice(2, 5).toUpperCase()
+  return `${prefix}-${suffix}`
+}
+
+function findCategoryPath(tree: Category[] | undefined, targetId: string): Category[] {
+  if (!tree) return []
+  for (const cat of tree) {
+    if (cat.id === targetId) return [cat]
+    if (cat.children) {
+      const sub = findCategoryPath(cat.children, targetId)
+      if (sub.length > 0) return [cat, ...sub]
+    }
+  }
+  return []
+}
+
+function flattenCategories(tree: Category[] | undefined): { id: string; name: string; parentId: string | null; level: number }[] {
+  if (!tree) return []
+  const result: { id: string; name: string; parentId: string | null; level: number }[] = []
+  const walk = (cats: Category[], level: number) => {
+    for (const c of cats) {
+      result.push({ id: c.id, name: c.name, parentId: c.parentId, level })
+      if (c.children) walk(c.children, level + 1)
+    }
+  }
+  walk(tree, 0)
+  return result
+}
+
+function DetailsSection({ form, errors, updateField, t, categories, categoryTree, reduced }: { form: FormState; errors: Record<string, string>; updateField: (f: keyof FormState, v: string | string[]) => void; t: any; categories?: { id: string; name: string }[]; categoryTree?: Category[]; reduced: boolean }) {
+  const [catPickerOpen, setCatPickerOpen] = useState(false)
+  const [catSearch, setCatSearch] = useState('')
+  const [tagInput, setTagInput] = useState('')
+  const [skuEdited, setSkuEdited] = useState(false)
+
+  const flatCats = useMemo(() => flattenCategories(categoryTree), [categoryTree])
+  const selectedPath = useMemo(() => findCategoryPath(categoryTree, form.categoryId), [categoryTree, form.categoryId])
+  const pathString = selectedPath.map(c => c.name).join(' › ')
+  const suggestedSku = useMemo(() => generateSkuFromName(form.name), [form.name])
+
+  useEffect(() => {
+    if (!skuEdited && form.name && !form.sku) {
+      updateField('sku', suggestedSku)
+    }
+  }, [suggestedSku, skuEdited, form.name, form.sku, updateField])
+
+  const filteredCats = useMemo(() => {
+    if (!catSearch.trim()) return flatCats
+    const q = catSearch.toLowerCase()
+    return flatCats.filter(c => c.name.toLowerCase().includes(q))
+  }, [flatCats, catSearch])
+
+  const handleAddTag = () => {
+    const tag = tagInput.trim().replace(/,/g, '')
+    if (!tag) return
+    if (form.tags.length >= 10) return
+    if (form.tags.includes(tag)) { setTagInput(''); return }
+    updateField('tags', [...form.tags, tag])
+    setTagInput('')
+  }
+
+  const handleRemoveTag = (tag: string) => {
+    updateField('tags', form.tags.filter(t => t !== tag))
+  }
+
+  const handleSkuAutoSuggest = () => {
+    setSkuEdited(false)
+    updateField('sku', suggestedSku)
+  }
+
   return (
     <View style={styles.sectionContent}>
+      {/* Product name */}
       <Field label={t('seller.products.formFieldName')} hint={t('seller.products.formFieldNameHint')} error={errors.name}>
         <TextInput
           style={styles.input}
@@ -768,35 +853,176 @@ function DetailsSection({ form, errors, updateField, t, categories }: { form: Fo
           accessibilityLabel={t('seller.products.formFieldName')}
         />
       </Field>
-      <Field label={t('seller.products.formFieldSku')} hint={t('seller.products.formFieldSkuHint')} error={errors.sku}>
+
+      {/* Brand */}
+      <Field label={t('seller.products.formFieldBrand')} hint={t('seller.products.formFieldBrandHint')}>
         <TextInput
-          style={[styles.input, { fontFamily: 'monospace' }]}
-          value={form.sku}
-          onChangeText={v => updateField('sku', v)}
-          placeholder="e.g. TOP-RED-STD"
+          style={styles.input}
+          value={form.brand}
+          onChangeText={v => updateField('brand', v)}
+          placeholder="e.g. Samsung"
           placeholderTextColor={colors.textTertiary}
-          accessibilityLabel={t('seller.products.formFieldSku')}
-          autoCapitalize="none"
+          accessibilityLabel={t('seller.products.formFieldBrand')}
         />
       </Field>
+
+      {/* SKU + auto-suggest */}
+      <Field label={t('seller.products.formFieldSku')} hint={t('seller.products.formFieldSkuHint')} error={errors.sku}>
+        <View style={styles.skuRow}>
+          <TextInput
+            style={[styles.input, { flex: 1, fontFamily: 'monospace' }]}
+            value={form.sku}
+            onChangeText={v => { setSkuEdited(true); updateField('sku', v) }}
+            placeholder="e.g. TOP-RED-STD"
+            placeholderTextColor={colors.textTertiary}
+            accessibilityLabel={t('seller.products.formFieldSku')}
+            autoCapitalize="none"
+          />
+          <TouchableOpacity
+            onPress={handleSkuAutoSuggest}
+            accessibilityRole="button"
+            accessibilityLabel={t('seller.products.formFieldSkuAutoSuggestBtnAria')}
+            style={styles.skuAutoBtn}
+          >
+            <Text style={styles.skuAutoBtnText} numberOfLines={1}>{t('seller.products.formFieldSkuAutoSuggestBtn')}</Text>
+          </TouchableOpacity>
+        </View>
+        {suggestedSku && skuEdited && (
+          <TouchableOpacity onPress={handleSkuAutoSuggest} style={styles.skuSuggestLink}>
+            <Text style={styles.skuSuggestText}>
+              {t('seller.products.formFieldSkuAutoSuggest', { sku: suggestedSku })}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </Field>
+
+      {/* Category picker (BottomSheet) */}
       <Field label={t('seller.products.formFieldCategory')} error={errors.categoryId}>
-        <View style={styles.categoryList}>
-          {(categories ?? []).map(c => {
-            const selected = form.categoryId === c.id
+        <TouchableOpacity
+          onPress={() => { setCatPickerOpen(true); setCatSearch('') }}
+          accessibilityRole="button"
+          accessibilityLabel={pathString ? t('seller.products.formFieldCategoryPathAria', { path: pathString }) : t('seller.products.formFieldCategory')}
+          style={styles.catPickerBtn}
+        >
+          <Text style={form.categoryId ? styles.catPickerText : styles.catPickerPlaceholder} numberOfLines={1}>
+            {pathString || t('seller.products.formFieldCategoryPlaceholder')}
+          </Text>
+          <Text style={styles.catPickerIcon}>›</Text>
+        </TouchableOpacity>
+      </Field>
+
+      {/* Tags chip input */}
+      <Field label={t('seller.products.formFieldTags')} hint={t('seller.products.formFieldTagsHint')}>
+        <View style={styles.tagInputWrap}>
+          {form.tags.map(tag => (
+            <View key={tag} style={styles.tagChip}>
+              <Text style={styles.tagChipText}>{tag}</Text>
+              <TouchableOpacity
+                onPress={() => handleRemoveTag(tag)}
+                accessibilityRole="button"
+                accessibilityLabel={t('seller.products.formFieldTagRemoveAria', { tag })}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              >
+                <Text style={styles.tagChipRemove}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+          <TextInput
+            style={styles.tagInput}
+            value={tagInput}
+            onChangeText={setTagInput}
+            onSubmitEditing={handleAddTag}
+            placeholder={form.tags.length === 0 ? t('seller.products.formFieldTagsPlaceholder') : ''}
+            placeholderTextColor={colors.textTertiary}
+            accessibilityLabel={t('seller.products.formFieldTagsAria')}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </View>
+        {form.tags.length >= 10 && (
+          <Text style={styles.tagMaxWarn}>Maximum 10 tags</Text>
+        )}
+      </Field>
+
+      {/* Condition segmented control */}
+      <Field label={t('seller.products.formFieldCondition')}>
+        <View style={styles.segmentWrap} accessibilityRole="radiogroup" accessibilityLabel={t('seller.products.formFieldConditionAria')}>
+          {(['new', 'used'] as const).map(c => {
+            const active = form.condition === c
             return (
               <TouchableOpacity
-                key={c.id}
-                onPress={() => updateField('categoryId', c.id)}
+                key={c}
+                onPress={() => updateField('condition', c)}
                 accessibilityRole="radio"
-                accessibilityState={{ selected }}
-                style={[styles.categoryChip, selected && styles.categoryChipActive]}
+                accessibilityState={{ selected: active }}
+                style={[styles.segmentBtn, active && styles.segmentBtnActive]}
               >
-                <Text style={[styles.categoryChipText, selected && styles.categoryChipTextActive]}>{c.name}</Text>
+                <Text style={[styles.segmentBtnText, active && styles.segmentBtnTextActive]}>
+                  {t(`seller.products.formFieldCondition${c.charAt(0).toUpperCase() + c.slice(1)}`)}
+                </Text>
               </TouchableOpacity>
             )
           })}
         </View>
       </Field>
+
+      {/* Status segmented control */}
+      <Field label={t('seller.products.formFieldStatus')}>
+        <View style={styles.segmentWrap} accessibilityRole="radiogroup" accessibilityLabel={t('seller.products.formFieldStatusAria')}>
+          {(['draft', 'active'] as const).map(s => {
+            const active = form.status === s
+            return (
+              <TouchableOpacity
+                key={s}
+                onPress={() => updateField('status', s)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: active }}
+                style={[styles.segmentBtn, active && styles.segmentBtnActive]}
+              >
+                <Text style={[styles.segmentBtnText, active && styles.segmentBtnTextActive]}>
+                  {t(`seller.products.formFieldStatus${s.charAt(0).toUpperCase() + s.slice(1)}`)}
+                </Text>
+              </TouchableOpacity>
+            )
+          })}
+        </View>
+      </Field>
+
+      {/* Category picker BottomSheet */}
+      <BottomSheet visible={catPickerOpen} onClose={() => setCatPickerOpen(false)} title={t('seller.products.formFieldCategory')}>
+        <View style={styles.catSearchWrap}>
+          <TextInput
+            style={styles.catSearchInput}
+            value={catSearch}
+            onChangeText={setCatSearch}
+            placeholder={t('seller.products.formFieldCategorySearch')}
+            placeholderTextColor={colors.textTertiary}
+            accessibilityLabel={t('seller.products.formFieldCategorySearch')}
+          />
+        </View>
+        <ScrollView style={styles.catList} keyboardShouldPersistTaps="handled">
+          {filteredCats.map(c => {
+            const isSelected = form.categoryId === c.id
+            return (
+              <TouchableOpacity
+                key={c.id}
+                onPress={() => { updateField('categoryId', c.id); setCatPickerOpen(false) }}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: isSelected }}
+                style={[styles.catRow, isSelected && styles.catRowActive, { paddingLeft: 16 + c.level * 16 }]}
+              >
+                <Text style={[styles.catRowText, isSelected && styles.catRowTextActive]}>
+                  {c.level > 0 ? '›  ' : ''}{c.name}
+                </Text>
+                {isSelected && <Text style={styles.catRowCheck}>✓</Text>}
+              </TouchableOpacity>
+            )
+          })}
+          {filteredCats.length === 0 && (
+            <Text style={styles.catEmpty}>No categories found</Text>
+          )}
+        </ScrollView>
+      </BottomSheet>
     </View>
   )
 }
@@ -1139,6 +1365,110 @@ const styles = StyleSheet.create({
   categoryChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   categoryChipText: { fontSize: 13, fontWeight: '500', color: colors.text },
   categoryChipTextActive: { color: colors.white },
+
+  skuRow: { flexDirection: 'row', gap: spacing[2], alignItems: 'center' },
+  skuAutoBtn: {
+    height: 44,
+    paddingHorizontal: spacing[3],
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  skuAutoBtnText: { fontSize: 12, fontWeight: '600', color: colors.text },
+  skuSuggestLink: { marginTop: spacing[1], paddingVertical: 2 },
+  skuSuggestText: { fontSize: 12, color: colors.primary, textDecorationLine: 'underline' },
+
+  catPickerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 44,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing[3],
+    backgroundColor: colors.surface,
+  },
+  catPickerText: { fontSize: 15, color: colors.text, flex: 1 },
+  catPickerPlaceholder: { fontSize: 15, color: colors.textTertiary, flex: 1 },
+  catPickerIcon: { fontSize: 20, color: colors.textTertiary },
+
+  tagInputWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing[1.5],
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[2],
+    minHeight: 44,
+    backgroundColor: colors.surface,
+  },
+  tagChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
+    backgroundColor: colors.primary,
+    borderRadius: radii.full,
+    paddingLeft: spacing[2.5],
+    paddingRight: spacing[1],
+    paddingVertical: spacing[1],
+  },
+  tagChipText: { fontSize: 13, fontWeight: '500', color: colors.white },
+  tagChipRemove: { fontSize: 11, color: colors.white, opacity: 0.85 },
+  tagInput: { flex: 1, minWidth: 80, fontSize: 14, color: colors.text, padding: 0 },
+  tagMaxWarn: { fontSize: 12, color: colors.warning, marginTop: spacing[1] },
+
+  segmentWrap: {
+    flexDirection: 'row',
+    backgroundColor: colors.surface,
+    borderRadius: radii.full,
+    padding: spacing[1],
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  segmentBtn: {
+    flex: 1,
+    height: 36,
+    borderRadius: radii.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  segmentBtnActive: { backgroundColor: colors.primary },
+  segmentBtnText: { fontSize: 14, fontWeight: '600', color: colors.textMuted },
+  segmentBtnTextActive: { color: colors.white },
+
+  catSearchWrap: { paddingHorizontal: spacing[4], marginBottom: spacing[2] },
+  catSearchInput: {
+    height: 40,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing[3],
+    fontSize: 14,
+    color: colors.text,
+    backgroundColor: colors.surface,
+  },
+  catList: { maxHeight: 300 },
+  catRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing[3],
+    paddingRight: spacing[4],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  catRowActive: { backgroundColor: colors.primary50 },
+  catRowText: { fontSize: 15, color: colors.text, flex: 1 },
+  catRowTextActive: { color: colors.primary, fontWeight: '600' },
+  catRowCheck: { color: colors.primary, fontSize: 16, fontWeight: '700' },
+  catEmpty: { fontSize: 14, color: colors.textMuted, textAlign: 'center', paddingVertical: spacing[6] },
 
   priceRow: { flexDirection: 'row', gap: spacing[3] },
   pricePreview: {
