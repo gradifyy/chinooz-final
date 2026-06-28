@@ -3,13 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
+  SectionList,
   TouchableOpacity,
   Pressable,
   TextInput,
   AccessibilityInfo,
   Platform,
-  LayoutAnimation,
   UIManager,
 } from 'react-native'
 import { useRouter, useLocalSearchParams } from 'expo-router'
@@ -19,64 +18,57 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  withTiming,
-  Easing,
 } from 'react-native-reanimated'
 import {
   Search,
   ChevronRight,
   ChevronLeft,
-  ChevronDown,
   X,
   Headset,
   LifeBuoy,
   Shield,
   Wallet,
-  User,
-  ThumbsUp,
-  ThumbsDown,
+  Package,
+  Banknote,
+  UserCog,
+  Rocket,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react-native'
-import { colors, spacing, radii, fontSize, fontFamily, easing } from '@chinooz/theme'
+import { colors, spacing, radii, fontSize, fontFamily } from '@chinooz/theme'
 import { EmptyState, Skeleton } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
+import {
+  RIDER_HELP_CATEGORIES,
+  RIDER_HELP_ARTICLES,
+  getHelpArticlesByCategory,
+  getRiderHelpContext,
+  getRelevantHelpArticles,
+  type RiderHelpArticle,
+  type RiderHelpCategory,
+} from '@chinooz/mock-data'
+import { useActiveDeliveryStore } from '@chinooz/state'
 import { useA11y } from '../../components/A11yProvider'
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true)
 }
 
-type Category = 'general' | 'payments' | 'safety' | 'account'
-
-type Article = {
-  id: string
-  category: Category
+const CATEGORY_ICONS: Record<RiderHelpCategory, LucideIcon> = {
+  gettingStarted: Rocket,
+  deliveries: Package,
+  earnings: Wallet,
+  cod: Banknote,
+  account: UserCog,
+  safety: Shield,
 }
 
 // i18n keys are derived from the article id to keep the data table clean.
-const FAQ_PREFIX = 'rider.support.faqArticles'
-const faqKey = (id: string, suffix: 'Q' | 'A') => `${FAQ_PREFIX}.${id}${suffix}`
+const HELP_PREFIX = 'rider.support.help.article'
+const articleTitleKey = (id: string) => `${HELP_PREFIX}.${id}.title`
+const articleBodyKey = (id: string) => `${HELP_PREFIX}.${id}.body`
 
-const ARTICLES: Article[] = [
-  { id: 'gen1', category: 'general' },
-  { id: 'gen2', category: 'general' },
-  { id: 'gen3', category: 'general' },
-  { id: 'pay1', category: 'payments' },
-  { id: 'pay2', category: 'payments' },
-  { id: 'pay3', category: 'payments' },
-  { id: 'safe1', category: 'safety' },
-  { id: 'safe2', category: 'safety' },
-  { id: 'safe3', category: 'safety' },
-  { id: 'acc1', category: 'account' },
-  { id: 'acc2', category: 'account' },
-]
-
-const CATEGORY_META: { key: Category; labelKey: string; icon: LucideIcon }[] = [
-  { key: 'general', labelKey: 'rider.support.faq.categoryGeneral', icon: LifeBuoy },
-  { key: 'payments', labelKey: 'rider.support.faq.categoryPayments', icon: Wallet },
-  { key: 'safety', labelKey: 'rider.support.faq.categorySafety', icon: Shield },
-  { key: 'account', labelKey: 'rider.support.faq.categoryAccount', icon: User },
-]
+type ArticleItem = { kind: 'article'; article: RiderHelpArticle }
 
 export default function HelpCenterScreen() {
   const { t } = useTranslation()
@@ -85,46 +77,104 @@ export default function HelpCenterScreen() {
   const { reducedMotion } = useA11y()
   const params = useLocalSearchParams<{ q?: string }>()
 
+  const activeDelivery = useActiveDeliveryStore(s => s.activeDelivery)
+  const hasActiveTrip =
+    !!activeDelivery &&
+    activeDelivery.status !== 'delivered' &&
+    activeDelivery.status !== 'cancelled' &&
+    activeDelivery.status !== 'failed'
+  const hasCod = hasActiveTrip && !!activeDelivery.isCod
+
   const [search, setSearch] = useState(typeof params.q === 'string' ? params.q : '')
   const [debounced, setDebounced] = useState(search)
-  const [activeCategory, setActiveCategory] = useState<Category | 'all'>('all')
-  const [expanded, setExpanded] = useState<string | null>(null)
+  const [activeCategory, setActiveCategory] = useState<RiderHelpCategory | 'all'>('all')
   const [isLoading, setIsLoading] = useState(true)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    analytics.screen({ name: 'rider-support-faq' })
-    // Simulate a brief content fetch so skeletons + aria-busy are exercised.
-    const id = setTimeout(() => setIsLoading(false), 500)
+    analytics.screen({ name: 'rider-help-center' })
+    const id = setTimeout(() => setIsLoading(false), 450)
     return () => clearTimeout(id)
   }, [])
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => setDebounced(search), 200)
+    debounceRef.current = setTimeout(() => setDebounced(search), 180)
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
   }, [search])
 
-  const filtered = useMemo(() => {
+  // Context-relevant articles, surfaced first when not searching.
+  const relevantArticles = useMemo(() => {
+    if (debounced.trim() || activeCategory !== 'all') return []
+    const ctx = getRiderHelpContext({ hasActiveDelivery: hasActiveTrip, hasCod })
+    return getRelevantHelpArticles(ctx)
+  }, [debounced, activeCategory, hasActiveTrip, hasCod])
+
+  const isSearching = debounced.trim().length > 0
+
+  // Filter articles by search query + active category.
+  const filteredArticles = useMemo(() => {
     const q = debounced.trim().toLowerCase()
-    return ARTICLES.filter((a) => {
+    return RIDER_HELP_ARTICLES.filter((a) => {
       if (activeCategory !== 'all' && a.category !== activeCategory) return false
       if (!q) return true
       return (
-        t(faqKey(a.id, 'Q')).toLowerCase().includes(q) ||
-        t(faqKey(a.id, 'A')).toLowerCase().includes(q)
+        t(articleTitleKey(a.id)).toLowerCase().includes(q) ||
+        t(articleBodyKey(a.id)).toLowerCase().includes(q)
       )
     })
   }, [debounced, activeCategory, t])
 
-  const toggleExpand = (id: string) => {
-    if (!reducedMotion) {
-      LayoutAnimation.configureNext(LayoutAnimation.create(200, 'easeInEaseOut', 'opacity'))
+  // Build sectioned list for browsing (no search): relevant first, then categories.
+  const sections = useMemo(() => {
+    if (isSearching) {
+      return [{
+        id: 'results',
+        title: t('rider.support.help.resultsAria', { count: filteredArticles.length }),
+        data: filteredArticles.map(a => ({ kind: 'article' as const, article: a })),
+      }]
     }
-    setExpanded((prev) => (prev === id ? null : id))
+    const list: { id: string; title: string; data: ArticleItem[] }[] = []
+    if (relevantArticles.length > 0 && activeCategory === 'all') {
+      list.push({
+        id: 'relevant',
+        title: t('rider.support.help.relevantTitle'),
+        data: relevantArticles.map(a => ({ kind: 'article' as const, article: a })),
+      })
+    }
+    const cats = activeCategory === 'all'
+      ? RIDER_HELP_CATEGORIES
+      : RIDER_HELP_CATEGORIES.filter(c => c.key === activeCategory)
+    for (const cat of cats) {
+      const arts = getHelpArticlesByCategory(cat.key)
+      if (arts.length === 0) continue
+      list.push({
+        id: cat.key,
+        title: t(cat.labelKey),
+        data: arts.map(a => ({ kind: 'article' as const, article: a })),
+      })
+    }
+    return list
+  }, [isSearching, filteredArticles, relevantArticles, activeCategory, t])
+
+  const openArticle = (article: RiderHelpArticle) => {
+    analytics.track({ event: 'rider_help_article_opened', screen: 'rider-help-center', properties: { articleId: article.id, category: article.category } })
+    router.push({ pathname: '/support/faq/[article]', params: { article: article.id } })
   }
 
-  const hasResults = filtered.length > 0
+  const hasResults = filteredArticles.length > 0
+
+  // Announce result count when a search completes.
+  useEffect(() => {
+    if (!isSearching || isLoading) return
+    const msg = hasResults
+      ? t('rider.support.help.resultsAria', { count: filteredArticles.length })
+      : t('rider.support.help.resultsNoneAria')
+    const id = setTimeout(() => {
+      try { AccessibilityInfo.announceForAccessibility(msg) } catch {}
+    }, 300)
+    return () => clearTimeout(id)
+  }, [isSearching, hasResults, filteredArticles.length, isLoading, t])
 
   return (
     <View style={styles.container}>
@@ -138,118 +188,136 @@ export default function HelpCenterScreen() {
         >
           <ChevronLeft size={22} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.topBarTitle} numberOfLines={1}>{t('rider.support.faq.title')}</Text>
+        <Text style={styles.topBarTitle} numberOfLines={1}>{t('rider.support.help.title')}</Text>
         <View style={styles.topBarBtn} />
       </View>
 
-      <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + spacing[6] }]}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        <Text style={styles.subtitle}>{t('rider.support.faq.subtitle')}</Text>
+      <View style={styles.searchWrap}>
+        <Search size={18} color={colors.textTertiary} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder={t('rider.support.help.searchPlaceholder')}
+          placeholderTextColor={colors.textTertiary}
+          value={search}
+          onChangeText={setSearch}
+          accessibilityLabel={t('rider.support.help.searchAria')}
+          inputMode="search"
+          returnKeyType="search"
+        />
+        {search.length > 0 && (
+          <Pressable
+            onPress={() => setSearch('')}
+            accessibilityRole="button"
+            accessibilityLabel={t('rider.support.help.searchAria')}
+            hitSlop={8}
+            style={styles.searchClear}
+          >
+            <X size={16} color={colors.textTertiary} />
+          </Pressable>
+        )}
+      </View>
 
-        <View style={styles.searchWrap}>
-          <Search size={18} color={colors.textTertiary} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder={t('rider.support.faq.searchPlaceholder')}
-            placeholderTextColor={colors.textTertiary}
-            value={search}
-            onChangeText={setSearch}
-            accessibilityLabel={t('rider.support.faq.searchAria')}
-            inputMode="search"
-            returnKeyType="search"
-          />
-          {search.length > 0 && (
-            <Pressable
-              onPress={() => setSearch('')}
-              accessibilityRole="button"
-              accessibilityLabel={t('rider.support.faq.searchAria')}
-              hitSlop={8}
-              style={styles.searchClear}
-            >
-              <X size={16} color={colors.textTertiary} />
-            </Pressable>
-          )}
-        </View>
-
-        <View style={styles.chipsRow}>
+      <View style={styles.chipsRow}>
+        <CategoryChip
+          label={t('rider.support.help.catAll')}
+          icon={LifeBuoy}
+          active={activeCategory === 'all'}
+          onPress={() => setActiveCategory('all')}
+          ariaLabel={t('rider.support.help.catAll')}
+          reducedMotion={reducedMotion}
+        />
+        {RIDER_HELP_CATEGORIES.map((c) => (
           <CategoryChip
-            label={t('rider.support.faq.categoryGeneral')}
-            icon={LifeBuoy}
-            active={activeCategory === 'all'}
-            onPress={() => setActiveCategory('all')}
-            ariaLabel={t('rider.support.faq.categoryGeneral')}
+            key={c.key}
+            label={t(c.labelKey)}
+            icon={CATEGORY_ICONS[c.key]}
+            active={activeCategory === c.key}
+            onPress={() => setActiveCategory(c.key)}
+            ariaLabel={t(c.labelKey)}
             reducedMotion={reducedMotion}
           />
-          {CATEGORY_META.map((c) => (
-            <CategoryChip
-              key={c.key}
-              label={t(c.labelKey)}
-              icon={c.icon}
-              active={activeCategory === c.key}
-              onPress={() => setActiveCategory(c.key)}
-              ariaLabel={t(c.labelKey)}
-              reducedMotion={reducedMotion}
-            />
+        ))}
+      </View>
+
+      {isLoading ? (
+        <View
+          style={styles.skeletonWrap}
+          accessibilityRole="none"
+          accessibilityState={{ busy: true }}
+          accessibilityLabel={t('rider.support.help.skeletonAria')}
+        >
+          {Array.from({ length: 6 }).map((_, i) => (
+            <View key={i} style={styles.skeletonRow}>
+              <View style={styles.skeletonIcon}>
+                <Skeleton width={20} height={20} circle />
+              </View>
+              <View style={{ flex: 1, gap: spacing[1.5] }}>
+                <Skeleton width="75%" height={14} />
+                <Skeleton width="50%" height={12} />
+              </View>
+            </View>
           ))}
         </View>
+      ) : isSearching && !hasResults ? (
+        <EmptyState
+          icon={<Text style={{ fontSize: 44 }}>{'\u{1F50D}'}</Text>}
+          title={t('rider.support.help.emptyTitle')}
+          subtitle={t('rider.support.help.emptySubtitle')}
+          action={{
+            label: t('rider.support.help.contactCta'),
+            onPress: () => router.push('/support/contact'),
+          }}
+        />
+      ) : (
+        <SectionList
+          sections={sections}
+          keyExtractor={(item, index) => {
+            const sec = sections.find(s => s.data.includes(item))
+            return `${sec?.id ?? ''}-${index}`
+          }}
+          contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + spacing[10] }]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          stickySectionHeadersEnabled={false}
+          renderSectionHeader={({ section }) => (
+            <View style={styles.sectionHeader}>
+              {section.id === 'relevant' && <Sparkles size={15} color={colors.primary} />}
+              <Text accessibilityRole="header" style={styles.sectionTitle}>
+                {section.title}
+              </Text>
+              {section.id === 'relevant' && (
+                <Text style={styles.sectionHint}>{t('rider.support.help.relevantSubtitle')}</Text>
+              )}
+            </View>
+          )}
+          renderItem={({ item, section }) => (
+            <ArticleRow
+              item={item}
+              inRelevant={section.id === 'relevant'}
+              reducedMotion={reducedMotion}
+              t={t}
+              onPress={() => openArticle(item.article)}
+            />
+          )}
+          ItemSeparatorComponent={() => <View style={styles.rowSeparator} />}
+          renderSectionFooter={() => <View style={styles.sectionFooter} />}
+        />
+      )}
 
-        {isLoading ? (
-          <View
-            style={styles.skeletonWrap}
-            accessibilityRole="none"
-            accessibilityState={{ busy: true }}
-            accessibilityLabel={t('rider.support.faq.skeletonAria')}
-          >
-            {Array.from({ length: 5 }).map((_, i) => (
-              <View key={i} style={styles.skeletonRow}>
-                <View style={{ flex: 1, gap: spacing[2] }}>
-                  <Skeleton width="80%" height={16} />
-                  <Skeleton width="55%" height={12} />
-                </View>
-              </View>
-            ))}
-          </View>
-        ) : hasResults ? (
-          <View style={styles.listCard}>
-            {filtered.map((article, i) => (
-              <ArticleRow
-                key={article.id}
-                article={article}
-                expanded={expanded === article.id}
-                onToggle={() => toggleExpand(article.id)}
-                reducedMotion={reducedMotion}
-                t={t}
-                divider={i < filtered.length - 1}
-              />
-            ))}
-          </View>
-        ) : (
-          <EmptyState
-            icon={<Text style={{ fontSize: 44 }}>{'\u{1F50D}'}</Text>}
-            title={t('rider.support.faq.emptyTitle')}
-            subtitle={t('rider.support.faq.emptySubtitle')}
-            action={{
-              label: t('rider.support.faq.contactCta'),
-              onPress: () => router.push('/support/contact'),
-            }}
-          />
-        )}
-
+      {/* Escalate CTA — always one tap */}
+      <View style={[styles.escalateBar, { paddingBottom: insets.bottom + spacing[3] }]}>
         <TouchableOpacity
-          style={styles.contactCta}
+          style={styles.escalateBtn}
           onPress={() => router.push('/support/contact')}
           accessibilityRole="button"
-          accessibilityLabel={t('rider.support.faq.contactCtaAria')}
+          accessibilityLabel={t('rider.support.help.contactCtaAria')}
           activeOpacity={0.85}
         >
           <Headset size={20} color={colors.primary} />
-          <Text style={styles.contactCtaText}>{t('rider.support.faq.contactCta')}</Text>
+          <Text style={styles.escalateText}>{t('rider.support.help.contactCta')}</Text>
           <ChevronRight size={18} color={colors.textTertiary} />
         </TouchableOpacity>
-      </ScrollView>
+      </View>
     </View>
   )
 }
@@ -294,116 +362,49 @@ function CategoryChip({
 }
 
 function ArticleRow({
-  article,
-  expanded,
-  onToggle,
+  item,
+  inRelevant,
   reducedMotion,
   t,
-  divider,
+  onPress,
 }: {
-  article: Article
-  expanded: boolean
-  onToggle: () => void
+  item: ArticleItem
+  inRelevant: boolean
   reducedMotion: boolean
   t: (k: string, o?: Record<string, unknown>) => string
-  divider: boolean
+  onPress: () => void
 }) {
-  const rotate = useSharedValue(0)
+  const scale = useSharedValue(1)
+  const handlePressIn = () => { if (!reducedMotion) scale.value = withSpring(0.98, { damping: 20, stiffness: 400 }) }
+  const handlePressOut = () => { if (!reducedMotion) scale.value = withSpring(1, { damping: 20, stiffness: 400 }) }
+  const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }))
 
-  useEffect(() => {
-    rotate.value = expanded
-      ? withTiming(1, { duration: reducedMotion ? 0 : 200, easing: Easing.bezier(...easing.easeOut) })
-      : withTiming(0, { duration: reducedMotion ? 0 : 200, easing: Easing.bezier(...easing.easeOut) })
-  }, [expanded, reducedMotion])
-
-  const chevronStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rotate.value * 180}deg` }],
-  }))
-
-  const question = t(faqKey(article.id, 'Q'))
-  const answer = t(faqKey(article.id, 'A'))
-  const status = expanded ? t('rider.support.faq.articleCloseAria') : t('rider.support.faq.articleOpenAria')
+  const Icon = CATEGORY_ICONS[item.article.category]
+  const title = t(articleTitleKey(item.article.id))
+  const body = t(articleBodyKey(item.article.id))
 
   return (
-    <View style={[styles.articleRow, divider && styles.articleRowBorder]}>
+    <Animated.View style={animStyle}>
       <TouchableOpacity
-        style={styles.articleHead}
-        onPress={onToggle}
+        style={[styles.articleCard, inRelevant && styles.articleCardRelevant]}
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
         accessibilityRole="button"
-        accessibilityLabel={t('rider.support.faq.articleAria', { title: question, status })}
-        accessibilityState={{ expanded }}
+        accessibilityLabel={t('rider.support.help.articleAria', { title })}
+        accessibilityHint={t('rider.support.help.openArticle')}
         activeOpacity={0.85}
       >
-        <Text style={styles.articleQuestion} numberOfLines={expanded ? undefined : 2}>
-          {question}
-        </Text>
-        <Animated.View style={chevronStyle}>
-          <ChevronDown size={18} color={colors.textTertiary} />
-        </Animated.View>
-      </TouchableOpacity>
-
-      {expanded && (
-        <View style={styles.articleBody}>
-          <Text style={styles.answerLabel}>{t('rider.support.faq.answerLabel')}</Text>
-          <Text style={styles.articleAnswer}>{answer}</Text>
-          <HelpfulRow articleId={article.id} t={t} />
+        <View style={[styles.articleIcon, inRelevant && styles.articleIconRelevant]}>
+          <Icon size={18} color={inRelevant ? colors.primary : colors.textMuted} />
         </View>
-      )}
-    </View>
-  )
-}
-
-function HelpfulRow({ articleId, t }: { articleId: string; t: (k: string, o?: Record<string, unknown>) => string }) {
-  const [vote, setVote] = useState<'yes' | 'no' | null>(null)
-  const scaleYes = useSharedValue(1)
-  const scaleNo = useSharedValue(1)
-
-  const handleVote = (choice: 'yes' | 'no') => {
-    setVote(choice)
-    analytics.track({ event: 'rider_faq_helpful', screen: 'rider-support-faq', properties: { articleId, helpful: choice === 'yes' } })
-    try { AccessibilityInfo.announceForAccessibility(t('rider.support.faq.helpfulThanks')) } catch {}
-  }
-
-  const animYes = useAnimatedStyle(() => ({ transform: [{ scale: scaleYes.value }] }))
-  const animNo = useAnimatedStyle(() => ({ transform: [{ scale: scaleNo.value }] }))
-
-  return (
-    <View style={styles.helpfulRow} accessibilityRole="radiogroup" accessibilityLabel={t('rider.support.faq.helpfulAria')}>
-      {vote ? (
-        <Text style={styles.helpfulThanks}>{t('rider.support.faq.helpfulThanks')}</Text>
-      ) : (
-        <>
-          <Animated.View style={animYes}>
-            <TouchableOpacity
-              style={styles.helpfulBtn}
-              onPress={() => handleVote('yes')}
-              onPressIn={() => { scaleYes.value = withSpring(0.94, { damping: 20, stiffness: 400 }) }}
-              onPressOut={() => { scaleYes.value = withSpring(1, { damping: 20, stiffness: 400 }) }}
-              accessibilityRole="button"
-              accessibilityLabel={t('rider.support.faq.helpfulYes')}
-              activeOpacity={0.8}
-            >
-              <ThumbsUp size={16} color={colors.success} />
-              <Text style={styles.helpfulYesText}>{t('rider.support.faq.helpfulYes')}</Text>
-            </TouchableOpacity>
-          </Animated.View>
-          <Animated.View style={animNo}>
-            <TouchableOpacity
-              style={styles.helpfulBtn}
-              onPress={() => handleVote('no')}
-              onPressIn={() => { scaleNo.value = withSpring(0.94, { damping: 20, stiffness: 400 }) }}
-              onPressOut={() => { scaleNo.value = withSpring(1, { damping: 20, stiffness: 400 }) }}
-              accessibilityRole="button"
-              accessibilityLabel={t('rider.support.faq.helpfulNo')}
-              activeOpacity={0.8}
-            >
-              <ThumbsDown size={16} color={colors.textMuted} />
-              <Text style={styles.helpfulNoText}>{t('rider.support.faq.helpfulNo')}</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        </>
-      )}
-    </View>
+        <View style={styles.articleBody}>
+          <Text style={styles.articleTitle} numberOfLines={2}>{title}</Text>
+          <Text style={styles.articlePreview} numberOfLines={2}>{body}</Text>
+        </View>
+        <ChevronRight size={18} color={colors.textTertiary} />
+      </TouchableOpacity>
+    </Animated.View>
   )
 }
 
@@ -421,13 +422,13 @@ const styles = StyleSheet.create({
   },
   topBarBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   topBarTitle: { fontSize: fontSize.lg[0], fontWeight: '600', color: colors.text, flex: 1, textAlign: 'center' },
-  scroll: { paddingHorizontal: spacing[4], paddingTop: spacing[4], gap: spacing[3] },
-  subtitle: { fontSize: fontSize.sm[0], color: colors.textMuted, fontFamily: fontFamily.sans[0] },
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[2],
     height: 44,
+    marginHorizontal: spacing[4],
+    marginTop: spacing[3],
     backgroundColor: colors.surface,
     borderRadius: radii.lg,
     borderWidth: 1,
@@ -436,7 +437,13 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, fontSize: fontSize.base[0], color: colors.text, padding: 0 },
   searchClear: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
-  chipsRow: { flexDirection: 'row', gap: spacing[2], flexWrap: 'wrap' },
+  chipsRow: {
+    flexDirection: 'row',
+    gap: spacing[2],
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    flexWrap: 'wrap',
+  },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -452,38 +459,66 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: { fontSize: fontSize.sm[0], fontWeight: '500', color: colors.text },
   chipTextActive: { color: colors.white },
-  skeletonWrap: { gap: spacing[3], marginTop: spacing[1] },
-  skeletonRow: { flexDirection: 'row', alignItems: 'center' },
-  listCard: {
+  skeletonWrap: { padding: spacing[4], gap: spacing[3] },
+  skeletonRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
+  skeletonIcon: { width: 36, height: 36, borderRadius: 9999, backgroundColor: colors.primary50, alignItems: 'center', justifyContent: 'center' },
+  list: { paddingHorizontal: spacing[4], paddingTop: spacing[1] },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1.5],
+    paddingTop: spacing[4],
+    paddingBottom: spacing[2],
+    backgroundColor: colors.background,
+    flexWrap: 'wrap',
+  },
+  sectionTitle: { fontSize: fontSize.md[0], fontWeight: '700', color: colors.text, fontFamily: fontFamily.sansSemiBold[0] },
+  sectionHint: { fontSize: fontSize.xs[0], color: colors.textMuted, flexBasis: '100%' },
+  sectionFooter: { height: spacing[2] },
+  articleCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
     backgroundColor: colors.surface,
     borderRadius: radii.lg,
     borderWidth: 1,
     borderColor: colors.borderLight,
-    overflow: 'hidden',
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[3],
+    minHeight: 56,
   },
-  articleRow: { paddingHorizontal: spacing[4], paddingVertical: spacing[3] },
-  articleRowBorder: { borderTopWidth: 1, borderTopColor: colors.borderLight },
-  articleHead: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing[3] },
-  articleQuestion: { flex: 1, fontSize: fontSize.base[0], fontWeight: '600', color: colors.text, lineHeight: 20 },
-  articleBody: { marginTop: spacing[3], gap: spacing[2] },
-  answerLabel: { fontSize: fontSize.xs[0], fontWeight: '700', color: colors.textTertiary, letterSpacing: 0.5, textTransform: 'uppercase' },
-  articleAnswer: { fontSize: fontSize.sm[0], color: colors.textSecondary, lineHeight: 20, fontFamily: fontFamily.sans[0] },
-  helpfulRow: { flexDirection: 'row', gap: spacing[3], marginTop: spacing[2], alignItems: 'center' },
-  helpfulBtn: { flexDirection: 'row', alignItems: 'center', gap: spacing[1.5], paddingVertical: spacing[1.5] },
-  helpfulYesText: { fontSize: fontSize.sm[0], fontWeight: '600', color: colors.success },
-  helpfulNoText: { fontSize: fontSize.sm[0], fontWeight: '600', color: colors.textMuted },
-  helpfulThanks: { fontSize: fontSize.sm[0], fontWeight: '500', color: colors.textMuted, fontStyle: 'italic' },
-  contactCta: {
+  articleCardRelevant: { borderColor: colors.primaryLight, backgroundColor: colors.primary50 },
+  articleIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: radii.md,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  articleIconRelevant: { backgroundColor: colors.surface },
+  articleBody: { flex: 1, gap: 2 },
+  articleTitle: { fontSize: fontSize.base[0], fontWeight: '600', color: colors.text, lineHeight: 19 },
+  articlePreview: { fontSize: fontSize.sm[0], color: colors.textMuted, lineHeight: 17, fontFamily: fontFamily.sans[0] },
+  rowSeparator: { height: spacing[2] },
+  escalateBar: {
+    paddingHorizontal: spacing[4],
+    paddingTop: spacing[3],
+    backgroundColor: colors.background,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+  },
+  escalateBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[2],
     backgroundColor: colors.surface,
     borderRadius: radii.lg,
     borderWidth: 1,
-    borderColor: colors.borderLight,
+    borderColor: colors.primary,
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],
-    marginTop: spacing[2],
+    minHeight: 52,
   },
-  contactCtaText: { flex: 1, fontSize: fontSize.base[0], fontWeight: '600', color: colors.text },
+  escalateText: { flex: 1, fontSize: fontSize.base[0], fontWeight: '600', color: colors.text },
 })

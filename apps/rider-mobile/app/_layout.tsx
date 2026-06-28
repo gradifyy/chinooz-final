@@ -24,6 +24,9 @@ export default function RootLayout() {
                       <Stack.Screen name="welcome" options={{ animation: 'fade' }} />
                       <Stack.Screen name="signup" options={{ animation: 'slide_from_right' }} />
                       <Stack.Screen name="login" options={{ animation: 'slide_from_right' }} />
+                      <Stack.Screen name="otp" options={{ animation: 'slide_from_right' }} />
+                      <Stack.Screen name="onboarding" options={{ animation: 'slide_from_right' }} />
+                      <Stack.Screen name="pending" options={{ animation: 'fade' }} />
                       <Stack.Screen name="terms" options={{ animation: 'slide_from_right' }} />
                       <Stack.Screen name="privacy" options={{ animation: 'slide_from_right' }} />
                       <Stack.Screen name="rider-agreement" options={{ animation: 'slide_from_right' }} />
@@ -39,6 +42,7 @@ export default function RootLayout() {
                       <Stack.Screen name="profile" options={{ animation: 'slide_from_right' }} />
                       <Stack.Screen name="support" options={{ animation: 'slide_from_right' }} />
                       <Stack.Screen name="support/faq" options={{ animation: 'slide_from_right' }} />
+                      <Stack.Screen name="support/faq/[article]" options={{ animation: 'slide_from_right' }} />
                       <Stack.Screen name="support/contact" options={{ animation: 'slide_from_right' }} />
                       <Stack.Screen name="support/sos" options={{ animation: 'slide_from_bottom' }} />
                       <Stack.Screen name="support/tickets" options={{ animation: 'slide_from_right' }} />
