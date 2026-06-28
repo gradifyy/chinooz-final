@@ -44,10 +44,28 @@ export interface VehicleDraft {
   color: string
 }
 
+/** A single uploaded document's draft state in the onboarding flow. */
+export interface DocumentItemDraft {
+  /** Whether the rider has uploaded a photo for this document. */
+  uploaded: boolean
+  /** Local URI of the captured/uploaded image (mock:// or file://). */
+  uri: string
+}
+
+/** Keyed by document kind: idFront, idBack, license, registration, selfie. */
+export type DocumentKey =
+  | 'idFront'
+  | 'idBack'
+  | 'license'
+  | 'registration'
+  | 'selfie'
+
+export type DocumentDraft = Record<DocumentKey, DocumentItemDraft>
+
 export interface OnboardingDraft {
   personal: PersonalDraft
   vehicle: VehicleDraft
-  documents: Record<string, unknown>
+  documents: DocumentDraft
 }
 
 interface OnboardingState {
@@ -55,7 +73,7 @@ interface OnboardingState {
   draft: OnboardingDraft
   setPersonal: (data: Partial<PersonalDraft>) => void
   setVehicle: (data: Partial<VehicleDraft>) => void
-  setDocuments: (data: Record<string, unknown>) => void
+  setDocuments: (data: Partial<DocumentDraft>) => void
   setCurrentStep: (step: OnboardingStep) => void
   reset: () => void
 }
@@ -90,10 +108,20 @@ const emptyVehicle: VehicleDraft = {
   color: '',
 }
 
+const emptyDocument: DocumentItemDraft = { uploaded: false, uri: '' }
+
+const emptyDocuments: DocumentDraft = {
+  idFront: { ...emptyDocument },
+  idBack: { ...emptyDocument },
+  license: { ...emptyDocument },
+  registration: { ...emptyDocument },
+  selfie: { ...emptyDocument },
+}
+
 const emptyDraft: OnboardingDraft = {
   personal: { ...emptyPersonal },
   vehicle: { ...emptyVehicle },
-  documents: {},
+  documents: { ...emptyDocuments },
 }
 
 export const useOnboardingStore = create<OnboardingState>()(
