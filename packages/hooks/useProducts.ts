@@ -447,6 +447,14 @@ export function useSellerInventory(filter: SellerInventoryFilter) {
   })
 }
 
+export function useStockHistory(variantId?: string) {
+  return useQuery({
+    queryKey: ['stock-history', variantId ?? 'all'],
+    queryFn: () => api.getStockHistory(variantId),
+    staleTime: 1000 * 10,
+  })
+}
+
 export function useSellerReviews(filter: SellerReviewFilter) {
   return useQuery({
     queryKey: ['seller-reviews', filter],

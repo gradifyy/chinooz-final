@@ -41,6 +41,7 @@ export {
   useSellerProducts,
   useSellerCategories,
   useSellerInventory,
+  useStockHistory,
   useSellerReviews,
   useRespondToSellerReview,
   useEditSellerReviewResponse,

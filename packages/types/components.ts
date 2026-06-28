@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import type { Product, StockStatus, Order, OrderStatus, SellerInventoryVariant } from './entities'
+import type { Product, Order, OrderStatus, SellerInventoryVariant, StockEditMode, StockEditReason, SellerSubOrder } from './entities'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'destructive'
 export type ButtonSize = 'sm' | 'md' | 'lg'
@@ -240,8 +240,8 @@ export interface InventoryRowProps extends BaseProps {
   variant: SellerInventoryVariant
   /** Low-stock threshold; falls back to 10 when omitted. */
   lowStockThreshold?: number
-  /** Commit a new stock value (debounced / on blur / on enter). */
-  onStockChange?: (stockCount: number) => void
+  /** Commit a new stock value (optimistic; caller handles mutation). */
+  onStockChange?: (stockCount: number, mode: StockEditMode, reason?: StockEditReason) => void
   /** Selection checkbox (bulk actions). */
   selected?: boolean
   onToggleSelect?: (id: string) => void
@@ -251,6 +251,34 @@ export interface InventoryRowProps extends BaseProps {
   loading?: boolean
   /** Layout: dense data-table row (web) vs compact card (mobile). */
   layout?: 'table' | 'compact'
+  /** Enable the full edit popover/sheet with set/adjust + reason. */
+  editable?: boolean
+  /** Optimistic state: 'idle' | 'saving' | 'saved' | 'error' */
+  editState?: 'idle' | 'saving' | 'saved' | 'error'
+  /** Large-change threshold (absolute delta) before confirming. */
+  largeChangeThreshold?: number
+  /** Large-change percent swing before confirming. */
+  largeChangePercent?: number
 }
 
 export type { OrderStatus }
+
+export interface SellerOrderRowProps extends BaseProps {
+  order: SellerSubOrder
+  selected?: boolean
+  onToggleSelect?: (id: string) => void
+  onPress?: (order: SellerSubOrder) => void
+  onAction?: (order: SellerSubOrder) => void
+  index?: number
+  loading?: boolean
+}
+
+export interface SellerOrderCardProps extends BaseProps {
+  order: SellerSubOrder
+  selected?: boolean
+  onToggleSelect?: (id: string) => void
+  onPress?: (order: SellerSubOrder) => void
+  onAction?: (order: SellerSubOrder) => void
+  index?: number
+  loading?: boolean
+}

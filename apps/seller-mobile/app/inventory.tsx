@@ -23,7 +23,7 @@ import Animated, {
 import { ChevronDown, Search, SlidersHorizontal, X, ArrowUpDown, PackageSearch, RotateCw } from 'lucide-react-native'
 import { colors, radii, spacing, fontFamily } from '@chinooz/theme'
 import { SafeImage, BottomSheet, EmptyState, InventoryRow, useReducedMotion } from '@chinooz/ui'
-import { useSellerInventory, useSellerCategories } from '@chinooz/hooks'
+import { useSellerInventory, useSellerCategories, useUpdateStock } from '@chinooz/hooks'
 import { useSellerSessionStore } from '@chinooz/state'
 import { analytics } from '@chinooz/analytics'
 import type { SellerInventoryProduct, SellerInventoryVariant, StockStatus } from '@chinooz/types'
@@ -163,8 +163,21 @@ function Collapsible({ open, reduced, children }: { open: boolean; reduced: bool
   )
 }
 
-function VariantRowCard({ v }: { v: SellerInventoryVariant }) {
-  return <InventoryRow variant={v} lowStockThreshold={LOW_STOCK_THRESHOLD} layout="compact" />
+function VariantRowCard({ v, onStockChange, editState }: {
+  v: SellerInventoryVariant
+  onStockChange: (newStock: number, mode: 'set' | 'adjust', reason?: 'restock' | 'correction' | 'damage' | 'loss' | 'return' | 'other') => void
+  editState: 'idle' | 'saving' | 'saved' | 'error'
+}) {
+  return (
+    <InventoryRow
+      variant={v}
+      lowStockThreshold={LOW_STOCK_THRESHOLD}
+      layout="compact"
+      editable
+      onStockChange={onStockChange}
+      editState={editState}
+    />
+  )
 }
 
 function ProductGroupCard({
@@ -172,11 +185,15 @@ function ProductGroupCard({
   expanded,
   onToggle,
   reduced,
+  onStockChange,
+  variantEditState,
 }: {
   product: SellerInventoryProduct
   expanded: boolean
   onToggle: () => void
   reduced: boolean
+  onStockChange: (variantId: string, productId: string, newStock: number, mode: 'set' | 'adjust', reason?: 'restock' | 'correction' | 'damage' | 'loss' | 'return' | 'other') => void
+  variantEditState: (variantId: string) => 'idle' | 'saving' | 'saved' | 'error'
 }) {
   const { t } = useTranslation()
   const chevron = useSharedValue(expanded ? 1 : 0)
@@ -216,7 +233,14 @@ function ProductGroupCard({
 
       <Collapsible open={expanded} reduced={reduced}>
         <View style={styles.variantsList}>
-          {product.variants.map(v => <VariantRowCard key={v.id} v={v} />)}
+          {product.variants.map(v => (
+            <VariantRowCard
+              key={v.id}
+              v={v}
+              onStockChange={(ns, m, r) => onStockChange(v.id, product.id, ns, m, r)}
+              editState={variantEditState(v.id)}
+            />
+          ))}
         </View>
       </Collapsible>
     </View>
@@ -252,6 +276,17 @@ export default function InventoryScreen() {
     stockMax: stockMax ?? undefined,
     sort,
   })
+  const stockMutation = useUpdateStock()
+
+  const handleStockChange = (variantId: string, productId: string, newStock: number, mode: 'set' | 'adjust', reason?: 'restock' | 'correction' | 'damage' | 'loss' | 'return' | 'other') => {
+    stockMutation.mutate({ productId, variantId, newCount: newStock, mode, reason: reason ?? 'restock' })
+  }
+  const variantEditState = (variantId: string): 'idle' | 'saving' | 'saved' | 'error' => {
+    if (stockMutation.isPending && stockMutation.variables?.variantId === variantId) return 'saving'
+    if (stockMutation.isError && stockMutation.variables?.variantId === variantId) return 'error'
+    if (stockMutation.isSuccess && stockMutation.variables?.variantId === variantId) return 'saved'
+    return 'idle'
+  }
 
   const counts = useMemo<Record<TabKey, number>>(() => {
     const c = invQ.data?.counts
@@ -420,6 +455,8 @@ export default function InventoryScreen() {
                 expanded={expanded.has(p.id)}
                 onToggle={() => toggleGroup(p.id)}
                 reduced={reduced}
+                onStockChange={handleStockChange}
+                variantEditState={variantEditState}
               />
             ))}
             <Text style={styles.countText}>

@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 import { Container, Screen, SafeImage, Spinner, EmptyState, InventoryRow } from '@chinooz/ui-web'
 import { useReducedMotion } from '@chinooz/ui-web'
-import { useSellerInventory, useSellerCategories } from '@chinooz/hooks'
+import { useSellerInventory, useSellerCategories, useUpdateStock } from '@chinooz/hooks'
 import { useSellerSessionStore } from '@chinooz/state'
 import { analytics } from '@chinooz/analytics'
 import { formatNPR } from '@chinooz/utils'
@@ -379,8 +379,22 @@ function ProductGroupRow({
 
 const VARIANT_GRID = 'grid grid-cols-[1.4fr_1fr_120px_110px_70px_130px] items-center'
 
-function VariantRow({ v }: { v: SellerInventoryVariant }) {
-  return <InventoryRow variant={v} lowStockThreshold={LOW_STOCK_THRESHOLD} layout="table" showOptionalColumns />
+function VariantRow({ v, onStockChange, editState }: {
+  v: SellerInventoryVariant
+  onStockChange: (newStock: number, mode: 'set' | 'adjust', reason?: 'restock' | 'correction' | 'damage' | 'loss' | 'return' | 'other') => void
+  editState: 'idle' | 'saving' | 'saved' | 'error'
+}) {
+  return (
+    <InventoryRow
+      variant={v}
+      lowStockThreshold={LOW_STOCK_THRESHOLD}
+      layout="table"
+      showOptionalColumns
+      editable
+      onStockChange={onStockChange}
+      editState={editState}
+    />
+  )
 }
 
 function ProductGroupCard({
@@ -479,14 +493,27 @@ export default function InventoryScreen() {
   useEffect(() => { analytics.screen({ name: 'seller-inventory' }) }, [])
 
   const catsQ = useSellerCategories()
-  const invQ = useSellerInventory({
+  const inventoryFilter = {
     status: tab,
     search: debouncedQuery,
     categoryId: category ?? undefined,
     stockMin: stockMin ?? undefined,
     stockMax: stockMax ?? undefined,
     sort,
-  })
+  }
+  const invQ = useSellerInventory(inventoryFilter)
+  const stockMutation = useUpdateStock()
+
+  const handleStockChange = (variantId: string, productId: string, newStock: number, mode: 'set' | 'adjust', reason?: 'restock' | 'correction' | 'damage' | 'loss' | 'return' | 'other') => {
+    stockMutation.mutate({ productId, variantId, newCount: newStock, mode, reason: reason ?? 'restock' })
+  }
+
+  const variantEditState = (variantId: string): 'idle' | 'saving' | 'saved' | 'error' => {
+    if (stockMutation.isPending && stockMutation.variables?.variantId === variantId) return 'saving'
+    if (stockMutation.isError && stockMutation.variables?.variantId === variantId) return 'error'
+    if (stockMutation.isSuccess && stockMutation.variables?.variantId === variantId) return 'saved'
+    return 'idle'
+  }
 
   const counts = useMemo<Record<TabKey, number>>(() => {
     const c = invQ.data?.counts
@@ -666,7 +693,14 @@ export default function InventoryScreen() {
                                 transition={reduced ? { duration: 0 } : { duration: 0.2, ease: easing.easeOut }}
                                 className="overflow-hidden"
                               >
-                                {p.variants.map(v => <VariantRow key={v.id} v={v} />)}
+                                {p.variants.map(v => (
+                                  <VariantRow
+                                    key={v.id}
+                                    v={v}
+                                    onStockChange={(ns, m, r) => handleStockChange(v.id, p.id, ns, m, r)}
+                                    editState={variantEditState(v.id)}
+                                  />
+                                ))}
                               </motion.div>
                             )}
                           </AnimatePresence>

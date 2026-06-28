@@ -11,6 +11,8 @@ import type {
   SellerProduct,
   SellerProductStatus,
   StockStatus,
+  StockEditMode,
+  StockEditReason,
   SellerSubOrder,
   SellerOrderStatusKey,
   Promotion,
@@ -154,6 +156,9 @@ export function useUpdateStock() {
     productId: string
     variantId?: string
     newCount: number
+    mode?: StockEditMode
+    reason?: StockEditReason
+    note?: string
   }
 
   type UpdateStockResult = {
@@ -164,7 +169,8 @@ export function useUpdateStock() {
   }
 
   const opts = {
-    mutationFn: (vars: UpdateStockVars) => api.updateStock(vars.productId, vars.variantId, vars.newCount),
+    mutationFn: (vars: UpdateStockVars) =>
+      api.updateStock(vars.productId, vars.variantId, vars.newCount, vars.mode ?? 'set', vars.reason ?? 'restock', vars.note),
     onMutate: async (vars: UpdateStockVars) => {
       await qc.cancelQueries({ queryKey: ['seller-inventory'] })
       const prevInventory = qc.getQueryData(['seller-inventory'])
