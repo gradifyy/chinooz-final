@@ -1,7 +1,15 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo } from 'react'
 import { StyleSheet, View, Text, Dimensions } from 'react-native'
-import Svg, { Rect, Circle, G, Line, Text as SvgText, Polyline } from 'react-native-svg'
-import { colors, radii, fontFamily, fontSize, shadow } from '@chinooz/theme'
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withDelay,
+  Easing,
+} from 'react-native-reanimated'
+import Svg, { Rect, Circle, G, Text as SvgText, Polyline } from 'react-native-svg'
+import { colors, radii, fontFamily, fontSize, shadow, duration, easing } from '@chinooz/theme'
+import { useReducedMotion } from '@chinooz/ui'
 import { rs3Project } from '@chinooz/rs3'
 import type { GeoPoint } from '@chinooz/types'
 import { formatKm, formatDuration, formatNpr } from './format'
@@ -47,10 +55,29 @@ export default function RoutePreviewMap({
   estPayout,
   testID,
 }: RoutePreviewMapProps) {
+  const reduced = useReducedMotion()
   const width = Dimensions.get('window').width - 32 // minus parent padding
   const height = 240
   const w = width - PAD * 2
   const h = height - PAD * 2
+
+  // Reveal animation: fade + slight scale up on mount.
+  const revealOpacity = useSharedValue(reduced ? 1 : 0)
+  const revealScale = useSharedValue(reduced ? 1 : 0.96)
+
+  useEffect(() => {
+    if (reduced) return
+    revealOpacity.value = withTiming(1, { duration: duration.slow })
+    revealScale.value = withDelay(
+      duration.fast,
+      withTiming(1, { duration: duration.slow, easing: Easing.bezier(...easing.easeOut) }),
+    )
+  }, [reduced])
+
+  const revealStyle = useAnimatedStyle(() => ({
+    opacity: revealOpacity.value,
+    transform: [{ scale: revealScale.value }],
+  }))
 
   const pts = useMemo(() => {
     const r = rs3Project(riderLocation)
@@ -69,6 +96,7 @@ export default function RoutePreviewMap({
 
   return (
     <View style={styles.container}>
+      <Animated.View style={revealStyle}>
       <View
         testID={testID}
         accessibilityRole="image"
@@ -152,8 +180,7 @@ export default function RoutePreviewMap({
           </G>
         </Svg>
       </View>
-
-      {/* Stat tiles */}
+      </Animated.View>
       <View style={styles.statsRow}>
         <StatTile label="Distance" value={formatKm(tripDistanceKm)} testID={testID ? `${testID}-stat-distance` : undefined} />
         <View style={styles.statDivider} />

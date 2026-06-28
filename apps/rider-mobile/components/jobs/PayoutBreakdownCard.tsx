@@ -1,7 +1,15 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
+import Animated, {
+  useSharedValue,
+  withTiming,
+  withDelay,
+  Easing,
+  runOnJS,
+} from 'react-native-reanimated'
 import { Receipt, Navigation, Star } from 'lucide-react-native'
-import { colors, radii, spacing, fontFamily, fontSize, shadow } from '@chinooz/theme'
+import { colors, radii, spacing, fontFamily, fontSize, shadow, duration, easing } from '@chinooz/theme'
+import { useReducedMotion } from '@chinooz/ui'
 import { formatNprTabular } from './format'
 
 /**
@@ -14,6 +22,7 @@ import { formatNprTabular } from './format'
  *   bonus     = remainder (surge / incentive / tip), may be 0
  *
  * The sum always equals the total payout. NPR tabular-nums for alignment.
+ * The total animates with a count-up on mount (skipped for reduced-motion).
  */
 
 export interface PayoutBreakdown {
@@ -39,6 +48,36 @@ interface PayoutBreakdownCardProps {
 }
 
 export default function PayoutBreakdownCard({ breakdown, testID }: PayoutBreakdownCardProps) {
+  const reduced = useReducedMotion()
+  const [displayTotal, setDisplayTotal] = useState(reduced ? breakdown.total : 0)
+
+  // Count-up animation for the total payout.
+  const countValue = useSharedValue(reduced ? breakdown.total : 0)
+
+  useEffect(() => {
+    if (reduced) {
+      setDisplayTotal(breakdown.total)
+      return
+    }
+    countValue.value = 0
+    countValue.value = withDelay(
+      duration.normal,
+      withTiming(breakdown.total, {
+        duration: duration.slower,
+        easing: Easing.bezier(...easing.easeOut),
+      }, (finished) => {
+        if (finished) runOnJS(setDisplayTotal)(breakdown.total)
+      }),
+    )
+    // Update display on each frame via polling — RN Reanimated doesn't have
+    // a direct useAnimatedText. We use a lightweight JS-side interval.
+    const id = setInterval(() => {
+      runOnJS(setDisplayTotal)(Math.round(countValue.value))
+    }, 16)
+    const cleanup = setTimeout(() => clearInterval(id), duration.slower + duration.normal + 100)
+    return () => { clearInterval(id); clearTimeout(cleanup) }
+  }, [breakdown.total, reduced])
+
   const rows: { icon: React.ReactNode; label: string; amount: number; iconBg: string }[] = [
     {
       icon: <Receipt size={14} color={colors.primary} />,
@@ -84,8 +123,8 @@ export default function PayoutBreakdownCard({ breakdown, testID }: PayoutBreakdo
       ))}
       <View style={styles.totalRow}>
         <Text style={styles.totalLabel}>Total payout</Text>
-        <Text style={styles.totalValue} numberOfLines={1}>
-          {formatNprTabular(breakdown.total)}
+        <Text style={styles.totalValue} numberOfLines={1} accessibilityLabel={`Total payout: ${formatNprTabular(breakdown.total)}`}>
+          {formatNprTabular(displayTotal)}
         </Text>
       </View>
     </View>

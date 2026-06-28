@@ -1,12 +1,21 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useEffect } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  useAnimatedReaction,
+} from 'react-native-reanimated'
 import { useTranslation } from 'react-i18next'
 import * as Haptics from 'expo-haptics'
 import { List, Map, ArrowDown, ArrowUp, RotateCcw } from 'lucide-react-native'
-import { colors, spacing, radii, fontFamily, fontSize } from '@chinooz/theme'
+import { colors, spacing, radii, fontFamily, fontSize, duration } from '@chinooz/theme'
 import { useReducedMotion } from '@chinooz/ui'
 import type { AvailableSort, AvailableView, AvailableFilters, PaymentFilter } from './types'
 import { DISTANCE_OPTIONS, MIN_PAYOUT_OPTIONS, DEFAULT_FILTERS } from './types'
+
+const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity)
 
 /**
  * Translate with an inline English fallback. The rider i18n namespace is under
@@ -42,6 +51,15 @@ export function SortViewToggle({ sort, view, onSortChange, onViewChange, testID 
     try { if (!reduced) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light) } catch {}
   }
 
+  // Animated indicator for the view switch (list → map).
+  const viewIndicatorX = useSharedValue(view === 'list' ? 0 : 36)
+  useEffect(() => {
+    const target = view === 'list' ? 0 : 36
+    viewIndicatorX.value = reduced
+      ? withTiming(target, { duration: 0 })
+      : withSpring(target, { damping: 25, stiffness: 350, mass: 0.8 })
+  }, [view, reduced])
+
   const sortLabel = sort === 'nearest'
     ? tt('rider.jobs.available.sortNearest', undefined, 'Nearest')
     : tt('rider.jobs.available.sortBestPayout', undefined, 'Best payout')
@@ -51,6 +69,10 @@ export function SortViewToggle({ sort, view, onSortChange, onViewChange, testID 
   const viewLabel = view === 'list'
     ? tt('rider.jobs.available.viewList', undefined, 'List')
     : tt('rider.jobs.available.viewMap', undefined, 'Map')
+
+  const viewIndicatorStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: viewIndicatorX.value }],
+  }))
 
   return (
     <View style={styles.sortViewRow} testID={testID}>
@@ -66,17 +88,23 @@ export function SortViewToggle({ sort, view, onSortChange, onViewChange, testID 
         <Text style={styles.sortLabel}>{sortLabel}</Text>
       </TouchableOpacity>
 
-      {/* View switch (list / map) */}
+      {/* View switch (list / map) — animated indicator */}
       <View
         style={styles.viewSwitch}
         accessibilityRole="tablist"
         accessibilityLabel={tt('rider.jobs.available.viewAria', { view: viewLabel }, `Switch view: ${viewLabel}`)}
       >
+        <Animated.View
+          style={[
+            styles.viewIndicator,
+            viewIndicatorStyle,
+          ]}
+        />
         <TouchableOpacity
           accessibilityRole="tab"
           accessibilityState={{ selected: view === 'list' }}
           onPress={() => { tick(); onViewChange('list') }}
-          style={[styles.viewSeg, view === 'list' && styles.viewSegActive]}
+          style={styles.viewSeg}
           activeOpacity={0.7}
         >
           <List size={14} color={view === 'list' ? colors.white : colors.textMuted} />
@@ -85,7 +113,7 @@ export function SortViewToggle({ sort, view, onSortChange, onViewChange, testID 
           accessibilityRole="tab"
           accessibilityState={{ selected: view === 'map' }}
           onPress={() => { tick(); onViewChange('map') }}
-          style={[styles.viewSeg, view === 'map' && styles.viewSegActive]}
+          style={styles.viewSeg}
           activeOpacity={0.7}
         >
           <Map size={14} color={view === 'map' ? colors.white : colors.textMuted} />
@@ -246,18 +274,32 @@ function FilterChip({
   aria: string
   onPress: () => void
 }) {
+  const reduced = useReducedMotion()
+  const scale = useSharedValue(1)
+
+  const pressIn = useCallback(() => {
+    if (!reduced) scale.value = withSpring(0.95, { damping: 15, stiffness: 400 })
+  }, [reduced])
+  const pressOut = useCallback(() => {
+    if (!reduced) scale.value = withSpring(1, { damping: 15, stiffness: 300 })
+  }, [reduced])
+
+  const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }))
+
   return (
-    <TouchableOpacity
+    <AnimatedTouchableOpacity
       accessibilityRole="button"
       accessibilityLabel={aria}
       accessibilityState={{ selected: active }}
       onPress={onPress}
-      style={[styles.chip, active && styles.chipActive]}
+      onPressIn={pressIn}
+      onPressOut={pressOut}
+      style={[styles.chip, active && styles.chipActive, animStyle]}
       activeOpacity={0.7}
     >
       <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>{label}</Text>
       <Text style={[styles.chipValue, active && styles.chipValueActive]} numberOfLines={1}>{value}</Text>
-    </TouchableOpacity>
+    </AnimatedTouchableOpacity>
   )
 }
 
@@ -288,6 +330,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderLight,
     padding: 2,
+    position: 'relative',
+  },
+  viewIndicator: {
+    position: 'absolute',
+    top: 2,
+    left: 2,
+    width: 36,
+    height: 36,
+    borderRadius: radii.full,
+    backgroundColor: colors.primary,
   },
   viewSeg: {
     width: 36,
@@ -295,8 +347,8 @@ const styles = StyleSheet.create({
     borderRadius: radii.full,
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 1,
   },
-  viewSegActive: { backgroundColor: colors.primary },
   filtersWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',

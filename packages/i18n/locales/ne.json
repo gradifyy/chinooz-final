@@ -3357,7 +3357,19 @@
       "chartColPeriod": "अवधि",
       "chartColValue": "मूल्य",
       "chartTooltipValue": "{{value}}",
-      "chartTooltipDate": "{{date}}"
+      "chartTooltipDate": "{{date}}",
+      "alertNewOrders": "पूरा गर्नुपर्ने नयाँ अर्डर",
+      "alertLowStock": "स्टक कम भएका उत्पादन",
+      "alertOutOfStock": "स्टक बाहिर भएका उत्पादन",
+      "alertReturns": "फिर्ता अनुरोधहरू व्यवस्थापन आवश्यक",
+      "alertMessages": "उत्तर नदिएका खरिदकर्ता सन्देश",
+      "alertReviews": "उत्तर दिन बाँकी समीक्षाहरू",
+      "alertPayout": "निकाल्न मिल्ने भुक्तानी",
+      "alertKyc": "KYC प्रमाणीकरण अपूर्ण",
+      "alertDismiss": "सचेत जानकारी हटाउनुहोस्",
+      "alertAria": "{{title}}, {{count}} वटा",
+      "alertAllCaughtUp": "सबै ठिक छ",
+      "alertAllCaughtUpSub": "अहिले कुनै कार्य आवश्यक छैन।"
     },
     "messages": {
       "tab": "सन्देश",

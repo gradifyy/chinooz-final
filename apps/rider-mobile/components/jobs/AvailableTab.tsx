@@ -9,11 +9,14 @@ import {
   AccessibilityInfo,
   RefreshControl,
 } from 'react-native'
+import Animated, {
+  FadeIn,
+} from 'react-native-reanimated'
 import { useTranslation } from 'react-i18next'
 import * as Haptics from 'expo-haptics'
-import { Navigation, WifiOff, Lock, Landmark, Flame, ChevronRight } from 'lucide-react-native'
-import { colors, spacing, radii, fontFamily, fontSize } from '@chinooz/theme'
-import { EmptyState, useReducedMotion } from '@chinooz/ui'
+import { WifiOff, Lock, Landmark } from 'lucide-react-native'
+import { colors, spacing, radii, fontFamily, fontSize, duration } from '@chinooz/theme'
+import { useReducedMotion } from '@chinooz/ui'
 import { useAvailableJobs } from '@chinooz/hooks'
 import { useCodLimitStatus } from '@chinooz/state'
 import { RIDER_LOCATION, getDemandZones, type DemandZone } from '@chinooz/mock-data'
@@ -24,6 +27,7 @@ import JobCard, { JobCardSkeleton } from './JobCard'
 import { SortViewToggle, JobFilters } from './JobFilters'
 import JobMiniMap from './JobMiniMap'
 import { riderJobToJobRequest } from './convert'
+import { ErrorStateView, QuietStateView } from './JobStateViews'
 
 /** A job is COD when it carries a positive codAmount. */
 function isCodJob(job: JobRequest): boolean {
@@ -194,11 +198,11 @@ export default function AvailableTab({
   // -- Error state --
   if (isError && !rawJobs) {
     return (
-      <EmptyState
+      <ErrorStateView
         testID="jobs-available-error"
-        icon={<Navigation size={40} color={colors.textTertiary} />}
-        title={tt('rider.jobs.availableEmpty', undefined, 'No deliveries nearby')}
-        subtitle={tt('common.error', undefined, 'Something went wrong')}
+        onRetry={() => refetch()}
+        title={tt('rider.jobs.states.errorTitle', undefined, 'Could not load deliveries')}
+        subtitle={tt('rider.jobs.states.errorSubtitle', undefined, 'Something went wrong. Please try again.')}
       />
     )
   }
@@ -315,34 +319,34 @@ export default function AvailableTab({
         </View>
       )}
 
-      {/* Map view */}
+      {/* Map view — fade in */}
       {view === 'map' && (
-        <JobMiniMap
-          jobs={filtered}
-          jobPoints={jobPoints}
-          riderLocation={RIDER_LOCATION}
-          width={Dimensions.get('window').width - spacing[4] * 2}
-          height={260}
-          onJobPress={handleJobPress}
-          accessibilityLabel={tt('rider.jobs.available.mapAria', { count: filtered.length }, `Map showing ${filtered.length} available job pins`)}
-          testID="jobs-available-map"
-        />
+        <Animated.View entering={reduced ? undefined : FadeIn.duration(duration.normal)} style={{ flex: 1 }}>
+          <JobMiniMap
+            jobs={filtered}
+            jobPoints={jobPoints}
+            riderLocation={RIDER_LOCATION}
+            width={Dimensions.get('window').width - spacing[4] * 2}
+            height={260}
+            onJobPress={handleJobPress}
+            accessibilityLabel={tt('rider.jobs.available.mapAria', { count: filtered.length }, `Map showing ${filtered.length} available job pins`)}
+            testID="jobs-available-map"
+          />
+        </Animated.View>
       )}
 
-      {/* List view */}
+      {/* List view — fade in */}
       {view === 'list' && (
+        <Animated.View entering={reduced ? undefined : FadeIn.duration(duration.normal)} style={{ flex: 1 }}>
         <FlatList
           data={filtered}
           keyExtractor={item => item.id}
           renderItem={renderItem}
           ItemSeparatorComponent={() => <View style={{ height: spacing[3] }} />}
           ListEmptyComponent={
-            <QuietState
-              title={tt('rider.jobs.available.quietTitle', undefined, 'No deliveries nearby right now')}
-              subtitle={tt('rider.jobs.available.quietSubtitle', undefined, 'Demand is quiet in your zone. Try moving to a hotspot to get more jobs.')}
-              actionLabel={tt('rider.jobs.available.quietAction', undefined, 'See hotspots')}
-              actionAria={tt('rider.jobs.available.quietActionAria', undefined, 'Open the demand hotspots heatmap')}
-              onOpenHotspots={onOpenHotspots}
+            <QuietStateView
+              testID="jobs-available-quiet"
+              onAction={onOpenHotspots}
             />
           }
           refreshControl={
@@ -358,6 +362,7 @@ export default function AvailableTab({
           scrollEnabled={false}
           testID="jobs-available-flatlist"
         />
+        </Animated.View>
       )}
 
       {/* Map view refresh button (FlatList above handles list refresh) */}
@@ -377,43 +382,6 @@ export default function AvailableTab({
 }
 
 /* ----------------------------- quiet state ----------------------------- */
-
-function QuietState({
-  title,
-  subtitle,
-  actionLabel,
-  actionAria,
-  onOpenHotspots,
-}: {
-  title: string
-  subtitle: string
-  actionLabel: string
-  actionAria: string
-  onOpenHotspots?: () => void
-}) {
-  return (
-    <View style={styles.quietWrap} testID="jobs-available-quiet">
-      <View style={styles.quietIcon}>
-        <Flame size={28} color={colors.primary} />
-      </View>
-      <Text style={styles.quietTitle}>{title}</Text>
-      <Text style={styles.quietSubtitle}>{subtitle}</Text>
-      {onOpenHotspots && (
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel={actionAria}
-          onPress={onOpenHotspots}
-          style={styles.quietAction}
-          activeOpacity={0.85}
-        >
-          <Flame size={15} color={colors.white} />
-          <Text style={styles.quietActionText}>{actionLabel}</Text>
-          <ChevronRight size={15} color={colors.white} />
-        </TouchableOpacity>
-      )}
-    </View>
-  )
-}
 
 /* ----------------------------- blocked card ----------------------------- */
 
@@ -480,34 +448,6 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   orderRef: { fontSize: fontSize.base[0], fontFamily: fontFamily.sansSemiBold[0], fontWeight: '600', color: colors.text, flex: 1 },
-  quietWrap: {
-    alignItems: 'center',
-    paddingVertical: spacing[10],
-    paddingHorizontal: spacing[6],
-    gap: spacing[3],
-  },
-  quietIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: radii.full,
-    backgroundColor: colors.primary50,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  quietTitle: { fontSize: fontSize.lg[0], fontWeight: '600', color: colors.text, textAlign: 'center' },
-  quietSubtitle: { fontSize: fontSize.sm[0], color: colors.textMuted, textAlign: 'center', lineHeight: 20 },
-  quietAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[1.5],
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing[5],
-    paddingVertical: spacing[2.5],
-    borderRadius: radii.lg,
-    minHeight: 48,
-    marginTop: spacing[1],
-  },
-  quietActionText: { fontSize: fontSize.base[0], fontWeight: '600', color: colors.white },
   mapRefreshBtn: {
     flexDirection: 'row',
     alignItems: 'center',

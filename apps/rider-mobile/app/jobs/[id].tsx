@@ -8,6 +8,13 @@ import {
   AccessibilityInfo,
   Dimensions,
 } from 'react-native'
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
@@ -28,7 +35,7 @@ import {
   CheckCircle2,
   X,
 } from 'lucide-react-native'
-import { colors, radii, spacing, fontFamily, fontSize, shadow } from '@chinooz/theme'
+import { colors, radii, spacing, fontFamily, fontSize, shadow, duration, easing } from '@chinooz/theme'
 import { useReducedMotion } from '@chinooz/ui'
 import { useJobById, useAcceptJob, useDeclineJob } from '@chinooz/hooks'
 import { useActiveDeliveryStore, useCodLimitStatus } from '@chinooz/state'
@@ -39,6 +46,8 @@ import type { RiderJob } from '@chinooz/types'
 import { formatNpr, formatNprTabular, formatKm, formatDuration, formatCountdown } from '../../components/jobs/format'
 import RoutePreviewMap from '../../components/jobs/RoutePreviewMap'
 import PayoutBreakdownCard, { derivePayoutBreakdown } from '../../components/jobs/PayoutBreakdownCard'
+
+const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity)
 
 /** Translate with an inline English fallback (rider i18n is under restructuring). */
 function useTt() {
@@ -75,6 +84,13 @@ export default function JobDetailScreen() {
   const params = useLocalSearchParams<{ id: string }>()
 
   const jobId = params.id
+
+  // Accept button scale pulse (confirmation feedback).
+  const acceptScale = useSharedValue(1)
+  // Handoff fade-out when transitioning to Active Delivery.
+  const handoffOpacity = useSharedValue(1)
+  const handoffStyle = useAnimatedStyle(() => ({ opacity: handoffOpacity.value }))
+  const acceptAnimStyle = useAnimatedStyle(() => ({ transform: [{ scale: acceptScale.value }] }))
 
   // Fetch the job by id (TanStack Query, 15s staleTime).
   const { data: job, isLoading, isError, refetch } = useJobById(jobId)
@@ -173,6 +189,13 @@ export default function JobDetailScreen() {
     // COD at limit — can't accept COD jobs.
     if (job.isCod && codAtLimit) return
 
+    // Scale pulse on Accept button (confirmation feedback).
+    if (!reduced) {
+      acceptScale.value = withSpring(0.94, { damping: 15, stiffness: 400 }, () => {
+        acceptScale.value = withSpring(1, { damping: 12, stiffness: 300 })
+      })
+    }
+
     setAccepting(true)
     try { if (!reduced) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success) } catch {}
     analytics.track({ name: 'rider_accept_job', properties: { jobId: job.id, orderRef: job.orderRef } })
@@ -181,7 +204,6 @@ export default function JobDetailScreen() {
     const result = await acceptMutation.mutateAsync({ jobId: job.id, opRef })
 
     if (result.success && result.activeDelivery) {
-      // Store the active delivery in the Zustand store + navigate to Active.
       const payload = jobRequestToActivePayload({
         id: job.id,
         orderRef: job.orderRef,
@@ -193,7 +215,13 @@ export default function JobDetailScreen() {
       AccessibilityInfo.announceForAccessibility(
         tt('rider.jobs.detail.acceptedAnnounce', undefined, 'Job accepted. Starting delivery.'),
       )
-      router.replace('/active')
+      // Handoff: fade out before navigating to Active Delivery.
+      if (!reduced) {
+        handoffOpacity.value = withTiming(0, { duration: duration.normal, easing: Easing.bezier(...easing.easeOut) })
+        setTimeout(() => router.replace('/active'), duration.normal)
+      } else {
+        router.replace('/active')
+      }
     } else {
       // Accept failed — job may have been taken.
       setTakenState('taken')
@@ -339,7 +367,7 @@ export default function JobDetailScreen() {
 
   // -- Job detail content --
   return (
-    <View style={styles.container}>
+    <Animated.View style={[styles.container, handoffStyle]}>
       <DetailHeader
         onBack={handleBack}
         title={tt('rider.jobs.detail.title', undefined, 'Job details')}
@@ -490,7 +518,7 @@ export default function JobDetailScreen() {
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
+        <AnimatedTouchableOpacity
           accessibilityRole="button"
           accessibilityLabel={
             codBlocked
@@ -503,6 +531,7 @@ export default function JobDetailScreen() {
           style={[
             styles.acceptBtn,
             (accepting || takenState || codBlocked) && styles.acceptBtnDisabled,
+            acceptAnimStyle,
           ]}
           activeOpacity={0.85}
           testID="job-detail-accept"
@@ -520,9 +549,9 @@ export default function JobDetailScreen() {
               <Text style={styles.acceptText}>{tt('rider.jobs.detail.accept', undefined, 'Accept job')}</Text>
             </>
           )}
-        </TouchableOpacity>
+        </AnimatedTouchableOpacity>
       </View>
-    </View>
+    </Animated.View>
   )
 }
 
