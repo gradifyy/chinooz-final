@@ -46,6 +46,9 @@ export type {
   PersonalDraft,
   VehicleDraft,
   VehicleType,
+  DocumentDraft,
+  DocumentItemDraft,
+  DocumentKey,
 } from './rider-onboarding'
 export { ONBOARDING_STEPS } from './rider-onboarding'
 export { useRiderTripsStore, computeQuestProgress } from './rider-trips'
