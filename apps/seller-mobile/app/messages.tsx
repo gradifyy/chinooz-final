@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react'
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import {
 import { useRouter } from 'expo-router'
 import { useTranslation } from 'react-i18next'
 import { Screen, EmptyState, Skeleton, useReducedMotion } from '@chinooz/ui'
-import { useSellerConversations, useMarkSellerConversationRead } from '@chinooz/hooks'
+import { useSellerConversations, useMarkSellerConversationRead, useFlushOfflineQueue } from '@chinooz/hooks'
 import { useSellerSessionStore, useSellerMessagesStore } from '@chinooz/state'
 import { colors, spacing, radii, fontSize, fontFamily } from '@chinooz/theme'
 import type { Conversation } from '@chinooz/types'
@@ -43,6 +43,7 @@ export default function SellerMessagesScreen() {
 
   const { data: conversations, isLoading, isError, refetch } = useSellerConversations(sellerId)
   const markRead = useMarkSellerConversationRead()
+  useFlushOfflineQueue()
 
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -244,7 +245,7 @@ function FilterChip({
   )
 }
 
-function ConversationRow({ convo, onTap }: { convo: Conversation; onTap: () => void }) {
+const ConversationRow = memo(function ConversationRow({ convo, onTap }: { convo: Conversation; onTap: () => void }) {
   const { t } = useTranslation()
   const reduced = useReducedMotion()
   const isUnread = convo.unreadCount > 0
@@ -317,7 +318,7 @@ function ConversationRow({ convo, onTap }: { convo: Conversation; onTap: () => v
       </TouchableOpacity>
     </Animated.View>
   )
-}
+})
 
 function formatTime(iso: string, t: (k: string, o?: any) => string): string {
   const diff = Date.now() - new Date(iso).getTime()

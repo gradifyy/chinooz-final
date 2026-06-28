@@ -53,6 +53,11 @@
   animation: rowReorder 250ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+.cv-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: 72px;
+}
+
 @layer base {
   html {
     -webkit-font-smoothing: antialiased;

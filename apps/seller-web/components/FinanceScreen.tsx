@@ -221,19 +221,12 @@ export default function FinanceScreen() {
                 {t('seller.finance.withdraw')}
               </button>
             </section>
+            )}
 
             <div className="md:col-span-8 grid grid-cols-2 xl:grid-cols-4 gap-4">
-              {loading
-                ? Array.from({ length: 4 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className="rounded-lg bg-surface border border-border-light shadow-sm p-4 animate-pulse"
-                    >
-                      <div className="h-3 w-20 bg-shimmer rounded" />
-                      <div className="mt-3 h-6 w-24 bg-shimmer rounded" />
-                    </div>
-                  ))
-                : cards.map(card => (
+              {loading ? (
+                <CardsSkeleton />
+              ) : cards.map(card => (
                     <div
                       key={card.label}
                       className="rounded-lg bg-surface border border-border-light shadow-sm p-4 flex flex-col"
@@ -314,6 +307,8 @@ export default function FinanceScreen() {
               })}
             </div>
           </div>
+          </div>
+          )}
         </div>
       </Container>
       <WithdrawSheet

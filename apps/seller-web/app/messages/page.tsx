@@ -33,6 +33,7 @@ export default function SellerMessagesPage() {
 
   const { data: conversations, isLoading, isError, refetch } = useSellerConversations(sellerId)
   const markRead = useMarkSellerConversationRead()
+  useFlushOfflineQueue()
 
   const threadParam = searchParams.get('thread') ?? undefined
   const [selectedId, setSelectedId] = useState<string | null>(threadParam ?? null)
@@ -206,7 +207,7 @@ export default function SellerMessagesPage() {
                       if (contextLabel) parts.push(contextLabel)
                       const ariaLabel = parts.join('. ')
                       return (
-                        <li key={item.id} className={reduced ? '' : 'anim-row-reorder'}>
+                        <li key={item.id} className={`cv-auto ${reduced ? '' : 'anim-row-reorder'}`}>
                           <button
                             onClick={() => handleOpen(item)}
                             className={`relative flex items-center gap-3 w-full px-4 text-left border-b transition-all duration-150 hover:bg-background active:scale-[0.98] ${reduced ? '' : 'motion-reduce:transition-none'} ${isUnread ? 'bg-[rgba(138,27,87,0.04)]' : 'bg-surface'} ${isSelected ? 'ring-2 ring-inset ring-primary-50' : ''}`}
@@ -692,7 +693,7 @@ function ThreadView({
                     className={`flex items-center gap-2 max-w-[78%] p-2 rounded-2xl text-left ${isMine ? 'bg-primary' : 'bg-background border border-border-light'}`}
                     aria-label={aria}
                   >
-                    <img src={rp.image} alt="" className="w-12 h-12 rounded-md object-cover" />
+                    <img src={rp.image} alt="" loading="lazy" className="w-12 h-12 rounded-md object-cover" />
                     <div className="min-w-0">
                       <p className={`text-sm font-medium truncate ${isMine ? 'text-white' : 'text-text'}`}>{rp.name}</p>
                       <p className={`text-sm ${isMine ? 'text-primary-50' : 'text-text-muted'}`}>NPR {rp.price.toLocaleString()}</p>
@@ -1011,7 +1012,7 @@ function ContextPanel({
               <div className="flex flex-col gap-1.5">
                 {orderCtx.items.slice(0, 3).map(it => (
                   <div key={it.id} className="flex items-center gap-2">
-                    <img src={it.image} alt="" className="w-8 h-8 rounded object-cover" />
+                    <img src={it.image} alt="" loading="lazy" className="w-8 h-8 rounded object-cover" />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-text truncate">{it.name}</p>
                       <p className="text-xs text-text-muted">x{it.quantity} · NPR {it.price.toLocaleString()}</p>
@@ -1045,7 +1046,7 @@ function ContextPanel({
             </div>
           ) : productCtx ? (
             <div className="flex items-center gap-2">
-              <img src={productCtx.image} alt="" className="w-8 h-8 rounded object-cover" />
+              <img src={productCtx.image} alt="" loading="lazy" className="w-8 h-8 rounded object-cover" />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-text truncate">{productCtx.name}</p>
                 <p className="text-xs text-text-muted">NPR {productCtx.price.toLocaleString()}</p>

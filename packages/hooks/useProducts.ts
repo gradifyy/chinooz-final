@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useQuery, useInfiniteQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import * as api from '@chinooz/mock-data'
 import type {
@@ -7,7 +8,7 @@ import type {
   SellerReviewResult,
   BulkReviewAction,
 } from '@chinooz/mock-data'
-import type { Product, Category, CancelReason, SellerOrderStatusKey, SellerReview, ReviewFlagReason } from '@chinooz/types'
+import type { Product, Category, CancelReason, SellerOrderStatusKey, SellerReview, ReviewFlagReason, Message } from '@chinooz/types'
 
 const STALE_PRODUCTS = 1000 * 30
 
@@ -785,7 +786,7 @@ export function useSellerOrders(sellerId: string | null, status?: SellerOrderSta
 export function useSellerConversations(sellerId?: string | null) {
   return useQuery({
     queryKey: ['seller-conversations', sellerId ?? 'me'],
-    queryFn: () => api.getSellerConversations(sellerId ?? undefined),
+    queryFn: () => api.messagingService.getSellerConversations(sellerId ?? undefined),
     staleTime: 1000 * 30,
   })
 }
@@ -793,7 +794,7 @@ export function useSellerConversations(sellerId?: string | null) {
 export function useSellerMessages(conversationId: string) {
   return useQuery({
     queryKey: ['seller-messages', conversationId],
-    queryFn: () => api.getSellerMessages(conversationId),
+    queryFn: () => api.messagingService.getSellerMessages(conversationId),
     enabled: !!conversationId,
     staleTime: 0,
   })
@@ -803,7 +804,28 @@ export function useSendSellerMessage() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ conversationId, body }: { conversationId: string; body: string }) =>
-      api.sendSellerMessage(conversationId, body),
+      api.messagingService.sendSellerMessage(conversationId, body),
+    onMutate: async ({ conversationId, body }) => {
+      await queryClient.cancelQueries({ queryKey: ['seller-messages', conversationId] })
+      const prev = queryClient.getQueryData<Message[]>(['seller-messages', conversationId])
+      const optimistic: Message = {
+        id: `smsg-opt-${Date.now()}`,
+        conversationId,
+        senderId: 'seller-1',
+        senderName: 'You',
+        body,
+        createdAt: new Date().toISOString(),
+        read: false,
+        status: 'sent',
+      }
+      queryClient.setQueryData<Message[]>(['seller-messages', conversationId], (old = []) => [...old, optimistic])
+      return { prev }
+    },
+    onError: (_err, variables, ctx) => {
+      if (ctx?.prev) {
+        queryClient.setQueryData(['seller-messages', variables.conversationId], ctx.prev)
+      }
+    },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['seller-messages', variables.conversationId] })
       queryClient.invalidateQueries({ queryKey: ['seller-conversations'] })
@@ -814,12 +836,36 @@ export function useSendSellerMessage() {
 export function useMarkSellerConversationRead() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (conversationId: string) => api.markSellerConversationRead(conversationId),
+    mutationFn: (conversationId: string) => api.messagingService.markSellerConversationRead(conversationId),
     onSuccess: (_data, conversationId) => {
       queryClient.invalidateQueries({ queryKey: ['seller-messages', conversationId] })
       queryClient.invalidateQueries({ queryKey: ['seller-conversations'] })
     },
   })
+}
+
+export function useFlushOfflineQueue() {
+  const queryClient = useQueryClient()
+  return useEffect(() => {
+    const flush = async () => {
+      try {
+        const queue = JSON.parse(localStorage.getItem('chinooz-seller-offline-queue') || '[]')
+        if (queue.length === 0) return
+        for (const item of queue) {
+          try {
+            await api.messagingService.sendSellerMessage(item.conversationId, item.body)
+          } catch {}
+        }
+        localStorage.removeItem('chinooz-seller-offline-queue')
+        queryClient.invalidateQueries({ queryKey: ['seller-conversations'] })
+        queryClient.invalidateQueries({ queryKey: ['seller-messages'] })
+      } catch {}
+    }
+    const on = () => flush()
+    window.addEventListener('online', on)
+    if (typeof navigator !== 'undefined' && navigator.onLine) flush()
+    return () => window.removeEventListener('online', on)
+  }, [queryClient])
 }
 
 export function useChatOrderContext(sellerId: string | null, orderId?: string) {

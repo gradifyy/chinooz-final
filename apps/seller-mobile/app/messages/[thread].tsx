@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react'
 import {
   View,
   Text,
@@ -753,7 +753,7 @@ function AttachPicker({
   )
 }
 
-function Bubble({ msg, isMine, reduced, t, onProductTap, failed, onRetry }: { msg: Message; isMine: boolean; reduced: boolean; t: (k: string, o?: any) => string; onProductTap: (id: string) => void; failed?: boolean; onRetry?: (msgId: string) => void }) {
+const Bubble = memo(function Bubble({ msg, isMine, reduced, t, onProductTap, failed, onRetry }: { msg: Message; isMine: boolean; reduced: boolean; t: (k: string, o?: any) => string; onProductTap: (id: string) => void; failed?: boolean; onRetry?: (msgId: string) => void }) {
   const scale = useSharedValue(reduced ? 1 : 0.95)
   const opacity = useSharedValue(reduced ? 1 : 0)
   useEffect(() => {
@@ -847,7 +847,7 @@ function Bubble({ msg, isMine, reduced, t, onProductTap, failed, onRetry }: { ms
       </View>
     </Animated.View>
   )
-}
+})
 
 function TypingIndicator({ name, reduced, t }: { name?: string; reduced: boolean; t: (k: string, o?: any) => string }) {
   const dot1 = useSharedValue(0)
@@ -909,7 +909,7 @@ function QuickReplyScroll({ onPick, t, isNe, reduced }: { onPick: (body: string)
   )
 }
 
-function QuickReplyChip({ label, aria, body, onPress, reduced }: { label: string; aria: string; body: string; onPress: (body: string) => void; reduced: boolean }) {
+const QuickReplyChip = memo(function QuickReplyChip({ label, aria, body, onPress, reduced }: { label: string; aria: string; body: string; onPress: (body: string) => void; reduced: boolean }) {
   const scale = useSharedValue(1)
   const handlePressIn = () => { if (!reduced) scale.value = withTiming(0.96, { duration: 100 }) }
   const handlePressOut = () => { if (!reduced) scale.value = withSpring(1, { damping: 15, stiffness: 400 }) }
@@ -928,7 +928,7 @@ function QuickReplyChip({ label, aria, body, onPress, reduced }: { label: string
       </TouchableOpacity>
     </Animated.View>
   )
-}
+})
 
 function TemplatesSheet({
   onClose,
