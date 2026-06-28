@@ -473,9 +473,9 @@ function DetailPane({
       <p className="mt-4 text-sm leading-relaxed text-text-secondary">{t(row.descKey)}</p>
 
       <div className="mt-5 flex flex-wrap gap-3">
-        {(row.id === 'store-profile' || row.id === 'kyc' || row.id === 'shipping-zones') ? (
+        {(row.id === 'store-profile' || row.id === 'kyc' || row.id === 'shipping-zones' || row.id === 'push-alerts') ? (
           <Link
-            href={row.id === 'store-profile' ? '/settings/storefront' : row.id === 'kyc' ? '/settings/business' : '/settings/shipping'}
+            href={row.id === 'store-profile' ? '/settings/storefront' : row.id === 'kyc' ? '/settings/business' : row.id === 'shipping-zones' ? '/settings/shipping' : '/settings/notifications'}
             className="inline-flex min-touch items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark transition-colors"
           >
             {t('seller.settings.manage')}
@@ -496,7 +496,7 @@ function DetailPane({
         </button>
       </div>
 
-      {row.id !== 'store-profile' && row.id !== 'kyc' && row.id !== 'shipping-zones' && (
+      {row.id !== 'store-profile' && row.id !== 'kyc' && row.id !== 'shipping-zones' && row.id !== 'push-alerts' && (
         <p className="mt-4 rounded-lg bg-background px-3 py-2.5 text-xs text-text-muted">
           {t('seller.settings.comingSoon')}
         </p>
