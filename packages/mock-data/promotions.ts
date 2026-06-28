@@ -7,6 +7,8 @@ export type PromotionType =
   | 'bogo'
   | 'free_shipping'
 
+export type PromotionScope = 'all' | 'category' | 'products'
+
 export interface Promotion {
   id: string
   name: string
@@ -14,6 +16,9 @@ export interface Promotion {
   status: PromotionStatus
   discountValue: number
   code: string
+  isCoupon: boolean
+  scope: PromotionScope
+  scopeLabel?: string
   startsAt: string
   endsAt: string
   redemptions: number
@@ -62,12 +67,14 @@ const PROMOTIONS: Promotion[] = [
     status: 'active',
     discountValue: 25,
     code: 'DASHAIN25',
+    isCoupon: true,
+    scope: 'all',
     startsAt: iso(-3),
     endsAt: iso(8),
     redemptions: 412,
     revenue: 184500,
     budget: 250000,
-    productsCount: 86,
+    productsCount: 0,
     createdAt: iso(-5),
   },
   {
@@ -77,6 +84,9 @@ const PROMOTIONS: Promotion[] = [
     status: 'active',
     discountValue: 40,
     code: 'FLASH40',
+    isCoupon: false,
+    scope: 'products',
+    scopeLabel: 'Flash deals',
     startsAt: iso(-1),
     endsAt: iso(0),
     redemptions: 1284,
@@ -92,6 +102,8 @@ const PROMOTIONS: Promotion[] = [
     status: 'active',
     discountValue: 200,
     code: 'WELCOME200',
+    isCoupon: true,
+    scope: 'all',
     startsAt: iso(-30),
     endsAt: iso(60),
     redemptions: 96,
@@ -106,6 +118,8 @@ const PROMOTIONS: Promotion[] = [
     status: 'active',
     discountValue: 150,
     code: 'FREESHIP',
+    isCoupon: true,
+    scope: 'all',
     startsAt: iso(-2),
     endsAt: iso(2),
     redemptions: 318,
@@ -120,6 +134,9 @@ const PROMOTIONS: Promotion[] = [
     status: 'scheduled',
     discountValue: 20,
     code: 'TIHAR20',
+    isCoupon: true,
+    scope: 'category',
+    scopeLabel: 'Ethnic wear',
     startsAt: iso(10),
     endsAt: iso(25),
     redemptions: 0,
@@ -135,6 +152,9 @@ const PROMOTIONS: Promotion[] = [
     status: 'scheduled',
     discountValue: 50,
     code: 'BOGO50',
+    isCoupon: false,
+    scope: 'category',
+    scopeLabel: 'Ethnic wear',
     startsAt: iso(5),
     endsAt: iso(12),
     redemptions: 0,
@@ -149,6 +169,9 @@ const PROMOTIONS: Promotion[] = [
     status: 'expired',
     discountValue: 30,
     code: 'SUMMER30',
+    isCoupon: true,
+    scope: 'products',
+    scopeLabel: 'Summer collection',
     startsAt: iso(-90),
     endsAt: iso(-60),
     redemptions: 742,
@@ -163,11 +186,13 @@ const PROMOTIONS: Promotion[] = [
     status: 'expired',
     discountValue: 500,
     code: 'EID500',
+    isCoupon: true,
+    scope: 'all',
     startsAt: iso(-45),
     endsAt: iso(-30),
     redemptions: 188,
     revenue: 142000,
-    productsCount: 22,
+    productsCount: 0,
     createdAt: iso(-46),
   },
   {
@@ -177,6 +202,9 @@ const PROMOTIONS: Promotion[] = [
     status: 'expired',
     discountValue: 35,
     code: 'LHOSAR35',
+    isCoupon: false,
+    scope: 'products',
+    scopeLabel: 'Festive items',
     startsAt: iso(-20),
     endsAt: iso(-18),
     redemptions: 560,
@@ -191,6 +219,8 @@ const PROMOTIONS: Promotion[] = [
     status: 'draft',
     discountValue: 15,
     code: 'WINTER15',
+    isCoupon: true,
+    scope: 'all',
     startsAt: iso(40),
     endsAt: iso(70),
     redemptions: 0,
@@ -206,6 +236,9 @@ const PROMOTIONS: Promotion[] = [
     status: 'draft',
     discountValue: 50,
     code: 'HAMPER50',
+    isCoupon: false,
+    scope: 'products',
+    scopeLabel: 'Hamper sets',
     startsAt: iso(15),
     endsAt: iso(20),
     redemptions: 0,
@@ -220,6 +253,8 @@ const PROMOTIONS: Promotion[] = [
     status: 'active',
     discountValue: 10,
     code: 'APP10',
+    isCoupon: true,
+    scope: 'all',
     startsAt: iso(-7),
     endsAt: iso(21),
     redemptions: 240,
@@ -282,4 +317,45 @@ export function getPromotionCounts(): Record<PromotionStatus, number> {
     expired: PROMOTIONS.filter(p => p.status === 'expired').length,
     draft: PROMOTIONS.filter(p => p.status === 'draft').length,
   }
+}
+
+export async function deletePromotionById(id: string): Promise<{ success: boolean }> {
+  await delay(300 + Math.random() * 200)
+  const idx = PROMOTIONS.findIndex(p => p.id === id)
+  if (idx >= 0) PROMOTIONS.splice(idx, 1)
+  return { success: true }
+}
+
+export async function duplicatePromotionById(id: string): Promise<Promotion | null> {
+  await delay(300 + Math.random() * 200)
+  const orig = PROMOTIONS.find(p => p.id === id)
+  if (!orig) return null
+  const copy: Promotion = {
+    ...orig,
+    id: `promo-${Date.now()}`,
+    name: `${orig.name} (copy)`,
+    status: 'draft',
+    redemptions: 0,
+    revenue: 0,
+    createdAt: new Date().toISOString(),
+  }
+  PROMOTIONS.push(copy)
+  return copy
+}
+
+export async function togglePromotionActiveById(id: string): Promise<Promotion | null> {
+  await delay(200 + Math.random() * 150)
+  const promo = PROMOTIONS.find(p => p.id === id)
+  if (!promo) return null
+  promo.status = promo.status === 'active' ? 'draft' : 'active'
+  return { ...promo }
+}
+
+export async function endPromotionNowById(id: string): Promise<Promotion | null> {
+  await delay(200 + Math.random() * 150)
+  const promo = PROMOTIONS.find(p => p.id === id)
+  if (!promo) return null
+  promo.status = 'expired'
+  promo.endsAt = new Date().toISOString()
+  return { ...promo }
 }

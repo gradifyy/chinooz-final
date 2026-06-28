@@ -12,24 +12,28 @@ import { useRouter } from 'expo-router'
 import { useTranslation } from 'react-i18next'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Search,
   SlidersHorizontal,
   Plus,
   X,
-  Tag,
   ChevronDown,
   Check,
   TrendingUp,
   Clock,
+  CheckSquare,
 } from 'lucide-react-native'
-import { colors, spacing, radii, fontSize, fontFamily } from '@chinooz/theme'
-import { SegmentedControl, BottomSheet, EmptyState } from '@chinooz/ui'
+import { colors, spacing, radii, fontSize } from '@chinooz/theme'
+import { SegmentedControl, BottomSheet, EmptyState, Toast } from '@chinooz/ui'
 import { useA11y } from '../components/A11yProvider'
 import {
   getPromotions,
   getPromotionCounts,
+  deletePromotionById,
+  duplicatePromotionById,
+  togglePromotionActiveById,
+  endPromotionNowById,
   PROMOTION_TYPES,
   type Promotion,
   type PromotionStatus,
@@ -37,6 +41,7 @@ import {
   type PromotionSort,
 } from '@chinooz/mock-data'
 import { analytics } from '@chinooz/analytics'
+import { PromotionCard, PromotionCardSkeleton } from '../components/PromotionCard'
 
 const STATUS_KEYS: PromotionStatus[] = ['active', 'scheduled', 'expired', 'draft']
 const SORT_KEYS: PromotionSort[] = ['newest', 'ending_soon', 'performance']
@@ -105,8 +110,56 @@ export default function PromotionsScreen() {
   const [filterSheet, setFilterSheet] = useState(false)
   const [sortSheet, setSortSheet] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [selectable, setSelectable] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [toast, setToast] = useState<{ visible: boolean; message: string }>({ visible: false, message: '' })
 
   const counts = useMemo(() => getPromotionCounts(), [])
+  const queryClient = useQueryClient()
+
+  const showToast = useCallback((message: string) => {
+    setToast({ visible: true, message })
+    setTimeout(() => setToast({ visible: false, message: '' }), 2500)
+  }, [])
+
+  const handleSelectChange = useCallback((id: string, sel: boolean) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (sel) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }, [])
+
+  const handleCopyCode = useCallback((code: string) => {
+    showToast(t('seller.promotions.codeCopiedAnnounce', { code }))
+  }, [showToast, t])
+
+  const handleEdit = useCallback((promo: Promotion) => {
+    analytics.track({ name: 'promotion_edit_tapped', properties: { id: promo.id } })
+  }, [])
+
+  const handleDuplicate = useCallback(async (promo: Promotion) => {
+    await duplicatePromotionById(promo.id)
+    queryClient.invalidateQueries({ queryKey: ['promotions-mobile'] })
+    showToast(t('seller.promotions.actionDuplicate'))
+  }, [queryClient, showToast, t])
+
+  const handleToggleActive = useCallback(async (promo: Promotion) => {
+    await togglePromotionActiveById(promo.id)
+    queryClient.invalidateQueries({ queryKey: ['promotions-mobile'] })
+  }, [queryClient])
+
+  const handleEndNow = useCallback(async (promo: Promotion) => {
+    await endPromotionNowById(promo.id)
+    queryClient.invalidateQueries({ queryKey: ['promotions-mobile'] })
+  }, [queryClient])
+
+  const handleDelete = useCallback(async (promo: Promotion) => {
+    await deletePromotionById(promo.id)
+    queryClient.invalidateQueries({ queryKey: ['promotions-mobile'] })
+    showToast(t('seller.promotions.actionDelete'))
+  }, [queryClient, showToast, t])
 
   useEffect(() => {
     analytics.screen({ name: 'seller-promotions' })
@@ -201,6 +254,15 @@ export default function PromotionsScreen() {
             <Plus size={16} color={colors.white} />
             <Text style={styles.createBtnText}>{t('seller.promotions.create')}</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={t('seller.promotions.selectPromotionAria', { name: '' })}
+            onPress={() => { haptic(); setSelectable(s => !s); setSelectedIds(new Set()) }}
+            style={[styles.selectBtn, selectable && styles.selectBtnActive, { minHeight: minTouchTarget }]}
+          >
+            <CheckSquare size={16} color={selectable ? colors.primary : colors.white} />
+            {selectable && <Text style={styles.selectBtnText}>{selectedIds.size}</Text>}
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -288,7 +350,11 @@ export default function PromotionsScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {isLoading ? (
-          <Text style={styles.loadingText}>{t('seller.promotions.loading')}</Text>
+          <View aria-busy={true} accessibilityLabel={t('seller.promotions.skeletonAria')} style={styles.skeletonWrap}>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <PromotionCardSkeleton key={i} />
+            ))}
+          </View>
         ) : isError ? (
           <EmptyState
             title={t('seller.promotions.error')}
@@ -313,8 +379,21 @@ export default function PromotionsScreen() {
             <Text style={styles.countText}>
               {t('seller.promotions.count', { count: items.length })}
             </Text>
-            {items.map(p => (
-              <PromotionCard key={p.id} promo={p} t={t} />
+            {items.map((p, i) => (
+              <PromotionCard
+                key={p.id}
+                promo={p}
+                index={i}
+                selected={selectedIds.has(p.id)}
+                selectable={selectable}
+                onSelectChange={handleSelectChange}
+                onEdit={handleEdit}
+                onDuplicate={handleDuplicate}
+                onToggleActive={handleToggleActive}
+                onEndNow={handleEndNow}
+                onDelete={handleDelete}
+                onCopyCode={handleCopyCode}
+              />
             ))}
           </>
         )}
@@ -418,73 +497,17 @@ export default function PromotionsScreen() {
           })}
         </View>
       </BottomSheet>
+
+      <Toast
+        message={toast.message}
+        variant="success"
+        visible={toast.visible}
+      />
     </View>
   )
 }
 
 type T = (key: string, opts?: Record<string, unknown>) => string
-
-function PromotionCard({ promo, t }: { promo: Promotion; t: T }) {
-  const sb = statusStyle[promo.status]
-  const isSale = promo.type === 'flash_sale' || promo.type === 'percentage'
-  const scheduleKey =
-    promo.status === 'expired' ? 'endedOn' : promo.status === 'scheduled' ? 'startsOn' : 'endsIn'
-  const scheduleDate =
-    promo.status === 'expired'
-      ? promo.endsAt
-      : promo.status === 'scheduled'
-        ? promo.startsAt
-        : promo.endsAt
-  return (
-    <View style={styles.card}>
-      <View style={styles.cardTop}>
-        <View style={styles.cardBrand}>
-          <View style={styles.cardIcon}>
-            <Tag size={18} color={colors.primary} />
-          </View>
-          <View style={styles.cardTitleWrap}>
-            <View style={styles.cardTitleRow}>
-              <Text style={styles.cardTitle} numberOfLines={1}>{promo.name}</Text>
-              {isSale && promo.status === 'active' && (
-                <View style={styles.saleBadge}>
-                  <Text style={styles.saleBadgeText}>{t('seller.promotions.saleBadge')}</Text>
-                </View>
-              )}
-            </View>
-            <Text style={styles.cardCode}>{promo.code}</Text>
-          </View>
-        </View>
-        <View style={[styles.statusBadge, { backgroundColor: sb.bg }]}>
-          <Text style={[styles.statusBadgeText, { color: sb.text }]}>
-            {t(`seller.promotions.status${promo.status.charAt(0).toUpperCase()}${promo.status.slice(1)}`)}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.cardMetrics}>
-        <View style={styles.metric}>
-          <Text style={styles.metricLabel}>{t('seller.promotions.colDiscount')}</Text>
-          <Text style={styles.discountValue}>{discountText(promo)}</Text>
-        </View>
-        <View style={styles.metricRight}>
-          <Text style={styles.metricLabel}>{t('seller.promotions.colRevenue')}</Text>
-          <Text style={styles.revenueValue}>
-            {t('seller.promotions.revenue', { amount: fmtNPR(promo.revenue) })}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.cardFooter}>
-        <Text style={styles.footerSchedule}>
-          {t(`seller.promotions.${scheduleKey}`, { date: formatDate(scheduleDate) })}
-        </Text>
-        <Text style={styles.footerRedemptions}>
-          {t('seller.promotions.redemptions', { count: promo.redemptions })}
-        </Text>
-      </View>
-    </View>
-  )
-}
 
 function FilterChip({ label, removeLabel, onRemove }: { label: string; removeLabel: string; onRemove: () => void }) {
   return (
@@ -529,6 +552,19 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[2],
   },
   createBtnText: { fontSize: fontSize.sm[0], fontWeight: '600', color: colors.white },
+  selectBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: radii.md,
+    paddingHorizontal: spacing[2.5],
+    paddingVertical: spacing[2],
+  },
+  selectBtnActive: {
+    backgroundColor: colors.white,
+  },
+  selectBtnText: { fontSize: fontSize.sm[0], fontWeight: '600', color: colors.primary },
 
   controlsWrap: {
     backgroundColor: colors.background,
@@ -590,67 +626,7 @@ const styles = StyleSheet.create({
   listContent: { padding: spacing[4], gap: spacing[3] },
   loadingText: { fontSize: fontSize.base[0], color: colors.textMuted, textAlign: 'center', marginTop: spacing[6] },
   countText: { fontSize: fontSize.sm[0], color: colors.textMuted, marginBottom: spacing[1] },
-
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    padding: spacing[4],
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
-  },
-  cardTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing[2] },
-  cardBrand: { flexDirection: 'row', alignItems: 'center', gap: spacing[2.5], flex: 1, minWidth: 0 },
-  cardIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radii.full,
-    backgroundColor: colors.primary50,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardTitleWrap: { flex: 1, minWidth: 0 },
-  cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[1.5] },
-  cardTitle: { fontSize: fontSize.md[0], fontWeight: '600', color: colors.text },
-  saleBadge: {
-    backgroundColor: colors.gold,
-    borderRadius: radii.full,
-    paddingHorizontal: spacing[1.5],
-    paddingVertical: 1,
-  },
-  saleBadgeText: { fontSize: 10, fontWeight: '700', color: colors.white, letterSpacing: 0.5 },
-  cardCode: { fontSize: fontSize.sm[0], color: colors.textMuted, fontFamily: fontFamily.sans[0], marginTop: 2 },
-
-  statusBadge: { borderRadius: radii.full, paddingHorizontal: spacing[2.5], paddingVertical: 4 },
-  statusBadgeText: { fontSize: fontSize.sm[0], fontWeight: '600' },
-
-  cardMetrics: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    marginTop: spacing[3],
-  },
-  metric: { gap: 2 },
-  metricRight: { alignItems: 'flex-end', gap: 2 },
-  metricLabel: { fontSize: fontSize.sm[0], color: colors.textMuted },
-  discountValue: { fontSize: fontSize.xl[0], fontWeight: '700', color: colors.gold },
-  revenueValue: { fontSize: fontSize.md[0], fontWeight: '600', color: colors.text },
-
-  cardFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing[3],
-    paddingTop: spacing[3],
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-  },
-  footerSchedule: { fontSize: fontSize.sm[0], color: colors.textSecondary },
-  footerRedemptions: { fontSize: fontSize.sm[0], color: colors.textMuted },
+  skeletonWrap: { gap: spacing[3] },
 
   sheetBody: { paddingHorizontal: spacing[4] },
   sheetSection: { fontSize: fontSize.base[0], fontWeight: '600', color: colors.text, marginBottom: spacing[2] },

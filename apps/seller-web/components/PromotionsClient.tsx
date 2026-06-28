@@ -1,15 +1,19 @@
 'use client'
 
 import React, { useEffect, useMemo, useState, useCallback } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence, type Transition } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
-import { Search, SlidersHorizontal, Plus, X, ChevronDown, Tag, ArrowUpDown } from 'lucide-react'
+import { Search, SlidersHorizontal, Plus, X, ChevronDown, Tag, ArrowUpDown, CheckSquare } from 'lucide-react'
 import { duration, easing } from '@chinooz/theme'
-import { useReducedMotion, SegmentedControl, EmptyState, Screen, Container } from '@chinooz/ui-web'
+import { useReducedMotion, SegmentedControl, EmptyState, Screen, Container, Toast } from '@chinooz/ui-web'
 import {
   getPromotions,
   getPromotionCounts,
+  deletePromotionById,
+  duplicatePromotionById,
+  togglePromotionActiveById,
+  endPromotionNowById,
   PROMOTION_TYPES,
   type Promotion,
   type PromotionStatus,
@@ -17,6 +21,7 @@ import {
   type PromotionSort,
 } from '@chinooz/mock-data'
 import { analytics } from '@chinooz/analytics'
+import { PromotionRow, PromotionRowSkeleton, PromotionCardSkeleton } from './PromotionRow'
 
 const STATUS_KEYS: PromotionStatus[] = ['active', 'scheduled', 'expired', 'draft']
 const SORT_KEYS: PromotionSort[] = ['newest', 'ending_soon', 'performance']
@@ -38,7 +43,7 @@ function formatNPR(n: number): string {
   return n.toLocaleString()
 }
 
-function typeLabel(t: (k: string) => string, type: PromotionType): string {
+function typeLabel(t: (k: string, opts?: Record<string, unknown>) => string, type: PromotionType): string {
   const map: Record<PromotionType, string> = {
     percentage: t('seller.promotions.typePercentage'),
     fixed: t('seller.promotions.typeFixed'),
@@ -54,6 +59,12 @@ function discountText(p: Promotion): string {
   if (p.type === 'fixed') return `NPR ${p.discountValue}`
   if (p.type === 'bogo') return 'BOGO'
   return ''
+}
+
+function scopeText(t: (k: string, opts?: Record<string, unknown>) => string, p: Promotion): string {
+  if (p.scope === 'all') return t('seller.promotions.scopeAll')
+  if (p.scope === 'category') return t('seller.promotions.scopeCategory', { label: p.scopeLabel ?? '' })
+  return t('seller.promotions.scopeProducts', { count: p.productsCount })
 }
 
 const statusBadge: Record<PromotionStatus, { cls: string; key: string }> = {
@@ -74,8 +85,56 @@ export default function PromotionsClient() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [sort, setSort] = useState<PromotionSort>('newest')
+  const [selectable, setSelectable] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [toast, setToast] = useState<{ visible: boolean; message: string }>({ visible: false, message: '' })
 
   const counts = useMemo(() => getPromotionCounts(), [])
+  const queryClient = useQueryClient()
+
+  const showToast = useCallback((message: string) => {
+    setToast({ visible: true, message })
+    setTimeout(() => setToast({ visible: false, message: '' }), 2500)
+  }, [])
+
+  const handleSelectChange = useCallback((id: string, selected: boolean) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (selected) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }, [])
+
+  const handleCopyCode = useCallback((code: string) => {
+    showToast(t('seller.promotions.codeCopiedAnnounce', { code }))
+  }, [showToast, t])
+
+  const handleEdit = useCallback((promo: Promotion) => {
+    analytics.track({ name: 'promotion_edit_tapped', properties: { id: promo.id } })
+  }, [])
+
+  const handleDuplicate = useCallback(async (promo: Promotion) => {
+    await duplicatePromotionById(promo.id)
+    queryClient.invalidateQueries({ queryKey: ['promotions'] })
+    showToast(t('seller.promotions.actionDuplicate'))
+  }, [queryClient, showToast, t])
+
+  const handleToggleActive = useCallback(async (promo: Promotion) => {
+    await togglePromotionActiveById(promo.id)
+    queryClient.invalidateQueries({ queryKey: ['promotions'] })
+  }, [queryClient])
+
+  const handleEndNow = useCallback(async (promo: Promotion) => {
+    await endPromotionNowById(promo.id)
+    queryClient.invalidateQueries({ queryKey: ['promotions'] })
+  }, [queryClient])
+
+  const handleDelete = useCallback(async (promo: Promotion) => {
+    await deletePromotionById(promo.id)
+    queryClient.invalidateQueries({ queryKey: ['promotions'] })
+    showToast(t('seller.promotions.actionDelete'))
+  }, [queryClient, showToast, t])
 
   useEffect(() => {
     analytics.screen({ name: 'seller-promotions' })
@@ -151,7 +210,6 @@ export default function PromotionsClient() {
     <Screen>
       <Container>
         <div className="py-6 md:py-8">
-          {/* Header */}
           <div className="flex items-start justify-between gap-4 mb-5">
             <div>
               <h1 className="text-2xl font-bold text-text tracking-tight">
@@ -159,17 +217,28 @@ export default function PromotionsClient() {
               </h1>
               <p className="text-text-muted text-sm mt-0.5">{t('seller.promotions.subtitle')}</p>
             </div>
-            <button
-              onClick={() => {}}
-              aria-label={t('seller.promotions.createAria')}
-              className="shrink-0 inline-flex items-center gap-1.5 h-10 px-4 rounded-md bg-primary text-white text-sm font-semibold hover:opacity-95 transition-opacity active:scale-[0.98] min-touch"
-            >
-              <Plus size={16} strokeWidth={2.5} />
-              <span className="hidden sm:inline">{t('seller.promotions.create')}</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => { setSelectable(s => !s); setSelectedIds(new Set()) }}
+                aria-label={t('seller.promotions.selectPromotionAria', { name: '' })}
+                className={`shrink-0 inline-flex items-center gap-1.5 h-10 px-3 rounded-md border text-sm font-semibold transition-colors min-touch ${
+                  selectable ? 'bg-primary text-white border-primary' : 'bg-surface text-text border-border hover:bg-background'
+                }`}
+              >
+                <CheckSquare size={16} />
+                <span className="hidden sm:inline">{selectable ? `${selectedIds.size}` : 'Select'}</span>
+              </button>
+              <button
+                onClick={() => {}}
+                aria-label={t('seller.promotions.createAria')}
+                className="shrink-0 inline-flex items-center gap-1.5 h-10 px-4 rounded-md bg-primary text-white text-sm font-semibold hover:opacity-95 transition-opacity active:scale-[0.98] min-touch"
+              >
+                <Plus size={16} strokeWidth={2.5} />
+                <span className="hidden sm:inline">{t('seller.promotions.create')}</span>
+              </button>
+            </div>
           </div>
 
-          {/* Sticky controls */}
           <div className="sticky top-0 z-sticky -mx-4 px-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8 py-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border-light">
             <div className="flex flex-col gap-3">
               <SegmentedControl
@@ -310,10 +379,33 @@ export default function PromotionsClient() {
             </div>
           </div>
 
-          {/* List */}
           <div className="mt-4">
             {isLoading ? (
-              <SkeletonTable />
+              <>
+                <div className="hidden md:block rounded-lg border border-border-light overflow-auto bg-surface max-h-[calc(100vh-220px)] scrollbar-none">
+                  <table className="w-full">
+                    <thead className="sticky top-0 z-base bg-surface">
+                      <tr className="border-b border-border">
+                        {['colPromotion','colType','colDiscount','colStatus','colSchedule','colRedemptions','colRevenue'].map(col => (
+                          <th key={col} scope="col" className="text-left text-xs font-semibold text-text-muted px-4 py-2.5 whitespace-nowrap bg-surface">
+                            {t(`seller.promotions.${col}`)}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody aria-busy="true" aria-label={t('seller.promotions.skeletonAria')}>
+                      {Array.from({ length: 6 }).map((_, i) => (
+                        <PromotionRowSkeleton key={i} selectable={selectable} />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="md:hidden flex flex-col gap-3" aria-busy="true" aria-label={t('seller.promotions.skeletonAria')}>
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <PromotionCardSkeleton key={i} />
+                  ))}
+                </div>
+              </>
             ) : isError ? (
               <EmptyState
                 title={t('seller.promotions.error')}
@@ -339,25 +431,12 @@ export default function PromotionsClient() {
                 <p className="text-xs text-text-muted mb-2">
                   {t('seller.promotions.count', { count: items.length })}
                 </p>
-                {/* Desktop table */}
                 <div className="hidden md:block rounded-lg border border-border-light overflow-auto bg-surface max-h-[calc(100vh-220px)] scrollbar-none">
                   <table className="w-full" role="table">
                     <thead className="sticky top-0 z-base bg-surface">
                       <tr className="border-b border-border">
-                        {[
-                          'colPromotion',
-                          'colType',
-                          'colDiscount',
-                          'colStatus',
-                          'colSchedule',
-                          'colRedemptions',
-                          'colRevenue',
-                        ].map(col => (
-                          <th
-                            key={col}
-                            scope="col"
-                            className="text-left text-xs font-semibold text-text-muted px-4 py-2.5 whitespace-nowrap bg-surface"
-                          >
+                        {['colPromotion','colType','colDiscount','colStatus','colSchedule','colRedemptions','colRevenue'].map(col => (
+                          <th key={col} scope="col" className="text-left text-xs font-semibold text-text-muted px-4 py-2.5 whitespace-nowrap bg-surface">
                             {t(`seller.promotions.${col}`)}
                           </th>
                         ))}
@@ -365,16 +444,27 @@ export default function PromotionsClient() {
                     </thead>
                     <tbody>
                       {items.map(p => (
-                        <PromotionRow key={p.id} promo={p} t={t} />
+                        <PromotionRow
+                          key={p.id}
+                          promo={p}
+                          selected={selectedIds.has(p.id)}
+                          selectable={selectable}
+                          onSelectChange={handleSelectChange}
+                          onEdit={handleEdit}
+                          onDuplicate={handleDuplicate}
+                          onToggleActive={handleToggleActive}
+                          onEndNow={handleEndNow}
+                          onDelete={handleDelete}
+                          onCopyCode={handleCopyCode}
+                        />
                       ))}
                     </tbody>
                   </table>
                 </div>
 
-                {/* Mobile cards */}
                 <div className="md:hidden flex flex-col gap-3">
                   {items.map(p => (
-                    <PromotionCard key={p.id} promo={p} t={t} />
+                    <CompactCard key={p.id} promo={p} t={t} onCopyCode={handleCopyCode} onEdit={handleEdit} />
                   ))}
                 </div>
               </>
@@ -382,74 +472,36 @@ export default function PromotionsClient() {
           </div>
         </div>
       </Container>
+      <Toast
+        message={toast.message}
+        variant="success"
+        visible={toast.visible}
+      />
     </Screen>
   )
 }
 
 type T = (key: string, opts?: Record<string, unknown>) => string
 
-function PromotionRow({ promo, t }: { promo: Promotion; t: T }) {
+function CompactCard({ promo, t, onCopyCode, onEdit }: { promo: Promotion; t: T; onCopyCode: (code: string) => void; onEdit: (p: Promotion) => void }) {
+  const [copied, setCopied] = useState(false)
   const sb = statusBadge[promo.status]
   const isSale = promo.type === 'flash_sale' || promo.type === 'percentage'
-  return (
-    <tr className="border-b border-border-light last:border-b-0 h-16 hover:bg-background/60 transition-colors">
-      <td className="px-4">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="shrink-0 w-9 h-9 rounded-full bg-primary-50 flex items-center justify-center">
-            <Tag size={16} color="#8A1B57" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm font-semibold text-text truncate">{promo.name}</span>
-              {isSale && promo.status === 'active' && (
-                <span className="shrink-0 text-[10px] font-bold tracking-wide text-white bg-gold rounded-full px-1.5 py-px">
-                  {t('seller.promotions.saleBadge')}
-                </span>
-              )}
-            </div>
-            <span className="text-xs text-text-muted font-mono">{promo.code}</span>
-          </div>
-        </div>
-      </td>
-      <td className="px-4">
-        <span className="text-sm text-text-secondary">{typeLabel(t, promo.type)}</span>
-      </td>
-      <td className="px-4">
-        <span className="text-sm font-bold text-gold tabular-nums">{discountText(promo)}</span>
-      </td>
-      <td className="px-4">
-        <span className={`inline-flex items-center text-xs font-semibold rounded-full px-2.5 py-1 ${sb.cls}`}>
-          {t(sb.key)}
-        </span>
-      </td>
-      <td className="px-4">
-        <span className="text-sm text-text-secondary whitespace-nowrap">
-          {formatDate(promo.startsAt)} – {formatDate(promo.endsAt)}
-        </span>
-      </td>
-      <td className="px-4">
-        <span className="text-sm text-text tabular-nums">{promo.redemptions.toLocaleString()}</span>
-      </td>
-      <td className="px-4">
-        <span className="text-sm font-semibold text-text tabular-nums">
-          {t('seller.promotions.revenue', { amount: formatNPR(promo.revenue) })}
-        </span>
-      </td>
-    </tr>
-  )
-}
 
-function PromotionCard({ promo, t }: { promo: Promotion; t: T }) {
-  const sb = statusBadge[promo.status]
-  const isSale = promo.type === 'flash_sale' || promo.type === 'percentage'
-  const scheduleKey =
-    promo.status === 'expired'
-      ? 'endedOn'
-      : promo.status === 'scheduled'
-        ? 'startsOn'
-        : 'endsIn'
+  const handleCopy = async () => {
+    try { await navigator.clipboard.writeText(promo.code) } catch {}
+    setCopied(true)
+    onCopyCode(promo.code)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
   return (
-    <div className="rounded-lg border border-border-light bg-surface shadow-sm p-4">
+    <div
+      onClick={() => onEdit(promo)}
+      role="button"
+      aria-label={t('seller.promotions.rowAria', { name: promo.name, type: typeLabel(t, promo.type), value: discountText(promo), status: t(sb.key) })}
+      className="rounded-lg border border-border-light bg-surface shadow-sm p-4 cursor-pointer hover:bg-primary-50/30 transition-colors"
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="shrink-0 w-10 h-10 rounded-full bg-primary-50 flex items-center justify-center">
@@ -457,65 +509,57 @@ function PromotionCard({ promo, t }: { promo: Promotion; t: T }) {
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className="text-sm font-semibold text-text truncate">{promo.name}</span>
+              <span className="text-[16px] font-semibold text-text truncate">{promo.name}</span>
               {isSale && promo.status === 'active' && (
                 <span className="shrink-0 text-[10px] font-bold tracking-wide text-white bg-gold rounded-full px-1.5 py-px">
                   {t('seller.promotions.saleBadge')}
                 </span>
               )}
             </div>
-            <span className="text-xs text-text-muted font-mono">{promo.code}</span>
+            <span className="text-[12px] font-medium text-text-muted">{typeLabel(t, promo.type)}</span>
           </div>
         </div>
-        <span className={`inline-flex items-center text-xs font-semibold rounded-full px-2.5 py-1 shrink-0 ${sb.cls}`}>
+        <span className={`inline-flex items-center text-[12px] font-semibold rounded-full px-2.5 py-1 shrink-0 ${sb.cls}`}>
           {t(sb.key)}
         </span>
       </div>
 
+      {promo.isCoupon && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); handleCopy() }}
+          className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-mono text-text-muted hover:text-primary transition-colors"
+          aria-label={t('seller.promotions.copyCodeAria', { code: promo.code })}
+        >
+          {promo.code}
+          <span className={`text-[11px] font-semibold ${copied ? 'text-success' : 'text-primary'}`}>
+            {copied ? `✓ ${t('seller.promotions.codeCopied')}` : t('seller.promotions.copyCode')}
+          </span>
+        </button>
+      )}
+
       <div className="mt-3 flex items-end justify-between gap-3">
         <div>
-          <p className="text-xs text-text-muted">{t('seller.promotions.colDiscount')}</p>
+          <p className="text-[12px] text-text-muted">{t('seller.promotions.colDiscount')}</p>
           <p className="text-xl font-bold text-gold tabular-nums leading-tight">{discountText(promo)}</p>
+          <p className="text-[12px] text-text-muted mt-0.5">{scopeText(t, promo)}</p>
         </div>
         <div className="text-right">
-          <p className="text-xs text-text-muted">{t('seller.promotions.colRevenue')}</p>
+          <p className="text-[12px] text-text-muted">{t('seller.promotions.revenueInfluenced')}</p>
           <p className="text-sm font-semibold text-text tabular-nums">
             {t('seller.promotions.revenue', { amount: formatNPR(promo.revenue) })}
+          </p>
+          <p className="text-[12px] text-text-muted tabular-nums">
+            {t('seller.promotions.uses', { count: promo.redemptions })}
           </p>
         </div>
       </div>
 
       <div className="mt-3 pt-3 border-t border-border-light flex items-center justify-between gap-2">
-        <span className="text-xs text-text-secondary">
-          {t(`seller.promotions.${scheduleKey}`, { date: formatDate(promo.status === 'expired' ? promo.endsAt : promo.status === 'scheduled' ? promo.startsAt : promo.endsAt) })}
-        </span>
-        <span className="text-xs text-text-muted">
-          {t('seller.promotions.redemptions', { count: promo.redemptions })}
+        <span className="text-[12px] text-text-secondary">
+          {formatDate(promo.startsAt)} – {formatDate(promo.endsAt)}
         </span>
       </div>
-    </div>
-  )
-}
-
-function SkeletonTable() {
-  return (
-    <div className="hidden md:block rounded-lg border border-border-light overflow-hidden bg-surface">
-      <div className="border-b border-border px-4 py-2.5">
-        <div className="flex gap-4">
-          {Array.from({ length: 7 }).map((_, i) => (
-            <div key={i} className="h-3 w-20 bg-shimmer rounded" />
-          ))}
-        </div>
-      </div>
-      {Array.from({ length: 6 }).map((_, r) => (
-        <div key={r} className="h-16 border-b border-border-light last:border-b-0 px-4 flex items-center gap-4">
-          <div className="w-9 h-9 rounded-full bg-shimmer" />
-          <div className="flex-1 space-y-2">
-            <div className="h-3 w-40 bg-shimmer rounded" />
-            <div className="h-2.5 w-24 bg-shimmer rounded" />
-          </div>
-        </div>
-      ))}
     </div>
   )
 }
