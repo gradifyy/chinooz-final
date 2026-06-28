@@ -18,6 +18,9 @@ import type {
   SellerInventoryProduct,
   SellerInventoryVariant,
   StockStatus,
+  StockEditReason,
+  StockEditMode,
+  StockHistoryEntry,
   SellerReview,
   SellerReviewResponse,
 } from '@chinooz/types'
@@ -381,6 +384,37 @@ export async function applyPromoCode(code: string): Promise<{
     return { success: false, error: 'Invalid code. Please try again.' }
   }
   return { success: true, discount: promo.discount, type: promo.type }
+}
+
+// --- Rider account lookup (RO3 branching) ---
+
+/**
+ * Mock rider account state for a verified phone number.
+ *
+ * Branching contract (same as buyer/seller auth boundary):
+ * - "new":      no rider account for this phone → onboarding stepper (RO3).
+ * - "approved": existing approved rider → Home / jobs board.
+ * - "pending":  existing rider awaiting approval → pending state (RO6).
+ *
+ * Deterministic by phone suffix so the three branches are exercisable:
+ * - 0: new rider, -1: approved, -2: pending.
+ */
+export type RiderAccountState = 'new' | 'approved' | 'pending'
+
+const APPROVED_RIDER_PHONES = new Set<string>(['9800000001', '9700000002'])
+const PENDING_RIDER_PHONES = new Set<string>(['9800000003', '9700000004'])
+
+export async function lookupRiderAccount(
+  phone: string,
+): Promise<{ state: RiderAccountState; riderId?: string; name?: string }> {
+  await randomDelay(300, 700)
+  if (APPROVED_RIDER_PHONES.has(phone)) {
+    return { state: 'approved', riderId: 'rider-1', name: 'Chinooz Rider' }
+  }
+  if (PENDING_RIDER_PHONES.has(phone)) {
+    return { state: 'pending', riderId: 'rider-pending' }
+  }
+  return { state: 'new' }
 }
 
 // --- Shipping Config ---
@@ -1044,4 +1078,72 @@ export async function toggleSellerReviewFlag(
   if (!review) return { success: false }
   review.flagged = !review.flagged
   return { success: true, review }
+}
+
+// --- Stock editing (SI5/SS3) ---
+
+const stockHistoryStore: StockHistoryEntry[] = []
+
+function findVariantInCache(variantId: string): SellerInventoryVariant | undefined {
+  for (const p of inventoryCache) {
+    const v = p.variants.find(vv => vv.id === variantId)
+    if (v) return v
+  }
+  return undefined
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function recalcProductAggregates(productId: string): void {
+  const p = inventoryCache.find(pp => pp.id === productId)
+  if (!p) return
+  p.aggregateStock = p.variants.reduce((s, v) => s + v.stockCount, 0)
+  p.stock =
+    p.variants.every(v => v.stock === 'out_of_stock')
+      ? 'out_of_stock'
+      : p.variants.some(v => v.stock === 'low_stock' || v.stock === 'out_of_stock')
+        ? 'low_stock'
+        : 'in_stock'
+}
+
+export interface UpdateStockInput {
+  variantId: string
+  newStock: number
+  mode: StockEditMode
+  reason: StockEditReason
+  note?: string
+}
+
+/** Synchronous record — used by sellerApi.updateStock to log history. */
+export function recordStockHistoryEntry(
+  variantId: string,
+  mode: StockEditMode,
+  reason: StockEditReason,
+  note: string | undefined,
+  newStock: number,
+): StockHistoryEntry | undefined {
+  const variant = findVariantInCache(variantId)
+  const previous = variant?.stockCount ?? 0
+  const entry: StockHistoryEntry = {
+    id: `she-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    variantId,
+    sku: variant?.sku ?? '',
+    previousStock: previous,
+    newStock,
+    delta: newStock - previous,
+    mode,
+    reason,
+    note,
+    createdAt: new Date().toISOString(),
+  }
+  stockHistoryStore.unshift(entry)
+  return entry
+}
+
+export async function getStockHistory(
+  variantId?: string,
+  limit = 50,
+): Promise<StockHistoryEntry[]> {
+  await randomDelay(100, 250)
+  const list = variantId ? stockHistoryStore.filter(e => e.variantId === variantId) : stockHistoryStore
+  return list.slice(0, limit)
 }

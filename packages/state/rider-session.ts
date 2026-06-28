@@ -1,6 +1,14 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 
+/**
+ * RO3 branching states after OTP verify:
+ * - "new":      phone not linked to an approved rider → onboarding stepper.
+ * - "approved": existing, approved rider → Home / jobs board.
+ * - "pending":  existing rider awaiting approval → pending state (RO6).
+ */
+export type RiderAccountState = 'new' | 'approved' | 'pending'
+
 export interface RiderProfile {
   name: string
   phone: string
@@ -12,6 +20,7 @@ interface RiderSessionState {
   isLoggedIn: boolean
   riderId: string | null
   rider: RiderProfile
+  accountState: RiderAccountState | null
   devMock: boolean
   markOnboardingSeen: () => void
   login: (riderId: string, name: string) => void
@@ -19,6 +28,7 @@ interface RiderSessionState {
   toggleLogin: () => void
   toggleDevMock: () => void
   updateRider: (data: Partial<RiderProfile>) => void
+  setAccountState: (state: RiderAccountState) => void
 }
 
 function getStorage() {
@@ -45,6 +55,7 @@ export const useRiderSessionStore = create<RiderSessionState>()(
       isLoggedIn: false,
       riderId: null,
       rider: { ...defaultRider },
+      accountState: null,
       devMock: true,
 
       markOnboardingSeen: () => set({ onboardingSeen: true }),
@@ -83,6 +94,8 @@ export const useRiderSessionStore = create<RiderSessionState>()(
           rider: { ...state.rider, ...data },
           riderId: state.riderId,
         })),
+
+      setAccountState: accountState => set({ accountState }),
     }),
     {
       name: 'chinooz-rider-session',
@@ -92,6 +105,7 @@ export const useRiderSessionStore = create<RiderSessionState>()(
         isLoggedIn: state.isLoggedIn,
         riderId: state.riderId,
         rider: state.rider,
+        accountState: state.accountState,
         devMock: state.devMock,
       }),
     },
