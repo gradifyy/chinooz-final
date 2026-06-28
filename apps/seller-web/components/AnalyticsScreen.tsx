@@ -13,6 +13,7 @@ import { analytics as tracker } from '@chinooz/analytics'
 import SalesSection from './SalesSection'
 import TrafficSection from './TrafficSection'
 import ProductsSection from './ProductsSection'
+import CustomersSection from './CustomersSection'
 import {
   getAnalytics,
   ANALYTICS_RANGES,
@@ -337,6 +338,8 @@ export default function AnalyticsScreen() {
                 <TrafficSection data={data} compare={compare} />
               ) : section === 'products' ? (
                 <ProductsSection data={data} range={range} compare={compare} filter={filter} />
+              ) : section === 'customers' ? (
+                <CustomersSection data={data} compare={compare} />
               ) : (
                 <SectionContent section={section} data={data} compare={compare} />
               )}
@@ -524,7 +527,7 @@ function SectionContent({
                     className="h-14 border-b border-border last:border-b-0 hover:bg-background/60 transition-colors"
                   >
                     <td className="py-2 px-4 text-[14px] font-semibold text-text truncate">
-                      {c.name}
+                      {c.displayName}
                     </td>
                     <td className="py-2 px-4 text-right text-[13px] text-text-secondary tabular-nums">
                       {c.orders}

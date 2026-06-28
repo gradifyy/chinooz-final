@@ -56,11 +56,12 @@ export default function ActiveTopBar({ delivery, onMinimize, onCancel }: ActiveT
   }, [reducedMotion, terminal, onMinimize])
 
   // One-tap safety entry — always reachable in-trip, even under stress.
+  // Deep-links to SOS with trip context so the full safety toolkit is one tap away.
   const handleSafety = useCallback(() => {
     try { if (!reducedMotion) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium) } catch {}
-    analytics.track({ event: 'rider_active_safety_tapped', screen: 'rider-active-delivery' })
-    router.push('/support')
-  }, [reducedMotion, router])
+    analytics.track({ event: 'rider_active_safety_tapped', screen: 'rider-active-delivery', properties: { orderRef: delivery.orderRef } })
+    router.push({ pathname: '/support/sos', params: { from: 'active', ref: delivery.orderRef } })
+  }, [reducedMotion, router, delivery.orderRef])
 
   const etaText = terminal
     ? delivery.status === 'delivered'

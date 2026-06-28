@@ -113,11 +113,25 @@ export interface AnalyticsProductDetail {
 
 export interface AnalyticsCustomerRow {
   id: string
-  name: string
+  displayName: string
   orders: number
   spend: number
   aov: number
   lastOrder: string
+}
+
+export interface AnalyticsGeoRow {
+  id: string
+  label: string
+  customers: number
+  share: number
+  color: string
+}
+
+export interface AnalyticsSearchTerm {
+  id: string
+  term: string
+  count: number
 }
 
 export interface AnalyticsFilter {
@@ -141,6 +155,9 @@ export interface AnalyticsSectionData {
   convTrend?: AnalyticsChartPoint[]
   productCallouts?: AnalyticsProductCallout[]
   categoryComparison?: AnalyticsCategoryComparison[]
+  customerTrend?: { label: string; new: number; returning: number }[]
+  geoBreakdown?: AnalyticsGeoRow[]
+  searchTerms?: AnalyticsSearchTerm[]
 }
 
 export const ANALYTICS_RANGES: { key: AnalyticsRangeKey; label: string; days: number }[] = [
@@ -171,10 +188,11 @@ const TRAFFIC_KPIS: KpiDef[] = [
 ]
 
 const CUSTOMER_KPIS: KpiDef[] = [
+  { key: 'total', label: 'Total customers', base: 64, hint: 'In this range' },
   { key: 'new', label: 'New customers', base: 38, hint: 'First-time buyers' },
   { key: 'returning', label: 'Returning', base: 26, hint: 'Repeat buyers' },
-  { key: 'total', label: 'Total customers', base: 64, hint: 'In this range' },
-  { key: 'ltv', label: 'Avg. LTV', base: 412, hint: 'Lifetime value', money: true },
+  { key: 'repeatRate', label: 'Repeat-purchase rate', base: 41, hint: 'Returning / total' },
+  { key: 'ltv', label: 'Avg. customer value', base: 412, hint: 'Lifetime value', money: true },
 ]
 
 const PRODUCTS_KPIS: KpiDef[] = [
@@ -254,11 +272,33 @@ const PRODUCT_ROWS = [
 ]
 
 const CUSTOMER_ROWS = [
-  { id: 'c1', name: 'Aarav Sharma', orders: 6, lastOrder: '2d ago' },
-  { id: 'c2', name: 'Sita Gurung', orders: 4, lastOrder: '5d ago' },
-  { id: 'c3', name: 'Bishal Thapa', orders: 3, lastOrder: '1w ago' },
-  { id: 'c4', name: 'Riya Maharjan', orders: 3, lastOrder: '2w ago' },
-  { id: 'c5', name: 'Niraj Kc', orders: 2, lastOrder: '3w ago' },
+  { id: 'c1', first: 'Aarav', initial: 'S', orders: 6, lastOrder: '2d ago' },
+  { id: 'c2', first: 'Sita', initial: 'G', orders: 4, lastOrder: '5d ago' },
+  { id: 'c3', first: 'Bishal', initial: 'T', orders: 3, lastOrder: '1w ago' },
+  { id: 'c4', first: 'Riya', initial: 'M', orders: 3, lastOrder: '2w ago' },
+  { id: 'c5', first: 'Niraj', initial: 'K', orders: 2, lastOrder: '3w ago' },
+  { id: 'c6', first: 'Priya', initial: 'R', orders: 2, lastOrder: '1m ago' },
+  { id: 'c7', first: 'Aayush', initial: 'P', orders: 1, lastOrder: '1m ago' },
+  { id: 'c8', first: 'Sneha', initial: 'B', orders: 1, lastOrder: '2m ago' },
+]
+
+const GEO_AREAS = [
+  { id: 'ktm', label: 'Kathmandu' },
+  { id: 'ltl', label: 'Lalitpur' },
+  { id: 'bkt', label: 'Bhaktapur' },
+  { id: 'pkr', label: 'Pokhara' },
+  { id: 'other', label: 'Other Nepal' },
+]
+
+const SEARCH_TERMS = [
+  { id: 's1', term: 'pashmina' },
+  { id: 's2', term: 'khukuri' },
+  { id: 's3', term: 'singing bowl' },
+  { id: 's4', term: 'dhaka topi' },
+  { id: 's5', term: 'organic honey' },
+  { id: 's6', term: 'handicraft gift' },
+  { id: 's7', term: 'Nepali souvenir' },
+  { id: 's8', term: 'woolen shawl' },
 ]
 
 function seeded(n: number, seed: number): number {
@@ -476,7 +516,7 @@ export function getAnalytics(
       const spend = c.orders * (260 + seeded(i, seedBase) * 220) * scale
       return {
         id: c.id,
-        name: c.name,
+        displayName: `${c.first} ${c.initial}.`,
         orders: c.orders,
         spend: Math.round(spend),
         aov: Math.round(spend / c.orders),
@@ -556,7 +596,9 @@ export function getAnalytics(
   if (section === 'products' && products) {
     const sortedByRevenue = [...products].sort((a, b) => b.revenue - a.revenue)
     const sortedByConv = [...products].sort((a, b) => a.convPct - b.convPct)
-    const oosDemand = products.filter(p => p.outOfStock && p.views > sortedByRevenue[Math.floor(sortedByRevenue.length / 2)].views)
+    const oosDemand = products.filter(
+      p => p.outOfStock && p.views > sortedByRevenue[Math.floor(sortedByRevenue.length / 2)].views,
+    )
 
     productCallouts = [
       {
@@ -587,9 +629,18 @@ export function getAnalytics(
       })
     }
 
-    const catMap = new Map<string, { revenue: number; units: number; views: number; convSum: number; count: number }>()
+    const catMap = new Map<
+      string,
+      { revenue: number; units: number; views: number; convSum: number; count: number }
+    >()
     for (const p of products) {
-      const existing = catMap.get(p.category) ?? { revenue: 0, units: 0, views: 0, convSum: 0, count: 0 }
+      const existing = catMap.get(p.category) ?? {
+        revenue: 0,
+        units: 0,
+        views: 0,
+        convSum: 0,
+        count: 0,
+      }
       existing.revenue += p.revenue
       existing.units += p.units
       existing.views += p.views
@@ -610,6 +661,44 @@ export function getAnalytics(
     }))
   }
 
+  let customerTrend: { label: string; new: number; returning: number }[] | undefined
+  let geoBreakdown: AnalyticsGeoRow[] | undefined
+  let searchTerms: AnalyticsSearchTerm[] | undefined
+
+  if (section === 'customers') {
+    const labels = CHART_LABELS[days] ?? CHART_LABELS[30]
+    customerTrend = labels.map((label, i) => {
+      const newC = Math.round(8 * scale * (0.5 + seeded(i + 70, seedBase) * 1.2))
+      const returningC = Math.round(5 * scale * (0.5 + seeded(i + 80, seedBase) * 1.0))
+      return { label, new: newC, returning: returningC }
+    })
+
+    const geoTotal =
+      GEO_AREAS.reduce(
+        (acc, _, i) =>
+          acc + Math.round(64 * scale * (0.5 - i * 0.08) * (0.8 + seeded(i + 110, seedBase) * 0.4)),
+        0,
+      ) || 1
+    geoBreakdown = GEO_AREAS.map((g, i) => {
+      const customersN = Math.round(
+        64 * scale * (0.5 - i * 0.08) * (0.8 + seeded(i + 110, seedBase) * 0.4),
+      )
+      return {
+        id: g.id,
+        label: g.label,
+        customers: customersN,
+        share: Math.round((customersN / geoTotal) * 100),
+        color: BREAKDOWN_PALETTE[i % BREAKDOWN_PALETTE.length],
+      }
+    })
+
+    searchTerms = SEARCH_TERMS.map((s, i) => ({
+      id: s.id,
+      term: s.term,
+      count: Math.round(120 * scale * (0.8 - i * 0.08) * (0.7 + seeded(i + 120, seedBase) * 0.6)),
+    })).sort((a, b) => b.count - a.count)
+  }
+
   return {
     section,
     range,
@@ -626,6 +715,9 @@ export function getAnalytics(
     convTrend,
     productCallouts,
     categoryComparison,
+    customerTrend,
+    geoBreakdown,
+    searchTerms,
   }
 }
 
@@ -720,9 +812,9 @@ export function getProductDetail(
 
   const labels = CHART_LABELS[days] ?? CHART_LABELS[30]
   const trend: AnalyticsChartPoint[] = labels.map((label, j) => {
-    const current = Math.round(revenue / labels.length * (0.5 + seeded(j + 40, seedBase) * 1.0))
+    const current = Math.round((revenue / labels.length) * (0.5 + seeded(j + 40, seedBase) * 1.0))
     const previous = compare
-      ? Math.round(revenue / labels.length * (0.4 + seeded(j + 50, seedBase + 1) * 0.9))
+      ? Math.round((revenue / labels.length) * (0.4 + seeded(j + 50, seedBase + 1) * 0.9))
       : undefined
     return { label, current, previous }
   })
@@ -735,13 +827,21 @@ export function getProductDetail(
   ]
   const funnel: AnalyticsFunnelStage[] = funnelStages.map((s, j) => {
     const count = Math.round(views * s.ratio * (0.85 + seeded(j + 60 + i, seedBase) * 0.3))
-    const prev = j === 0 ? count : Math.round(views * funnelStages[j - 1].ratio * (0.85 + seeded(j - 1 + 60 + i, seedBase) * 0.3))
+    const prev =
+      j === 0
+        ? count
+        : Math.round(
+            views * funnelStages[j - 1].ratio * (0.85 + seeded(j - 1 + 60 + i, seedBase) * 0.3),
+          )
     const convFromPrev = j === 0 ? 100 : Math.round((count / Math.max(1, prev)) * 100)
     const dropOffPct = j === 0 ? 0 : Math.round(((prev - count) / Math.max(1, prev)) * 100)
     return { id: s.id, label: s.label, count, convFromPrev, dropOffPct, isBiggestLeak: false }
   })
 
-  const biggestLeakIdx = funnel.reduce((best, f, j) => (j > 0 && f.dropOffPct > funnel[best].dropOffPct ? j : best), 1)
+  const biggestLeakIdx = funnel.reduce(
+    (best, f, j) => (j > 0 && f.dropOffPct > funnel[best].dropOffPct ? j : best),
+    1,
+  )
   funnel[biggestLeakIdx].isBiggestLeak = true
 
   return { product, trend, funnel }

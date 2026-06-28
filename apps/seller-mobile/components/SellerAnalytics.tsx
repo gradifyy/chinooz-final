@@ -17,6 +17,7 @@ import { useSellerCategories, useSellerProducts } from '@chinooz/hooks'
 import SalesSection from './SalesSection'
 import TrafficSection from './TrafficSection'
 import ProductsSection from './ProductsSection'
+import CustomersSection from './CustomersSection'
 import {
   getAnalytics,
   ANALYTICS_RANGES,
@@ -300,6 +301,8 @@ export default function SellerAnalytics() {
             <TrafficSection data={data} compare={compare} />
           ) : section === 'products' ? (
             <ProductsSection data={data} range={range} compare={compare} filter={filter} />
+          ) : section === 'customers' ? (
+            <CustomersSection data={data} compare={compare} />
           ) : (
             <SectionContent section={section} data={data} compare={compare} />
           )}
@@ -493,7 +496,7 @@ function SectionContent({
             <View key={c.id} style={[styles.productRow, i > 0 && styles.productRowBorder]}>
               <View style={styles.productBody}>
                 <Text style={styles.productName} numberOfLines={1}>
-                  {c.name}
+                  {c.displayName}
                 </Text>
                 <Text style={styles.productSub} numberOfLines={1}>
                   {t('seller.analytics.colOrders')} {c.orders} · {c.lastOrder}

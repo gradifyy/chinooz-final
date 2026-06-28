@@ -176,6 +176,47 @@ export const riderOnboardingPersonalSchema = z.object({
 
 export type RiderOnboardingPersonalInput = z.infer<typeof riderOnboardingPersonalSchema>
 
+/**
+ * RO3 step 2 — rider onboarding vehicle details.
+ * Plate is required for motorized vehicles (motorbike, scooter) but optional
+ * for bicycles. Make/model is always optional. Plate is auto-uppercased and
+ * validated against the Nepali plate format (e.g. "BA 1 PA 2024").
+ */
+export const riderOnboardingVehicleSchema = z
+  .object({
+    type: z.enum(['bicycle', 'motorbike', 'scooter'], {
+      errorMap: () => ({ message: 'Please select a vehicle type' }),
+    }),
+    makeModel: z
+      .string()
+      .max(120, 'Make/model is too long')
+      .optional()
+      .or(z.literal('')),
+    plate: z
+      .string()
+      .max(20, 'Plate number is too long')
+      .optional()
+      .or(z.literal('')),
+    color: z
+      .string()
+      .min(2, 'Color is required')
+      .max(50, 'Color is too long'),
+  })
+  .superRefine((data, ctx) => {
+    // Plate required for motorized vehicles.
+    if (data.type !== 'bicycle') {
+      if (!data.plate || data.plate.trim().length < 3) {
+        ctx.addIssue({
+          path: ['plate'],
+          message: 'Plate number is required for motorized vehicles',
+          code: 'custom',
+        })
+      }
+    }
+  })
+
+export type RiderOnboardingVehicleInput = z.infer<typeof riderOnboardingVehicleSchema>
+
 export const createProfileSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').max(100),
   email: z.string().email('Please enter a valid email').optional().or(z.literal('')),

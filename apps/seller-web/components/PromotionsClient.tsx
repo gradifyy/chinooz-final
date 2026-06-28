@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence, type Transition } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
+import { useRouter } from 'next/navigation'
 import { Search, SlidersHorizontal, Plus, X, ChevronDown, Tag, ArrowUpDown, CheckSquare } from 'lucide-react'
 import { duration, easing } from '@chinooz/theme'
 import { useReducedMotion, SegmentedControl, EmptyState, Screen, Container, Toast } from '@chinooz/ui-web'
@@ -76,6 +77,7 @@ const statusBadge: Record<PromotionStatus, { cls: string; key: string }> = {
 
 export default function PromotionsClient() {
   const { t } = useTranslation()
+  const router = useRouter()
   const reduced = useReducedMotion()
 
   const [status, setStatus] = useState<PromotionStatus>('active')
@@ -112,7 +114,8 @@ export default function PromotionsClient() {
 
   const handleEdit = useCallback((promo: Promotion) => {
     analytics.track({ name: 'promotion_edit_tapped', properties: { id: promo.id } })
-  }, [])
+    router.push(`/promotions/${promo.id}/edit`)
+  }, [router])
 
   const handleDuplicate = useCallback(async (promo: Promotion) => {
     await duplicatePromotionById(promo.id)
@@ -229,7 +232,7 @@ export default function PromotionsClient() {
                 <span className="hidden sm:inline">{selectable ? `${selectedIds.size}` : 'Select'}</span>
               </button>
               <button
-                onClick={() => {}}
+                onClick={() => router.push('/promotions/new')}
                 aria-label={t('seller.promotions.createAria')}
                 className="shrink-0 inline-flex items-center gap-1.5 h-10 px-4 rounded-md bg-primary text-white text-sm font-semibold hover:opacity-95 transition-opacity active:scale-[0.98] min-touch"
               >

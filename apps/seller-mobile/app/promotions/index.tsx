@@ -26,7 +26,7 @@ import {
 } from 'lucide-react-native'
 import { colors, spacing, radii, fontSize } from '@chinooz/theme'
 import { SegmentedControl, BottomSheet, EmptyState, Toast } from '@chinooz/ui'
-import { useA11y } from '../components/A11yProvider'
+import { useA11y } from '../../components/A11yProvider'
 import {
   getPromotions,
   getPromotionCounts,
@@ -41,7 +41,7 @@ import {
   type PromotionSort,
 } from '@chinooz/mock-data'
 import { analytics } from '@chinooz/analytics'
-import { PromotionCard, PromotionCardSkeleton } from '../components/PromotionCard'
+import { PromotionCard, PromotionCardSkeleton } from '../../components/PromotionCard'
 
 const STATUS_KEYS: PromotionStatus[] = ['active', 'scheduled', 'expired', 'draft']
 const SORT_KEYS: PromotionSort[] = ['newest', 'ending_soon', 'performance']
@@ -137,7 +137,8 @@ export default function PromotionsScreen() {
 
   const handleEdit = useCallback((promo: Promotion) => {
     analytics.track({ name: 'promotion_edit_tapped', properties: { id: promo.id } })
-  }, [])
+    router.push(`/promotions/${promo.id}/edit`)
+  }, [router])
 
   const handleDuplicate = useCallback(async (promo: Promotion) => {
     await duplicatePromotionById(promo.id)
@@ -248,7 +249,7 @@ export default function PromotionsScreen() {
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel={t('seller.promotions.createAria')}
-            onPress={haptic}
+            onPress={() => { haptic(); router.push('/promotions/new') }}
             style={[styles.createBtn, { minHeight: minTouchTarget }]}
           >
             <Plus size={16} color={colors.white} />
