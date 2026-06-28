@@ -584,6 +584,10 @@ function ResultState({ t, router, insets, phase, amount, net, fee, methodLabel, 
   const ringScale = useSharedValue(reduced ? 0 : 0)
   const ringOpacity = useSharedValue(reduced ? 0 : 0)
 
+  const isPending = phase === 'pending'
+  const isPaid = phase === 'paid'
+  const isFailed = phase === 'failed'
+
   useEffect(() => {
     if (reduced) return
     scale.value = withSpring(1, { damping: 16, stiffness: 300, mass: 0.8 })
@@ -593,17 +597,13 @@ function ResultState({ t, router, insets, phase, amount, net, fee, methodLabel, 
       ringScale.value = withSpring(1.8, { damping: 12, stiffness: 120, mass: 1 })
       ringOpacity.value = withTiming(0, { duration: duration.slower, easing: Easing.bezier(...easing.easeOut) })
     }
-  }, [])
+  }, [isPaid, reduced])
 
   const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }], opacity: opacity.value }))
   const ringStyle = useAnimatedStyle(() => ({
     transform: [{ scale: ringScale.value }],
     opacity: ringOpacity.value,
-  ))
-
-  const isPending = phase === 'pending'
-  const isPaid = phase === 'paid'
-  const isFailed = phase === 'failed'
+  }))
 
   const icon = isPaid ? <CheckCircle2 size={48} color={colors.success} /> : isFailed ? <XCircle size={48} color={colors.error} /> : <Clock size={48} color={colors.primary} />
   const title = isPaid ? t('rider.earnings.payout.cashout.paidTitle') : isFailed ? t('rider.earnings.payout.cashout.failedTitle') : t('rider.earnings.payout.cashout.pendingTitle')
