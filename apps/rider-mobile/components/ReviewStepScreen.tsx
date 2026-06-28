@@ -37,10 +37,11 @@ import {
   type ConsentState,
   type DocumentKey,
 } from '@chinooz/state'
-import { submitRiderOnboarding } from '@chinooz/mock-data/api'
+import { useSubmitRiderOnboarding } from '@chinooz/hooks'
 import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
 import { analytics } from '@chinooz/analytics'
 import ProgressStepper from './ProgressStepper'
+import { SubmitError } from './OnboardingStates'
 
 const STEP_LABEL_KEYS: Record<OnboardingStep, string> = {
   personal: 'rider.onboarding.stepPersonal',
@@ -73,11 +74,13 @@ export default function ReviewStepScreen() {
   const setConsent = useOnboardingStore(s => s.setConsent)
   const setCurrentStep = useOnboardingStore(s => s.setCurrentStep)
   const reset = useOnboardingStore(s => s.reset)
+  const submitMutation = useSubmitRiderOnboarding()
 
   const [consent, setConsentState] = useState<ConsentState>(draft.consent)
   const [initialConsent, setInitialConsent] = useState<ConsentState>(draft.consent)
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [submitError, setSubmitError] = useState(false)
   const [consentError, setConsentError] = useState(false)
   const [dirtyOpen, setDirtyOpen] = useState(false)
   const pendingExit = useRef<(() => void) | null>(null)
@@ -158,9 +161,10 @@ export default function ReviewStepScreen() {
     }
 
     setSubmitting(true)
+    setSubmitError(false)
     setConsent(consent)
     try {
-      await submitRiderOnboarding({
+      await submitMutation.mutateAsync({
         personal: draft.personal,
         vehicle: draft.vehicle,
         documents: draft.documents,
@@ -171,11 +175,18 @@ export default function ReviewStepScreen() {
       try {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       } catch {}
-      analytics.track({ name: 'rider_onboarding_submitted' })
+    } catch {
+      setSubmitError(true)
+      try {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+        AccessibilityInfo.announceForAccessibility(
+          t('rider.onboarding.states.errorSubmitTitle'),
+        )
+      } catch {}
     } finally {
       setSubmitting(false)
     }
-  }, [consent, draft, setConsent, t])
+  }, [consent, draft, setConsent, submitMutation, t])
 
   const handleGoPending = useCallback(() => {
     reset()
@@ -369,6 +380,18 @@ export default function ReviewStepScreen() {
               </Text>
             ) : null}
           </View>
+
+          {submitError ? (
+            <SubmitError
+              title={t('rider.onboarding.states.errorSubmitTitle')}
+              body={t('rider.onboarding.states.errorSubmitBody')}
+              ariaLabel={t('rider.onboarding.states.errorSubmitTitle')}
+              retryLabel={t('rider.onboarding.states.errorSubmitRetry')}
+              retryAria={t('rider.onboarding.states.errorSubmitRetryAria')}
+              calmText={t('rider.onboarding.states.progressSavedBody')}
+              onRetry={handleSubmit}
+            />
+          ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
 

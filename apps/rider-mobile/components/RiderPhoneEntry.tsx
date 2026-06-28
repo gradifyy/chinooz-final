@@ -59,10 +59,10 @@ export default function RiderPhoneEntry({ mode }: Props) {
   const validate = useCallback((value: string) => {
     const result = nepaliPhoneSchema.safeParse({ phone: value })
     if (!result.success) {
-      return result.error.issues[0]?.message || 'Invalid phone number'
+      return result.error.issues[0]?.message || t('rider.onboarding.states.errorPhoneInvalid')
     }
     return ''
-  }, [])
+  }, [t])
 
   const handleChange = useCallback((text: string) => {
     const digits = text.replace(/\D/g, '').slice(0, 10)
@@ -109,11 +109,11 @@ export default function RiderPhoneEntry({ mode }: Props) {
         router.push({ pathname: '/otp', params: { phone, mode } })
       }
     } catch {
-      setError('Something went wrong. Please try again.')
+      setError(t('rider.onboarding.states.errorTitle'))
     } finally {
       setLoading(false)
     }
-  }, [phone, validate, router, mode, reduced])
+  }, [phone, validate, router, mode, reduced, t])
 
   const containerStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: shakeX.value }],

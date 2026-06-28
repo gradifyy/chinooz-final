@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect } from 'react'
 import {
   View,
   Text,
@@ -22,15 +22,13 @@ import {
 } from 'lucide-react-native'
 import { colors, spacing, radii, fontFamily, fontSize } from '@chinooz/theme'
 import { useRiderSessionStore } from '@chinooz/state'
-import {
-  checkRiderApproval,
-  type RiderApprovalResult,
-  type RiderVerificationItem,
-} from '@chinooz/mock-data/api'
+import { useRiderApprovalStatus } from '@chinooz/hooks'
+import type { RiderVerificationItem } from '@chinooz/mock-data'
 import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
 import { SlideUp } from '@chinooz/ui/Animate'
 import { analytics } from '@chinooz/analytics'
 import LanguageToggle from '../components/LanguageToggle'
+import { PendingSkeleton, OnboardingError } from '../components/OnboardingStates'
 
 type ItemStatus = 'pending' | 'verified' | 'rejected'
 
@@ -49,34 +47,18 @@ export default function PendingScreen() {
   const reduced = useReducedMotion()
   const logout = useRiderSessionStore(s => s.logout)
 
-  const [result, setResult] = useState<RiderApprovalResult | null>(null)
-  const [, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
+  const { data: result, isLoading: loading, isError: error, refetch, isRefetching } = useRiderApprovalStatus('rider-pending')
 
   useEffect(() => {
     analytics.screen({ name: 'rider-pending' })
-    loadApproval()
-  }, [])
-
-  const loadApproval = useCallback(async () => {
-    try {
-      const r = await checkRiderApproval('rider-pending')
-      setResult(r)
-    } catch {
-      // Fallback: show pending state with no items
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
   }, [])
 
   const handleRefresh = useCallback(() => {
-    setRefreshing(true)
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     } catch {}
-    loadApproval()
-  }, [loadApproval])
+    refetch()
+  }, [refetch])
 
   const handleLogout = useCallback(() => {
     try {
@@ -120,12 +102,25 @@ export default function PendingScreen() {
         <LanguageToggle />
       </View>
 
+      {loading ? (
+        <PendingSkeleton ariaLabel={t('rider.onboarding.states.loadingPendingAria')} />
+      ) : error ? (
+        <OnboardingError
+          title={t('rider.onboarding.states.errorTitle')}
+          body={t('rider.onboarding.states.errorBody')}
+          ariaLabel={t('rider.onboarding.states.errorTitle')}
+          retryLabel={t('rider.onboarding.states.errorRetry')}
+          retryAria={t('rider.onboarding.states.errorRetryAria')}
+          calmText={t('rider.onboarding.states.progressSaved')}
+          onRetry={() => refetch()}
+        />
+      ) : (
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing[6] }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
+          <RefreshControl refreshing={isRefetching} onRefresh={handleRefresh} tintColor={colors.primary} />
         }
       >
         {/* Status region — announced as status for screen readers */}
@@ -212,6 +207,7 @@ export default function PendingScreen() {
           </SlideUp>
         ) : null}
       </ScrollView>
+      )}
 
       {/* Footer actions */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing[4] }]}>
@@ -398,7 +394,7 @@ const styles = StyleSheet.create({
     color: colors.error,
     fontFamily: fontFamily.sans[0],
     lineHeight: 16,
-    paddingLeft: spacing[4 + 2],
+    paddingLeft: spacing[4] + spacing[2],
   },
   // Resubmit card
   resubmitCard: {

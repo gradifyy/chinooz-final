@@ -62,10 +62,16 @@ export type DocumentKey =
 
 export type DocumentDraft = Record<DocumentKey, DocumentItemDraft>
 
+export interface ConsentState {
+  riderAgreement: boolean
+  dataProcessing: boolean
+}
+
 export interface OnboardingDraft {
   personal: PersonalDraft
   vehicle: VehicleDraft
   documents: DocumentDraft
+  consent: ConsentState
 }
 
 interface OnboardingState {
@@ -74,6 +80,7 @@ interface OnboardingState {
   setPersonal: (data: Partial<PersonalDraft>) => void
   setVehicle: (data: Partial<VehicleDraft>) => void
   setDocuments: (data: Partial<DocumentDraft>) => void
+  setConsent: (data: Partial<ConsentState>) => void
   setCurrentStep: (step: OnboardingStep) => void
   reset: () => void
 }
@@ -118,10 +125,16 @@ const emptyDocuments: DocumentDraft = {
   selfie: { ...emptyDocument },
 }
 
+const emptyConsent: ConsentState = {
+  riderAgreement: false,
+  dataProcessing: false,
+}
+
 const emptyDraft: OnboardingDraft = {
   personal: { ...emptyPersonal },
   vehicle: { ...emptyVehicle },
   documents: { ...emptyDocuments },
+  consent: { ...emptyConsent },
 }
 
 export const useOnboardingStore = create<OnboardingState>()(
@@ -151,6 +164,14 @@ export const useOnboardingStore = create<OnboardingState>()(
           draft: {
             ...state.draft,
             documents: { ...state.draft.documents, ...data },
+          },
+        })),
+
+      setConsent: data =>
+        set(state => ({
+          draft: {
+            ...state.draft,
+            consent: { ...state.draft.consent, ...data },
           },
         })),
 

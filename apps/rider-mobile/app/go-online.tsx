@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect } from 'react'
 import {
   View,
   Text,
@@ -27,9 +27,11 @@ import {
   Sparkles,
 } from 'lucide-react-native'
 import { colors, spacing, radii, fontFamily, fontSize, easing } from '@chinooz/theme'
-import { getGoOnlineChecklist, type GoOnlineCheckItem } from '@chinooz/mock-data/api'
+import type { GoOnlineCheckItem } from '@chinooz/mock-data'
+import { useGoOnlineChecklist } from '@chinooz/hooks'
 import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
 import { analytics } from '@chinooz/analytics'
+import { GoOnlineSkeleton, OnboardingError } from '../components/OnboardingStates'
 
 /**
  * RO7 — Go-online checklist.
@@ -45,25 +47,12 @@ export default function GoOnlineScreen() {
   const insets = useSafeAreaInsets()
   const reduced = useReducedMotion()
 
-  const [items, setItems] = useState<GoOnlineCheckItem[]>([])
-  const [, setLoading] = useState(true)
-  const [allComplete, setAllComplete] = useState(false)
+  const { data, isLoading: loading, isError: error, refetch } = useGoOnlineChecklist('rider-1')
+  const items = data?.items ?? []
+  const allComplete = data?.allComplete ?? false
 
   useEffect(() => {
     analytics.screen({ name: 'rider-go-online' })
-    loadChecklist()
-  }, [])
-
-  const loadChecklist = useCallback(async () => {
-    try {
-      const result = await getGoOnlineChecklist('rider-1')
-      setItems(result.items)
-      setAllComplete(result.allComplete)
-    } catch {
-      // Fallback: empty checklist
-    } finally {
-      setLoading(false)
-    }
   }, [])
 
   const handleItemPress = useCallback(
@@ -147,6 +136,19 @@ export default function GoOnlineScreen() {
         </View>
       </View>
 
+      {loading ? (
+        <GoOnlineSkeleton ariaLabel={t('rider.onboarding.states.loadingGoOnlineAria')} />
+      ) : error ? (
+        <OnboardingError
+          title={t('rider.onboarding.states.errorTitle')}
+          body={t('rider.onboarding.states.errorBody')}
+          ariaLabel={t('rider.onboarding.states.errorTitle')}
+          retryLabel={t('rider.onboarding.states.errorRetry')}
+          retryAria={t('rider.onboarding.states.errorRetryAria')}
+          calmText={t('rider.onboarding.states.progressSaved')}
+          onRetry={() => refetch()}
+        />
+      ) : (
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[
@@ -188,6 +190,7 @@ export default function GoOnlineScreen() {
           </Animated.View>
         ) : null}
       </ScrollView>
+      )}
 
       {/* Footer with Start earning CTA */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing[4] }]}>

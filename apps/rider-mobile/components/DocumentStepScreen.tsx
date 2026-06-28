@@ -44,8 +44,10 @@ import {
   type OnboardingStep,
 } from '@chinooz/state'
 import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
+import { compressImage } from '@chinooz/utils'
 import { analytics } from '@chinooz/analytics'
 import ProgressStepper from './ProgressStepper'
+import { UploadError, EmptyDocsState } from './OnboardingStates'
 
 type DocStatus = 'notUploaded' | 'uploaded' | 'pending'
 
@@ -125,6 +127,7 @@ export default function DocumentStepScreen() {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [uploadErrors, setUploadErrors] = useState<Record<string, boolean>>({})
   const [dirtyOpen, setDirtyOpen] = useState(false)
   const pendingExit = useRef<(() => void) | null>(null)
 
@@ -145,6 +148,12 @@ export default function DocumentStepScreen() {
   )
 
   const isMotorized = vehicleType === 'motorbike' || vehicleType === 'scooter'
+
+  /** Whether any documents have been uploaded yet (for empty state). */
+  const hasAnyUploads = useMemo(
+    () => (Object.keys(form) as DocumentKey[]).some(k => form[k].uploaded),
+    [form],
+  )
 
   /** Documents visible for the current vehicle type. */
   const visibleDocs = useMemo(
@@ -177,6 +186,42 @@ export default function DocumentStepScreen() {
     [],
   )
 
+  const clearUploadError = useCallback((key: DocumentKey) => {
+    setUploadErrors(prev => {
+      if (!prev[key]) return prev
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
+  }, [])
+
+  const simulateUpload = useCallback(
+    async (key: DocumentKey, uri: string) => {
+      // Compress the image before upload (battery/data conscious).
+      const compressedUri = await compressImage(uri, { maxWidth: 1024, quality: 0.8 })
+
+      // Simulate ~15% upload failure for error-state demonstration.
+      if (__DEV__ && Math.random() < 0.15) {
+        setUploadErrors(prev => ({ ...prev, [key]: true }))
+        try {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+          AccessibilityInfo.announceForAccessibility(
+            t('rider.onboarding.states.errorUploadTitle'),
+          )
+        } catch {}
+        return
+      }
+      clearUploadError(key)
+      setDocField(key, { uploaded: true, uri: compressedUri })
+      try {
+        AccessibilityInfo.announceForAccessibility(
+          t('rider.onboarding.documents.statusUploaded'),
+        )
+      } catch {}
+    },
+    [clearUploadError, setDocField, t],
+  )
+
   const handleCapture = useCallback(
     (key: DocumentKey) => {
       try {
@@ -188,31 +233,17 @@ export default function DocumentStepScreen() {
         [
           {
             text: t('rider.onboarding.documents.capture'),
-            onPress: () => {
-              setDocField(key, { uploaded: true, uri: 'mock://camera' })
-              try {
-                AccessibilityInfo.announceForAccessibility(
-                  t('rider.onboarding.documents.statusUploaded'),
-                )
-              } catch {}
-            },
+            onPress: () => simulateUpload(key, 'mock://camera'),
           },
           {
             text: t('rider.onboarding.documents.upload'),
-            onPress: () => {
-              setDocField(key, { uploaded: true, uri: 'mock://gallery' })
-              try {
-                AccessibilityInfo.announceForAccessibility(
-                  t('rider.onboarding.documents.statusUploaded'),
-                )
-              } catch {}
-            },
+            onPress: () => simulateUpload(key, 'mock://gallery'),
           },
           { text: t('common.cancel'), style: 'cancel' as const },
         ],
       )
     },
-    [t, setDocField],
+    [t, simulateUpload],
   )
 
   const handleReplace = useCallback(
@@ -226,17 +257,17 @@ export default function DocumentStepScreen() {
         [
           {
             text: t('rider.onboarding.documents.capture'),
-            onPress: () => setDocField(key, { uploaded: true, uri: 'mock://camera-replace' }),
+            onPress: () => simulateUpload(key, 'mock://camera-replace'),
           },
           {
             text: t('rider.onboarding.documents.upload'),
-            onPress: () => setDocField(key, { uploaded: true, uri: 'mock://gallery-replace' }),
+            onPress: () => simulateUpload(key, 'mock://gallery-replace'),
           },
           { text: t('common.cancel'), style: 'cancel' as const },
         ],
       )
     },
-    [t, setDocField],
+    [t, simulateUpload],
   )
 
   const validate = useCallback((): boolean => {
@@ -403,6 +434,18 @@ export default function DocumentStepScreen() {
             </View>
           </View>
 
+          {/* Empty state — no documents uploaded yet */}
+          {!hasAnyUploads ? (
+            <EmptyDocsState
+              title={t('rider.onboarding.states.emptyDocsTitle')}
+              body={t('rider.onboarding.states.emptyDocsBody')}
+              ariaLabel={t('rider.onboarding.states.emptyDocsTitle')}
+              actionLabel={t('rider.onboarding.states.emptyDocsUpload')}
+              actionAria={t('rider.onboarding.states.emptyDocsUploadAria')}
+              onAction={() => handleCapture(visibleDocs[0]?.key ?? 'idFront')}
+            />
+          ) : null}
+
           {/* Document upload cards */}
           {visibleDocs.map(doc => {
             const Icon = doc.icon
@@ -488,6 +531,18 @@ export default function DocumentStepScreen() {
                     </TouchableOpacity>
                   </View>
                 )}
+
+                {/* Upload error — inline, preserves other items */}
+                {uploadErrors[doc.key] ? (
+                  <UploadError
+                    title={t('rider.onboarding.states.errorUploadTitle')}
+                    body={t('rider.onboarding.states.errorUploadBody')}
+                    ariaLabel={t('rider.onboarding.states.errorUploadTitle')}
+                    retryLabel={t('rider.onboarding.states.errorUploadRetry')}
+                    retryAria={t('rider.onboarding.states.errorUploadRetryAria')}
+                    onRetry={() => handleCapture(doc.key)}
+                  />
+                ) : null}
 
                 {/* Guidance text */}
                 <Text style={styles.docGuidance}>
