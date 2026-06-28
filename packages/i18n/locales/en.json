@@ -91,7 +91,6 @@
     "mostPopular": "Most Popular",
     "relevance": "Relevance",
     "newest": "Newest",
-    "rating": "Rating",
     "browseAll": "Browse All Categories"
   },
   "deals": {
@@ -808,6 +807,112 @@
       "delivered": "Delivered",
       "cancelled": "Cancelled",
       "returned": "Returned"
+    }
+  },
+  "showcase": {
+    "title": "Experience Chinooz",
+    "subtitle": "Shopping reimagined for Nepal. Fast, simple, and in your language.",
+    "carouselLabel": "App screens showcase",
+    "prevSlide": "Previous screen",
+    "nextSlide": "Next screen",
+    "slideIndicators": "Slide indicators",
+    "goToSlide": "Go to slide",
+    "screens": {
+      "search": "Search and discover products",
+      "cart": "Multi-seller shopping cart",
+      "tracking": "Live order tracking",
+      "cod": "Cash on delivery payment",
+      "bilingual": "App in Nepali language"
+    },
+    "features": {
+      "search": {
+        "title": "Smart Search",
+        "desc": "Find anything across thousands of products from verified sellers."
+      },
+      "cart": {
+        "title": "Multi-Seller Cart",
+        "desc": "Shop from multiple sellers in one checkout. We handle the rest."
+      },
+      "tracking": {
+        "title": "Live Tracking",
+        "desc": "Watch your order move in real-time from seller to your door."
+      },
+      "cod": {
+        "title": "Cash on Delivery",
+        "desc": "Pay when it arrives. eSewa, Khalti, and cards also accepted."
+      },
+      "bilingual": {
+        "title": "English & Nepali",
+        "desc": "Full app experience in both languages. Switch anytime."
+      }
+    },
+    "floatingCards": {
+      "notification": {
+        "title": "Order Confirmed",
+        "desc": "Your order #CHN1234 has been confirmed and is being prepared."
+      },
+      "orderTracked": {
+        "title": "Out for Delivery",
+        "desc": "Rider Sujan is 12 minutes away with your package."
+      }
+    }
+  },
+  "bento": {
+    "title": "Everything You Need",
+    "subtitle": "Built from the ground up for how Nepal shops — fast, flexible, and familiar.",
+    "delivery": {
+      "title": "Lightning Delivery in the Valley",
+      "desc": "Average 45-minute delivery across Kathmandu Valley. Track every step in real-time."
+    },
+    "payment": {
+      "title": "Pay Your Way",
+      "desc": "Cash on delivery, eSewa, Khalti, Connect IPS, or card. Your choice, zero hassle."
+    },
+    "bilingual": {
+      "title": "Fully Bilingual",
+      "desc": "Complete experience in English and Nepali. Switch languages with one tap."
+    },
+    "verified": {
+      "title": "Verified Sellers",
+      "desc": "Every seller is vetted. Ratings, reviews, and quality you can trust."
+    },
+    "tracking": {
+      "title": "Real-Time Tracking",
+      "desc": "Live map tracking from pickup to doorstep. Know exactly where your order is."
+    },
+    "secure": {
+      "title": "Secure & Private",
+      "desc": "Bank-grade encryption. Your data stays yours. Safe payments, every time."
+    }
+  },
+  "nepal": {
+    "badge": "Made for Nepal",
+    "title": "Built for Nepal, by Nepal",
+    "subtitle": "We're not adapting a foreign app. Chinooz is designed from day one for Nepali buyers, sellers, and riders.",
+    "vision": "Starting in Kathmandu Valley, growing to serve every corner of Nepal. This is just the beginning.",
+    "stats": {
+      "sellers": "Verified Sellers",
+      "products": "Products Listed",
+      "delivery": "Avg. Delivery Time",
+      "zones": "Delivery Zones"
+    },
+    "pillars": {
+      "kathmandu": {
+        "title": "Kathmandu Valley First",
+        "desc": "Hyper-local launch across Kathmandu, Lalitpur, and Bhaktapur — with nationwide expansion on the roadmap."
+      },
+      "payments": {
+        "title": "Local Payments",
+        "desc": "eSewa, Khalti, Connect IPS, and cash on delivery. The payment methods Nepal actually uses."
+      },
+      "language": {
+        "title": "Your Language",
+        "desc": "Full Nepali language support throughout the app. No awkward translations — native from the start."
+      },
+      "riders": {
+        "title": "Local Riders",
+        "desc": "Our delivery network is powered by riders who know every galli and tole in the Valley."
+      }
     }
   }
 }

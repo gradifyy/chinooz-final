@@ -7,6 +7,8 @@ const nextConfig = {
       { protocol: 'https', hostname: 'ui-avatars.com' },
     ],
     formats: ['image/avif', 'image/webp'],
+    deviceSizes: [640, 750, 828, 1080, 1200],
+    imageSizes: [150, 300, 450, 600, 750],
   },
   headers: async () => [
     {
@@ -20,7 +22,7 @@ const nextConfig = {
     },
   ],
   experimental: {
-    optimizePackageImports: ['@chinooz/ui-web', 'framer-motion'],
+    optimizePackageImports: ['@chinooz/ui-web', 'framer-motion', 'embla-carousel-react'],
   },
 }
 
