@@ -33,12 +33,13 @@ import {
   MapPin,
 } from 'lucide-react-native'
 import { colors, radii, spacing, fontFamily, fontSize, shadow } from '@chinooz/theme'
-import { useReducedMotion } from '@chinooz/ui'
+import { useReducedMotion, FadeIn } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
+import { useCodCollections } from '@chinooz/hooks'
+import { useAppState } from '../../components/AppStateProvider'
+import { OfflineBanner, DisputeBanner } from '../../components/WalletStates'
 import {
-  getCodCollections,
   formatRiderNPRAmount,
-  type CodCollectionLedger,
   type CodCollectionDay,
   type CodCollectionRow,
 } from '@chinooz/mock-data'
@@ -73,10 +74,13 @@ export default function CodCollectionLedgerScreen() {
   const { connectivity } = useAppState()
   const isOffline = connectivity === 'offline'
 
-  const [ledger, setLedger] = useState<CodCollectionLedger | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState(false)
+  // TanStack Query — 30s staleTime, auto-refetch on focus.
+  const collectionsQuery = useCodCollections()
+  const ledger = collectionsQuery.data ?? null
+  const loading = collectionsQuery.isLoading
+  const refreshing = collectionsQuery.isFetching && !collectionsQuery.isLoading
+  const error = collectionsQuery.isError
+
   const [dateRange, setDateRange] = useState<DateRangeKey>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [query, setQuery] = useState('')
@@ -85,27 +89,9 @@ export default function CodCollectionLedgerScreen() {
     analytics.screen({ name: 'rider-cod-collection-ledger' })
   }, [])
 
-  const load = useCallback(async () => {
-    setError(false)
-    try {
-      const r = await getCodCollections()
-      setLedger(r)
-    } catch {
-      setError(true)
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    load()
-  }, [load])
-
-  const onRefresh = () => {
-    setRefreshing(true)
-    load()
-  }
+  const onRefresh = useCallback(() => {
+    collectionsQuery.refetch()
+  }, [collectionsQuery])
 
   const filteredDays = useMemo(() => {
     if (!ledger) return [] as CodCollectionDay[]
@@ -280,12 +266,12 @@ export default function CodCollectionLedgerScreen() {
             body={t('rider.wallet.states.disputeWarningBody', {
               amount: formatRiderNPRAmount(
                 ledger.days
-                  .flatMap(d => d.rows)
+                  .flatMap(d => d.entries)
                   .filter(r => r.flagged)
                   .reduce((s, r) => s + r.amount, 0),
               ),
               orderId: ledger.days
-                .flatMap(d => d.rows)
+                .flatMap(d => d.entries)
                 .find(r => r.flagged)?.orderId ?? '—',
             })}
             ariaLabel={t('rider.wallet.states.disputeWarningAria', {
@@ -329,14 +315,15 @@ export default function CodCollectionLedgerScreen() {
             </View>
 
             {/* Day groups */}
-            {filteredDays.map(day => (
+            {filteredDays.map((day, i) => (
+              <FadeIn key={day.date} delay={i * 60}>
               <DayGroup
-                key={day.date}
                 day={day}
                 reduced={reduced}
                 onRowTap={onRowTap}
                 t={t}
               />
+              </FadeIn>
             ))}
             <View style={{ height: spacing[4] }} />
           </View>

@@ -30,14 +30,13 @@ import {
   AlertTriangle,
 } from 'lucide-react-native'
 import { colors, radii, spacing, fontFamily, fontSize, shadow } from '@chinooz/theme'
-import { useReducedMotion } from '@chinooz/ui'
+import { useReducedMotion, FadeIn } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
 import { useA11y } from '../../components/A11yProvider'
 import { useAppState } from '../../components/AppStateProvider'
 import { OfflineBanner, PartialDepositBanner } from '../../components/WalletStates'
+import { useDepositHistory, useDepositReceipt } from '@chinooz/hooks'
 import {
-  getDepositHistory,
-  getDepositReceipt,
   formatRiderNPRAmount,
   type DepositHistory,
   type DepositHistoryEntry,
@@ -135,67 +134,42 @@ export default function DepositHistoryScreen() {
   const isOffline = connectivity === 'offline'
   const { minTouchTarget } = useA11y()
 
-  const [history, setHistory] = useState<DepositHistory | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState(false)
+  // TanStack Query — 30s staleTime, auto-refetch on focus.
+  const historyQuery = useDepositHistory()
+  const history = historyQuery.data ?? null
+  const loading = historyQuery.isLoading
+  const refreshing = historyQuery.isFetching && !historyQuery.isLoading
+  const error = historyQuery.isError
+
   const [dateRange, setDateRange] = useState<DateRangeKey>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
 
-  // Receipt detail state
+  // Receipt detail state — uses TanStack Query for the receipt fetch.
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [receipt, setReceipt] = useState<DepositReceipt | null>(null)
-  const [receiptLoading, setReceiptLoading] = useState(false)
+  const receiptQuery = useDepositReceipt(selectedId)
+  const receipt = receiptQuery.data ?? null
+  const receiptLoading = receiptQuery.isLoading && !!selectedId
 
   useEffect(() => {
     analytics.screen({ name: 'rider-deposit-history' })
   }, [])
 
-  const load = useCallback(async () => {
-    setError(false)
-    try {
-      const h = await getDepositHistory()
-      setHistory(h)
-    } catch {
-      setError(true)
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    load()
-  }, [load])
-
   const onRefresh = useCallback(() => {
-    setRefreshing(true)
-    load()
-  }, [load])
+    historyQuery.refetch()
+  }, [historyQuery])
 
   const openReceipt = useCallback(
-    async (id: string) => {
+    (id: string) => {
       try {
         if (!reduced) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
       } catch {}
       setSelectedId(id)
-      setReceiptLoading(true)
-      setReceipt(null)
-      try {
-        const r = await getDepositReceipt(id)
-        setReceipt(r)
-      } catch {
-        setReceipt(null)
-      } finally {
-        setReceiptLoading(false)
-      }
     },
     [reduced],
   )
 
   const closeReceipt = useCallback(() => {
     setSelectedId(null)
-    setReceipt(null)
   }, [])
 
   const onExportReceipt = useCallback(() => {
@@ -394,14 +368,15 @@ export default function DepositHistoryScreen() {
                   </Text>
                 </View>
               ) : (
-                filteredDays.map(day => (
+                filteredDays.map((day, i) => (
+                  <FadeIn key={day.date} delay={i * 60}>
                   <DayGroup
-                    key={day.date}
                     day={day}
                     t={t}
                     minTouchTarget={minTouchTarget}
                     onPressDeposit={openReceipt}
                   />
+                  </FadeIn>
                 ))
               )}
             </>

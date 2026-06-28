@@ -30,10 +30,11 @@ import {
   Navigation,
 } from 'lucide-react-native'
 import Svg, { Polygon, Circle, G, Defs, ClipPath } from 'react-native-svg'
-import { colors, radii, spacing, fontFamily, fontSize, shadow } from '@chinooz/theme'
-import { useReducedMotion } from '@chinooz/ui'
+import { colors, radii, spacing, fontFamily, fontSize, shadow, duration } from '@chinooz/theme'
+import { useReducedMotion, ScaleIn, SpringUp } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
 import { useCODWalletStore, useCodLimitStatus } from '@chinooz/state'
+import { useDepositCash } from '@chinooz/hooks'
 import { useA11y } from '../../components/A11yProvider'
 import { useAppState } from '../../components/AppStateProvider'
 import {
@@ -86,8 +87,8 @@ export default function DepositScreen() {
   const isOffline = connectivity === 'offline'
 
   const cashInHand = useCODWalletStore(s => s.cashInHand)
-  const recordDeposit = useCODWalletStore(s => s.recordDeposit)
   const limitStatus = useCodLimitStatus()
+  const depositMutation = useDepositCash()
 
   const [step, setStep] = useState<Step>('method')
   const [method, setMethod] = useState<DepositMethodKind | null>(null)
@@ -120,7 +121,13 @@ export default function DepositScreen() {
         const result = await verifyDeposit(depositResult.id)
         if (cancelled) return
         if (result.status === 'verified') {
-          recordDeposit(depositResult.amount)
+          // Use the idempotent depositCash mutation (optimistic + rollback +
+          // store update + analytics). opRef = deposit reference so retries
+          // never double-count.
+          depositMutation.mutate({
+            amountNpr: Math.round(depositResult.amount),
+            opRef: depositResult.reference,
+          })
           setStep('success')
           if (!reduced) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
         } else {
@@ -138,7 +145,7 @@ export default function DepositScreen() {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [step, depositResult, recordDeposit, reduced])
+  }, [step, depositResult, depositMutation, reduced])
 
   const handleSelectMethod = useCallback(
     (kind: DepositMethodKind) => {
@@ -1170,9 +1177,11 @@ function StatusStep({
         </>
       ) : (
         <>
+          <ScaleIn>
           <View style={styles.statusIconWrapSuccess}>
             <CheckCircle2 size={40} color={colors.success} />
           </View>
+          </ScaleIn>
           <Text style={styles.statusTitleSuccess}>
             {t('rider.wallet.deposit.successTitle')}
           </Text>
@@ -1181,6 +1190,7 @@ function StatusStep({
               amount: formatRiderNPRAmount(amount),
             })}
           </Text>
+          <SpringUp delay={duration.normal}>
           <View style={styles.successMilestoneCard}>
             <View style={styles.milestoneRow}>
               <Banknote size={18} color={colors.gold} />
@@ -1204,6 +1214,7 @@ function StatusStep({
               </View>
             )}
           </View>
+          </SpringUp>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t('rider.wallet.deposit.successDone')}

@@ -331,9 +331,18 @@ export function useCollectCOD() {
       amountNpr: number
       opRef: string
     }) => riderApi.collectCOD(jobId, amountNpr, opRef),
-    onSuccess: () => {
+    onSuccess: (_data, vars) => {
+      // Update the shared codWalletStatus store so the wallet hero,
+      // limit meter, and COD job gating all reflect the new collection.
+      // Integer-paisa safe: Math.round guards against float drift.
+      useCODWalletStore.getState().recordCollection(Math.round(vars.amountNpr))
       qc.invalidateQueries({ queryKey: KEYS.wallet })
+      qc.invalidateQueries({ queryKey: KEYS.codCollections })
       qc.invalidateQueries({ queryKey: KEYS.active })
+      analytics.track('rider_cod_collected', {
+        jobId: vars.jobId,
+        amount: Math.round(vars.amountNpr),
+      })
     },
   })
 }
@@ -554,6 +563,34 @@ export function useCODWallet() {
   })
 }
 
+/** COD collection ledger (RW3). 30s staleTime, shares the wallet cadence. */
+export function useCodCollections() {
+  return useQuery({
+    queryKey: KEYS.codCollections,
+    queryFn: () => getCodCollections(),
+    staleTime: STALE_LEDGER,
+  })
+}
+
+/** Deposit history (RW5). 30s staleTime. */
+export function useDepositHistory() {
+  return useQuery({
+    queryKey: KEYS.depositHistory,
+    queryFn: () => getDepositHistory(),
+    staleTime: STALE_LEDGER,
+  })
+}
+
+/** Deposit receipt detail (RW5). */
+export function useDepositReceipt(depositId: string | null) {
+  return useQuery({
+    queryKey: KEYS.depositReceipt(depositId ?? ''),
+    queryFn: () => getDepositReceipt(depositId!),
+    enabled: !!depositId,
+    staleTime: STALE_LEDGER,
+  })
+}
+
 export function useDepositCash() {
   const qc = useQueryClient()
   return useMutation({
@@ -569,6 +606,7 @@ export function useDepositCash() {
       const prev = qc.getQueryData<ReturnType<typeof getCODWalletSync>>(KEYS.wallet)
       if (prev) {
         // Optimistic: reduce cashInHand + increase depositedTotal.
+        // Integer-paisa safe: Math.round guards against float drift.
         const depositedTotal = prev.codDepositedTotal + Math.round(amountNpr)
         qc.setQueryData(KEYS.wallet, {
           ...prev,
@@ -583,8 +621,19 @@ export function useDepositCash() {
     onError: (_err, _vars, ctx) => {
       if (ctx?.prev) qc.setQueryData(KEYS.wallet, ctx.prev)
     },
+    onSuccess: (_data, vars) => {
+      // Update the shared codWalletStatus store so the wallet hero,
+      // limit meter, and COD job gating all reflect the deposit.
+      // Integer-paisa safe: Math.round guards against float drift.
+      useCODWalletStore.getState().recordDeposit(Math.round(vars.amountNpr))
+      analytics.track('rider_deposit_completed', {
+        amount: Math.round(vars.amountNpr),
+        opRef: vars.opRef,
+      })
+    },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: KEYS.wallet })
+      qc.invalidateQueries({ queryKey: KEYS.depositHistory })
     },
   })
 }

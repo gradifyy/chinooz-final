@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect } from 'react'
 import {
   View,
   Text,
@@ -19,13 +19,22 @@ import {
   AlertTriangle,
   Inbox,
 } from 'lucide-react-native'
-import { colors, spacing, radii, fontFamily, fontSize } from '@chinooz/theme'
+import {
+  colors,
+  spacing,
+  radii,
+  fontFamily,
+  fontSize,
+  duration,
+} from '@chinooz/theme'
 import { useA11y } from './A11yProvider'
 import { useAppState } from './AppStateProvider'
 import { useCODWalletStore, useCodLimitStatus } from '@chinooz/state'
 import { analytics } from '@chinooz/analytics'
+import { SlideUp, FadeIn } from '@chinooz/ui'
+import { CountUp } from './CountUp'
+import { useCODWallet } from '@chinooz/hooks'
 import {
-  getCODWallet,
   formatRiderNPRAmount,
   type CODWalletSnapshot,
 } from '@chinooz/mock-data'
@@ -47,29 +56,6 @@ import {
  * Deposit action; the surface stays calm/trustworthy (handling money).
  */
 
-function useCountUp(target: number, enabled: boolean, durationMs = 900): number {
-  const [value, setValue] = useState(0)
-  const raf = useRef<ReturnType<typeof requestAnimationFrame> | null>(null)
-  useEffect(() => {
-    if (!enabled) {
-      setValue(target)
-      return
-    }
-    const start = Date.now()
-    const tick = () => {
-      const t = Math.min(1, (Date.now() - start) / durationMs)
-      const eased = 1 - Math.pow(1 - t, 3)
-      setValue(Math.round(target * eased))
-      if (t < 1) raf.current = requestAnimationFrame(tick)
-    }
-    raf.current = requestAnimationFrame(tick)
-    return () => {
-      if (raf.current) cancelAnimationFrame(raf.current)
-    }
-  }, [target, enabled, durationMs])
-  return value
-}
-
 export default function CODWalletScreen() {
   const { t } = useTranslation()
   const router = useRouter()
@@ -88,38 +74,25 @@ export default function CODWalletScreen() {
   const hydrated = useCODWalletStore(s => s.hydrated)
   const hydrateFromSnapshot = useCODWalletStore(s => s.hydrateFromSnapshot)
 
-  const [loading, setLoading] = useState(!hydrated)
-  const [error, setError] = useState(false)
-  const [reloadTick, setReloadTick] = useState(0)
+  // TanStack Query — 30s staleTime, seeded with sync snapshot (placeholderData).
+  // Hydrates the zustand store on success so all screens share one source of truth.
+  const walletQuery = useCODWallet()
+  const loading = walletQuery.isLoading && !hydrated
+  const error = walletQuery.isError && !hydrated
 
   useEffect(() => {
     analytics.screen({ name: 'rider-cod-wallet' })
   }, [])
 
-  // Hydrate the store from the mock getCODWallet async fetcher.
+  // Sync the query snapshot → zustand store (one source of truth).
   useEffect(() => {
-    let active = true
-    setLoading(true)
-    setError(false)
-    getCODWallet()
-      .then((snap: CODWalletSnapshot) => {
-        if (!active) return
-        hydrateFromSnapshot(snap)
-        setLoading(false)
-      })
-      .catch(() => {
-        if (!active) return
-        setError(true)
-        setLoading(false)
-      })
-    return () => {
-      active = false
+    if (walletQuery.data) {
+      hydrateFromSnapshot(walletQuery.data as CODWalletSnapshot)
     }
-  }, [hydrateFromSnapshot, reloadTick])
+  }, [walletQuery.data, hydrateFromSnapshot])
 
   const heroTarget = cashInHand
-  const animatedHero = useCountUp(heroTarget, !loading && !reducedMotion && hydrated)
-  const displayHero = loading ? heroTarget : animatedHero
+  const heroReady = !loading && hydrated
 
   const goBack = useCallback(() => {
     try {
@@ -129,7 +102,7 @@ export default function CODWalletScreen() {
     else router.replace('/home')
   }, [router, reducedMotion])
 
-  const retry = useCallback(() => setReloadTick(tick => tick + 1), [])
+  const retry = useCallback(() => walletQuery.refetch(), [walletQuery])
 
   const deposit = useCallback(() => {
     try {
@@ -283,7 +256,8 @@ export default function CODWalletScreen() {
           />
         )}
 
-        {/* Hero cash-in-hand */}
+        {/* Hero cash-in-hand — SlideUp enter + CountUp (60fps UI thread) */}
+        <SlideUp delay={duration.fast} style={styles.heroSlideWrap}>
         <View
           accessibilityLabel={heroAria}
           accessibilityRole="summary"
@@ -297,9 +271,13 @@ export default function CODWalletScreen() {
             </View>
             <Text style={styles.heroLabel}>{t('rider.wallet.heroLabel')}</Text>
           </View>
-          <Text style={styles.heroAmount}>
-            NPR {formatRiderNPRAmount(displayHero)}
-          </Text>
+          <CountUp
+            value={heroTarget}
+            format={(v: number) => `NPR ${formatRiderNPRAmount(v)}`}
+            style={styles.heroAmount}
+            reduced={reducedMotion || !heroReady}
+            dur={duration.slower}
+          />
           <Text style={styles.heroFormula}>{t('rider.wallet.heroFormula')}</Text>
           <Text style={styles.heroCaption}>{t('rider.wallet.heroCaption')}</Text>
 
@@ -330,9 +308,12 @@ export default function CODWalletScreen() {
             <Text style={styles.depositText}>{t('rider.wallet.depositCta')}</Text>
           </TouchableOpacity>
         </View>
+        </SlideUp>
 
         {/* COD limit meter + collection status (RW6) */}
+        <FadeIn delay={duration.normal}>
         <CODLimitMeter />
+        </FadeIn>
 
         {/* Quick stats — small tiles */}
         <View style={styles.statsRow}>
@@ -439,6 +420,9 @@ const styles = StyleSheet.create({
   },
 
   // Hero — calm, trustworthy surface; gold accent bar reserved for action emphasis.
+  heroSlideWrap: {
+    // SlideUp wrapper — no visual style, just animation container.
+  },
   heroCard: {
     position: 'relative',
     backgroundColor: colors.surface,
