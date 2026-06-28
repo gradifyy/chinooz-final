@@ -222,6 +222,33 @@ export async function fulfillOrder(
   }
 }
 
+export async function rejectOrder(
+  subOrderId: string,
+  reason: string,
+  reasonDetail?: string,
+): Promise<{ subOrderId: string; success: boolean; reason: string }> {
+  await randomDelay(400, 800)
+  maybeError()
+  return { subOrderId, success: true, reason }
+}
+
+export async function partialShipOrder(
+  subOrderId: string,
+  itemIds: string[],
+  trackingNumber: string,
+  carrier: string,
+  shipDate?: string,
+): Promise<{ subOrderId: string; success: boolean; trackingNumber: string; shippedCount: number }> {
+  await randomDelay(400, 800)
+  maybeError()
+  return {
+    subOrderId,
+    success: true,
+    trackingNumber: trackingNumber || `TRK-${Math.floor(Math.random() * 1000000)}`,
+    shippedCount: itemIds.length,
+  }
+}
+
 // --- Promotions ---
 
 export async function getPromotionsApi(

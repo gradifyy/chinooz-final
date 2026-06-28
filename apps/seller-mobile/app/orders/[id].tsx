@@ -28,6 +28,7 @@ import { useSellerOrderById } from '@chinooz/hooks'
 import { useSellerSessionStore } from '@chinooz/state'
 import { analytics } from '@chinooz/analytics'
 import { OrderStatusTimeline } from '@chinooz/ui'
+import MobileFulfillmentBar from '../../components/MobileFulfillmentBar'
 import type {
   SellerSubOrder,
   SellerOrderStatusKey,
@@ -118,19 +119,6 @@ function buildTimelineSteps(order: SellerSubOrder, t: (k: string) => string): Ti
   return steps
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type IconType = any
-
-const FULFILL_ACTIONS: Record<SellerOrderStatusKey, { labelKey: string; ariaKey: string; Icon: IconType; primary: boolean } | null> = {
-  new: { labelKey: 'seller.orders.actionAccept', ariaKey: 'seller.orders.actionAcceptAria', Icon: Check, primary: true },
-  to_pack: { labelKey: 'seller.orders.actionPack', ariaKey: 'seller.orders.actionPackAria', Icon: Package, primary: true },
-  to_ship: { labelKey: 'seller.orders.actionShip', ariaKey: 'seller.orders.actionShipAria', Icon: Truck, primary: true },
-  shipped: { labelKey: 'seller.orders.actionPrintLabel', ariaKey: 'seller.orders.actionPrintLabelAria', Icon: Printer, primary: false },
-  completed: null,
-  cancelled_returned: null,
-  action_needed: null,
-}
-
 function StatusPill({ statusKey, t }: { statusKey: SellerOrderStatusKey; t: (k: string) => string }) {
   const m = STATUS_META[statusKey]
   return (
@@ -177,14 +165,6 @@ export default function SellerOrderDetailScreen() {
     if (!order) return []
     return buildTimelineSteps(order, t)
   }, [order, t])
-
-  const handleContact = useCallback(() => {
-    router.push(`/messages?order=${order?.orderId ?? ''}` as any)
-  }, [router, order])
-
-  const handleCancel = useCallback(() => {
-    router.push('/(tabs)/orders' as any)
-  }, [router])
 
   if (!isLoggedIn) return <Redirect href="/onboarding" />
 
@@ -233,10 +213,6 @@ export default function SellerOrderDetailScreen() {
   const deliveryFee = Math.max(0, order.total - subtotal)
   const discount = subtotal + deliveryFee - order.total > 0 ? subtotal + deliveryFee - order.total : 0
   const maskedPhone = maskPhone(order.buyerPhone)
-
-  const fulfill = FULFILL_ACTIONS[order.statusKey]
-  const canCancel = order.statusKey === 'new' || order.statusKey === 'to_pack'
-  const canPrint = order.statusKey === 'shipped' || order.statusKey === 'completed'
 
   const sla = computeShipBy(order)
   const slaText = sla
@@ -392,50 +368,13 @@ export default function SellerOrderDetailScreen() {
         </View>
       </ScrollView>
 
-      {/* Sticky action bar */}
-      <View style={[styles.actionBar, { paddingBottom: insets.bottom + spacing[2] }]}>
-        {fulfill && (
-          <TouchableOpacity
-            style={[styles.actionBtn, fulfill.primary ? styles.actionBtnPrimary : styles.actionBtnSecondary]}
-            accessibilityRole="button"
-            accessibilityLabel={t(fulfill.ariaKey)}
-            activeOpacity={0.85}
-          >
-            <fulfill.Icon size={16} color={fulfill.primary ? colors.white : colors.text} />
-            <Text style={fulfill.primary ? styles.actionBtnPrimaryText : styles.actionBtnSecondaryText}>
-              {t(fulfill.labelKey)}
-            </Text>
-          </TouchableOpacity>
-        )}
-        {canPrint && !fulfill && (
-          <TouchableOpacity style={styles.actionBtnSecondary} accessibilityRole="button" accessibilityLabel={t('seller.orders.actionPrintLabelAria')} activeOpacity={0.85}>
-            <Printer size={16} color={colors.text} />
-            <Text style={styles.actionBtnSecondaryText}>{t('seller.orders.actionPrintLabel')}</Text>
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity
-          style={styles.actionBtnSecondary}
-          onPress={handleContact}
-          accessibilityRole="button"
-          accessibilityLabel={t('seller.orders.actionContactBuyerAria')}
-          activeOpacity={0.85}
-        >
-          <MessageCircle size={16} color={colors.text} />
-          <Text style={styles.actionBtnSecondaryText}>{t('seller.orders.actionContactBuyer')}</Text>
-        </TouchableOpacity>
-        {canCancel && (
-          <TouchableOpacity
-            style={styles.actionBtnDestructive}
-            onPress={handleCancel}
-            accessibilityRole="button"
-            accessibilityLabel={t('seller.orders.actionCancelAria')}
-            activeOpacity={0.85}
-          >
-            <XCircle size={16} color={colors.error} />
-            <Text style={styles.actionBtnDestructiveText}>{t('seller.orders.actionCancel')}</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      <MobileFulfillmentBar
+        order={order}
+        t={t}
+        onContact={() => router.push(`/messages?order=${order.orderId}` as any)}
+        onNavigateBack={() => router.push('/(tabs)/orders' as any)}
+        insets={insets}
+      />
     </View>
   )
 }

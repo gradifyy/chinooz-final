@@ -7,16 +7,11 @@ import { useTranslation } from 'react-i18next'
 import {
   ArrowLeft,
   Clock,
-  Printer,
-  MessageCircle,
   AlertTriangle,
-  Check,
-  Package,
-  Truck,
-  XCircle,
 } from 'lucide-react'
 import { Container, Screen } from '@chinooz/ui-web'
 import { useReducedMotion, OrderStatusTimeline } from '@chinooz/ui-web'
+import FulfillmentActionBar from '@/components/FulfillmentActionBar'
 import { useSellerOrderById } from '@chinooz/hooks'
 import { useSellerSessionStore } from '@chinooz/state'
 import { analytics } from '@chinooz/analytics'
@@ -214,84 +209,6 @@ function SummaryLine({ label, value, muted, suffix }: { label: string; value: nu
       <span className="text-sm text-text tabular-nums" style={TABNUM}>
         {formatNPR(Math.abs(value))}{suffix ? ` ${suffix}` : ''}
       </span>
-    </div>
-  )
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type IconType = any
-
-const FULFILL_ACTIONS: Record<SellerOrderStatusKey, { labelKey: string; ariaKey: string; Icon: IconType; primary: boolean } | null> = {
-  new: { labelKey: 'seller.orders.actionAccept', ariaKey: 'seller.orders.actionAcceptAria', Icon: Check, primary: true },
-  to_pack: { labelKey: 'seller.orders.actionPack', ariaKey: 'seller.orders.actionPackAria', Icon: Package, primary: true },
-  to_ship: { labelKey: 'seller.orders.actionShip', ariaKey: 'seller.orders.actionShipAria', Icon: Truck, primary: true },
-  shipped: { labelKey: 'seller.orders.actionPrintLabel', ariaKey: 'seller.orders.actionPrintLabelAria', Icon: Printer, primary: false },
-  completed: null,
-  cancelled_returned: null,
-  action_needed: null,
-}
-
-function ActionBar({ order, t, onContact, onCancel }: {
-  order: SellerSubOrder
-  t: (k: string, opts?: Record<string, unknown>) => string
-  onContact: () => void
-  onCancel: () => void
-}) {
-  const reduced = useReducedMotion()
-  const fulfill = FULFILL_ACTIONS[order.statusKey]
-  const canCancel = order.statusKey === 'new' || order.statusKey === 'to_pack'
-  const canPrint = order.statusKey === 'shipped' || order.statusKey === 'completed'
-
-  return (
-    <div className="sticky bottom-0 z-sticky bg-surface border-t border-border-light shadow-lg px-4 py-3">
-      <div className="max-w-[800px] mx-auto flex items-center gap-2 justify-end flex-wrap">
-        {fulfill && (
-          <motion.button
-            whileHover={reduced ? undefined : { scale: 1.02 }}
-            whileTap={reduced ? undefined : { scale: 0.98 }}
-            className={`inline-flex items-center gap-1.5 rounded-md px-4 py-2.5 text-sm font-semibold min-h-[40px] ${
-              fulfill.primary ? 'bg-primary text-white hover:bg-primary-dark' : 'border border-border bg-surface text-text hover:bg-background'
-            }`}
-            aria-label={t(fulfill.ariaKey)}
-          >
-            <fulfill.Icon size={16} />
-            {t(fulfill.labelKey)}
-          </motion.button>
-        )}
-        {canPrint && !fulfill && (
-          <motion.button
-            whileHover={reduced ? undefined : { scale: 1.02 }}
-            whileTap={reduced ? undefined : { scale: 0.98 }}
-            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface text-text px-4 py-2.5 text-sm font-semibold hover:bg-background min-h-[40px]"
-            aria-label={t('seller.orders.actionPrintLabelAria')}
-          >
-            <Printer size={16} />
-            {t('seller.orders.actionPrintLabel')}
-          </motion.button>
-        )}
-        <motion.button
-          whileHover={reduced ? undefined : { scale: 1.02 }}
-          whileTap={reduced ? undefined : { scale: 0.98 }}
-          onClick={onContact}
-          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface text-text px-4 py-2.5 text-sm font-semibold hover:bg-background min-h-[40px]"
-          aria-label={t('seller.orders.actionContactBuyerAria')}
-        >
-          <MessageCircle size={16} />
-          {t('seller.orders.actionContactBuyer')}
-        </motion.button>
-        {canCancel && (
-          <motion.button
-            whileHover={reduced ? undefined : { scale: 1.02 }}
-            whileTap={reduced ? undefined : { scale: 0.98 }}
-            onClick={onCancel}
-            className="inline-flex items-center gap-1.5 rounded-md border border-error/30 bg-error/5 text-error px-4 py-2.5 text-sm font-semibold hover:bg-error/10 min-h-[40px]"
-            aria-label={t('seller.orders.actionCancelAria')}
-          >
-            <XCircle size={16} />
-            {t('seller.orders.actionCancel')}
-          </motion.button>
-        )}
-      </div>
     </div>
   )
 }
@@ -534,11 +451,11 @@ export default function SellerOrderDetailPage() {
       </Container>
 
       {/* Sticky action bar */}
-      <ActionBar
+      <FulfillmentActionBar
         order={order}
         t={t}
         onContact={() => router.push(`/messages?order=${order.orderId}`)}
-        onCancel={() => router.push(`/orders`)}
+        onNavigateBack={() => router.push('/orders')}
       />
     </Screen>
   )

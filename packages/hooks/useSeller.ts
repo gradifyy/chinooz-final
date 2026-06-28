@@ -364,6 +364,49 @@ export function useFulfillOrder() {
     }) => api.fulfillOrder(subOrderId, trackingNumber, carrier),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['seller-orders'] })
+      qc.invalidateQueries({ queryKey: ['seller-order'] })
+    },
+  })
+}
+
+export function useRejectOrder() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      subOrderId,
+      reason,
+      reasonDetail,
+    }: {
+      subOrderId: string
+      reason: string
+      reasonDetail?: string
+    }) => api.rejectOrder(subOrderId, reason, reasonDetail),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['seller-orders'] })
+      qc.invalidateQueries({ queryKey: ['seller-order'] })
+    },
+  })
+}
+
+export function usePartialShipOrder() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      subOrderId,
+      itemIds,
+      trackingNumber,
+      carrier,
+      shipDate,
+    }: {
+      subOrderId: string
+      itemIds: string[]
+      trackingNumber: string
+      carrier: string
+      shipDate?: string
+    }) => api.partialShipOrder(subOrderId, itemIds, trackingNumber, carrier, shipDate),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['seller-orders'] })
+      qc.invalidateQueries({ queryKey: ['seller-order'] })
     },
   })
 }
