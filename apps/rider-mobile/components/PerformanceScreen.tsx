@@ -230,7 +230,17 @@ export default function PerformanceScreen() {
                 period: periodLabel,
               })}
             >
-              <Scorecard overview={overview} t={t} reduced={reduced} />
+              <Scorecard
+                overview={overview}
+                t={t}
+                reduced={reduced}
+                onMetricPress={id => {
+                  try {
+                    if (!reduced) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  } catch {}
+                  router.push({ pathname: '/profile/metrics', params: { metric: id } } as any)
+                }}
+              />
             </View>
 
             {/* Tier badge + standing line — supportive, not a leaderboard */}
@@ -350,15 +360,18 @@ function PeriodSwitch({
  * Scorecard — overall rating (stars) leads, then tabular figure tiles for
  * acceptance / completion / on-time / total deliveries. Status colors are
  * restrained: only a small dot + word carry the band, never color alone.
+ * Each tile is tappable (tap-through to RP2 metrics detail).
  */
 function Scorecard({
   overview,
   t,
   reduced,
+  onMetricPress,
 }: {
   overview: RiderPerformanceOverview
   t: (key: string, opts?: Record<string, unknown>) => string
   reduced: boolean
+  onMetricPress: (metricId: RiderPerformanceMetric['id']) => void
 }) {
   const rating = overview.metrics.find(m => m.id === 'rating')
   const rateMetrics = overview.metrics.filter(m => m.id !== 'rating')
@@ -366,11 +379,17 @@ function Scorecard({
   return (
     <View style={styles.scorecard}>
       {rating && (
-        <RatingHero metric={rating} ratingCount={overview.ratingCount} t={t} reduced={reduced} />
+        <RatingHero
+          metric={rating}
+          ratingCount={overview.ratingCount}
+          t={t}
+          reduced={reduced}
+          onPress={() => onMetricPress(rating.id)}
+        />
       )}
       <View style={styles.tileGrid}>
         {rateMetrics.map(m => (
-          <MetricTile key={m.id} metric={m} t={t} />
+          <MetricTile key={m.id} metric={m} t={t} onPress={() => onMetricPress(m.id)} />
         ))}
       </View>
     </View>
@@ -382,11 +401,13 @@ function RatingHero({
   ratingCount,
   t,
   reduced,
+  onPress,
 }: {
   metric: RiderPerformanceMetric
   ratingCount: number
   t: (key: string, opts?: Record<string, unknown>) => string
   reduced: boolean
+  onPress: () => void
 }) {
   const status = metric.status
   const visual = STATUS_VISUAL[status]
@@ -394,12 +415,13 @@ function RatingHero({
   const stars = Math.round(metric.rawValue)
   const hint = metric.hintKey ? t(metric.hintKey, { count: ratingCount }) : ''
   const unit = t(metric.unitKey).trim()
-  const aria = t('rider.performance.tileAria', {
+  const tileAria = t('rider.performance.tileAria', {
     metric: t(metric.labelKey),
     value: metric.value,
     unit,
     status: t(statusWordKey(status)),
   })
+  const aria = `${tileAria}. ${t('rider.performance.entryMetricsAria')}`
 
   // Subtle entrance for the stars (supportive, not celebratory).
   const starScale = useSharedValue(reduced ? 1 : 0.96)
@@ -413,7 +435,13 @@ function RatingHero({
   const starStyle = useAnimatedStyle(() => ({ transform: [{ scale: starScale.value }] }))
 
   return (
-    <View style={styles.ratingHero} accessibilityRole="text" accessibilityLabel={aria}>
+    <TouchableOpacity
+      style={styles.ratingHero}
+      accessibilityRole="button"
+      accessibilityLabel={aria}
+      activeOpacity={0.85}
+      onPress={onPress}
+    >
       <View style={styles.ratingHeroTop}>
         <View style={styles.ratingHeroLabelRow}>
           <Text style={styles.ratingHeroLabel}>{t(metric.labelKey)}</Text>
@@ -432,31 +460,40 @@ function RatingHero({
         </View>
         {hint ? <Text style={styles.ratingHeroHint}>{hint}</Text> : null}
       </View>
-    </View>
+    </TouchableOpacity>
   )
 }
 
 function MetricTile({
   metric,
   t,
+  onPress,
 }: {
   metric: RiderPerformanceMetric
   t: (key: string, opts?: Record<string, unknown>) => string
+  onPress: () => void
 }) {
   const status = metric.status
   const visual = STATUS_VISUAL[status]
   const Icon = visual.Icon
   const hint = metric.hintKey ? t(metric.hintKey) : ''
   const unit = t(metric.unitKey).trim()
-  const aria = t('rider.performance.tileAria', {
+  const tileAria = t('rider.performance.tileAria', {
     metric: t(metric.labelKey),
     value: metric.value,
     unit,
     status: t(statusWordKey(status)),
   })
+  const aria = `${tileAria}. ${t('rider.performance.entryMetricsAria')}`
 
   return (
-    <View style={styles.tile} accessibilityRole="text" accessibilityLabel={aria}>
+    <TouchableOpacity
+      style={styles.tile}
+      accessibilityRole="button"
+      accessibilityLabel={aria}
+      activeOpacity={0.85}
+      onPress={onPress}
+    >
       <View style={styles.tileTop}>
         <Text style={styles.tileLabel} numberOfLines={1}>
           {t(metric.labelKey)}
@@ -478,7 +515,7 @@ function MetricTile({
         </Text>
       </View>
       {hint ? <Text style={styles.tileHint} numberOfLines={2}>{hint}</Text> : null}
-    </View>
+    </TouchableOpacity>
   )
 }
 
