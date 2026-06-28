@@ -29,8 +29,9 @@ import {
   useSellerProducts,
 } from '@chinooz/hooks'
 import { useSellerSessionStore } from '@chinooz/state'
-import { SELLER_REPLY_TEMPLATES, SELLER_QUICK_REPLIES, mockBuyerReply, type ChatOrderContext, type ChatProductContext } from '@chinooz/mock-data'
+import { SELLER_REPLY_TEMPLATES, SELLER_QUICK_REPLIES, mockBuyerReply, fillTemplatePlaceholders, getPlaceholders, type ChatOrderContext, type ChatProductContext } from '@chinooz/mock-data'
 import { colors, spacing, radii, fontSize, fontFamily, duration } from '@chinooz/theme'
+import { useSellerTemplatesStore } from '@chinooz/state'
 import type { Conversation, Message, RichProductPayload, RichOrderPayload, RichTrackingPayload } from '@chinooz/types'
 import Animated, {
   useSharedValue,
@@ -65,7 +66,8 @@ function ThreadView({
   convo?: Conversation
   onBack: () => void
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const isNe = i18n.language === 'ne'
   const router = useRouter()
   const sellerId = useSellerSessionStore(s => s.sellerId)
   const { data: serverMessages, isLoading } = useSellerMessages(conversationId)
@@ -73,6 +75,13 @@ function ThreadView({
   const markRead = useMarkSellerConversationRead()
   const trackingMutation = useGenerateTracking()
   const attachMutation = useAttachConversationContext()
+  const templates = useSellerTemplatesStore(s => s.templates)
+  const addTemplate = useSellerTemplatesStore(s => s.addTemplate)
+  const updateTemplate = useSellerTemplatesStore(s => s.updateTemplate)
+  const deleteTemplate = useSellerTemplatesStore(s => s.deleteTemplate)
+  const awayMessage = useSellerTemplatesStore(s => s.awayMessage)
+  const setAwayEnabled = useSellerTemplatesStore(s => s.setAwayEnabled)
+  const setAwayBody = useSellerTemplatesStore(s => s.setAwayBody)
 
   const { data: orderCtx, isLoading: orderCtxLoading } = useChatOrderContext(
     sellerId,
@@ -88,6 +97,7 @@ function ThreadView({
   const [loadEarlier, setLoadEarlier] = useState(true)
   const [loadingEarlier, setLoadingEarlier] = useState(false)
   const [showTemplates, setShowTemplates] = useState(false)
+  const [showTemplateManager, setShowTemplateManager] = useState(false)
   const [contextExpanded, setContextExpanded] = useState(false)
   const [showAttachPicker, setShowAttachPicker] = useState(false)
   const [inputHeight, setInputHeight] = useState(40)
@@ -150,6 +160,19 @@ function ThreadView({
     sendMutation.mutate({ conversationId, body: trimmed })
     triggerBuyerReply(trimmed)
   }, [input, conversationId, sendMutation, pushMessage, triggerBuyerReply])
+
+  const handleInsertTemplate = useCallback((body: string) => {
+    const filled = fillTemplatePlaceholders(body, {
+      orderRef: orderCtx?.orderRef,
+      trackingNumber: undefined,
+      buyerName: convo?.participantName,
+    })
+    setInput(filled)
+    setShowTemplates(false)
+    if (getPlaceholders(body).length > 0) {
+      try { AccessibilityInfo.announceForAccessibility(t('seller.messages.templateFilled')) } catch {}
+    }
+  }, [orderCtx, convo, t])
 
   const handleShareProduct = useCallback(() => {
     if (!productCtx) return
@@ -389,10 +412,26 @@ function ThreadView({
       {showTemplates ? (
         <TemplatesSheet
           onClose={() => setShowTemplates(false)}
-          onPick={(body) => handleSend(body)}
+          onPick={handleInsertTemplate}
+          onManage={() => { setShowTemplates(false); setShowTemplateManager(true) }}
+          templates={templates}
           t={t}
+          isNe={isNe}
         />
       ) : null}
+
+      <TemplateManagerSheet
+        visible={showTemplateManager}
+        onClose={() => setShowTemplateManager(false)}
+        templates={templates}
+        onAdd={addTemplate}
+        onUpdate={updateTemplate}
+        onDelete={deleteTemplate}
+        awayMessage={awayMessage}
+        onSetAwayEnabled={setAwayEnabled}
+        onSetAwayBody={setAwayBody}
+        t={t}
+      />
 
       <AttachPicker
         visible={showAttachPicker}
@@ -400,6 +439,13 @@ function ThreadView({
         onAttach={handleAttach}
         sellerId={sellerId}
         t={t}
+      />
+
+      <QuickReplyScroll
+        onPick={(body) => handleInsertTemplate(body)}
+        t={t}
+        isNe={isNe}
+        reduced={reduced}
       />
 
       <View style={styles.inputBar}>
@@ -838,32 +884,274 @@ function TypingIndicator({ name, reduced, t }: { name?: string; reduced: boolean
   )
 }
 
-function TemplatesSheet({ onClose, onPick, t }: { onClose: () => void; onPick: (body: string) => void; t: (k: string, o?: any) => string }) {
+function QuickReplyScroll({ onPick, t, isNe, reduced }: { onPick: (body: string) => void; t: (k: string, o?: any) => string; isNe: boolean; reduced: boolean }) {
+  const scrollRef = useRef<FlatList>(null)
+  return (
+    <View style={styles.quickReplyWrap}>
+      <FlatList
+        ref={scrollRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        data={SELLER_QUICK_REPLIES}
+        keyExtractor={item => item.id}
+        contentContainerStyle={{ gap: spacing[2], paddingHorizontal: spacing[3] }}
+        renderItem={({ item }) => (
+          <QuickReplyChip
+            label={isNe ? item.labelNe : item.label}
+            aria={t('seller.messages.quickReplyAria', { label: isNe ? item.labelNe : item.label })}
+            body={isNe ? item.bodyNe : item.body}
+            onPress={onPick}
+            reduced={reduced}
+          />
+        )}
+      />
+    </View>
+  )
+}
+
+function QuickReplyChip({ label, aria, body, onPress, reduced }: { label: string; aria: string; body: string; onPress: (body: string) => void; reduced: boolean }) {
+  const scale = useSharedValue(1)
+  const handlePressIn = () => { if (!reduced) scale.value = withTiming(0.96, { duration: 100 }) }
+  const handlePressOut = () => { if (!reduced) scale.value = withSpring(1, { damping: 15, stiffness: 400 }) }
+  const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }))
+  return (
+    <Animated.View style={animStyle}>
+      <TouchableOpacity
+        style={styles.quickReplyChip}
+        onPress={() => onPress(body)}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        accessibilityRole="button"
+        accessibilityLabel={aria}
+      >
+        <Text style={styles.quickReplyChipText}>{label}</Text>
+      </TouchableOpacity>
+    </Animated.View>
+  )
+}
+
+function TemplatesSheet({
+  onClose,
+  onPick,
+  onManage,
+  templates,
+  t,
+  isNe,
+}: {
+  onClose: () => void
+  onPick: (body: string) => void
+  onManage: () => void
+  templates: import('@chinooz/types').SellerMessageTemplate[]
+  t: (k: string, o?: any) => string
+  isNe: boolean
+}) {
+  const builtIns = templates.filter(t => t.isBuiltIn)
+  const customs = templates.filter(t => !t.isBuiltIn)
   return (
     <View style={styles.templatesWrap} accessibilityLabel={t('seller.messages.threadTemplates')}>
       <View style={styles.templatesHeader}>
         <Text style={styles.templatesTitle}>{t('seller.messages.threadTemplates')}</Text>
-        <TouchableOpacity onPress={onClose} accessibilityRole="button" accessibilityLabel={t('common.close')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Text style={{ fontSize: 18, color: colors.textMuted }}>{'\u{2715}'}</Text>
-        </TouchableOpacity>
-      </View>
-      <View style={styles.templatesList}>
-        {SELLER_QUICK_REPLIES.map(q => (
-          <TouchableOpacity key={q.id} style={styles.templateChip} onPress={() => onPick(q.body)} accessibilityRole="button" accessibilityLabel={q.label}>
-            <Text style={styles.templateChipText}>{q.label}</Text>
+        <View style={{ flexDirection: 'row', gap: spacing[2] }}>
+          <TouchableOpacity onPress={onManage} accessibilityRole="button" accessibilityLabel={t('seller.messages.templateManagerAria')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={styles.manageLink}>{t('seller.messages.templateManager')}</Text>
           </TouchableOpacity>
-        ))}
+          <TouchableOpacity onPress={onClose} accessibilityRole="button" accessibilityLabel={t('common.close')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={{ fontSize: 18, color: colors.textMuted }}>{'\u{2715}'}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-      <Text style={styles.templatesSub}>{t('seller.messages.threadTemplates')}</Text>
-      <View style={styles.templatesList}>
-        {SELLER_REPLY_TEMPLATES.map(tpl => (
-          <TouchableOpacity key={tpl.id} style={styles.templateRow} onPress={() => onPick(tpl.body)} accessibilityRole="button" accessibilityLabel={tpl.label}>
-            <Text style={styles.templateLabel}>{tpl.label}</Text>
+      <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
+        {customs.length > 0 && (
+          <Text style={styles.templatesSub}>{t('seller.messages.templateCustom')}</Text>
+        )}
+        {customs.map(tpl => (
+          <TouchableOpacity key={tpl.id} style={styles.templateRow} onPress={() => onPick(tpl.body)} accessibilityRole="button" accessibilityLabel={t('seller.messages.templateInsertAria', { label: tpl.label })}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={styles.templateLabel}>{tpl.label}</Text>
+              {tpl.hasPlaceholders ? <Text style={styles.placeholderBadge}>{'{…}'}</Text> : null}
+            </View>
             <Text style={styles.templateBody} numberOfLines={2}>{tpl.body}</Text>
           </TouchableOpacity>
         ))}
-      </View>
+        <Text style={styles.templatesSub}>{t('seller.messages.templateBuiltIn')}</Text>
+        {builtIns.map(tpl => (
+          <TouchableOpacity key={tpl.id} style={styles.templateRow} onPress={() => onPick(tpl.body)} accessibilityRole="button" accessibilityLabel={t('seller.messages.templateInsertAria', { label: tpl.label })}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={styles.templateLabel}>{tpl.label}</Text>
+              {tpl.hasPlaceholders ? <Text style={styles.placeholderBadge}>{'{…}'}</Text> : null}
+            </View>
+            <Text style={styles.templateBody} numberOfLines={2}>{tpl.body}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
     </View>
+  )
+}
+
+function TemplateManagerSheet({
+  visible,
+  onClose,
+  templates,
+  onAdd,
+  onUpdate,
+  onDelete,
+  awayMessage,
+  onSetAwayEnabled,
+  onSetAwayBody,
+  t,
+}: {
+  visible: boolean
+  onClose: () => void
+  templates: import('@chinooz/types').SellerMessageTemplate[]
+  onAdd: (label: string, body: string) => void
+  onUpdate: (id: string, label: string, body: string) => void
+  onDelete: (id: string) => void
+  awayMessage: import('@chinooz/types').SellerAwayMessage
+  onSetAwayEnabled: (enabled: boolean) => void
+  onSetAwayBody: (body: string) => void
+  t: (k: string, o?: any) => string
+}) {
+  const [editing, setEditing] = useState<import('@chinooz/types').SellerMessageTemplate | null>(null)
+  const [label, setLabel] = useState('')
+  const [body, setBody] = useState('')
+  const [showForm, setShowForm] = useState(false)
+
+  const handleNew = () => {
+    setEditing(null)
+    setLabel('')
+    setBody('')
+    setShowForm(true)
+  }
+
+  const handleEdit = (tpl: import('@chinooz/types').SellerMessageTemplate) => {
+    setEditing(tpl)
+    setLabel(tpl.label)
+    setBody(tpl.body)
+    setShowForm(true)
+  }
+
+  const handleSave = () => {
+    if (!label.trim() || !body.trim()) return
+    if (editing) {
+      onUpdate(editing.id, label.trim(), body.trim())
+    } else {
+      onAdd(label.trim(), body.trim())
+    }
+    setShowForm(false)
+    setEditing(null)
+  }
+
+  const handleDelete = (id: string) => {
+    onDelete(id)
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} accessibilityLabel={t('seller.messages.templateManager')}>
+      <View style={styles.pickerOverlay}>
+        <View style={styles.pickerSheet} accessibilityLabel={t('seller.messages.templateManager')}>
+          <View style={styles.pickerHeader}>
+            <Text style={styles.pickerTitle}>{t('seller.messages.templateManager')}</Text>
+            <TouchableOpacity onPress={onClose} accessibilityRole="button" accessibilityLabel={t('common.close')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={{ fontSize: 18, color: colors.textMuted }}>{'\u{2715}'}</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={{ maxHeight: 400 }} showsVerticalScrollIndicator={false}>
+            {showForm ? (
+              <View style={styles.templateForm}>
+                <Text style={styles.templateFormTitle}>{editing ? t('seller.messages.templateEdit') : t('seller.messages.templateNew')}</Text>
+                <Text style={styles.templateFormLabel}>{t('seller.messages.templateLabel')}</Text>
+                <TextInput
+                  style={styles.templateFormInput}
+                  value={label}
+                  onChangeText={setLabel}
+                  placeholder={t('seller.messages.templateLabelHint')}
+                  placeholderTextColor={colors.textTertiary}
+                  accessibilityLabel={t('seller.messages.templateLabel')}
+                />
+                <Text style={styles.templateFormLabel}>{t('seller.messages.templateBody')}</Text>
+                <TextInput
+                  style={[styles.templateFormInput, { minHeight: 80, textAlignVertical: 'top' }]}
+                  value={body}
+                  onChangeText={setBody}
+                  placeholder={t('seller.messages.templateBodyHint')}
+                  placeholderTextColor={colors.textTertiary}
+                  multiline
+                  accessibilityLabel={t('seller.messages.templateBody')}
+                />
+                <Text style={styles.placeholderHint}>{t('seller.messages.templateBodyHint')}</Text>
+                <View style={styles.templateFormActions}>
+                  <TouchableOpacity onPress={() => setShowForm(false)} style={styles.templateCancelBtn} accessibilityRole="button" accessibilityLabel={t('seller.messages.templateCancel')}>
+                    <Text style={styles.templateCancelText}>{t('seller.messages.templateCancel')}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={handleSave} style={styles.templateSaveBtn} accessibilityRole="button" accessibilityLabel={t('seller.messages.templateSave')}>
+                    <Text style={styles.templateSaveText}>{t('seller.messages.templateSave')}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <>
+                {templates.map(tpl => (
+                  <View key={tpl.id} style={styles.managerRow}>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[1] }}>
+                        <Text style={styles.templateLabel}>{tpl.label}</Text>
+                        {tpl.isBuiltIn ? (
+                          <Text style={styles.builtInBadge}>{t('seller.messages.templateBuiltIn')}</Text>
+                        ) : null}
+                        {tpl.hasPlaceholders ? <Text style={styles.placeholderBadge}>{'{…}'}</Text> : null}
+                      </View>
+                      <Text style={styles.templateBody} numberOfLines={2}>{tpl.body}</Text>
+                    </View>
+                    {!tpl.isBuiltIn ? (
+                      <View style={{ flexDirection: 'row', gap: spacing[1] }}>
+                        <TouchableOpacity onPress={() => handleEdit(tpl)} accessibilityRole="button" accessibilityLabel={`${t('seller.messages.templateEdit')} ${tpl.label}`} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
+                          <Text style={styles.editAction}>{t('seller.messages.templateEdit')}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => handleDelete(tpl.id)} accessibilityRole="button" accessibilityLabel={`${t('seller.messages.templateDelete')} ${tpl.label}`} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
+                          <Text style={styles.deleteAction}>{t('seller.messages.templateDelete')}</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : null}
+                  </View>
+                ))}
+                <TouchableOpacity onPress={handleNew} style={styles.newTemplateBtn} accessibilityRole="button" accessibilityLabel={t('seller.messages.templateNew')}>
+                  <Text style={styles.newTemplateText}>+ {t('seller.messages.templateNew')}</Text>
+                </TouchableOpacity>
+
+                <View style={styles.awaySection}>
+                  <Text style={styles.awayTitle}>{t('seller.messages.awayTitle')}</Text>
+                  <Text style={styles.awaySubtitle}>{t('seller.messages.awaySubtitle')}</Text>
+                  <TouchableOpacity
+                    style={styles.awayToggleRow}
+                    onPress={() => onSetAwayEnabled(!awayMessage.enabled)}
+                    accessibilityRole="switch"
+                    accessibilityLabel={t('seller.messages.awayEnabledAria')}
+                    accessibilityState={{ checked: awayMessage.enabled }}
+                  >
+                    <Text style={styles.awayToggleLabel}>{t('seller.messages.awayEnabled')}</Text>
+                    <View style={[styles.toggle, awayMessage.enabled && styles.toggleOn]}>
+                      <View style={[styles.toggleKnob, awayMessage.enabled && styles.toggleKnobOn]} />
+                    </View>
+                  </TouchableOpacity>
+                  {awayMessage.enabled ? (
+                    <TextInput
+                      style={[styles.templateFormInput, { minHeight: 60, textAlignVertical: 'top' }]}
+                      value={awayMessage.body}
+                      onChangeText={onSetAwayBody}
+                      placeholder={t('seller.messages.awayBodyHint')}
+                      placeholderTextColor={colors.textTertiary}
+                      multiline
+                      accessibilityLabel={t('seller.messages.awayBody')}
+                    />
+                  ) : null}
+                </View>
+              </>
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
   )
 }
 
@@ -1026,4 +1314,42 @@ const styles = StyleSheet.create({
   templateRow: { paddingVertical: spacing[2], borderBottomWidth: 1, borderBottomColor: colors.borderLight },
   templateLabel: { fontSize: fontSize.sm[0], fontWeight: '600', color: colors.text },
   templateBody: { fontSize: fontSize.xs[0], color: colors.textMuted, marginTop: 2 },
+  quickReplyWrap: { paddingVertical: spacing[1], borderTopWidth: 0, backgroundColor: colors.surface },
+  quickReplyChip: {
+    borderRadius: radii.full,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1.5],
+    minHeight: 32,
+  },
+  quickReplyChipText: { fontSize: fontSize.sm[0], fontWeight: '500', color: colors.text },
+  manageLink: { fontSize: fontSize.sm[0], color: colors.primary, fontWeight: '500' },
+  placeholderBadge: { fontSize: fontSize.xs[0], color: colors.primary, fontWeight: '600', backgroundColor: colors.primary50, paddingHorizontal: spacing[1], borderRadius: radii.sm, overflow: 'hidden' },
+  builtInBadge: { fontSize: 9, color: colors.textMuted, fontWeight: '500', backgroundColor: colors.borderLight, paddingHorizontal: spacing[1], borderRadius: radii.sm, overflow: 'hidden' },
+  managerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing[2], borderBottomWidth: 1, borderBottomColor: colors.borderLight, gap: spacing[2] },
+  editAction: { fontSize: fontSize.sm[0], color: colors.primary, fontWeight: '500' },
+  deleteAction: { fontSize: fontSize.sm[0], color: colors.error, fontWeight: '500' },
+  newTemplateBtn: { paddingVertical: spacing[3], alignItems: 'center', marginTop: spacing[2] },
+  newTemplateText: { fontSize: fontSize.base[0], color: colors.primary, fontWeight: '600' },
+  templateForm: { paddingVertical: spacing[2], gap: spacing[2] },
+  templateFormTitle: { fontSize: fontSize.md[0], fontWeight: '700', color: colors.text },
+  templateFormLabel: { fontSize: fontSize.sm[0], fontWeight: '600', color: colors.text },
+  templateFormInput: { backgroundColor: colors.background, borderRadius: radii.md, paddingHorizontal: spacing[3], paddingVertical: spacing[2], fontSize: fontSize.base[0], color: colors.text },
+  templateFormActions: { flexDirection: 'row', gap: spacing[2], justifyContent: 'flex-end', marginTop: spacing[1] },
+  templateCancelBtn: { paddingVertical: spacing[2], paddingHorizontal: spacing[4], borderRadius: radii.md, borderWidth: 1, borderColor: colors.border },
+  templateCancelText: { fontSize: fontSize.base[0], color: colors.text, fontWeight: '500' },
+  templateSaveBtn: { paddingVertical: spacing[2], paddingHorizontal: spacing[4], borderRadius: radii.md, backgroundColor: colors.primary },
+  templateSaveText: { fontSize: fontSize.base[0], color: colors.white, fontWeight: '600' },
+  placeholderHint: { fontSize: fontSize.xs[0], color: colors.textTertiary, marginTop: -spacing[1] },
+  awaySection: { marginTop: spacing[4], paddingTop: spacing[3], borderTopWidth: 1, borderTopColor: colors.borderLight, gap: spacing[2] },
+  awayTitle: { fontSize: fontSize.md[0], fontWeight: '700', color: colors.text },
+  awaySubtitle: { fontSize: fontSize.sm[0], color: colors.textMuted },
+  awayToggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing[1] },
+  awayToggleLabel: { fontSize: fontSize.base[0], color: colors.text, fontWeight: '500' },
+  toggle: { width: 44, height: 24, borderRadius: 12, backgroundColor: colors.border, justifyContent: 'center', paddingHorizontal: 2 },
+  toggleOn: { backgroundColor: colors.primary },
+  toggleKnob: { width: 20, height: 20, borderRadius: 10, backgroundColor: colors.white, alignSelf: 'flex-start' },
+  toggleKnobOn: { alignSelf: 'flex-end' },
 })

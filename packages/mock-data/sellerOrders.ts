@@ -242,6 +242,15 @@ export async function getSellerOrders(
   return all
 }
 
+export async function getSellerOrderById(
+  sellerId: string,
+  subOrderId: string,
+): Promise<SellerSubOrder | null> {
+  await randomDelay(150, 350)
+  const all = [...fromFixtureOrders(sellerId), ...buildSeededSubOrders(sellerId)]
+  return all.find(o => o.subOrderId === subOrderId || o.orderId === subOrderId) ?? null
+}
+
 export const SELLER_ORDER_STATUS_KEYS: SellerOrderStatusKey[] = [
   'new',
   'to_pack',

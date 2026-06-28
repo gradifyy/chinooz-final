@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useRouter, useParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, Check, AlertCircle, Image as ImageIcon, Tag, DollarSign, FileText, Save } from 'lucide-react'
+import { ArrowLeft, Check, AlertCircle, Image as ImageIcon, Tag, DollarSign, FileText, Save, Plus, Trash2, ChevronLeft, ChevronRight, Star, Video } from 'lucide-react'
 import { Container, Screen, SafeImage, useReducedMotion } from '@chinooz/ui-web'
 import { useSellerCategories, useSellerProducts } from '@chinooz/hooks'
 import { analytics } from '@chinooz/analytics'
@@ -22,7 +22,8 @@ import type { Product } from '@chinooz/types'
 type SectionKey = 'media' | 'details' | 'pricing' | 'description'
 
 interface FormState {
-  image: string
+  images: string[]
+  videoUrl: string
   name: string
   sku: string
   categoryId: string
@@ -39,7 +40,8 @@ interface FormState {
 }
 
 const EMPTY_FORM: FormState = {
-  image: '',
+  images: [],
+  videoUrl: '',
   name: '',
   sku: '',
   categoryId: '',
@@ -118,7 +120,8 @@ export default function ProductFormScreen() {
     const product = productData.items.find(p => p.id === editId)
     if (product) {
       const loaded: FormState = {
-        image: product.image,
+        images: product.image ? [product.image] : [],
+        videoUrl: '',
         name: product.name,
         sku: product.sku,
         categoryId: product.categoryId,
@@ -179,7 +182,7 @@ export default function ProductFormScreen() {
     snackbarTimer.current = setTimeout(() => setSnackbar(null), 3000)
   }
 
-  const updateField = useCallback((field: keyof FormState, value: string) => {
+  const updateField = useCallback((field: keyof FormState, value: string | string[]) => {
     setForm(prev => ({ ...prev, [field]: value }))
     setErrors(prev => {
       const next = { ...prev }
@@ -313,7 +316,7 @@ export default function ProductFormScreen() {
     name: debouncedForm.name || 'Product name',
     slug: 'preview',
     description: debouncedForm.description || '',
-    images: debouncedForm.image ? [{ uri: debouncedForm.image, alt: debouncedForm.name }] : [],
+    images: debouncedForm.images.length > 0 ? [{ uri: debouncedForm.images[0], alt: debouncedForm.name }] : [],
     price: Number(debouncedForm.price) || 0,
     compareAtPrice: debouncedForm.compareAtPrice ? Number(debouncedForm.compareAtPrice) : undefined,
     currency: 'NPR',
@@ -436,7 +439,7 @@ export default function ProductFormScreen() {
                     refCallback={(el) => { sectionRefs.current[s.key] = el }}
                   >
                     {s.key === 'media' && (
-                      <MediaSection form={form} errors={errors} updateField={updateField} t={t} />
+                      <MediaSection form={form} errors={errors} updateField={updateField} t={t} reduced={reduced} />
                     )}
                     {s.key === 'details' && (
                       <DetailsSection form={form} errors={errors} updateField={updateField} t={t} categories={sellerCats} />
@@ -623,36 +626,299 @@ function inputCls(hasError?: boolean) {
   }`
 }
 
-function MediaSection({ form, errors, updateField, t }: { form: FormState; errors: Record<string, string>; updateField: (f: keyof FormState, v: string) => void; t: any }) {
+const MAX_IMAGES = 8
+
+interface MediaImage {
+  id: string
+  url: string
+  uploading: boolean
+  progress: number
+}
+
+function MediaSection({ form, errors, updateField, t, reduced }: { form: FormState; errors: Record<string, string>; updateField: (f: keyof FormState, v: string | string[]) => void; t: any; reduced: boolean }) {
+  const [mediaImages, setMediaImages] = useState<MediaImage[]>(
+    form.images.map((url, i) => ({ id: `img-${i}-${Date.now()}`, url, uploading: false, progress: 100 }))
+  )
+  const [dragIndex, setDragIndex] = useState<number | null>(null)
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
+  const [imageUrl, setImageUrl] = useState('')
+  const dragCounter = useRef(0)
+
+  // Sync mediaImages → form.images
+  const syncToForm = useCallback((imgs: MediaImage[]) => {
+    const urls = imgs.filter(i => !i.uploading).map(i => i.url)
+    updateField('images', urls)
+  }, [updateField])
+
+  const addImage = (url: string) => {
+    if (!url.trim()) return
+    if (mediaImages.length >= MAX_IMAGES) return
+    const id = `img-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const newImg: MediaImage = { id, url: url.trim(), uploading: true, progress: 0 }
+    setMediaImages(prev => {
+      const next = [...prev, newImg]
+      return next
+    })
+    // Mock upload progress
+    let pct = 0
+    const interval = setInterval(() => {
+      pct += Math.random() * 30 + 15
+      if (pct >= 100) {
+        pct = 100
+        clearInterval(interval)
+        setMediaImages(prev => {
+          const next = prev.map(img => img.id === id ? { ...img, uploading: false, progress: 100 } : img)
+          syncToForm(next)
+          return next
+        })
+      } else {
+        setMediaImages(prev => prev.map(img => img.id === id ? { ...img, progress: pct } : img))
+      }
+    }, 200)
+  }
+
+  const handleAddFromUrl = () => {
+    if (!imageUrl.trim()) return
+    addImage(imageUrl)
+    setImageUrl('')
+  }
+
+  const handleDelete = (id: string) => {
+    setMediaImages(prev => {
+      const next = prev.filter(img => img.id !== id)
+      syncToForm(next)
+      return next
+    })
+  }
+
+  const handleSetCover = (id: string) => {
+    setMediaImages(prev => {
+      const idx = prev.findIndex(img => img.id === id)
+      if (idx <= 0) return prev
+      const next = [prev[idx], ...prev.filter((_, i) => i !== idx)]
+      syncToForm(next)
+      return next
+    })
+  }
+
+  const moveImage = (id: string, dir: -1 | 1) => {
+    setMediaImages(prev => {
+      const idx = prev.findIndex(img => img.id === id)
+      const newIdx = idx + dir
+      if (newIdx < 0 || newIdx >= prev.length) return prev
+      const next = [...prev]
+      ;[next[idx], next[newIdx]] = [next[newIdx], next[idx]]
+      syncToForm(next)
+      return next
+    })
+  }
+
+  // Drag handlers
+  const handleDragStart = (idx: number) => {
+    setDragIndex(idx)
+    dragCounter.current = 0
+  }
+  const handleDragEnd = () => {
+    if (dragIndex !== null && dragOverIndex !== null && dragIndex !== dragOverIndex) {
+      setMediaImages(prev => {
+        const next = [...prev]
+        const [moved] = next.splice(dragIndex, 1)
+        next.splice(dragOverIndex, 0, moved)
+        syncToForm(next)
+        return next
+      })
+    }
+    setDragIndex(null)
+    setDragOverIndex(null)
+  }
+  const handleDragOver = (e: React.DragEvent, idx: number) => {
+    e.preventDefault()
+    setDragOverIndex(idx)
+  }
+
+  const canAdd = mediaImages.length < MAX_IMAGES
+
   return (
     <div className="flex flex-col gap-4">
       <Field
         label={t('seller.products.formFieldImage')}
         hint={t('seller.products.formFieldImageHint')}
-        error={errors.image}
-        errorId="error-image"
+        error={errors.images}
+        errorId="error-images"
       >
-        <div className="flex items-start gap-4">
-          <div className="w-24 h-24 rounded-md border border-border bg-background overflow-hidden shrink-0 flex items-center justify-center">
-            {form.image ? (
-              <SafeImage src={form.image} alt="Preview" className="w-full h-full object-cover" />
-            ) : (
-              <ImageIcon size={28} className="text-text-tertiary" aria-hidden="true" />
-            )}
-          </div>
-          <div className="flex-1">
-            <input
-              type="url"
-              value={form.image}
-              onChange={e => updateField('image', e.target.value)}
-              placeholder={t('seller.products.formFieldImageUrl')}
-              aria-label={t('seller.products.formFieldImageUrl')}
-              aria-describedby={errors.image ? 'error-image' : undefined}
-              aria-invalid={!!errors.image}
-              className={inputCls(!!errors.image)}
-            />
-            <p className="text-[12px] text-text-muted mt-1.5">{t('seller.products.formFieldImageUrlHint')}</p>
-          </div>
+        {/* Thumbnail grid */}
+        <div className="flex flex-wrap gap-3" role="group" aria-label={t('seller.products.formFieldImage')}>
+          {mediaImages.map((img, idx) => {
+            const isCover = idx === 0
+            const isDragging = dragIndex === idx
+            const isDragOver = dragOverIndex === idx && dragIndex !== idx
+            return (
+              <div
+                key={img.id}
+                draggable={!img.uploading}
+                onDragStart={() => handleDragStart(idx)}
+                onDragEnd={handleDragEnd}
+                onDragOver={(e) => handleDragOver(e, idx)}
+                onDrop={handleDragEnd}
+                className={`group relative w-24 h-24 rounded-lg border-2 overflow-hidden bg-background transition-all duration-200 ${
+                  isDragging ? 'opacity-50 scale-105 shadow-lg z-10' : ''
+                } ${
+                  isDragOver && !reduced ? 'border-primary scale-105' : 'border-border'
+                }`}
+                aria-label={t('seller.products.mediaThumbAria', { n: idx + 1, cover: isCover ? `, ${t('seller.products.mediaCoverLabel')}` : '' })}
+              >
+                {/* Image */}
+                {img.uploading && img.progress < 100 ? (
+                  <div className="w-full h-full bg-shimmer flex items-center justify-center">
+                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-border">
+                      <div
+                        className="h-full bg-primary transition-all duration-200"
+                        style={{ width: `${img.progress}%` }}
+                        role="progressbar"
+                        aria-valuenow={Math.round(img.progress)}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-label={t('seller.products.mediaUploadProgress', { percent: Math.round(img.progress) })}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <SafeImage src={img.url} alt="" className="w-full h-full object-cover" />
+                )}
+
+                {/* Cover badge */}
+                {isCover && !img.uploading && (
+                  <span className="absolute top-1 left-1 inline-flex items-center gap-1 rounded-full bg-primary text-white text-[12px] font-semibold px-1.5 py-0.5">
+                    <Star size={10} fill="currentColor" aria-hidden="true" />
+                    {t('seller.products.mediaCoverBadge')}
+                  </span>
+                )}
+
+                {/* Hover actions */}
+                {!img.uploading && (
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
+                    <div className="flex items-center gap-1">
+                      {/* Keyboard move left */}
+                      <button
+                        type="button"
+                        onClick={() => moveImage(img.id, -1)}
+                        disabled={idx === 0}
+                        aria-label={t('seller.products.mediaMoveLeftAria', { n: idx + 1 })}
+                        className="w-7 h-7 rounded-md bg-white/90 text-text flex items-center justify-center hover:bg-white disabled:opacity-30 transition-opacity"
+                      >
+                        <ChevronLeft size={14} aria-hidden="true" />
+                      </button>
+                      {/* Set cover */}
+                      {!isCover && (
+                        <button
+                          type="button"
+                          onClick={() => handleSetCover(img.id)}
+                          aria-label={t('seller.products.mediaSetCoverAria', { n: idx + 1 })}
+                          className="w-7 h-7 rounded-md bg-white/90 text-primary flex items-center justify-center hover:bg-white transition-colors"
+                        >
+                          <Star size={14} aria-hidden="true" />
+                        </button>
+                      )}
+                      {/* Keyboard move right */}
+                      <button
+                        type="button"
+                        onClick={() => moveImage(img.id, 1)}
+                        disabled={idx === mediaImages.length - 1}
+                        aria-label={t('seller.products.mediaMoveRightAria', { n: idx + 1 })}
+                        className="w-7 h-7 rounded-md bg-white/90 text-text flex items-center justify-center hover:bg-white disabled:opacity-30 transition-opacity"
+                      >
+                        <ChevronRight size={14} aria-hidden="true" />
+                      </button>
+                      {/* Delete */}
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(img.id)}
+                        aria-label={t('seller.products.mediaDeleteAria', { n: idx + 1 })}
+                        className="w-7 h-7 rounded-md bg-white/90 text-error flex items-center justify-center hover:bg-white transition-colors"
+                      >
+                        <Trash2 size={14} aria-hidden="true" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Drag handle indicator */}
+                {!img.uploading && (
+                  <div
+                    className="absolute bottom-1 right-1 text-white/70 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
+                    aria-hidden="true"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="3" r="1.2"/><circle cx="11" cy="3" r="1.2"/><circle cx="5" cy="8" r="1.2"/><circle cx="11" cy="8" r="1.2"/><circle cx="5" cy="13" r="1.2"/><circle cx="11" cy="13" r="1.2"/></svg>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+
+          {/* Add tile */}
+          {canAdd && (
+            <button
+              type="button"
+              onClick={handleAddFromUrl}
+              disabled={!imageUrl.trim()}
+              aria-label={t('seller.products.mediaAddTileAria')}
+              className="w-24 h-24 rounded-lg border-2 border-dashed border-border bg-background flex flex-col items-center justify-center gap-1 text-text-tertiary hover:border-primary hover:text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Plus size={24} aria-hidden="true" />
+              <span className="text-[11px] font-medium">{t('seller.products.mediaAddTile')}</span>
+            </button>
+          )}
+        </div>
+
+        {/* URL input */}
+        <div className="mt-3 flex items-center gap-2">
+          <input
+            type="url"
+            value={imageUrl}
+            onChange={e => setImageUrl(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddFromUrl() } }}
+            placeholder={t('seller.products.formFieldImageUrl')}
+            aria-label={t('seller.products.formFieldImageUrl')}
+            className={inputCls(false)}
+          />
+          <button
+            type="button"
+            onClick={handleAddFromUrl}
+            disabled={!imageUrl.trim()}
+            className="h-10 px-3 rounded-md border border-border bg-surface text-[14px] font-semibold text-text hover:bg-background transition-colors disabled:opacity-50"
+          >
+            {t('seller.products.mediaAddTile')}
+          </button>
+        </div>
+
+        {/* Drag hint */}
+        {mediaImages.length > 1 && (
+          <p className="text-[12px] text-text-muted mt-1">{t('seller.products.mediaDragHint')}</p>
+        )}
+
+        {/* Max count warning */}
+        {mediaImages.length >= MAX_IMAGES && (
+          <p className="text-[12px] text-warning">{t('seller.products.mediaMaxCount', { max: MAX_IMAGES })}</p>
+        )}
+
+        {/* Empty state */}
+        {mediaImages.length === 0 && (
+          <p className="text-[12px] text-text-muted mt-1">{t('seller.products.mediaEmpty')}</p>
+        )}
+      </Field>
+
+      {/* Video URL */}
+      <Field label={t('seller.products.formFieldVideoUrl')} hint={t('seller.products.formFieldVideoUrlHint')}>
+        <div className="relative">
+          <Video size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" aria-hidden="true" />
+          <input
+            type="url"
+            value={form.videoUrl}
+            onChange={e => updateField('videoUrl', e.target.value)}
+            placeholder="https://youtube.com/..."
+            aria-label={t('seller.products.formFieldVideoUrl')}
+            className={`${inputCls(false)} pl-10`}
+          />
         </div>
       </Field>
     </div>

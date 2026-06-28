@@ -86,11 +86,16 @@ export interface Review {
   sellerResponse?: SellerReviewResponse
 }
 
+export type ReviewFlagReason = 'spam' | 'abusive' | 'fake' | 'off_topic'
+export type ReviewModerationStatus = 'pending' | 'removed' | 'dismissed'
+
 export interface SellerReview extends Review {
   productName: string
   productImage: string
   response?: SellerReviewResponse
   flagged?: boolean
+  flagReason?: ReviewFlagReason
+  moderationStatus?: ReviewModerationStatus
   verifiedPurchase?: boolean
 }
 

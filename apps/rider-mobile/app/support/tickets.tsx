@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   AccessibilityInfo,
+  RefreshControl,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -20,36 +21,33 @@ import {
   ChevronRight,
   Plus,
   Ticket as TicketIcon,
+  MessageCircle,
+  Clock,
+  CheckCircle2,
+  Loader,
+  type LucideIcon,
 } from 'lucide-react-native'
 import { colors, spacing, radii, fontSize, fontFamily } from '@chinooz/theme'
 import { EmptyState, Skeleton } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
 import { useA11y } from '../../components/A11yProvider'
+import {
+  getTickets,
+  getRiderTicketCategoryMeta,
+  type RiderTicket,
+  type RiderTicketStatus,
+} from '@chinooz/mock-data'
 
-type TicketStatus = 'open' | 'pending' | 'resolved'
-
-type Ticket = {
-  id: string
-  subjectIdx: number
-  status: TicketStatus
-  updatedAt: number // epoch ms
-}
-
-// i18n subject keys are derived from the index to avoid inline key literals.
-const TICKET_PREFIX = 'rider.support.ticketArticles'
-const ticketSubjectKey = (idx: number) => `${TICKET_PREFIX}.t${idx}Subject`
-
-const MOCK_TICKETS: Ticket[] = [
-  { id: 'CHZ-9001', subjectIdx: 1, status: 'open', updatedAt: Date.now() - 1000 * 60 * 60 * 3 },
-  { id: 'CHZ-9002', subjectIdx: 2, status: 'pending', updatedAt: Date.now() - 1000 * 60 * 60 * 26 },
-  { id: 'CHZ-9003', subjectIdx: 3, status: 'resolved', updatedAt: Date.now() - 1000 * 60 * 60 * 72 },
-  { id: 'CHZ-9004', subjectIdx: 4, status: 'resolved', updatedAt: Date.now() - 1000 * 60 * 60 * 120 },
-]
-
-const STATUS_META: Record<TicketStatus, { dot: string; bg: string; labelKey: string; ariaKey: string }> = {
-  open: { dot: colors.info, bg: colors.infoLight, labelKey: 'rider.support.tickets.statusOpen', ariaKey: 'rider.support.tickets.statusOpenAria' },
-  pending: { dot: colors.warning, bg: colors.warningLight, labelKey: 'rider.support.tickets.statusPending', ariaKey: 'rider.support.tickets.statusPendingAria' },
-  resolved: { dot: colors.success, bg: colors.successLight, labelKey: 'rider.support.tickets.statusResolved', ariaKey: 'rider.support.tickets.statusResolvedAria' },
+const STATUS_META: Record<RiderTicketStatus, {
+  icon: LucideIcon
+  color: string
+  bg: string
+  labelKey: string
+  ariaKey: string
+}> = {
+  open: { icon: MessageCircle, color: colors.info, bg: colors.infoLight, labelKey: 'rider.support.tickets.statusOpen', ariaKey: 'rider.support.tickets.statusOpenAria' },
+  in_progress: { icon: Loader, color: colors.warning, bg: colors.warningLight, labelKey: 'rider.support.tickets.statusInProgress', ariaKey: 'rider.support.tickets.statusInProgressAria' },
+  resolved: { icon: CheckCircle2, color: colors.success, bg: colors.successLight, labelKey: 'rider.support.tickets.statusResolved', ariaKey: 'rider.support.tickets.statusResolvedAria' },
 }
 
 function timeAgo(ms: number): string {
@@ -68,12 +66,26 @@ export default function MyTicketsScreen() {
   const { reducedMotion } = useA11y()
 
   const [isLoading, setIsLoading] = useState(true)
-  const [tickets] = useState<Ticket[]>(MOCK_TICKETS)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [tickets, setTickets] = useState<RiderTicket[]>([])
+
+  const loadTickets = async (isRefresh = false) => {
+    if (isRefresh) setIsRefreshing(true)
+    else setIsLoading(true)
+    try {
+      const list = await getTickets()
+      setTickets(list)
+    } catch {
+      // mock — ignore
+    } finally {
+      setIsLoading(false)
+      setIsRefreshing(false)
+    }
+  }
 
   useEffect(() => {
     analytics.screen({ name: 'rider-support-tickets' })
-    const id = setTimeout(() => setIsLoading(false), 450)
-    return () => clearTimeout(id)
+    loadTickets()
   }, [])
 
   const sorted = useMemo(
@@ -100,6 +112,13 @@ export default function MyTicketsScreen() {
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + spacing[6] }]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => loadTickets(true)}
+            tintColor={colors.primary}
+          />
+        }
       >
         <View style={styles.headerRow}>
           <View style={{ flex: 1, gap: 2 }}>
@@ -164,7 +183,7 @@ export default function MyTicketsScreen() {
                 t={t}
                 onOpen={() => {
                   analytics.track({ event: 'rider_ticket_opened', screen: 'rider-support-tickets', properties: { ticketId: ticket.id } })
-                  try { AccessibilityInfo.announceForAccessibility(t('rider.support.tickets.rowAria', { id: ticket.id, subject: t(ticketSubjectKey(ticket.subjectIdx)), status: t(STATUS_META[ticket.status].labelKey), date: timeAgo(ticket.updatedAt) })) } catch {}
+                  router.push({ pathname: '/support/tickets/[ticket]', params: { ticket: ticket.id } })
                 }}
               />
             ))}
@@ -182,7 +201,7 @@ function TicketRow({
   t,
   onOpen,
 }: {
-  ticket: Ticket
+  ticket: RiderTicket
   reducedMotion: boolean
   divider: boolean
   t: (k: string, o?: Record<string, unknown>) => string
@@ -194,9 +213,11 @@ function TicketRow({
   const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }))
 
   const meta = STATUS_META[ticket.status]
-  const subject = t(ticketSubjectKey(ticket.subjectIdx))
+  const StatusIcon = meta.icon
+  const catMeta = getRiderTicketCategoryMeta(ticket.category)
   const statusLabel = t(meta.labelKey)
   const ago = timeAgo(ticket.updatedAt)
+  const hasContext = !!ticket.context.orderRef
 
   return (
     <Animated.View style={animStyle}>
@@ -206,7 +227,7 @@ function TicketRow({
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         accessibilityRole="button"
-        accessibilityLabel={t('rider.support.tickets.rowAria', { id: ticket.id, subject, status: statusLabel, date: ago })}
+        accessibilityLabel={t('rider.support.tickets.rowAria', { id: ticket.id, subject: ticket.subject, status: statusLabel, date: ago })}
         activeOpacity={0.85}
       >
         <View style={styles.ticketIcon}>
@@ -215,13 +236,27 @@ function TicketRow({
         <View style={styles.ticketBody}>
           <View style={styles.ticketHead}>
             <Text style={styles.ticketId}>{ticket.id}</Text>
+            {/* Status pill — icon + text, never color-only */}
             <View style={[styles.statusChip, { backgroundColor: meta.bg }]}>
-              <View style={[styles.statusDot, { backgroundColor: meta.dot }]} />
-              <Text style={[styles.statusText, { color: meta.dot }]}>{statusLabel}</Text>
+              <StatusIcon size={12} color={meta.color} />
+              <Text style={[styles.statusText, { color: meta.color }]}>{statusLabel}</Text>
             </View>
           </View>
-          <Text style={styles.ticketSubject} numberOfLines={2}>{subject}</Text>
-          <Text style={styles.ticketDate}>{t('rider.support.tickets.lastUpdated', { date: ago })}</Text>
+          <Text style={styles.ticketSubject} numberOfLines={2}>{ticket.subject}</Text>
+          <View style={styles.ticketMeta}>
+            {catMeta && (
+              <Text style={styles.ticketCategory}>{t(catMeta.labelKey)}</Text>
+            )}
+            {hasContext && (
+              <>
+                <Text style={styles.metaDot}>{'\u00B7'}</Text>
+                <Text style={styles.ticketOrder}>{ticket.context.orderRef}</Text>
+              </>
+            )}
+            <Text style={styles.metaDot}>{'\u00B7'}</Text>
+            <Clock size={11} color={colors.textTertiary} />
+            <Text style={styles.ticketDate}>{t('rider.support.tickets.lastUpdated', { date: ago })}</Text>
+          </View>
         </View>
         <ChevronRight size={18} color={colors.textTertiary} />
       </TouchableOpacity>
@@ -274,7 +309,7 @@ const styles = StyleSheet.create({
     gap: spacing[3],
     paddingHorizontal: spacing[4],
     paddingVertical: spacing[3],
-    minHeight: 56,
+    minHeight: 64,
   },
   ticketRowBorder: { borderTopWidth: 1, borderTopColor: colors.borderLight },
   ticketIcon: {
@@ -296,8 +331,11 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[1],
     borderRadius: radii.full,
   },
-  statusDot: { width: 6, height: 6, borderRadius: 9999 },
   statusText: { fontSize: fontSize.xs[0], fontWeight: '700' },
   ticketSubject: { fontSize: fontSize.base[0], fontWeight: '600', color: colors.text, lineHeight: 19 },
+  ticketMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing[1], flexWrap: 'wrap' },
+  ticketCategory: { fontSize: fontSize.xs[0], color: colors.textMuted, fontFamily: fontFamily.sans[0] },
+  metaDot: { fontSize: fontSize.xs[0], color: colors.textTertiary },
+  ticketOrder: { fontSize: fontSize.xs[0], fontWeight: '500', color: colors.textSecondary },
   ticketDate: { fontSize: fontSize.xs[0], color: colors.textMuted, fontFamily: fontFamily.sans[0] },
 })

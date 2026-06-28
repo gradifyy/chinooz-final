@@ -12,14 +12,14 @@ import {
   PackageSearch,
   RotateCw,
 } from 'lucide-react'
-import { Container, Screen, SafeImage, Spinner, EmptyState, InventoryRow } from '@chinooz/ui-web'
+import { Container, Screen, SafeImage, Spinner, EmptyState, InventoryRow, BulkBar, BulkConfirmModal, CsvImportModal } from '@chinooz/ui-web'
 import { useReducedMotion } from '@chinooz/ui-web'
-import { useSellerInventory, useSellerCategories, useUpdateStock } from '@chinooz/hooks'
+import { useSellerInventory, useSellerCategories, useUpdateStock, useBulkUpdateStock, useExportStockCsv, useImportStockCsv } from '@chinooz/hooks'
 import { useSellerSessionStore } from '@chinooz/state'
 import { analytics } from '@chinooz/analytics'
 import { formatNPR } from '@chinooz/utils'
 import { easing } from '@chinooz/theme'
-import type { SellerInventoryProduct, SellerInventoryVariant, StockStatus } from '@chinooz/types'
+import type { SellerInventoryProduct, SellerInventoryVariant, StockStatus, BulkStockAction, StockEditReason, CsvStockRow } from '@chinooz/types'
 import { LOW_STOCK_THRESHOLD, type InventorySort } from '@chinooz/mock-data'
 
 type TabKey = 'all' | 'in_stock' | 'low_stock' | 'out_of_stock'
@@ -489,6 +489,11 @@ export default function InventoryScreen() {
   const [stockMin, setStockMin] = useState<number | null>(null)
   const [stockMax, setStockMax] = useState<number | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkAction, setBulkAction] = useState<BulkStockAction | null>(null)
+  const [csvOpen, setCsvOpen] = useState(false)
+  const [snackbar, setSnackbar] = useState<{ msg: string; variant: 'success' | 'error' } | null>(null)
+  const snackbarTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   useEffect(() => { analytics.screen({ name: 'seller-inventory' }) }, [])
 
@@ -503,6 +508,9 @@ export default function InventoryScreen() {
   }
   const invQ = useSellerInventory(inventoryFilter)
   const stockMutation = useUpdateStock()
+  const bulkMutation = useBulkUpdateStock()
+  const exportMutation = useExportStockCsv()
+  const importMutation = useImportStockCsv()
 
   const handleStockChange = (variantId: string, productId: string, newStock: number, mode: 'set' | 'adjust', reason?: 'restock' | 'correction' | 'damage' | 'loss' | 'return' | 'other') => {
     stockMutation.mutate({ productId, variantId, newCount: newStock, mode, reason: reason ?? 'restock' })
@@ -513,6 +521,65 @@ export default function InventoryScreen() {
     if (stockMutation.isError && stockMutation.variables?.variantId === variantId) return 'error'
     if (stockMutation.isSuccess && stockMutation.variables?.variantId === variantId) return 'saved'
     return 'idle'
+  }
+
+  const showSnackbar = (msg: string, variant: 'success' | 'error') => {
+    setSnackbar({ msg, variant })
+    clearTimeout(snackbarTimer.current)
+    snackbarTimer.current = setTimeout(() => setSnackbar(null), 3000)
+  }
+
+  const allVisibleVariants = useMemo(() => {
+    return (invQ.data?.products ?? []).flatMap(p => p.variants.map(v => ({ id: v.id, productId: p.id })))
+  }, [invQ.data])
+
+  const allSelected = allVisibleVariants.length > 0 && allVisibleVariants.every(v => selected.has(v.id))
+  const someSelected = selected.size > 0 && !allSelected
+
+  const toggleSelect = (id: string) => {
+    setSelected(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  }
+  const toggleSelectAll = () => {
+    if (allSelected) { setSelected(new Set()) }
+    else { setSelected(new Set(allVisibleVariants.map(v => v.id))) }
+  }
+  const clearSelection = () => setSelected(new Set())
+
+  const handleBulkConfirm = (value: number | undefined, reason: StockEditReason) => {
+    if (!bulkAction) return
+    bulkMutation.mutate(
+      { variantIds: [...selected], action: bulkAction, value, reason },
+      {
+        onSuccess: (data) => {
+          showSnackbar(
+            data.failed > 0
+              ? t('seller.inventory.bulkResultFailed', { count: data.failed, total: data.updated + data.failed })
+              : t('seller.inventory.bulkResult', { count: data.updated }),
+            data.failed > 0 ? 'error' : 'success',
+          )
+          clearSelection()
+        },
+        onError: () => showSnackbar(t('seller.inventory.bulkError'), 'error'),
+      },
+    )
+    setBulkAction(null)
+  }
+
+  const handleExport = () => {
+    exportMutation.mutate(undefined as never, {
+      onSuccess: () => showSnackbar(t('seller.inventory.exportReady'), 'success'),
+      onError: () => showSnackbar(t('seller.inventory.bulkError'), 'error'),
+    })
+  }
+
+  const handleImport = (rows: CsvStockRow[]) => {
+    importMutation.mutate(rows, {
+      onSuccess: (data) => {
+        showSnackbar(t('seller.inventory.bulkResult', { count: data.updated }), 'success')
+        setCsvOpen(false)
+      },
+      onError: () => showSnackbar(t('seller.inventory.bulkError'), 'error'),
+    })
   }
 
   const counts = useMemo<Record<TabKey, number>>(() => {

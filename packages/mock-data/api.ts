@@ -21,8 +21,13 @@ import type {
   StockEditReason,
   StockEditMode,
   StockHistoryEntry,
+  BulkStockOperation,
+  BulkStockResult,
+  CsvStockRow,
   SellerReview,
   SellerReviewResponse,
+  ReviewFlagReason,
+  ReviewModerationStatus,
 } from '@chinooz/types'
 import {
   products,
@@ -956,6 +961,14 @@ function buildSellerReviews(): SellerReview[] {
       // 90% of reviews are verified purchases.
       const verifiedPurchase = seededReview(s + 61) < 0.9
 
+      // Seed moderation status for flagged reviews: mostly pending, some dismissed.
+      const flagReason: ReviewFlagReason | undefined = flagged
+        ? (['spam', 'abusive', 'fake', 'off_topic'][Math.floor(seededReview(s + 71) * 4)] as ReviewFlagReason)
+        : undefined
+      const moderationStatus: ReviewModerationStatus | undefined = flagged
+        ? (seededReview(s + 81) < 0.8 ? 'pending' : 'dismissed')
+        : undefined
+
       list.push({
         id: `srev-${p.id}-${i}`,
         productId: p.id,
@@ -971,6 +984,8 @@ function buildSellerReviews(): SellerReview[] {
         helpful: Math.floor(seededReview(s + 51) * 40),
         response,
         flagged,
+        flagReason,
+        moderationStatus,
         verifiedPurchase,
       })
     }
@@ -1101,6 +1116,55 @@ export async function deleteSellerReviewResponse(
   return { success: true, review }
 }
 
+export async function flagSellerReview(
+  reviewId: string,
+  reason: ReviewFlagReason,
+): Promise<{ success: boolean; review?: SellerReview }> {
+  await randomDelay(200, 500)
+  const review = sellerReviewsCache.find(r => r.id === reviewId)
+  if (!review) return { success: false }
+  review.flagged = true
+  review.flagReason = reason
+  review.moderationStatus = 'pending'
+  return { success: true, review }
+}
+
+export async function unflagSellerReview(
+  reviewId: string,
+): Promise<{ success: boolean; review?: SellerReview }> {
+  await randomDelay(150, 350)
+  const review = sellerReviewsCache.find(r => r.id === reviewId)
+  if (!review) return { success: false }
+  review.flagged = false
+  review.flagReason = undefined
+  review.moderationStatus = undefined
+  return { success: true, review }
+}
+
+export type BulkReviewAction = 'mark_responded_not_needed' | 'flag'
+
+export async function bulkUpdateSellerReviews(
+  reviewIds: string[],
+  action: BulkReviewAction,
+  reason?: ReviewFlagReason,
+): Promise<{ success: boolean; updated: SellerReview[] }> {
+  await randomDelay(300, 600)
+  const updated: SellerReview[] = []
+  for (const id of reviewIds) {
+    const review = sellerReviewsCache.find(r => r.id === id)
+    if (!review) continue
+    if (action === 'mark_responded_not_needed') {
+      review.flagged = false
+    } else if (action === 'flag') {
+      review.flagged = true
+      review.flagReason = reason ?? 'spam'
+      review.moderationStatus = 'pending'
+    }
+    updated.push(review)
+  }
+  return { success: true, updated }
+}
+
 // --- Stock editing (SI5/SS3) ---
 
 const stockHistoryStore: StockHistoryEntry[] = []
@@ -1167,4 +1231,83 @@ export async function getStockHistory(
   await randomDelay(100, 250)
   const list = variantId ? stockHistoryStore.filter(e => e.variantId === variantId) : stockHistoryStore
   return list.slice(0, limit)
+}
+
+// --- Bulk stock updates (SI4/SS3) ---
+
+export async function bulkUpdateStock(op: BulkStockOperation): Promise<BulkStockResult> {
+  await randomDelay(400, 900)
+  let updated = 0
+  let failed = 0
+
+  for (const variantId of op.variantIds) {
+    const variant = findVariantInCache(variantId)
+    if (!variant) { failed++; continue }
+
+    const previous = variant.stockCount
+    let newStock = previous
+
+    switch (op.action) {
+      case 'set':
+        newStock = Math.max(0, op.value ?? 0)
+        break
+      case 'adjust':
+        newStock = Math.max(0, previous + (op.value ?? 0))
+        break
+      case 'threshold':
+        variant.lowStockThreshold = Math.max(0, op.value ?? 0)
+        break
+      case 'mark_out':
+        newStock = 0
+        break
+    }
+
+    if (op.action !== 'threshold') {
+      variant.stockCount = newStock
+      variant.stock = stockStatusFor(newStock)
+    }
+    recalcProductAggregates(variant.productId)
+
+    recordStockHistoryEntry(
+      variantId,
+      op.action === 'adjust' ? 'adjust' : 'set',
+      op.reason ?? 'restock',
+      undefined,
+      newStock,
+    )
+    updated++
+  }
+
+  return { success: true, updated, failed }
+}
+
+export async function exportStockCsv(): Promise<string> {
+  await randomDelay(200, 500)
+  const rows: string[] = ['SKU,StockCount,LowStockThreshold']
+  for (const p of inventoryCache) {
+    for (const v of p.variants) {
+      rows.push(`${v.sku},${v.stockCount},${v.lowStockThreshold ?? LOW_STOCK_THRESHOLD}`)
+    }
+  }
+  return rows.join('\n')
+}
+
+export async function importStockCsv(rows: CsvStockRow[]): Promise<BulkStockResult> {
+  await randomDelay(400, 800)
+  let updated = 0
+  let failed = 0
+  for (const row of rows) {
+    const variant = inventoryCache
+      .flatMap(p => p.variants)
+      .find(v => v.sku === row.sku)
+    if (!variant) { failed++; continue }
+    const previous = variant.stockCount
+    variant.stockCount = Math.max(0, row.stockCount)
+    variant.stock = stockStatusFor(variant.stockCount)
+    if (row.lowStockThreshold != null) variant.lowStockThreshold = row.lowStockThreshold
+    recalcProductAggregates(variant.productId)
+    recordStockHistoryEntry(variant.id, 'set', 'correction', undefined, variant.stockCount)
+    updated++
+  }
+  return { success: true, updated, failed }
 }

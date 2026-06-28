@@ -12,6 +12,7 @@ import { useSellerSessionStore } from '@chinooz/state'
 import { analytics as tracker } from '@chinooz/analytics'
 import SalesSection from './SalesSection'
 import TrafficSection from './TrafficSection'
+import ProductsSection from './ProductsSection'
 import {
   getAnalytics,
   ANALYTICS_RANGES,
@@ -334,6 +335,8 @@ export default function AnalyticsScreen() {
                 <SalesSection data={data} range={range} compare={compare} filter={filter} />
               ) : section === 'traffic' ? (
                 <TrafficSection data={data} compare={compare} />
+              ) : section === 'products' ? (
+                <ProductsSection data={data} range={range} compare={compare} filter={filter} />
               ) : (
                 <SectionContent section={section} data={data} compare={compare} />
               )}

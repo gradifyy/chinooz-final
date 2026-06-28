@@ -13,6 +13,8 @@ import type {
   StockStatus,
   StockEditMode,
   StockEditReason,
+  SellerInventoryVariant,
+  CsvStockRow,
   SellerSubOrder,
   SellerOrderStatusKey,
   Promotion,
@@ -213,6 +215,81 @@ export function useUpdateStock() {
   }
 
   return useMutation(opts)
+}
+
+/**
+ * Bulk stock update — optimistic (SS3 pattern).
+ * Patches all selected variants in the cache instantly, rolls back on error.
+ */
+export function useBulkUpdateStock() {
+  const qc = useQueryClient()
+
+  type BulkVars = {
+    variantIds: string[]
+    action: 'set' | 'adjust' | 'threshold' | 'mark_out'
+    value?: number
+    reason?: StockEditReason
+  }
+
+  const opts = {
+    mutationFn: (vars: BulkVars) => api.bulkUpdateStock(vars),
+    onMutate: async (vars: BulkVars) => {
+      await qc.cancelQueries({ queryKey: ['seller-inventory'] })
+      const prev = qc.getQueriesData({ queryKey: ['seller-inventory'] })
+      qc.setQueriesData({ queryKey: ['seller-inventory'] }, (old: any) => {
+        if (!old) return old
+        return {
+          ...old,
+          products: (old.products ?? []).map((p: any) => ({
+            ...p,
+            variants: (p.variants ?? []).map((v: SellerInventoryVariant) => {
+              if (!vars.variantIds.includes(v.id)) return v
+              if (vars.action === 'threshold') {
+                return { ...v, lowStockThreshold: Math.max(0, vars.value ?? 0) }
+              }
+              let newCount = v.stockCount
+              if (vars.action === 'set') newCount = Math.max(0, vars.value ?? 0)
+              else if (vars.action === 'adjust') newCount = Math.max(0, v.stockCount + (vars.value ?? 0))
+              else if (vars.action === 'mark_out') newCount = 0
+              const status: StockStatus =
+                newCount <= 0 ? 'out_of_stock' : newCount < (v.lowStockThreshold ?? 10) ? 'low_stock' : 'in_stock'
+              return { ...v, stockCount: newCount, stock: status }
+            }),
+          })),
+        }
+      })
+      return { prev }
+    },
+    onError: (_err: Error, _vars: BulkVars, ctx: any) => {
+      if (ctx?.prev) {
+        for (const [key, data] of ctx.prev) {
+          qc.setQueryData(key, data)
+        }
+      }
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['seller-inventory'] })
+      qc.invalidateQueries({ queryKey: ['seller-products'] })
+    },
+  }
+
+  return useMutation(opts)
+}
+
+export function useExportStockCsv() {
+  return useMutation({
+    mutationFn: () => api.exportStockCsv(),
+  })
+}
+
+export function useImportStockCsv() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (rows: CsvStockRow[]) => api.importStockCsv(rows),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['seller-inventory'] })
+    },
+  })
 }
 
 // --- Orders ---

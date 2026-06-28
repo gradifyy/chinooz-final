@@ -31,6 +31,7 @@ import {
   type FinanceSummary,
 } from '@chinooz/mock-data'
 import EarningsChart from './EarningsChart'
+import WithdrawSheet from './WithdrawSheet'
 
 const RANGE_LABEL_KEY: Record<FinanceRangeKey, string> = {
   today: 'rangeToday',
@@ -71,6 +72,7 @@ export default function FinanceScreen() {
   const [rangeKey, setRangeKey] = useState<FinanceRangeKey>('30d')
   const [summary, setSummary] = useState<FinanceSummary | null>(null)
   const [loading, setLoading] = useState(true)
+  const [withdrawOpen, setWithdrawOpen] = useState(false)
   const { width } = useWindowDimensions()
   const isMd = width >= 768
 

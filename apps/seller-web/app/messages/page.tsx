@@ -16,8 +16,8 @@ import {
   useSellerOrders,
   useSellerProducts,
 } from '@chinooz/hooks'
-import { SELLER_REPLY_TEMPLATES, SELLER_QUICK_REPLIES, mockBuyerReply, type ChatOrderContext, type ChatProductContext } from '@chinooz/mock-data'
-import { useSellerSessionStore, useSellerMessagesStore } from '@chinooz/state'
+import { SELLER_QUICK_REPLIES, mockBuyerReply, fillTemplatePlaceholders, getPlaceholders, type ChatOrderContext, type ChatProductContext } from '@chinooz/mock-data'
+import { useSellerSessionStore, useSellerMessagesStore, useSellerTemplatesStore } from '@chinooz/state'
 import type { Conversation, Message, RichProductPayload, RichOrderPayload, RichTrackingPayload } from '@chinooz/types'
 
 type FilterKey = 'all' | 'unread' | 'order' | 'product'
@@ -313,7 +313,8 @@ function ThreadView({
   onBack: () => void
   isDesktop: boolean
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const isNe = i18n.language === 'ne'
   const router = useRouter()
   const sellerId = useSellerSessionStore(s => s.sellerId)
   const { data: serverMessages, isLoading } = useSellerMessages(conversationId)
@@ -322,6 +323,13 @@ function ThreadView({
   const trackingMutation = useGenerateTracking()
   const attachMutation = useAttachConversationContext()
   const convo = conversations.find(c => c.id === conversationId)
+  const templates = useSellerTemplatesStore(s => s.templates)
+  const addTemplate = useSellerTemplatesStore(s => s.addTemplate)
+  const updateTemplate = useSellerTemplatesStore(s => s.updateTemplate)
+  const deleteTemplate = useSellerTemplatesStore(s => s.deleteTemplate)
+  const awayMessage = useSellerTemplatesStore(s => s.awayMessage)
+  const setAwayEnabled = useSellerTemplatesStore(s => s.setAwayEnabled)
+  const setAwayBody = useSellerTemplatesStore(s => s.setAwayBody)
 
   const { data: orderCtx, isLoading: orderCtxLoading } = useChatOrderContext(
     sellerId,
@@ -335,6 +343,7 @@ function ThreadView({
   const [localMessages, setLocalMessages] = useState<Message[]>([])
   const [typing, setTyping] = useState(false)
   const [showTemplates, setShowTemplates] = useState(false)
+  const [showTemplateManager, setShowTemplateManager] = useState(false)
   const [showAttachPicker, setShowAttachPicker] = useState(false)
   const [contextCollapsed, setContextCollapsed] = useState(false)
   const [loadEarlier, setLoadEarlier] = useState(true)
@@ -402,6 +411,20 @@ function ThreadView({
     sendMutation.mutate({ conversationId, body: trimmed })
     triggerBuyerReply(trimmed)
   }, [input, conversationId, sendMutation, pushMessage, triggerBuyerReply])
+
+  const handleInsertTemplate = useCallback((body: string) => {
+    const filled = fillTemplatePlaceholders(body, {
+      orderRef: orderCtx?.orderRef,
+      trackingNumber: undefined,
+      buyerName: convo?.participantName,
+    })
+    setInput(filled)
+    setShowTemplates(false)
+    if (textareaRef.current) {
+      textareaRef.current.style.height = '40px'
+      textareaRef.current.style.height = Math.min(120, textareaRef.current.scrollHeight) + 'px'
+    }
+  }, [orderCtx, convo])
 
   const handleShareProduct = useCallback(() => {
     if (!productCtx) return
@@ -684,23 +707,52 @@ function ThreadView({
           <div className="border-t border-border-light bg-surface px-4 py-3 max-h-72 overflow-y-auto" role="dialog" aria-label={t('seller.messages.threadTemplates')}>
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-semibold text-text">{t('seller.messages.threadTemplates')}</span>
-              <button onClick={() => setShowTemplates(false)} className="text-text-muted hover:text-text" aria-label={t('common.close')}>{'\u{2715}'}</button>
-            </div>
-            <div className="flex flex-wrap gap-2 mb-2">
-              {SELLER_QUICK_REPLIES.map(q => (
-                <button key={q.id} onClick={() => handleSend(q.body)} className="rounded-full px-3 py-1.5 text-sm font-medium text-primary bg-primary-50 hover:bg-primary-50/70 transition-colors" aria-label={q.label}>{q.label}</button>
-              ))}
+              <div className="flex items-center gap-3">
+                <button onClick={() => { setShowTemplates(false); setShowTemplateManager(true) }} className="text-sm font-medium text-primary hover:underline" aria-label={t('seller.messages.templateManagerAria')}>
+                  {t('seller.messages.templateManager')}
+                </button>
+                <button onClick={() => setShowTemplates(false)} className="text-text-muted hover:text-text" aria-label={t('common.close')}>{'\u{2715}'}</button>
+              </div>
             </div>
             <div className="flex flex-col">
-              {SELLER_REPLY_TEMPLATES.map(tpl => (
-                <button key={tpl.id} onClick={() => handleSend(tpl.body)} className="text-left py-2 border-b border-border-light last:border-0 hover:bg-background transition-colors" aria-label={tpl.label}>
-                  <p className="text-sm font-semibold text-text">{tpl.label}</p>
+              {templates.filter(tpl => !tpl.isBuiltIn).length > 0 && (
+                <p className="text-xs font-semibold text-text-muted uppercase tracking-wide mt-1 mb-1">{t('seller.messages.templateCustom')}</p>
+              )}
+              {templates.filter(tpl => !tpl.isBuiltIn).map(tpl => (
+                <button key={tpl.id} onClick={() => handleInsertTemplate(tpl.body)} className="text-left py-2 border-b border-border-light last:border-0 hover:bg-background transition-colors" aria-label={t('seller.messages.templateInsertAria', { label: tpl.label })}>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-semibold text-text">{tpl.label}</p>
+                    {tpl.hasPlaceholders && <span className="text-[10px] text-primary font-semibold bg-primary-50 px-1 rounded">{'}'}</span>}
+                  </div>
+                  <p className="text-xs text-text-muted mt-0.5 line-clamp-2">{tpl.body}</p>
+                </button>
+              ))}
+              <p className="text-xs font-semibold text-text-muted uppercase tracking-wide mt-2 mb-1">{t('seller.messages.templateBuiltIn')}</p>
+              {templates.filter(tpl => tpl.isBuiltIn).map(tpl => (
+                <button key={tpl.id} onClick={() => handleInsertTemplate(tpl.body)} className="text-left py-2 border-b border-border-light last:border-0 hover:bg-background transition-colors" aria-label={t('seller.messages.templateInsertAria', { label: tpl.label })}>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-semibold text-text">{tpl.label}</p>
+                    {tpl.hasPlaceholders && <span className="text-[10px] text-primary font-semibold bg-primary-50 px-1 rounded">{'}'}</span>}
+                  </div>
                   <p className="text-xs text-text-muted mt-0.5 line-clamp-2">{tpl.body}</p>
                 </button>
               ))}
             </div>
           </div>
         )}
+
+        <TemplateManagerModal
+          visible={showTemplateManager}
+          onClose={() => setShowTemplateManager(false)}
+          templates={templates}
+          onAdd={addTemplate}
+          onUpdate={updateTemplate}
+          onDelete={deleteTemplate}
+          awayMessage={awayMessage}
+          onSetAwayEnabled={setAwayEnabled}
+          onSetAwayBody={setAwayBody}
+          t={t}
+        />
 
         <AttachPickerModal
           visible={showAttachPicker}
@@ -709,6 +761,19 @@ function ThreadView({
           sellerId={sellerId}
           t={t}
         />
+
+        <div className="flex items-center gap-2 px-3 pt-2 bg-surface overflow-x-auto scrollbar-none">
+          {SELLER_QUICK_REPLIES.map(q => (
+            <button
+              key={q.id}
+              onClick={() => handleInsertTemplate(isNe ? q.bodyNe : q.body)}
+              className="shrink-0 rounded-full border border-border bg-surface px-3 py-1.5 text-sm font-medium text-text hover:border-primary hover:text-primary active:scale-[0.96] transition-all"
+              aria-label={t('seller.messages.quickReplyAria', { label: isNe ? q.labelNe : q.label })}
+            >
+              {isNe ? q.labelNe : q.label}
+            </button>
+          ))}
+        </div>
 
         <div className="flex items-end gap-2 p-3 border-t border-border-light bg-surface">
           <button

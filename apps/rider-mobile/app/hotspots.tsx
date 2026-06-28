@@ -31,11 +31,13 @@ import {
   getDemandZones,
   getSurgeZones,
   getRiderRecommendations,
+  getDemandForecast,
   isInHotspot,
   RIDER_LOCATION,
   type DemandZone,
   type SurgeZone,
   type DemandLevel,
+  type DemandForecast,
 } from '@chinooz/mock-data'
 import { useOnlineStatusStore } from '@chinooz/state'
 import { useA11y } from '../components/A11yProvider'
@@ -43,6 +45,7 @@ import { useAppState } from '../components/AppStateProvider'
 import DemandHeatmap from '../components/DemandHeatmap'
 import ZoneDetailSheet from '../components/ZoneDetailSheet'
 import RecommendationsStrip from '../components/RecommendationsStrip'
+import DemandForecastChart from '../components/DemandForecastChart'
 
 /**
  * RD1 — Demand / Hotspots heatmap.
@@ -82,6 +85,7 @@ export default function HotspotsScreen() {
   const [selectedZone, setSelectedZone] = useState<DemandZone | null>(null)
   const [sheetVisible, setSheetVisible] = useState(false)
   const [recNonce, setRecNonce] = useState(0)
+  const [forecast, setForecast] = useState<DemandForecast | null>(null)
 
   const status = useOnlineStatusStore(s => s.status)
   const setOnlineStatus = useOnlineStatusStore(s => s.setOnlineStatus)
@@ -98,8 +102,10 @@ export default function HotspotsScreen() {
   const load = useCallback(() => {
     const z = getDemandZones({ now: Date.now() })
     const s = getSurgeZones({ now: Date.now() })
+    const f = getDemandForecast({ now: Date.now() })
     setZones(z)
     setSurgeZones(s)
+    setForecast(f)
   }, [])
 
   useEffect(() => {
@@ -361,6 +367,49 @@ export default function HotspotsScreen() {
     [t],
   )
 
+  const forecastLabels = useMemo(
+    () => ({
+      title: t('rider.hotspots.forecastTitle'),
+      sub: t('rider.hotspots.forecastSub'),
+      nextPeak: (time: string) => t('rider.hotspots.forecastNextPeak', { time }),
+      nextPeakNow: (label: string) => t('rider.hotspots.forecastNextPeakNow', { label }),
+      nextPeakLabel: (label: string, hour: string) =>
+        t('rider.hotspots.forecastNextPeakLabel', { label, hour }),
+      noPeak: t('rider.hotspots.forecastNoPeak'),
+      planHint: (hint: string) => t('rider.hotspots.forecastPlanHint', { hint }),
+      surgeTie: (mult: number, zone: string) =>
+        t('rider.hotspots.forecastSurgeTie', { mult, zone }),
+      lunch: t('rider.hotspots.forecastLunch'),
+      dinner: t('rider.hotspots.forecastDinner'),
+      ariaSummary: (p: {
+        peakCount: number
+        peaks: string
+        nextPeak: string
+        surge: string
+        plan: string
+      }) =>
+        t('rider.hotspots.forecastAriaSummary', {
+          peakCount: p.peakCount,
+          peaks: p.peaks,
+          nextPeak: p.nextPeak,
+          surge: p.surge,
+          plan: p.plan,
+        }),
+      dataTableTitle: t('rider.hotspots.forecastDataTableTitle'),
+      dataTableHour: t('rider.hotspots.forecastDataTableHour'),
+      dataTableDemand: t('rider.hotspots.forecastDataTableDemand'),
+      dataTablePeak: t('rider.hotspots.forecastDataTablePeak'),
+      dataTableSurge: t('rider.hotspots.forecastDataTableSurge'),
+      barAria: (label: string, demand: number, peak: string, surge: string) =>
+        t('rider.hotspots.forecastBarAria', { label, demand, peak, surge }),
+      hoursShort: (hours: number, minutes: number) =>
+        t('rider.hotspots.forecastHoursShort', { hours, minutes }),
+      minutesShort: (minutes: number) =>
+        t('rider.hotspots.forecastMinutesShort', { minutes }),
+    }),
+    [t],
+  )
+
   const topZone = zones[0]
   const mapAria = topZone
     ? t('rider.hotspots.mapAria', {
@@ -499,6 +548,16 @@ export default function HotspotsScreen() {
             ) : null}
           </View>
         </View>
+
+        {/* RD4 — Demand forecast / peak timeline */}
+        {forecast ? (
+          <View style={styles.forecastSection}>
+            <DemandForecastChart
+              forecast={forecast}
+              labels={forecastLabels}
+            />
+          </View>
+        ) : null}
 
         {/* Ranked fallback list (the map is not the only way in) */}
         <View
@@ -783,6 +842,13 @@ const styles = StyleSheet.create({
     textTransform: 'capitalize',
   },
   recSection: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    padding: spacing[4],
+  },
+  forecastSection: {
     backgroundColor: colors.surface,
     borderRadius: radii.xl,
     borderWidth: 1,

@@ -17,6 +17,7 @@ import {
   type FinanceSummary,
 } from '@chinooz/mock-data'
 import EarningsChart from '@/components/EarningsChart'
+import WithdrawSheet from '@/components/WithdrawSheet'
 
 function useCountUp(target: number, enabled: boolean, durationMs = 900): number {
   const [value, setValue] = useState(0)
@@ -56,6 +57,9 @@ export default function FinanceScreen() {
   const [rangeKey, setRangeKey] = useState<FinanceRangeKey>('30d')
   const [summary, setSummary] = useState<FinanceSummary | null>(null)
   const [loading, setLoading] = useState(true)
+  const [withdrawOpen, setWithdrawOpen] = useState(false)
+  const [availBalance, setAvailBalance] = useState(0)
+  const [pendingBalanceState, setPendingBalanceState] = useState(0)
 
   useEffect(() => {
     analytics.screen({ name: 'seller-finance' })
@@ -83,7 +87,8 @@ export default function FinanceScreen() {
 
   const available = summary?.availableBalance ?? 0
   const animatedAvailable = useCountUp(available, !loading && !reducedMotion)
-  const displayAvailable = loading ? available : animatedAvailable
+  const heroAvailable = loading ? available : animatedAvailable
+  const heroPending = summary?.pendingBalance ?? 0
 
   const cards = useMemo(() => {
     if (!summary) return [] as { label: string; value: string }[]
@@ -158,7 +163,7 @@ export default function FinanceScreen() {
                   className="mt-2 text-[32px] leading-none font-bold tabular-nums text-primary"
                   style={{ fontVariantNumeric: 'tabular-nums' }}
                 >
-                  NPR {formatNPRAmount(displayAvailable)}
+                  NPR {formatNPRAmount(heroAvailable)}
                 </p>
                 <div className="mt-4 pt-4 border-t border-border-light">
                   <p className="text-xs font-medium text-text-muted">
@@ -168,7 +173,7 @@ export default function FinanceScreen() {
                     className="mt-1 text-sm font-medium tabular-nums text-text-muted"
                     style={{ fontVariantNumeric: 'tabular-nums' }}
                   >
-                    NPR {formatNPRAmount(summary?.pendingBalance ?? 0)}
+                    NPR {formatNPRAmount(heroPending)}
                   </p>
                   <p className="mt-1 text-xs text-text-tertiary">
                     {t('seller.finance.heroPendingHint')}
@@ -176,7 +181,7 @@ export default function FinanceScreen() {
                 </div>
               </div>
               <button
-                onClick={() => {}}
+                onClick={() => setWithdrawOpen(true)}
                 aria-label={t('seller.finance.withdrawAria', {
                   amount: formatNPRAmount(summary?.availableBalance ?? 0),
                 })}
@@ -281,6 +286,17 @@ export default function FinanceScreen() {
           </div>
         </div>
       </Container>
+      <WithdrawSheet
+        open={withdrawOpen}
+        onClose={() => setWithdrawOpen(false)}
+        availableBalance={summary?.availableBalance ?? 0}
+        pendingBalance={summary?.pendingBalance ?? 0}
+        onBalancesUpdate={(avail, pend) => {
+          setSummary(prev =>
+            prev ? { ...prev, availableBalance: avail, pendingBalance: pend } : prev,
+          )
+        }}
+      />
     </Screen>
   )
 }

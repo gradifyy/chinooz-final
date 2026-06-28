@@ -591,13 +591,20 @@ export function formatRiderNPRAmount(value: number): string {
  */
 export interface CODCollectionEntry {
   id: string
+  /** Order ref (buyer/seller order model), e.g. "CHZ-2048". */
   orderId: string
+  /** Jobs-history id for cross-linking to the trip receipt (one source of truth). */
+  jobRef: string
   /** NPR amount collected from the customer. */
   amount: number
   /** ISO timestamp of collection. */
   collectedAt: string
+  /** Buyer area / drop-off label. */
+  buyerArea: string
   /** Customer-facing label, e.g. area or name. */
   label: string
+  /** Collection status: collected (ok), partial (short), disputed (contested). */
+  status: 'collected' | 'partial' | 'disputed'
 }
 
 export interface CODDepositEntry {
@@ -712,24 +719,33 @@ const COD_WALLET_DEFAULT: CODWalletSnapshot = {
   recentCollections: [
     {
       id: 'col-1',
-      orderId: 'ORD-20481',
+      orderId: 'CHZ-20481',
+      jobRef: 'rj5-h1',
       amount: 1240,
       collectedAt: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
+      buyerArea: 'Balaju',
       label: 'Balaju — COD',
+      status: 'collected',
     },
     {
       id: 'col-2',
-      orderId: 'ORD-20479',
+      orderId: 'CHZ-20479',
+      jobRef: 'rj5-h2',
       amount: 860,
       collectedAt: new Date(Date.now() - 70 * 60 * 1000).toISOString(),
+      buyerArea: 'Thamel',
       label: 'Thamel — COD',
+      status: 'partial',
     },
     {
       id: 'col-3',
-      orderId: 'ORD-20476',
+      orderId: 'CHZ-20476',
+      jobRef: 'rj5-h3',
       amount: 2150,
       collectedAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+      buyerArea: 'Patan',
       label: 'Patan — COD',
+      status: 'collected',
     },
   ],
   recentDeposits: [
@@ -774,6 +790,202 @@ export function getCODWalletSync(): CODWalletSnapshot {
   snap.cashInHand = snap.codCollectedTotal - snap.codDepositedTotal
   snap.pendingToDeposit = snap.cashInHand
   return snap
+}
+
+/**
+ * RW3 — COD collection ledger types.
+ *
+ * A chronological list of COD collections grouped by day with daily
+ * subtotals and a running cash-in-hand impact. Each row links to the trip
+ * receipt (Jobs history) via jobRef. Disputed / partial collections are
+ * flagged so the rider can see which need review.
+ */
+export type CodCollectionStatus = CODCollectionEntry['status']
+
+export interface CodCollectionRow extends CODCollectionEntry {
+  /** Running cash-in-hand after this collection (NPR). */
+  runningCashInHand: number
+  /** True when status is partial or disputed (needs review). */
+  flagged: boolean
+}
+
+export interface CodCollectionDay {
+  /** ISO date (yyyy-mm-dd). */
+  date: string
+  /** Human label, e.g. "Today" or "Fri 27 Jun". */
+  label: string
+  /** Collection rows for this day, chronological. */
+  entries: CodCollectionRow[]
+  /** Sum of collected amounts for the day (NPR). */
+  dailyTotal: number
+  /** Count of collections in the day. */
+  count: number
+  /** Count of flagged (partial/disputed) collections in the day. */
+  flaggedCount: number
+}
+
+export interface CodCollectionLedger {
+  days: CodCollectionDay[]
+  /** Grand total across all days (NPR). */
+  grandTotal: number
+  /** Total collection count. */
+  totalCount: number
+  /** Total flagged count. */
+  flaggedCount: number
+  /** Cash-in-hand at the latest point (NPR). */
+  cashInHandNow: number
+}
+
+function dayLabelFor(date: string): string {
+  const today = new Date().toISOString().slice(0, 10)
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+  if (date === today) return 'Today'
+  if (date === yesterday) return 'Yesterday'
+  return new Date(date + 'T00:00:00').toLocaleDateString(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  })
+}
+
+/** Full fixture of COD collections (more than the 3 in COD_WALLET_DEFAULT). */
+const COD_COLLECTION_FIXTURES: Omit<CODCollectionEntry, 'id'>[] = [
+  {
+    orderId: 'CHZ-20481',
+    jobRef: 'rj5-h1',
+    amount: 1240,
+    collectedAt: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
+    buyerArea: 'Balaju',
+    label: 'Balaju — COD',
+    status: 'collected',
+  },
+  {
+    orderId: 'CHZ-20479',
+    jobRef: 'rj5-h2',
+    amount: 860,
+    collectedAt: new Date(Date.now() - 70 * 60 * 1000).toISOString(),
+    buyerArea: 'Thamel',
+    label: 'Thamel — COD',
+    status: 'partial',
+  },
+  {
+    orderId: 'CHZ-20476',
+    jobRef: 'rj5-h3',
+    amount: 2150,
+    collectedAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+    buyerArea: 'Patan',
+    label: 'Patan — COD',
+    status: 'collected',
+  },
+  {
+    orderId: 'CHZ-20472',
+    jobRef: 'rj5-h4',
+    amount: 540,
+    collectedAt: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+    buyerArea: 'Boudha',
+    label: 'Boudha — COD',
+    status: 'collected',
+  },
+  {
+    orderId: 'CHZ-20468',
+    jobRef: 'rj5-h5',
+    amount: 1030,
+    collectedAt: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString(),
+    buyerArea: 'Kirtipur',
+    label: 'Kirtipur — COD',
+    status: 'disputed',
+  },
+  {
+    orderId: 'CHZ-20464',
+    jobRef: 'rj5-h6',
+    amount: 780,
+    collectedAt: new Date(Date.now() - 28 * 60 * 60 * 1000).toISOString(),
+    buyerArea: 'Kalanki',
+    label: 'Kalanki — COD',
+    status: 'collected',
+  },
+  {
+    orderId: 'CHZ-20459',
+    jobRef: 'rj5-h7',
+    amount: 1620,
+    collectedAt: new Date(Date.now() - 50 * 60 * 60 * 1000).toISOString(),
+    buyerArea: 'Bhaktapur',
+    label: 'Bhaktapur — COD',
+    status: 'collected',
+  },
+  {
+    orderId: 'CHZ-20455',
+    jobRef: 'rj5-h8',
+    amount: 920,
+    collectedAt: new Date(Date.now() - 52 * 60 * 60 * 1000).toISOString(),
+    buyerArea: 'Baneshwor',
+    label: 'Baneshwor — COD',
+    status: 'partial',
+  },
+]
+
+/**
+ * Build the COD collection ledger with day grouping + running cash-in-hand.
+ * Collections are sorted oldest-first within each day so the running total
+ * accumulates chronologically; days are newest-first for display.
+ */
+function buildCodCollectionLedger(): CodCollectionLedger {
+  const startingCash = 8000 // cash-in-hand before the earliest collection
+  const withIds: CODCollectionEntry[] = COD_COLLECTION_FIXTURES.map((c, i) => ({
+    ...c,
+    id: `col-${i + 1}`,
+  }))
+  // Sort oldest-first globally so the running total is correct.
+  const sorted = [...withIds].sort(
+    (a, b) => new Date(a.collectedAt).getTime() - new Date(b.collectedAt).getTime(),
+  )
+  let running = startingCash
+  const rows: CodCollectionRow[] = sorted.map(c => {
+    running += c.amount
+    return {
+      ...c,
+      runningCashInHand: running,
+      flagged: c.status !== 'collected',
+    }
+  })
+  // Group by day (newest-first for display).
+  const byDay = new Map<string, CodCollectionRow[]>()
+  for (const r of rows) {
+    const date = r.collectedAt.slice(0, 10)
+    const arr = byDay.get(date) ?? []
+    arr.push(r)
+    byDay.set(date, arr)
+  }
+  const days: CodCollectionDay[] = Array.from(byDay.entries())
+    .map(([date, entries]) => ({
+      date,
+      label: dayLabelFor(date),
+      entries: entries.sort(
+        (a, b) => new Date(b.collectedAt).getTime() - new Date(a.collectedAt).getTime(),
+      ),
+      dailyTotal: entries.reduce((s, e) => s + e.amount, 0),
+      count: entries.length,
+      flaggedCount: entries.filter(e => e.flagged).length,
+    }))
+    .sort((a, b) => (a.date < b.date ? 1 : -1))
+
+  return {
+    days,
+    grandTotal: rows.reduce((s, r) => s + r.amount, 0),
+    totalCount: rows.length,
+    flaggedCount: rows.filter(r => r.flagged).length,
+    cashInHandNow: running,
+  }
+}
+
+/**
+ * Mock async fetcher for the COD collection ledger (RW3). Mirrors a real API
+ * call (latency + jitter) so the ledger screen's loading/skeleton and
+ * TanStack Query paths are exercised.
+ */
+export async function getCodCollections(): Promise<CodCollectionLedger> {
+  await new Promise(resolve => setTimeout(resolve, 220 + seeded(2, 11) * 260))
+  return buildCodCollectionLedger()
 }
 
 // ─── RE5/RE6 — Payout methods + withdrawal history ──────────────────────

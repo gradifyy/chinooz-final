@@ -46,6 +46,7 @@ export default function RootLayout() {
                       <Stack.Screen name="support/contact" options={{ animation: 'slide_from_right' }} />
                       <Stack.Screen name="support/sos" options={{ animation: 'slide_from_bottom' }} />
                       <Stack.Screen name="support/tickets" options={{ animation: 'slide_from_right' }} />
+                      <Stack.Screen name="support/tickets/[ticket]" options={{ animation: 'slide_from_right' }} />
                     </Stack>
                   </SafeAreaProvider>
                 </AppStateProvider>

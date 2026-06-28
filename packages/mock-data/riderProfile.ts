@@ -478,3 +478,114 @@ export function daysUntilExpiry(iso: string | null): number | null {
 
 /** Threshold (days) below which an expiry reminder is shown. */
 export const RIDER_DOC_EXPIRY_REMIND_DAYS = 30
+
+/**
+ * RP4 — Rider notifications & app preferences (RG4) + job preferences.
+ *
+ * Surfaces:
+ * - getRiderPreferences():  notification toggles, app prefs, job prefs.
+ * - updateRiderPreferences():  mock persist (partial updates).
+ *
+ * The COD-vs-prepaid preference respects the COD float limit: when the rider
+ * is at the limit, COD-only is disabled and the UI notes the limit.
+ */
+
+export type RiderNavApp = 'google' | 'apple' | 'osm' | 'none'
+export type RiderDistanceUnit = 'km' | 'mile'
+export type RiderSoundLevel = 'off' | 'low' | 'medium' | 'high'
+export type RiderHapticsLevel = 'off' | 'low' | 'medium' | 'high'
+export type RiderMapStyle = 'standard' | 'satellite' | 'dark'
+export type RiderCodPreference = 'any' | 'cod' | 'prepaid'
+
+export interface RiderNotificationPrefs {
+  jobOffers: boolean
+  jobOffersSound: boolean
+  jobOffersVibration: boolean
+  earnings: boolean
+  incentives: boolean
+  ratings: boolean
+  announcements: boolean
+  quietHoursEnabled: boolean
+  /** "HH:mm" 24h. */
+  quietHoursStart: string
+  /** "HH:mm" 24h. */
+  quietHoursEnd: string
+}
+
+export interface RiderAppPrefs {
+  navApp: RiderNavApp
+  distanceUnit: RiderDistanceUnit
+  soundLevel: RiderSoundLevel
+  hapticsLevel: RiderHapticsLevel
+  batterySaver: boolean
+  dataSaver: boolean
+  mapStyle: RiderMapStyle
+}
+
+export interface RiderJobPrefs {
+  /** Zone IDs the rider prefers. */
+  preferredZones: string[]
+  /** Max acceptance radius in km. */
+  maxDistanceKm: number
+  codPreference: RiderCodPreference
+}
+
+export interface RiderPreferences {
+  notifications: RiderNotificationPrefs
+  app: RiderAppPrefs
+  job: RiderJobPrefs
+}
+
+export const RIDER_PREFERENCE_ZONES: { id: string; labelKey: string }[] = [
+  { id: 'patan', labelKey: 'rider.prefs.zones.patan' },
+  { id: 'ktm-central', labelKey: 'rider.prefs.zones.ktmCentral' },
+  { id: 'bkt', labelKey: 'rider.prefs.zones.bkt' },
+  { id: 'kirtipur', labelKey: 'rider.prefs.zones.kirtipur' },
+  { id: 'bhaktapur', labelKey: 'rider.prefs.zones.bhaktapur' },
+]
+
+export const RIDER_MAX_DISTANCE_OPTIONS = [2, 5, 10, 15, 20]
+
+export async function getRiderPreferences(): Promise<RiderPreferences> {
+  await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 180))
+  return {
+    notifications: {
+      jobOffers: true,
+      jobOffersSound: true,
+      jobOffersVibration: true,
+      earnings: true,
+      incentives: true,
+      ratings: false,
+      announcements: true,
+      quietHoursEnabled: false,
+      quietHoursStart: '22:00',
+      quietHoursEnd: '07:00',
+    },
+    app: {
+      navApp: 'google',
+      distanceUnit: 'km',
+      soundLevel: 'medium',
+      hapticsLevel: 'medium',
+      batterySaver: false,
+      dataSaver: false,
+      mapStyle: 'standard',
+    },
+    job: {
+      preferredZones: ['patan', 'ktm-central'],
+      maxDistanceKm: 10,
+      codPreference: 'any',
+    },
+  }
+}
+
+export async function updateRiderPreferences(
+  data: Partial<{
+    notifications: Partial<RiderNotificationPrefs>
+    app: Partial<RiderAppPrefs>
+    job: Partial<RiderJobPrefs>
+  }>,
+): Promise<{ success: boolean }> {
+  await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 160))
+  void data
+  return { success: true }
+}

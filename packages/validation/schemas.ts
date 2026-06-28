@@ -321,7 +321,8 @@ export const productFormSchema = z.object({
   compareAtPrice: z.number().optional(),
   stockCount: z.number().min(0, 'Stock cannot be negative').max(999999, 'Stock is too high'),
   description: z.string().min(10, 'Description must be at least 10 characters').max(5000, 'Description is too long'),
-  image: z.string().optional().or(z.literal('')),
+  images: z.array(z.string()).min(1, 'At least one image is required').max(8, 'Maximum 8 images'),
+  videoUrl: z.string().max(500, 'Video URL is too long').optional().or(z.literal('')),
   weight: z.number().optional(),
   shippingWidth: z.number().optional(),
   shippingHeight: z.number().optional(),
@@ -334,7 +335,7 @@ export type ProductFormInput = z.infer<typeof productFormSchema>
 
 // Per-section sub-schemas for completion tracking
 export const productMediaSectionSchema = z.object({
-  image: z.string().min(1, 'At least one image is required'),
+  images: z.array(z.string().min(1)).min(1, 'At least one image is required').max(8, 'You can upload up to 8 images'),
 })
 
 export const productDetailsSectionSchema = z.object({
@@ -352,4 +353,66 @@ export const productPricingSectionSchema = z.object({
 export const productDescriptionSectionSchema = z.object({
   description: z.string().min(10, 'Description must be at least 10 characters').max(5000, 'Description is too long'),
   specs: z.string().max(2000, 'Specs are too long').optional().or(z.literal('')),
+})
+
+// --- Seller Promotion Form ---
+
+export const promotionFormSchema = z.object({
+  name: z.string().min(2, 'Promotion name must be at least 2 characters').max(120, 'Promotion name is too long'),
+  type: z.enum(['percentage', 'fixed', 'flash_sale', 'bogo', 'free_shipping']),
+  discountValue: z.number().min(1, 'Discount value must be at least 1').max(100, 'Percentage cannot exceed 100'),
+  code: z.string().max(30, 'Code is too long').optional().or(z.literal('')),
+  isCoupon: z.boolean(),
+  scope: z.enum(['all', 'category', 'products']),
+  scopeLabel: z.string().max(100).optional().or(z.literal('')),
+  startsAt: z.string().min(1, 'Start date is required'),
+  endsAt: z.string().min(1, 'End date is required'),
+  budget: z.number().min(0).optional(),
+  productsCount: z.number().min(0).optional(),
+  status: z.enum(['active', 'scheduled', 'expired', 'draft']),
+}).superRefine((data, ctx) => {
+  if (data.type === 'percentage' || data.type === 'flash_sale') {
+    if (data.discountValue > 100) {
+      ctx.addIssue({ path: ['discountValue'], code: z.ZodIssueCode.custom, message: 'Percentage cannot exceed 100' })
+    }
+  }
+  if (data.isCoupon && (!data.code || data.code.trim().length < 2)) {
+    ctx.addIssue({ path: ['code'], code: z.ZodIssueCode.custom, message: 'Coupon code is required when coupon mode is on' })
+  }
+  if (data.startsAt && data.endsAt) {
+    const start = new Date(data.startsAt).getTime()
+    const end = new Date(data.endsAt).getTime()
+    if (end <= start) {
+      ctx.addIssue({ path: ['endsAt'], code: z.ZodIssueCode.custom, message: 'End date must be after start date' })
+    }
+  }
+})
+
+export type PromotionFormInput = z.infer<typeof promotionFormSchema>
+
+export const promotionTypeValueSectionSchema = z.object({
+  name: z.string().min(2, 'Promotion name must be at least 2 characters').max(120, 'Promotion name is too long'),
+  type: z.enum(['percentage', 'fixed', 'flash_sale', 'bogo', 'free_shipping']),
+  discountValue: z.number().min(1, 'Discount value must be at least 1'),
+  code: z.string().max(30, 'Code is too long').optional().or(z.literal('')),
+  isCoupon: z.boolean(),
+})
+
+export const promotionTargetsSectionSchema = z.object({
+  scope: z.enum(['all', 'category', 'products']),
+  scopeLabel: z.string().max(100).optional().or(z.literal('')),
+})
+
+export const promotionScheduleSectionSchema = z.object({
+  startsAt: z.string().min(1, 'Start date is required'),
+  endsAt: z.string().min(1, 'End date is required'),
+  budget: z.number().min(0).optional(),
+}).superRefine((data, ctx) => {
+  if (data.startsAt && data.endsAt) {
+    const start = new Date(data.startsAt).getTime()
+    const end = new Date(data.endsAt).getTime()
+    if (end <= start) {
+      ctx.addIssue({ path: ['endsAt'], code: z.ZodIssueCode.custom, message: 'End date must be after start date' })
+    }
+  }
 })

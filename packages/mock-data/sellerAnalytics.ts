@@ -57,10 +57,15 @@ export interface AnalyticsProductRow {
   name: string
   category: string
   views: number
+  addToCart: number
   units: number
   revenue: number
   convPct: number
+  returnRate: number
   deltaPct: number
+  sparkline: number[]
+  outOfStock: boolean
+  stockCount: number
 }
 
 export interface AnalyticsFunnelStage {
@@ -78,6 +83,32 @@ export interface AnalyticsTrafficSource {
   value: number
   share: number
   color: string
+}
+
+export interface AnalyticsProductCallout {
+  id: string
+  type: 'top' | 'under' | 'oos_demand'
+  title: string
+  hint: string
+  productIds: string[]
+  productNames: string[]
+}
+
+export interface AnalyticsCategoryComparison {
+  id: string
+  label: string
+  revenue: number
+  units: number
+  views: number
+  convPct: number
+  share: number
+  color: string
+}
+
+export interface AnalyticsProductDetail {
+  product: AnalyticsProductRow
+  trend: AnalyticsChartPoint[]
+  funnel: AnalyticsFunnelStage[]
 }
 
 export interface AnalyticsCustomerRow {
@@ -108,6 +139,8 @@ export interface AnalyticsSectionData {
   funnel?: AnalyticsFunnelStage[]
   trafficSources?: AnalyticsTrafficSource[]
   convTrend?: AnalyticsChartPoint[]
+  productCallouts?: AnalyticsProductCallout[]
+  categoryComparison?: AnalyticsCategoryComparison[]
 }
 
 export const ANALYTICS_RANGES: { key: AnalyticsRangeKey; label: string; days: number }[] = [
@@ -142,6 +175,15 @@ const CUSTOMER_KPIS: KpiDef[] = [
   { key: 'returning', label: 'Returning', base: 26, hint: 'Repeat buyers' },
   { key: 'total', label: 'Total customers', base: 64, hint: 'In this range' },
   { key: 'ltv', label: 'Avg. LTV', base: 412, hint: 'Lifetime value', money: true },
+]
+
+const PRODUCTS_KPIS: KpiDef[] = [
+  { key: 'pViews', label: 'Total views', base: 8640, hint: 'Product detail views' },
+  { key: 'pAddToCart', label: 'Add to cart', base: 312, hint: 'Add-to-cart events' },
+  { key: 'pUnits', label: 'Units sold', base: 128, hint: 'Items sold' },
+  { key: 'pRevenue', label: 'Revenue', base: 18450, hint: 'Gross revenue', money: true },
+  { key: 'pConvRate', label: 'Avg. conv. rate', base: 4, hint: 'Purchases / views' },
+  { key: 'pReturnRate', label: 'Avg. return rate', base: 3, hint: 'Returned / sold' },
 ]
 
 const CHART_LABELS: Record<number, string[]> = {
@@ -263,9 +305,11 @@ export function getAnalytics(
       ? SALES_KPIS
       : section === 'traffic'
         ? TRAFFIC_KPIS
-        : section === 'customers'
-          ? CUSTOMER_KPIS
-          : SALES_KPIS
+        : section === 'products'
+          ? PRODUCTS_KPIS
+          : section === 'customers'
+            ? CUSTOMER_KPIS
+            : SALES_KPIS
 
   const kpis: AnalyticsKpi[] = kpiDefs.map((k, i) => {
     const raw = k.base * scale * (0.82 + seeded(i, seedBase) * 0.34)
@@ -399,18 +443,30 @@ export function getAnalytics(
     products = PRODUCT_ROWS.map((p, i) => {
       const revenue = p.base * scale * (0.7 + seeded(i, seedBase) * 0.6)
       const views = Math.round(p.base * scale * (2 + seeded(i + 2, seedBase) * 1.5))
+      const addToCart = Math.round(views * (0.08 + seeded(i + 12, seedBase) * 0.06))
       const units = Math.round(revenue / 480)
       const convPct = Math.round((4 + seeded(i + 4, seedBase) * 6) * 10) / 10
+      const returnRate = Math.round((1 + seeded(i + 14, seedBase) * 5) * 10) / 10
       const deltaPct = Math.round((seeded(i + 6, seedBase) - 0.4) * 50)
+      const sparkline = Array.from({ length: 7 }, (_, j) =>
+        Math.round(p.base * scale * 0.1 * (0.5 + seeded(i * 10 + j + 20, seedBase) * 1.2)),
+      )
+      const outOfStock = seeded(i + 30, seedBase) > 0.82
+      const stockCount = outOfStock ? 0 : Math.round(50 + seeded(i + 31, seedBase) * 200)
       return {
         id: p.id,
         name: p.name,
         category: p.category,
         views,
+        addToCart,
         units,
         revenue: Math.round(revenue),
         convPct,
+        returnRate,
         deltaPct,
+        sparkline,
+        outOfStock,
+        stockCount,
       }
     })
   }
@@ -494,6 +550,66 @@ export function getAnalytics(
     })
   }
 
+  let productCallouts: AnalyticsProductCallout[] | undefined
+  let categoryComparison: AnalyticsCategoryComparison[] | undefined
+
+  if (section === 'products' && products) {
+    const sortedByRevenue = [...products].sort((a, b) => b.revenue - a.revenue)
+    const sortedByConv = [...products].sort((a, b) => a.convPct - b.convPct)
+    const oosDemand = products.filter(p => p.outOfStock && p.views > sortedByRevenue[Math.floor(sortedByRevenue.length / 2)].views)
+
+    productCallouts = [
+      {
+        id: 'top',
+        type: 'top',
+        title: 'Top sellers',
+        hint: 'Strong revenue and conversion this period',
+        productIds: sortedByRevenue.slice(0, 2).map(p => p.id),
+        productNames: sortedByRevenue.slice(0, 2).map(p => p.name),
+      },
+      {
+        id: 'under',
+        type: 'under',
+        title: 'Underperformers',
+        hint: 'High views, low conversion — check pricing or photos',
+        productIds: sortedByConv.slice(0, 2).map(p => p.id),
+        productNames: sortedByConv.slice(0, 2).map(p => p.name),
+      },
+    ]
+    if (oosDemand.length > 0) {
+      productCallouts.push({
+        id: 'oos',
+        type: 'oos_demand',
+        title: 'Out of stock but in demand',
+        hint: 'Still getting views but no stock — restock to recover sales',
+        productIds: oosDemand.map(p => p.id),
+        productNames: oosDemand.map(p => p.name),
+      })
+    }
+
+    const catMap = new Map<string, { revenue: number; units: number; views: number; convSum: number; count: number }>()
+    for (const p of products) {
+      const existing = catMap.get(p.category) ?? { revenue: 0, units: 0, views: 0, convSum: 0, count: 0 }
+      existing.revenue += p.revenue
+      existing.units += p.units
+      existing.views += p.views
+      existing.convSum += p.convPct
+      existing.count += 1
+      catMap.set(p.category, existing)
+    }
+    const catTotal = [...catMap.values()].reduce((s, v) => s + v.revenue, 0) || 1
+    categoryComparison = [...catMap.entries()].map(([cat, v], i) => ({
+      id: cat.toLowerCase(),
+      label: cat,
+      revenue: v.revenue,
+      units: v.units,
+      views: v.views,
+      convPct: Math.round((v.convSum / v.count) * 10) / 10,
+      share: Math.round((v.revenue / catTotal) * 100),
+      color: BREAKDOWN_PALETTE[i % BREAKDOWN_PALETTE.length],
+    }))
+  }
+
   return {
     section,
     range,
@@ -508,6 +624,8 @@ export function getAnalytics(
     funnel,
     trafficSources,
     convTrend,
+    productCallouts,
+    categoryComparison,
   }
 }
 
@@ -555,4 +673,76 @@ export function getSalesTrend(
   })
 
   return { points, granularity, grossNet }
+}
+
+export function getProductDetail(
+  productId: string,
+  range: AnalyticsRange,
+  opts: { compare?: boolean; filter?: AnalyticsFilter } = {},
+): AnalyticsProductDetail | null {
+  const compare = opts.compare ?? false
+  const days = range.days
+  const scale = scaleFor(days)
+  const seedBase = days + productId.length
+
+  const productDef = PRODUCT_ROWS.find(p => p.id === productId)
+  if (!productDef) return null
+
+  const i = PRODUCT_ROWS.indexOf(productDef)
+  const revenue = productDef.base * scale * (0.7 + seeded(i, seedBase) * 0.6)
+  const views = Math.round(productDef.base * scale * (2 + seeded(i + 2, seedBase) * 1.5))
+  const addToCart = Math.round(views * (0.08 + seeded(i + 12, seedBase) * 0.06))
+  const units = Math.round(revenue / 480)
+  const convPct = Math.round((4 + seeded(i + 4, seedBase) * 6) * 10) / 10
+  const returnRate = Math.round((1 + seeded(i + 14, seedBase) * 5) * 10) / 10
+  const deltaPct = Math.round((seeded(i + 6, seedBase) - 0.4) * 50)
+  const sparkline = Array.from({ length: 7 }, (_, j) =>
+    Math.round(productDef.base * scale * 0.1 * (0.5 + seeded(i * 10 + j + 20, seedBase) * 1.2)),
+  )
+  const outOfStock = seeded(i + 30, seedBase) > 0.82
+  const stockCount = outOfStock ? 0 : Math.round(50 + seeded(i + 31, seedBase) * 200)
+
+  const product: AnalyticsProductRow = {
+    id: productDef.id,
+    name: productDef.name,
+    category: productDef.category,
+    views,
+    addToCart,
+    units,
+    revenue: Math.round(revenue),
+    convPct,
+    returnRate,
+    deltaPct,
+    sparkline,
+    outOfStock,
+    stockCount,
+  }
+
+  const labels = CHART_LABELS[days] ?? CHART_LABELS[30]
+  const trend: AnalyticsChartPoint[] = labels.map((label, j) => {
+    const current = Math.round(revenue / labels.length * (0.5 + seeded(j + 40, seedBase) * 1.0))
+    const previous = compare
+      ? Math.round(revenue / labels.length * (0.4 + seeded(j + 50, seedBase + 1) * 0.9))
+      : undefined
+    return { label, current, previous }
+  })
+
+  const funnelStages = [
+    { id: 'views', label: 'Views', ratio: 1.0 },
+    { id: 'addToCart', label: 'Add to cart', ratio: 0.36 },
+    { id: 'checkout', label: 'Checkout', ratio: 0.12 },
+    { id: 'purchase', label: 'Purchase', ratio: 0.08 },
+  ]
+  const funnel: AnalyticsFunnelStage[] = funnelStages.map((s, j) => {
+    const count = Math.round(views * s.ratio * (0.85 + seeded(j + 60 + i, seedBase) * 0.3))
+    const prev = j === 0 ? count : Math.round(views * funnelStages[j - 1].ratio * (0.85 + seeded(j - 1 + 60 + i, seedBase) * 0.3))
+    const convFromPrev = j === 0 ? 100 : Math.round((count / Math.max(1, prev)) * 100)
+    const dropOffPct = j === 0 ? 0 : Math.round(((prev - count) / Math.max(1, prev)) * 100)
+    return { id: s.id, label: s.label, count, convFromPrev, dropOffPct, isBiggestLeak: false }
+  })
+
+  const biggestLeakIdx = funnel.reduce((best, f, j) => (j > 0 && f.dropOffPct > funnel[best].dropOffPct ? j : best), 1)
+  funnel[biggestLeakIdx].isBiggestLeak = true
+
+  return { product, trend, funnel }
 }

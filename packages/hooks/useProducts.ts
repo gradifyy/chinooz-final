@@ -5,8 +5,9 @@ import type {
   SellerInventoryFilter,
   SellerReviewFilter,
   SellerReviewResult,
+  BulkReviewAction,
 } from '@chinooz/mock-data'
-import type { Product, Category, CancelReason, SellerOrderStatusKey, SellerReview } from '@chinooz/types'
+import type { Product, Category, CancelReason, SellerOrderStatusKey, SellerReview, ReviewFlagReason } from '@chinooz/types'
 
 const STALE_PRODUCTS = 1000 * 30
 
@@ -618,12 +619,144 @@ export function useToggleSellerReviewFlag() {
   })
 }
 
+export function useFlagSellerReview() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ reviewId, reason }: { reviewId: string; reason: ReviewFlagReason }) =>
+      api.flagSellerReview(reviewId, reason),
+
+    onMutate: async ({ reviewId, reason }) => {
+      await queryClient.cancelQueries({ queryKey: ['seller-reviews'] })
+      const snapshots = queryClient.getQueriesData<SellerReviewResult>({
+        queryKey: ['seller-reviews'],
+      })
+      optimisticUpdateReview(queryClient, reviewId, (r) => ({
+        ...r,
+        flagged: true,
+        flagReason: reason,
+        moderationStatus: 'pending' as const,
+      }))
+      return { snapshots }
+    },
+
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.snapshots) {
+        for (const [key, data] of ctx.snapshots) {
+          queryClient.setQueryData(key, data)
+        }
+      }
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['seller-reviews'] })
+    },
+  })
+}
+
+export function useUnflagSellerReview() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (reviewId: string) => api.unflagSellerReview(reviewId),
+
+    onMutate: async (reviewId) => {
+      await queryClient.cancelQueries({ queryKey: ['seller-reviews'] })
+      const snapshots = queryClient.getQueriesData<SellerReviewResult>({
+        queryKey: ['seller-reviews'],
+      })
+      optimisticUpdateReview(queryClient, reviewId, (r) => ({
+        ...r,
+        flagged: false,
+        flagReason: undefined,
+        moderationStatus: undefined,
+      }))
+      return { snapshots }
+    },
+
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.snapshots) {
+        for (const [key, data] of ctx.snapshots) {
+          queryClient.setQueryData(key, data)
+        }
+      }
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['seller-reviews'] })
+    },
+  })
+}
+
+export function useBulkUpdateSellerReviews() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ reviewIds, action, reason }: { reviewIds: string[]; action: BulkReviewAction; reason?: ReviewFlagReason }) =>
+      api.bulkUpdateSellerReviews(reviewIds, action, reason),
+
+    onMutate: async ({ reviewIds, action, reason }) => {
+      await queryClient.cancelQueries({ queryKey: ['seller-reviews'] })
+      const snapshots = queryClient.getQueriesData<SellerReviewResult>({
+        queryKey: ['seller-reviews'],
+      })
+      queryClient.setQueriesData<SellerReviewResult>({ queryKey: ['seller-reviews'] }, (old) => {
+        if (!old) return old
+        const updatedItems = old.items.map((r) => {
+          if (!reviewIds.includes(r.id)) return r
+          if (action === 'mark_responded_not_needed') {
+            return { ...r, flagged: false }
+          }
+          return {
+            ...r,
+            flagged: true,
+            flagReason: reason ?? ('spam' as ReviewFlagReason),
+            moderationStatus: 'pending' as const,
+          }
+        })
+        return {
+          ...old,
+          items: updatedItems,
+          counts: {
+            all: old.counts.all,
+            needs_response: updatedItems.filter((r) => (!r.response && !r.flagged)).length,
+            responded: updatedItems.filter((r) => (!!r.response)).length,
+            flagged: updatedItems.filter((r) => (!!r.flagged)).length,
+          },
+        }
+      })
+      return { snapshots }
+    },
+
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.snapshots) {
+        for (const [key, data] of ctx.snapshots) {
+          queryClient.setQueryData(key, data)
+        }
+      }
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['seller-reviews'] })
+    },
+  })
+}
+
 export function useSellerOrders(sellerId: string | null, status?: SellerOrderStatusKey) {
   return useQuery({
     queryKey: ['seller-orders', sellerId, status],
     queryFn: () => api.getSellerOrders(sellerId as string, status),
     enabled: !!sellerId,
     staleTime: 1000 * 30,
+  })
+}
+
+export function useSellerOrderById(sellerId: string | null, subOrderId: string | null) {
+  return useQuery({
+    queryKey: ['seller-order', sellerId, subOrderId],
+    queryFn: () => api.getSellerOrderById(sellerId as string, subOrderId as string),
+    enabled: !!sellerId && !!subOrderId,
+    staleTime: 1000 * 60,
   })
 }
 

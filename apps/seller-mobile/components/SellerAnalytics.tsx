@@ -16,6 +16,7 @@ import { useA11y } from './A11yProvider'
 import { useSellerCategories, useSellerProducts } from '@chinooz/hooks'
 import SalesSection from './SalesSection'
 import TrafficSection from './TrafficSection'
+import ProductsSection from './ProductsSection'
 import {
   getAnalytics,
   ANALYTICS_RANGES,
@@ -297,6 +298,8 @@ export default function SellerAnalytics() {
             <SalesSection data={data} range={range} compare={compare} filter={filter} />
           ) : section === 'traffic' ? (
             <TrafficSection data={data} compare={compare} />
+          ) : section === 'products' ? (
+            <ProductsSection data={data} range={range} compare={compare} filter={filter} />
           ) : (
             <SectionContent section={section} data={data} compare={compare} />
           )}

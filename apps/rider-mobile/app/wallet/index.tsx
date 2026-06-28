@@ -1,5 +1,5 @@
 import React from 'react'
-import CODWalletScreen from '../components/CODWalletScreen'
+import CODWalletScreen from '../../components/CODWalletScreen'
 
 /**
  * RW2 — Cash & COD Wallet overview route.

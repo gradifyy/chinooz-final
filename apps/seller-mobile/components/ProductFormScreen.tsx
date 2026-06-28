@@ -37,7 +37,8 @@ import { useA11y } from './A11yProvider'
 type SectionKey = 'media' | 'details' | 'pricing' | 'description'
 
 interface FormState {
-  image: string
+  images: string[]
+  videoUrl: string
   name: string
   sku: string
   categoryId: string
@@ -54,7 +55,8 @@ interface FormState {
 }
 
 const EMPTY_FORM: FormState = {
-  image: '',
+  images: [],
+  videoUrl: '',
   name: '',
   sku: '',
   categoryId: '',
@@ -120,7 +122,8 @@ export default function ProductFormScreen() {
     const product = productData.items.find(p => p.id === editId)
     if (product) {
       const loaded: FormState = {
-        image: product.image,
+        images: product.image ? [product.image] : [],
+        videoUrl: '',
         name: product.name,
         sku: product.sku,
         categoryId: product.categoryId,
@@ -178,7 +181,7 @@ export default function ProductFormScreen() {
     transform: [{ translateY: snackbarOpacity.value === 1 ? 0 : 20 }],
   }))
 
-  const updateField = useCallback((field: keyof FormState, value: string) => {
+  const updateField = useCallback((field: keyof FormState, value: string | string[]) => {
     setForm(prev => ({ ...prev, [field]: value }))
     setErrors(prev => {
       const next = { ...prev }
@@ -360,7 +363,7 @@ export default function ProductFormScreen() {
               onToggle={() => toggleSection(s.key)}
               reduced={reducedMotion}
             >
-              {s.key === 'media' && <MediaSection form={form} errors={errors} updateField={updateField} t={t} />}
+              {s.key === 'media' && <MediaSection form={form} errors={errors} updateField={updateField} t={t} reduced={reducedMotion} />}
               {s.key === 'details' && <DetailsSection form={form} errors={errors} updateField={updateField} t={t} categories={sellerCats} />}
               {s.key === 'pricing' && <PricingSection form={form} errors={errors} updateField={updateField} t={t} />}
               {s.key === 'description' && <DescriptionSection form={form} errors={errors} updateField={updateField} t={t} />}
@@ -505,33 +508,249 @@ function Field({ label, hint, error, errorId, children }: { label: string; hint?
   )
 }
 
-function MediaSection({ form, errors, updateField, t }: { form: FormState; errors: Record<string, string>; updateField: (f: keyof FormState, v: string) => void; t: any }) {
+const MAX_IMAGES = 8
+
+interface MediaImage {
+  id: string
+  url: string
+  uploading: boolean
+  progress: number
+}
+
+function MediaSection({ form, errors, updateField, t, reduced }: { form: FormState; errors: Record<string, string>; updateField: (f: keyof FormState, v: string | string[]) => void; t: any; reduced: boolean }) {
+  const [mediaImages, setMediaImages] = useState<MediaImage[]>(
+    form.images.map((url, i) => ({ id: `img-${i}-${Date.now()}`, url, uploading: false, progress: 100 }))
+  )
+  const [imageUrl, setImageUrl] = useState('')
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+
+  const syncToForm = useCallback((imgs: MediaImage[]) => {
+    const urls = imgs.filter(i => !i.uploading).map(i => i.url)
+    updateField('images', urls)
+  }, [updateField])
+
+  const addImage = (url: string) => {
+    if (!url.trim()) return
+    if (mediaImages.length >= MAX_IMAGES) return
+    const id = `img-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const newImg: MediaImage = { id, url: url.trim(), uploading: true, progress: 0 }
+    setMediaImages(prev => [...prev, newImg])
+    let pct = 0
+    const interval = setInterval(() => {
+      pct += Math.random() * 30 + 15
+      if (pct >= 100) {
+        pct = 100
+        clearInterval(interval)
+        setMediaImages(prev => {
+          const next = prev.map(img => img.id === id ? { ...img, uploading: false, progress: 100 } : img)
+          syncToForm(next)
+          return next
+        })
+      } else {
+        setMediaImages(prev => prev.map(img => img.id === id ? { ...img, progress: pct } : img))
+      }
+    }, 200)
+  }
+
+  const handleAddFromUrl = () => {
+    if (!imageUrl.trim()) return
+    addImage(imageUrl)
+    setImageUrl('')
+  }
+
+  const handleDelete = (id: string) => {
+    setMediaImages(prev => {
+      const next = prev.filter(img => img.id !== id)
+      syncToForm(next)
+      return next
+    })
+    setDeleteConfirm(null)
+  }
+
+  const handleSetCover = (id: string) => {
+    setMediaImages(prev => {
+      const idx = prev.findIndex(img => img.id === id)
+      if (idx <= 0) return prev
+      const next = [prev[idx], ...prev.filter((_, i) => i !== idx)]
+      syncToForm(next)
+      return next
+    })
+  }
+
+  const moveImage = (id: string, dir: -1 | 1) => {
+    setMediaImages(prev => {
+      const idx = prev.findIndex(img => img.id === id)
+      const newIdx = idx + dir
+      if (newIdx < 0 || newIdx >= prev.length) return prev
+      const next = [...prev]
+      ;[next[idx], next[newIdx]] = [next[newIdx], next[idx]]
+      syncToForm(next)
+      return next
+    })
+  }
+
+  const canAdd = mediaImages.length < MAX_IMAGES
+
   return (
-    <View style={styles.sectionContent}>
-      <Field label={t('seller.products.formFieldImage')} hint={t('seller.products.formFieldImageHint')} error={errors.image}>
-        <View style={styles.mediaRow}>
-          <View style={styles.mediaPreview}>
-            {form.image ? (
-              <SafeImage source={form.image} alt="Preview" style={styles.mediaImage} />
-            ) : (
-              <Text style={styles.mediaPlaceholder}>🖼</Text>
-            )}
-          </View>
-          <View style={{ flex: 1 }}>
-            <TextInput
-              style={styles.input}
-              value={form.image}
-              onChangeText={v => updateField('image', v)}
-              placeholder={t('seller.products.formFieldImageUrl')}
-              placeholderTextColor={colors.textTertiary}
-              accessibilityLabel={t('seller.products.formFieldImageUrl')}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            <Text style={styles.fieldHint}>{t('seller.products.formFieldImageUrlHint')}</Text>
-          </View>
+    <View style={styles.mediaSectionContent}>
+      <Field label={t('seller.products.formFieldImage')} hint={t('seller.products.formFieldImageHint')} error={errors.images}>
+        {/* Thumbnail grid */}
+        <View style={styles.mediaGrid}>
+          {mediaImages.map((img, idx) => {
+            const isCover = idx === 0
+            return (
+              <View
+                key={img.id}
+                style={styles.mediaThumbWrap}
+                accessibilityLabel={t('seller.products.mediaThumbAria', { n: idx + 1, cover: isCover ? `, ${t('seller.products.mediaCoverLabel')}` : '' })}
+                accessibilityRole="image"
+              >
+                <View style={styles.mediaThumb}>
+                  {img.uploading && img.progress < 100 ? (
+                    <View style={styles.mediaUploading}>
+                      <View style={styles.mediaProgressTrack}>
+                        <View
+                          style={[styles.mediaProgressBar, { width: `${img.progress}%` }]}
+                          accessibilityRole="progressbar"
+                          accessibilityLabel={t('seller.products.mediaUploadProgress', { percent: Math.round(img.progress) })}
+                        />
+                      </View>
+                    </View>
+                  ) : (
+                    <SafeImage source={img.url} alt="" style={styles.mediaImage} />
+                  )}
+
+                  {/* Cover badge */}
+                  {isCover && !img.uploading && (
+                    <View style={styles.mediaCoverBadge}>
+                      <Text style={styles.mediaCoverBadgeText}>★ {t('seller.products.mediaCoverBadge')}</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Action row */}
+                {!img.uploading && (
+                  <View style={styles.mediaActions}>
+                    <TouchableOpacity
+                      onPress={() => moveImage(img.id, -1)}
+                      disabled={idx === 0}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('seller.products.mediaMoveLeftAria', { n: idx + 1 })}
+                      style={[styles.mediaActionBtn, idx === 0 && styles.mediaActionDisabled]}
+                    >
+                      <Text style={styles.mediaActionIcon}>‹</Text>
+                    </TouchableOpacity>
+                    {!isCover && (
+                      <TouchableOpacity
+                        onPress={() => handleSetCover(img.id)}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('seller.products.mediaSetCoverAria', { n: idx + 1 })}
+                        style={styles.mediaActionBtn}
+                      >
+                        <Text style={styles.mediaActionIcon}>★</Text>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                      onPress={() => moveImage(img.id, 1)}
+                      disabled={idx === mediaImages.length - 1}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('seller.products.mediaMoveRightAria', { n: idx + 1 })}
+                      style={[styles.mediaActionBtn, idx === mediaImages.length - 1 && styles.mediaActionDisabled]}
+                    >
+                      <Text style={styles.mediaActionIcon}>›</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setDeleteConfirm(img.id)}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('seller.products.mediaDeleteAria', { n: idx + 1 })}
+                      style={[styles.mediaActionBtn, styles.mediaActionDanger]}
+                    >
+                      <Text style={[styles.mediaActionIcon, { color: colors.error }]}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            )
+          })}
+
+          {/* Add tile */}
+          {canAdd && (
+            <TouchableOpacity
+              onPress={handleAddFromUrl}
+              disabled={!imageUrl.trim()}
+              accessibilityRole="button"
+              accessibilityLabel={t('seller.products.mediaAddTileAria')}
+              style={[styles.mediaAddTile, !imageUrl.trim() && styles.mediaAddTileDisabled]}
+            >
+              <Text style={styles.mediaAddIcon}>+</Text>
+              <Text style={styles.mediaAddText}>{t('seller.products.mediaAddTile')}</Text>
+            </TouchableOpacity>
+          )}
         </View>
+
+        {/* URL input */}
+        <View style={styles.mediaUrlRow}>
+          <TextInput
+            style={[styles.input, { flex: 1 }]}
+            value={imageUrl}
+            onChangeText={setImageUrl}
+            placeholder={t('seller.products.formFieldImageUrl')}
+            placeholderTextColor={colors.textTertiary}
+            accessibilityLabel={t('seller.products.formFieldImageUrl')}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <TouchableOpacity
+            onPress={handleAddFromUrl}
+            disabled={!imageUrl.trim()}
+            style={[styles.mediaUrlAddBtn, !imageUrl.trim() && styles.mediaAddTileDisabled]}
+          >
+            <Text style={styles.mediaUrlAddText}>{t('seller.products.mediaAddTile')}</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Max count */}
+        {mediaImages.length >= MAX_IMAGES && (
+          <Text style={styles.mediaMaxCount}>{t('seller.products.mediaMaxCount', { max: MAX_IMAGES })}</Text>
+        )}
+
+        {/* Empty state */}
+        {mediaImages.length === 0 && (
+          <Text style={styles.fieldHint}>{t('seller.products.mediaEmpty')}</Text>
+        )}
       </Field>
+
+      {/* Video URL */}
+      <Field label={t('seller.products.formFieldVideoUrl')} hint={t('seller.products.formFieldVideoUrlHint')}>
+        <TextInput
+          style={styles.input}
+          value={form.videoUrl}
+          onChangeText={v => updateField('videoUrl', v)}
+          placeholder="https://youtube.com/..."
+          placeholderTextColor={colors.textTertiary}
+          accessibilityLabel={t('seller.products.formFieldVideoUrl')}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+      </Field>
+
+      {/* Delete confirm */}
+      <BottomSheet visible={!!deleteConfirm} onClose={() => setDeleteConfirm(null)} title={t('seller.products.mediaDeleteConfirm')}>
+        <View style={styles.mediaDeleteConfirmActions}>
+          <TouchableOpacity
+            onPress={() => setDeleteConfirm(null)}
+            style={styles.mediaDeleteCancelBtn}
+          >
+            <Text style={styles.mediaDeleteCancelText}>{t('seller.products.actionCancel')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => deleteConfirm && handleDelete(deleteConfirm)}
+            style={styles.mediaDeleteConfirmBtn}
+          >
+            <Text style={styles.mediaDeleteConfirmText}>{t('seller.products.actionDelete')}</Text>
+          </TouchableOpacity>
+        </View>
+      </BottomSheet>
     </View>
   )
 }
@@ -813,20 +1032,99 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
 
-  mediaRow: { flexDirection: 'row', gap: spacing[3], alignItems: 'flex-start' },
-  mediaPreview: {
-    width: 80,
-    height: 80,
-    borderRadius: radii.md,
+  mediaSectionContent: { paddingHorizontal: spacing[4], paddingBottom: spacing[4], gap: spacing[4] },
+  mediaGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
+  mediaThumbWrap: { width: 96, gap: spacing[1] },
+  mediaThumb: {
+    width: 96,
+    height: 96,
+    borderRadius: radii.lg,
     borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+    overflow: 'hidden',
+  },
+  mediaImage: { width: '100%', height: '100%' },
+  mediaUploading: {
+    flex: 1,
+    backgroundColor: colors.shimmer,
+    justifyContent: 'flex-end',
+  },
+  mediaProgressTrack: { height: 3, backgroundColor: colors.border },
+  mediaProgressBar: { height: 3, backgroundColor: colors.primary },
+  mediaCoverBadge: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    backgroundColor: colors.primary,
+    borderRadius: radii.full,
+    paddingHorizontal: spacing[1.5],
+    paddingVertical: 2,
+  },
+  mediaCoverBadgeText: { color: colors.white, fontSize: 11, fontWeight: '600' },
+  mediaActions: { flexDirection: 'row', gap: spacing[0.5], justifyContent: 'center' },
+  mediaActionBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mediaActionDisabled: { opacity: 0.3 },
+  mediaActionDanger: { borderColor: colors.error },
+  mediaActionIcon: { fontSize: 14, color: colors.text, fontWeight: '600' },
+  mediaAddTile: {
+    width: 96,
+    height: 96,
+    borderRadius: radii.lg,
+    borderWidth: 2,
+    borderStyle: 'dashed',
     borderColor: colors.border,
     backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
+    gap: spacing[1],
   },
-  mediaImage: { width: '100%', height: '100%' },
-  mediaPlaceholder: { fontSize: 28, color: colors.textTertiary },
+  mediaAddTileDisabled: { opacity: 0.5 },
+  mediaAddIcon: { fontSize: 24, color: colors.textTertiary, fontWeight: '300' },
+  mediaAddText: { fontSize: 10, fontWeight: '500', color: colors.textTertiary, textAlign: 'center' },
+  mediaUrlRow: { flexDirection: 'row', gap: spacing[2], marginTop: spacing[2] },
+  mediaUrlAddBtn: {
+    height: 44,
+    paddingHorizontal: spacing[3],
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mediaUrlAddText: { fontSize: 13, fontWeight: '600', color: colors.text },
+  mediaMaxCount: { fontSize: 12, color: colors.warning, marginTop: spacing[1] },
+  mediaDeleteConfirmActions: { flexDirection: 'row', gap: spacing[3], paddingHorizontal: spacing[4], marginTop: spacing[4] },
+  mediaDeleteCancelBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mediaDeleteCancelText: { fontSize: 14, fontWeight: '600', color: colors.text },
+  mediaDeleteConfirmBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: radii.md,
+    backgroundColor: colors.error,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mediaDeleteConfirmText: { fontSize: 14, fontWeight: '700', color: colors.white },
 
   categoryList: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
   categoryChip: {

@@ -21,6 +21,10 @@ export {
   productDetailsSectionSchema,
   productPricingSectionSchema,
   productDescriptionSectionSchema,
+  promotionFormSchema,
+  promotionTypeValueSectionSchema,
+  promotionTargetsSectionSchema,
+  promotionScheduleSectionSchema,
 } from './schemas'
 
 export type {
@@ -42,4 +46,5 @@ export type {
   BusinessKycInput,
   PayoutInput,
   ProductFormInput,
+  PromotionFormInput,
 } from './schemas'

@@ -175,28 +175,34 @@ export interface SellerReplyTemplate {
   id: string
   label: string
   body: string
+  hasPlaceholders?: boolean
+  isBuiltIn?: boolean
 }
 
 export const SELLER_REPLY_TEMPLATES: SellerReplyTemplate[] = [
-  { id: 't1', label: 'Order confirmed', body: 'Thanks for your order! It has been confirmed and will ship within 24 hours.' },
-  { id: 't2', label: 'Shipping update', body: 'Your order has been dispatched. You will receive a tracking link shortly.' },
-  { id: 't3', label: 'Out of stock', body: 'Sorry, this item is currently out of stock. It will be back in 3–5 days.' },
-  { id: 't4', label: 'Return approved', body: 'Your return request has been approved. The refund will be processed in 1–2 business days.' },
-  { id: 't5', label: 'Bulk discount', body: 'Yes! We offer a 10% discount on orders of 20 or more units. Let me know the quantity you need.' },
-  { id: 't6', label: 'Thanks for review', body: 'Thank you so much for the kind review! We really appreciate your support.' },
+  { id: 't1', label: 'Order confirmed', body: 'Thanks for your order {order_id}! It has been confirmed and will ship within 24 hours.', hasPlaceholders: true, isBuiltIn: true },
+  { id: 't2', label: 'Shipping update', body: 'Your order {order_id} has been dispatched. Tracking: {tracking}. It should arrive in 1–2 days.', hasPlaceholders: true, isBuiltIn: true },
+  { id: 't3', label: 'Out of stock', body: 'Sorry, this item is currently out of stock. It will be back in 3–5 days.', hasPlaceholders: false, isBuiltIn: true },
+  { id: 't4', label: 'Return approved', body: 'Your return request for {order_id} has been approved. The refund will be processed in 1–2 business days.', hasPlaceholders: true, isBuiltIn: true },
+  { id: 't5', label: 'Bulk discount', body: 'Yes! We offer a 10% discount on orders of 20 or more units. Let me know the quantity you need.', hasPlaceholders: false, isBuiltIn: true },
+  { id: 't6', label: 'Thanks for review', body: 'Thank you so much for the kind review, {buyer_name}! We really appreciate your support.', hasPlaceholders: true, isBuiltIn: true },
 ]
 
 export interface SellerQuickReply {
   id: string
   label: string
+  labelNe: string
   body: string
+  bodyNe: string
 }
 
 export const SELLER_QUICK_REPLIES: SellerQuickReply[] = [
-  { id: 'q1', label: '👋 Hi there!', body: 'Hi there! How can I help you today?' },
-  { id: 'q2', label: '📦 Order status', body: 'Your order is on the way and should arrive within 1–2 days.' },
-  { id: 'q3', label: '✅ In stock', body: 'Yes, this is in stock and ready to ship!' },
-  { id: 'q4', label: '🙏 Thank you', body: 'Thank you for shopping with us! Please reach out anytime.' },
+  { id: 'q1', label: '👋 Hi there!', labelNe: '👋 नमस्ते!', body: 'Hi there! How can I help you today?', bodyNe: 'नमस्ते! मा कसरी मद्दत गर्न सक्छु?' },
+  { id: 'q2', label: '📦 On its way', labelNe: '📦 बाटोमा छ', body: 'Your order is on the way and should arrive within 1–2 days.', bodyNe: 'तपाईंको अर्डर बाटोमा छ र १–२ दिनमा पुग्नेछ।' },
+  { id: 'q3', label: '✅ In stock', labelNe: '✅ स्टकमा छ', body: 'Yes, this is in stock and ready to ship!', bodyNe: 'हो, यो स्टकमा छ र पठाउन तयार छ!' },
+  { id: 'q4', label: '🙏 Thanks!', labelNe: '🙏 धन्यवाद!', body: 'Thank you for shopping with us! Please reach out anytime.', bodyNe: 'हामीसँग किनमेल गर्नुभएकोमा धन्यवाद! कुनै समय सम्पर्क गर्नुहोस्।' },
+  { id: 'q5', label: '💳 Payment received', labelNe: '💳 भुक्तानी प्राप्त', body: 'Payment received for your order. We are processing it now.', bodyNe: 'तपाईंको अर्डरको भुक्तानी प्राप्त भयो। हामी अहिले प्रशोधन गरिरहेका छौं।' },
+  { id: 'q6', label: '🔄 Return info', labelNe: '🔄 फिर्ता जानकारी', body: 'For returns, please share your order ID. We will guide you through the process.', bodyNe: 'फिर्ताको लागि, कृपया आफ्नो अर्डर ID साझेदारी गर्नुहोस्। हामी प्रक्रिया मार्गदर्शन गर्नेछौं।' },
 ]
 
 const CANNED_BUYER_REPLIES = [

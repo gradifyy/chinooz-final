@@ -359,3 +359,29 @@ export async function endPromotionNowById(id: string): Promise<Promotion | null>
   promo.endsAt = new Date().toISOString()
   return { ...promo }
 }
+
+export async function getPromotionById(id: string): Promise<Promotion | null> {
+  await delay(150 + Math.random() * 200)
+  return PROMOTIONS.find(p => p.id === id) ?? null
+}
+
+export async function createPromotion(input: Omit<Promotion, 'id' | 'redemptions' | 'revenue' | 'createdAt'>): Promise<Promotion> {
+  await delay(400 + Math.random() * 300)
+  const promo: Promotion = {
+    ...input,
+    id: `promo-${Date.now()}`,
+    redemptions: 0,
+    revenue: 0,
+    createdAt: new Date().toISOString(),
+  }
+  PROMOTIONS.push(promo)
+  return promo
+}
+
+export async function updatePromotion(id: string, updates: Partial<Promotion>): Promise<Promotion | null> {
+  await delay(400 + Math.random() * 300)
+  const promo = PROMOTIONS.find(p => p.id === id)
+  if (!promo) return null
+  Object.assign(promo, updates)
+  return { ...promo }
+}
