@@ -16,7 +16,7 @@ import {
   RotateCcw,
 } from 'lucide-react'
 import { Container, Screen } from '@chinooz/ui-web'
-import { useReducedMotion } from '@chinooz/ui-web'
+import { useReducedMotion, SellerOrderRow, SellerOrderRowSkeleton } from '@chinooz/ui-web'
 import { useSellerOrders } from '@chinooz/hooks'
 import { useSellerSessionStore } from '@chinooz/state'
 import { analytics } from '@chinooz/analytics'
@@ -69,13 +69,13 @@ const DEFAULT_FILTERS: FilterState = {
 }
 
 const STATUS_PILL: Record<SellerOrderStatusKey, { bg: string; text: string; dot: string }> = {
-  new: { bg: 'bg-warning-light', text: 'text-[#92400E]', dot: 'bg-warning' },
-  to_pack: { bg: 'bg-info-light', text: 'text-info', dot: 'bg-info' },
-  to_ship: { bg: 'bg-[#F3E8FF]', text: 'text-[#7C3AED]', dot: 'bg-[#7C3AED]' },
-  shipped: { bg: 'bg-[#E0F2FE]', text: 'text-[#0369A1]', dot: 'bg-[#0369A1]' },
-  completed: { bg: 'bg-success-light', text: 'text-success', dot: 'bg-success' },
-  cancelled_returned: { bg: 'bg-error-light', text: 'text-error', dot: 'bg-error' },
-  action_needed: { bg: 'bg-error-light', text: 'text-error', dot: 'bg-error' },
+  new: { bg: 'bg-info/10', text: 'text-info', dot: 'bg-info' },
+  to_pack: { bg: 'bg-warning/10', text: 'text-warning', dot: 'bg-warning' },
+  to_ship: { bg: 'bg-warning/10', text: 'text-warning', dot: 'bg-warning' },
+  shipped: { bg: 'bg-info/10', text: 'text-info', dot: 'bg-info' },
+  completed: { bg: 'bg-success/10', text: 'text-success', dot: 'bg-success' },
+  cancelled_returned: { bg: 'bg-error/10', text: 'text-error', dot: 'bg-error' },
+  action_needed: { bg: 'bg-error/10', text: 'text-error', dot: 'bg-error' },
 }
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
@@ -168,17 +168,6 @@ function CountBadge({ count, tab }: { count: number; tab: TabKey }) {
       }`}
     >
       {count > 99 ? '99+' : count}
-    </span>
-  )
-}
-
-function StatusPill({ statusKey, t }: { statusKey: SellerOrderStatusKey; t: (k: string) => string }) {
-  const c = STATUS_PILL[statusKey]
-  const labelKey = TABS.find(tb => tb.key === statusKey)?.labelKey ?? 'seller.orders.tabNew'
-  return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${c.bg} ${c.text}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${c.dot}`} aria-hidden="true" />
-      {t(labelKey)}
     </span>
   )
 }
@@ -394,145 +383,6 @@ function CheckIcon() {
   )
 }
 
-function OrderRow({ o, index, onPress, t }: { o: SellerSubOrder; index: number; onPress: () => void; t: (k: string) => string }) {
-  const reduced = useReducedMotion()
-  const isNew = o.statusKey === 'new'
-  const firstItem = o.items[0]
-  const extra = o.items.length - 1
-  return (
-    <motion.tr
-      initial={reduced ? false : { opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={reduced ? { duration: 0 } : { duration: duration.normal / 1000, delay: Math.min(index * 0.03, 0.2) }}
-      onClick={onPress}
-      className={`group h-[72px] cursor-pointer border-b border-[#E5E5E5] transition-colors duration-200 hover:bg-primary/[0.03] ${
-        isNew ? 'bg-primary/[0.06]' : 'bg-surface'
-      }`}
-    >
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-2">
-          {isNew && <span className="h-9 w-1 rounded-full bg-primary" aria-hidden="true" />}
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-text tabular-nums truncate">{o.orderId}</p>
-            <p className="text-xs text-text-muted truncate">{o.subOrderId}</p>
-          </div>
-        </div>
-      </td>
-      <td className="px-4 py-3 hidden lg:table-cell">
-        <p className="text-sm text-text font-medium truncate">{o.buyerName}</p>
-        <p className="text-xs text-text-muted truncate">{o.city}</p>
-      </td>
-      <td className="px-4 py-3 max-w-[260px]">
-        <div className="flex items-center gap-2.5">
-          <img
-            src={firstItem.image}
-            alt=""
-            className="h-10 w-10 rounded-md object-cover bg-shimmer shrink-0"
-            loading="lazy"
-          />
-          <div className="min-w-0">
-            <p className="text-sm text-text truncate">{firstItem.name}</p>
-            {extra > 0 && (
-              <p className="text-xs text-text-muted">+{extra} {extra === 1 ? t('seller.orders.item') : t('seller.orders.items')}</p>
-            )}
-          </div>
-        </div>
-      </td>
-      <td className="px-4 py-3 hidden md:table-cell">
-        <span className="text-sm font-semibold text-text tabular-nums">{formatNPR(o.total)}</span>
-      </td>
-      <td className="px-4 py-3 hidden xl:table-cell">
-        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-          o.paymentType === 'cod' ? 'bg-warning-light text-[#92400E]' : 'bg-info-light text-info'
-        }`}>
-          {o.paymentType === 'cod' ? t('seller.orders.paymentCod') : t('seller.orders.paymentPrepaid')}
-        </span>
-      </td>
-      <td className="px-4 py-3 hidden xl:table-cell">
-        <span className="text-xs text-text-secondary capitalize">{t(`seller.orders.shipping${o.shippingMethod.charAt(0).toUpperCase()}${o.shippingMethod.slice(1)}`)}</span>
-      </td>
-      <td className="px-4 py-3 hidden md:table-cell">
-        <span className="text-sm text-text-muted tabular-nums">{formatDate(o.createdAt)}</span>
-      </td>
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-2">
-          <StatusPill statusKey={o.statusKey} t={t} />
-          {o.actionNeeded && (
-            <span className="inline-flex items-center gap-1 text-xs font-semibold text-error" title={o.actionReason}>
-              <AlertTriangle size={13} />
-            </span>
-          )}
-        </div>
-      </td>
-      <td className="px-4 py-3 text-right">
-        <span className="inline-flex items-center text-sm font-semibold text-primary group-hover:translate-x-0.5 transition-transform">
-          {t('seller.orders.rowAction')} ›
-        </span>
-      </td>
-    </motion.tr>
-  )
-}
-
-function OrderCardMobile({ o, index, onPress, t }: { o: SellerSubOrder; index: number; onPress: () => void; t: (k: string) => string }) {
-  const reduced = useReducedMotion()
-  const isNew = o.statusKey === 'new'
-  const firstItem = o.items[0]
-  const extra = o.items.length - 1
-  return (
-    <motion.button
-      initial={reduced ? false : { opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={reduced ? { duration: 0 } : { duration: duration.slow / 1000, ease: easing.easeOut as any, delay: Math.min(index * 0.05, 0.3) }}
-      onClick={onPress}
-      className={`w-full text-left rounded-lg shadow-sm p-4 flex flex-col gap-2.5 border ${
-        isNew ? 'bg-primary/[0.06] border-primary/20 border-l-4 border-l-primary' : 'bg-surface border-border-light'
-      }`}
-      aria-label={`Order ${o.orderId}, ${o.buyerName}, ${formatNPR(o.total)}`}
-    >
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold text-text tabular-nums truncate">{o.orderId}</span>
-        <StatusPill statusKey={o.statusKey} t={t} />
-      </div>
-
-      {o.actionNeeded && (
-        <div className="flex items-center gap-1.5 text-xs font-semibold text-error bg-error-light rounded-md px-2 py-1">
-          <AlertTriangle size={13} />
-          <span className="truncate">{o.actionReason ?? t('seller.orders.actionNeededLabel')}</span>
-        </div>
-      )}
-
-      <div className="flex items-center gap-3">
-        <img src={firstItem.image} alt="" className="h-11 w-11 rounded-md object-cover bg-shimmer shrink-0" loading="lazy" />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm text-text truncate">{firstItem.name}</p>
-          {extra > 0 && (
-            <p className="text-xs text-text-muted">+{extra} {extra === 1 ? t('seller.orders.item') : t('seller.orders.items')}</p>
-          )}
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between text-xs text-text-muted">
-        <span className="truncate">{o.buyerName} · {o.city}</span>
-        <span className="capitalize shrink-0 ml-2">{t(`seller.orders.shipping${o.shippingMethod.charAt(0).toUpperCase()}${o.shippingMethod.slice(1)}`)}</span>
-      </div>
-
-      <div className="h-px bg-border-light" />
-
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-            o.paymentType === 'cod' ? 'bg-warning-light text-[#92400E]' : 'bg-info-light text-info'
-          }`}>
-            {o.paymentType === 'cod' ? t('seller.orders.paymentCod') : t('seller.orders.paymentPrepaid')}
-          </span>
-          <span className="text-xs text-text-muted">{formatDate(o.createdAt)}</span>
-        </div>
-        <span className="text-base font-semibold text-primary tabular-nums">{formatNPR(o.total)}</span>
-      </div>
-    </motion.button>
-  )
-}
-
 export default function SellerOrders() {
   const { t } = useTranslation()
   const router = useRouter()
@@ -547,6 +397,7 @@ export default function SellerOrders() {
   const [sort, setSort] = useState<SellerOrderSortKey>('newest')
   const [showFilters, setShowFilters] = useState(false)
   const [headerHeight, setHeaderHeight] = useState(0)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const headerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -627,6 +478,16 @@ export default function SellerOrders() {
 
   const handleTabChange = useCallback((key: string) => {
     setActiveTab(key as TabKey)
+    setSelectedIds(new Set())
+  }, [])
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   }, [])
 
   if (!isLoggedIn) return null
@@ -778,13 +639,13 @@ export default function SellerOrders() {
             {/* Mobile skeletons */}
             <div className="md:hidden flex flex-col gap-3">
               {[0, 1, 2, 3].map(i => (
-                <div key={i} className="h-[168px] rounded-lg bg-surface border border-border-light animate-pulse" />
+                <SellerOrderRowSkeleton key={i} />
               ))}
             </div>
             {/* Table skeleton */}
             <div className="hidden md:block overflow-hidden rounded-lg border border-border-light">
               {[0, 1, 2, 3, 4, 5].map(i => (
-                <div key={i} className="h-[72px] border-b border-border-light bg-surface animate-pulse" />
+                <SellerOrderRowSkeleton key={i} />
               ))}
             </div>
           </div>
@@ -809,12 +670,14 @@ export default function SellerOrders() {
             <div className="md:hidden flex flex-col gap-3">
               <AnimatePresence mode="popLayout">
                 {visibleOrders.map((o, i) => (
-                  <OrderCardMobile
+                  <SellerOrderRow
                     key={o.subOrderId}
-                    o={o}
+                    order={o}
                     index={i}
+                    selected={selectedIds.has(o.subOrderId)}
+                    onToggleSelect={toggleSelect}
                     onPress={() => router.push(`/orders/${o.subOrderId}`)}
-                    t={t}
+                    onAction={() => router.push(`/orders/${o.subOrderId}`)}
                   />
                 ))}
               </AnimatePresence>
@@ -826,14 +689,15 @@ export default function SellerOrders() {
                 <thead className="sticky z-sticky bg-surface" style={{ top: headerHeight }}>
                   <tr className="border-b border-[#E5E5E5]">
                     {[
+                      { key: 'select', label: '', cls: 'w-12' },
                       { key: 'order', label: 'seller.orders.columnOrder', cls: 'text-left' },
                       { key: 'buyer', label: 'seller.orders.columnBuyer', cls: 'text-left hidden lg:table-cell' },
-                      { key: 'product', label: 'seller.orders.columnProduct', cls: 'text-left' },
+                      { key: 'items', label: 'seller.orders.columnProduct', cls: 'text-left' },
                       { key: 'total', label: 'seller.orders.columnTotal', cls: 'text-left hidden md:table-cell' },
                       { key: 'payment', label: 'seller.orders.columnPayment', cls: 'text-left hidden xl:table-cell' },
-                      { key: 'shipping', label: 'seller.orders.columnShipping', cls: 'text-left hidden xl:table-cell' },
                       { key: 'date', label: 'seller.orders.columnDate', cls: 'text-left hidden md:table-cell' },
                       { key: 'status', label: 'seller.orders.columnStatus', cls: 'text-left' },
+                      { key: 'sla', label: 'SLA', cls: 'text-left hidden xl:table-cell' },
                       { key: 'action', label: 'seller.orders.columnAction', cls: 'text-right' },
                     ].map(col => (
                       <th
@@ -841,7 +705,7 @@ export default function SellerOrders() {
                         scope="col"
                         className={`px-4 py-3 text-[12px] font-semibold text-text-muted ${col.cls}`}
                       >
-                        {t(col.label)}
+                        {col.label ? t(col.label) : ''}
                       </th>
                     ))}
                   </tr>
@@ -849,12 +713,14 @@ export default function SellerOrders() {
                 <tbody>
                   <AnimatePresence mode="popLayout">
                     {visibleOrders.map((o, i) => (
-                      <OrderRow
+                      <SellerOrderRow
                         key={o.subOrderId}
-                        o={o}
+                        order={o}
                         index={i}
+                        selected={selectedIds.has(o.subOrderId)}
+                        onToggleSelect={toggleSelect}
                         onPress={() => router.push(`/orders/${o.subOrderId}`)}
-                        t={t}
+                        onAction={() => router.push(`/orders/${o.subOrderId}`)}
                       />
                     ))}
                   </AnimatePresence>

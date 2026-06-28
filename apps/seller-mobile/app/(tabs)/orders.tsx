@@ -20,6 +20,7 @@ import { colors, spacing, radii, fontSize } from '@chinooz/theme'
 import { useA11y } from '../components/A11yProvider'
 import { useSellerSessionStore } from '@chinooz/state'
 import { useSellerOrders } from '@chinooz/hooks'
+import { SellerOrderCard, SellerOrderCardSkeleton } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
 import { formatNPR } from '@chinooz/utils'
 import type {
@@ -63,10 +64,10 @@ const DEFAULT_FILTERS: FilterState = {
 }
 
 const STATUS_PILL: Record<SellerOrderStatusKey, { bg: string; text: string; dot: string }> = {
-  new: { bg: colors.warningLight, text: '#92400E', dot: colors.warning },
-  to_pack: { bg: colors.infoLight, text: colors.info, dot: colors.info },
-  to_ship: { bg: '#F3E8FF', text: '#7C3AED', dot: '#7C3AED' },
-  shipped: { bg: '#E0F2FE', text: '#0369A1', dot: '#0369A1' },
+  new: { bg: colors.infoLight, text: colors.info, dot: colors.info },
+  to_pack: { bg: colors.warningLight, text: colors.warning, dot: colors.warning },
+  to_ship: { bg: colors.warningLight, text: colors.warning, dot: colors.warning },
+  shipped: { bg: colors.infoLight, text: colors.info, dot: colors.info },
   completed: { bg: colors.successLight, text: colors.success, dot: colors.success },
   cancelled_returned: { bg: colors.errorLight, text: colors.error, dot: colors.error },
   action_needed: { bg: colors.errorLight, text: colors.error, dot: colors.error },
@@ -196,6 +197,16 @@ export default function SellerOrdersScreen() {
     return n
   }, [filters])
 
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
   const switchTab = useCallback(
     (key: TabKey) => {
       if (key === activeTab) return
@@ -208,6 +219,7 @@ export default function SellerOrdersScreen() {
         useNativeDriver: true,
       }).start(() => {
         setActiveTab(key)
+        setSelectedIds(new Set())
         Animated.timing(listFade, {
           toValue: 1,
           duration: reducedMotion ? 0 : 220,
@@ -428,10 +440,14 @@ export default function SellerOrdersScreen() {
 
       {/* List */}
       {isLoading ? (
-        <View style={styles.loadingWrap} accessibilityLabel={t('seller.orders.loading')}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>{t('seller.orders.loading')}</Text>
-        </View>
+        <FlatList
+          data={[0, 1, 2, 3]}
+          keyExtractor={i => String(i)}
+          renderItem={() => <SellerOrderCardSkeleton />}
+          ItemSeparatorComponent={() => <View style={{ height: spacing[3] }} />}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+        />
       ) : isError ? (
         <View style={styles.centerWrap}>
           <Text style={styles.errorIcon}>⚠️</Text>
@@ -454,7 +470,14 @@ export default function SellerOrdersScreen() {
             data={visibleOrders}
             keyExtractor={item => item.subOrderId}
             renderItem={({ item, index }) => (
-              <OrderCardMobile o={item} index={index} onPress={() => router.push(`/orders/${item.subOrderId}` as any)} t={t} reducedMotion={reducedMotion} />
+              <SellerOrderCard
+                order={item}
+                index={index}
+                selected={selectedIds.has(item.subOrderId)}
+                onToggleSelect={toggleSelect}
+                onPress={() => router.push(`/orders/${item.subOrderId}` as any)}
+                onAction={() => router.push(`/orders/${item.subOrderId}` as any)}
+              />
             )}
             ItemSeparatorComponent={() => <View style={{ height: spacing[3] }} />}
             contentContainerStyle={styles.listContent}
@@ -554,99 +577,6 @@ function EmptyState({ tab, t }: { tab: TabKey; t: (k: string) => string }) {
         {isAction ? t('seller.orders.emptyActionNeededSubtitle') : t('seller.orders.emptySubtitle')}
       </Text>
     </View>
-  )
-}
-
-function OrderCardMobile({
-  o,
-  index,
-  onPress,
-  t,
-  reducedMotion,
-}: {
-  o: SellerSubOrder
-  index: number
-  onPress: () => void
-  t: (k: string) => string
-  reducedMotion: boolean
-}) {
-  const isNew = o.statusKey === 'new'
-  const firstItem = o.items[0]
-  const extra = o.items.length - 1
-  const pill = STATUS_PILL[o.statusKey]
-  const labelKey = TABS.find(tb => tb.key === o.statusKey)?.labelKey ?? 'seller.orders.tabNew'
-  const fade = useRef(new Animated.Value(0)).current
-  useEffect(() => {
-    Animated.timing(fade, {
-      toValue: 1,
-      duration: reducedMotion ? 0 : 280,
-      delay: reducedMotion ? 0 : Math.min(index * 50, 250),
-      useNativeDriver: true,
-    }).start()
-  }, [fade, index, reducedMotion])
-
-  return (
-    <Animated.View style={{ opacity: fade }}>
-      <TouchableOpacity
-        onPress={onPress}
-        activeOpacity={0.9}
-        accessibilityRole="button"
-        accessibilityLabel={`Order ${o.orderId}, ${o.buyerName}, ${formatNPR(o.total)}`}
-        style={[styles.card, isNew && styles.cardNew]}
-      >
-        {isNew && <View style={styles.cardAccent} />}
-        <View style={styles.cardHeader}>
-          <Text style={styles.cardOrderId} numberOfLines={1}>
-            {o.orderId}
-          </Text>
-          <View style={[styles.cardStatusPill, { backgroundColor: pill.bg }]}>
-            <View style={[styles.cardStatusDot, { backgroundColor: pill.dot }]} />
-            <Text style={[styles.cardStatusText, { color: pill.text }]}>{t(labelKey)}</Text>
-          </View>
-        </View>
-
-        {o.actionNeeded && (
-          <View style={styles.cardActionBanner}>
-            <AlertTriangle size={13} color={colors.error} />
-            <Text style={styles.cardActionText} numberOfLines={1}>
-              {o.actionReason ?? t('seller.orders.actionNeededLabel')}
-            </Text>
-          </View>
-        )}
-
-        <View style={styles.cardProductRow}>
-          <Image source={{ uri: firstItem.image }} style={styles.cardThumb} />
-          <View style={styles.cardProductBody}>
-            <Text style={styles.cardProductName} numberOfLines={1}>
-              {firstItem.name}
-            </Text>
-            {extra > 0 && (
-              <Text style={styles.cardExtra}>
-                +{extra} {extra === 1 ? t('seller.orders.item') : t('seller.orders.items')}
-              </Text>
-            )}
-          </View>
-        </View>
-
-        <View style={styles.cardMetaRow}>
-          <Text style={styles.cardMetaLeft} numberOfLines={1}>
-            {o.buyerName} · {o.city}
-          </Text>
-          <Text style={styles.cardMetaRight}>{formatDate(o.createdAt)}</Text>
-        </View>
-
-        <View style={styles.cardDivider} />
-
-        <View style={styles.cardFooter}>
-          <View style={[styles.cardPayPill, { backgroundColor: o.paymentType === 'cod' ? colors.warningLight : colors.infoLight }]}>
-            <Text style={[styles.cardPayText, { color: o.paymentType === 'cod' ? '#92400E' : colors.info }]}>
-              {o.paymentType === 'cod' ? t('seller.orders.paymentCod') : t('seller.orders.paymentPrepaid')}
-            </Text>
-          </View>
-          <Text style={styles.cardTotal}>{formatNPR(o.total)}</Text>
-        </View>
-      </TouchableOpacity>
-    </Animated.View>
   )
 }
 
