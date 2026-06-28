@@ -38,13 +38,30 @@ import {
   getDemandZones,
   getSurgeZones,
   getDemandForecast,
+  getSurgeDetail,
   getRiderRecommendations,
   type DemandZone,
   type SurgeZone,
   type DemandForecast,
+  type SurgeDetail,
   type RiderRecommendation,
   type GeoPoint,
 } from './riderDemand'
+import {
+  getRiderMetricDetail as getRiderMetricDetailMock,
+  type RiderMetricId,
+  type RiderMetricDetail,
+  type RiderPerformanceRange,
+} from './riderPerformance'
+import {
+  getRiderRatings as getRiderRatingsMock,
+  reportRiderRating as reportRiderRatingMock,
+  type RiderRatingsResult,
+} from './riderRatings'
+import {
+  getRiderTierDetail as getRiderTierDetailMock,
+  type RiderTierDetail,
+} from './riderTier'
 
 // ---------------------------------------------------------------------------
 // Latency + error simulation knobs
@@ -465,6 +482,13 @@ export async function getDemandForecastApi(): Promise<DemandForecast> {
   return getDemandForecast()
 }
 
+/** Get surge / peak-pay detail (RI5). */
+export async function getSurgeDetailApi(): Promise<SurgeDetail> {
+  await randomDelay(200, 400)
+  maybeThrow()
+  return getSurgeDetail()
+}
+
 /** Get zone detail (a single zone + its surge + recommendations). */
 export async function getZoneDetailApi(
   zoneId: string,
@@ -486,4 +510,55 @@ export async function getZoneDetailApi(
     { limit: 3 },
   )
   return { zone, surge, recommendations }
+}
+
+// ---------------------------------------------------------------------------
+// Performance / Ratings / Tier (RP1-RP4)
+// ---------------------------------------------------------------------------
+
+/** Get per-metric detail + trend (RP2). */
+export async function getRiderMetricDetailApi(
+  metricId: RiderMetricId,
+  period: RiderPerformanceRange,
+): Promise<RiderMetricDetail> {
+  await randomDelay(200, 450)
+  maybeThrow()
+  return getRiderMetricDetailMock(metricId, period)
+}
+
+/** Get rider ratings + feedback (RP3). */
+export async function getRiderRatingsApi(
+  filters?: { stars?: number | 'all'; tag?: string | 'all' },
+): Promise<RiderRatingsResult> {
+  await randomDelay(250, 500)
+  maybeThrow()
+  return getRiderRatingsMock(filters as any)
+}
+
+/**
+ * Report an unfair rating (RP3). Idempotent via `opRef` so retries never
+ * double-report. Optimistic + rollback is handled in the query hook.
+ */
+export async function reportRiderRatingApi(
+  ratingId: string,
+  opRef: string,
+): Promise<{ success: boolean; error?: string }> {
+  return runIdempotent(
+    opRef,
+    'status',
+    `report-${ratingId}`,
+    async () => {
+      await randomDelay(300, 600)
+      maybeThrow(0.04)
+      await reportRiderRatingMock(ratingId)
+      return { success: true }
+    },
+  )
+}
+
+/** Get rider tier + standing + improvement (RP4). */
+export async function getRiderTierDetailApi(): Promise<RiderTierDetail> {
+  await randomDelay(200, 450)
+  maybeThrow()
+  return getRiderTierDetailMock()
 }

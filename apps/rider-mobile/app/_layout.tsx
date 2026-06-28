@@ -38,6 +38,7 @@ export default function RootLayout() {
                       <Stack.Screen name="quests" options={{ animation: 'slide_from_right' }} />
                       <Stack.Screen name="quests/[id]" options={{ animation: 'slide_from_right' }} />
                       <Stack.Screen name="streaks" options={{ animation: 'slide_from_right' }} />
+                      <Stack.Screen name="surge-map" options={{ animation: 'slide_from_right' }} />
                       <Stack.Screen name="earnings" options={{ animation: 'slide_from_right' }} />
                       <Stack.Screen name="earnings-chart" options={{ animation: 'slide_from_right' }} />
                       <Stack.Screen name="ledger" options={{ animation: 'slide_from_right' }} />

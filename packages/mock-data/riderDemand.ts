@@ -622,3 +622,185 @@ export function getDemandForecast(opts: { now?: number } = {}): DemandForecast {
     planHint,
   }
 }
+
+/**
+ * RI5 — Surge / peak-pay detail for the surge screen.
+ *
+ * Combines active surge zones, current + upcoming peak windows with bonuses,
+ * a countdown to the next peak, honest surge rules, and a tie-in to Hotspots.
+ */
+
+export interface SurgePeakWindow {
+  /** Stable id. */
+  id: string
+  /** i18n key for the peak label, e.g. "Lunch", "Dinner". */
+  labelKey: string
+  /** Start hour (24h). */
+  startHour: number
+  /** End hour (24h). */
+  endHour: number
+  /** Display label for the time range, e.g. "11am - 2pm". */
+  timeRange: string
+  /** Whether this window is currently active. */
+  isActive: boolean
+  /** Whether this window is upcoming (not yet started). */
+  isUpcoming: boolean
+  /** Minutes until this window starts (0 if active or past). */
+  minutesUntilStart: number
+  /** Minutes until this window ends (0 if not yet started or past). */
+  minutesUntilEnd: number
+  /** Surge multiplier during this window (e.g. 1.5). */
+  multiplier: number
+  /** Flat NPR bonus per delivery during this window (0 if multiplier-only). */
+  bonusNpr: number
+  /** Zone ids where this surge is active. */
+  zoneIds: string[]
+  /** i18n key for the bonus description. */
+  bonusDescKey: string
+}
+
+export interface SurgeRule {
+  id: string
+  /** i18n key for the rule title. */
+  titleKey: string
+  /** i18n key for the rule description. */
+  descKey: string
+}
+
+export interface SurgeDetail {
+  /** Active surge zones (same as getSurgeZones() but enriched). */
+  activeZones: Array<{
+    zoneId: string
+    zoneName: string
+    multiplier: number
+    bonusNpr: number
+    minutesLeft: number
+  }>
+  /** Current + upcoming peak windows. */
+  peakWindows: SurgePeakWindow[]
+  /** The next upcoming peak (or null if none today). */
+  nextPeak: SurgePeakWindow | null
+  /** Honest surge rules (no fake urgency). */
+  rules: SurgeRule[]
+  /** Link to Hotspots (RD) for where the jobs are. */
+  hotspotsHref: string
+  /** i18n key for the Hotspots link label. */
+  hotspotsLabelKey: string
+  /** i18n key for the Hotspots link aria. */
+  hotspotsAriaKey: string
+  /** Whether surge is currently live anywhere. */
+  surgeLive: boolean
+  /** Headline surge multiplier (shared with RI5 incentives hub). */
+  headlineMultiplier: number
+  /** Headline surge zone label. */
+  headlineZoneLabel: string
+}
+
+/**
+ * RI5 — Get the full surge / peak-pay detail for the surge screen.
+ *
+ * Combines surge zones, demand forecast peaks, and honest rules into a single
+ * payload. The surge multiplier and headline zone mirror `RiderSurge` from
+ * riderIncentives so the surge screen and the Incentives hub report the same
+ * value.
+ *
+ * @param opts.now - override for deterministic testing
+ */
+export function getSurgeDetail(opts: { now?: number } = {}): SurgeDetail {
+  const now = opts.now ?? Date.now()
+  const nowDate = new Date(now)
+  const currentHour = nowDate.getHours()
+  const currentMin = nowDate.getMinutes()
+  const ri5 = getIncentiveSurge()
+  const surgeZones = getSurgeZones({ now })
+  const demandZones = getDemandZones({ now })
+
+  // Active surge zones enriched with zone names + bonus.
+  const activeZones = surgeZones.map(sz => {
+    const zone = demandZones.find(dz => dz.id === sz.zoneId)
+    const bonusNpr = sz.multiplier >= 1.5 ? 50 : sz.multiplier >= 1.3 ? 30 : 20
+    return {
+      zoneId: sz.zoneId,
+      zoneName: zone?.name ?? sz.zoneId,
+      multiplier: sz.multiplier,
+      bonusNpr,
+      minutesLeft: Math.max(0, Math.round((sz.endsAt - now) / 60_000)),
+    }
+  })
+
+  // Peak windows derived from PEAK_WINDOWS + surge multipliers.
+  const peakWindows: SurgePeakWindow[] = PEAK_WINDOWS.map((pw, idx) => {
+    const isActive = currentHour >= pw.startHour && currentHour < pw.endHour
+    const isUpcoming = currentHour < pw.startHour
+    const minutesUntilStart = isUpcoming
+      ? (pw.startHour - currentHour) * 60 - currentMin
+      : 0
+    const minutesUntilEnd = isActive
+      ? (pw.endHour - currentHour) * 60 - currentMin
+      : 0
+    const multiplier = pw.startHour >= 17 ? ri5.multiplier : 1.2
+    const bonusNpr = pw.startHour >= 17 ? 50 : 30
+    const timeRange = `${hourLabel(pw.startHour)} - ${hourLabel(pw.endHour)}`
+    const zoneIds = surgeZones
+      .filter(sz => {
+        const zone = demandZones.find(dz => dz.id === sz.zoneId)
+        return zone && zone.demand >= 60
+      })
+      .map(sz => sz.zoneId)
+    return {
+      id: `peak-${pw.label.toLowerCase()}`,
+      labelKey: `rider.surge.peak${pw.label}`,
+      startHour: pw.startHour,
+      endHour: pw.endHour,
+      timeRange,
+      isActive,
+      isUpcoming,
+      minutesUntilStart: Math.max(0, minutesUntilStart),
+      minutesUntilEnd: Math.max(0, minutesUntilEnd),
+      multiplier,
+      bonusNpr,
+      zoneIds,
+      bonusDescKey: `rider.surge.peakBonusDesc`,
+    }
+  })
+
+  // Next upcoming peak (not yet started).
+  const nextPeak = peakWindows.find(pw => pw.isUpcoming) ?? null
+
+  // Honest surge rules — no fake urgency, no manipulation.
+  const rules: SurgeRule[] = [
+    {
+      id: 'rule-real-demand',
+      titleKey: 'rider.surge.ruleRealDemandTitle',
+      descKey: 'rider.surge.ruleRealDemandDesc',
+    },
+    {
+      id: 'rule-no-inflation',
+      titleKey: 'rider.surge.ruleNoInflationTitle',
+      descKey: 'rider.surge.ruleNoInflationDesc',
+    },
+    {
+      id: 'rule-bonus-guaranteed',
+      titleKey: 'rider.surge.ruleBonusGuaranteedTitle',
+      descKey: 'rider.surge.ruleBonusGuaranteedDesc',
+    },
+    {
+      id: 'rule-window-honest',
+      titleKey: 'rider.surge.ruleWindowHonestTitle',
+      descKey: 'rider.surge.ruleWindowHonestDesc',
+    },
+  ]
+
+  return {
+    activeZones,
+    peakWindows,
+    nextPeak,
+    rules,
+    hotspotsHref: '/hotspots',
+    hotspotsLabelKey: 'rider.surge.linkHotspots',
+    hotspotsAriaKey: 'rider.surge.linkHotspotsAria',
+    surgeLive: ri5.active,
+    headlineMultiplier: ri5.multiplier,
+    headlineZoneLabel: ri5.zoneLabel,
+  }
+}

@@ -36,7 +36,7 @@ import {
   verifyRiderPhoneOtp,
   getCODWalletSync,
 } from '@chinooz/mock-data'
-import type { RiderPerformanceRange, RiderEarningsRange, GeoPoint } from '@chinooz/mock-data'
+import type { RiderPerformanceRange, RiderEarningsRange, GeoPoint, RiderMetricId } from '@chinooz/mock-data'
 import type {
   RiderJob,
   ActiveDelivery,
@@ -74,12 +74,18 @@ const KEYS = {
   incentives: ['rider', 'incentives'] as const,
   demand: ['rider', 'demand-zones'] as const,
   surge: ['rider', 'surge-zones'] as const,
+  surgeDetail: ['rider', 'surge-detail'] as const,
   forecast: ['rider', 'demand-forecast'] as const,
   zoneDetail: (zoneId: string) => ['rider', 'zone-detail', zoneId] as const,
   performance: (period: RiderPerformanceRange) =>
     ['rider', 'performance', period.key] as const,
   performanceDetail: (period: RiderPerformanceRange) =>
     ['rider', 'performance', 'detail', period.key] as const,
+  metricDetail: (metricId: RiderMetricId, period: RiderPerformanceRange) =>
+    ['rider', 'performance', 'metric', metricId, period.key] as const,
+  ratings: (stars: number | 'all', tag: string | 'all') =>
+    ['rider', 'ratings', { stars, tag }] as const,
+  tier: ['rider', 'tier'] as const,
   personal: ['rider', 'personal-profile'] as const,
 }
 
@@ -487,6 +493,19 @@ export function useDemandForecast() {
   })
 }
 
+/**
+ * Surge / peak-pay detail (RI5). Shares the same staleTime (30s) as
+ * demand/surge. RefetchInterval keeps the countdown + active windows fresh.
+ */
+export function useSurgeDetail() {
+  return useQuery({
+    queryKey: KEYS.surgeDetail,
+    queryFn: () => riderApi.getSurgeDetailApi(),
+    staleTime: STALE_DEMAND,
+    refetchInterval: STALE_DEMAND,
+  })
+}
+
 /** Zone detail: a single zone + surge + recommendations. */
 export function useZoneDetail(zoneId: string | null, riderLocation: GeoPoint) {
   return useQuery({
@@ -513,6 +532,75 @@ export function useRiderPerformanceDetail(period: RiderPerformanceRange) {
   return useQuery({
     queryKey: KEYS.performanceDetail(period),
     queryFn: () => getRiderPerformanceDetail(period),
+    staleTime: STALE_PERFORMANCE,
+  })
+}
+
+/** Per-metric detail + trend (RP2). */
+export function useRiderMetricDetail(
+  metricId: RiderMetricId,
+  period: RiderPerformanceRange,
+) {
+  return useQuery({
+    queryKey: KEYS.metricDetail(metricId, period),
+    queryFn: () => riderApi.getRiderMetricDetailApi(metricId, period),
+    staleTime: STALE_PERFORMANCE,
+  })
+}
+
+/** Rider ratings + feedback (RP3). */
+export function useRiderRatings(stars: number | 'all' = 'all', tag: string | 'all' = 'all') {
+  return useQuery({
+    queryKey: KEYS.ratings(stars, tag),
+    queryFn: () => riderApi.getRiderRatingsApi({ stars, tag }),
+    staleTime: STALE_PERFORMANCE,
+  })
+}
+
+/**
+ * Report an unfair rating (RP3). Optimistic + rollback: the reported rating
+ * is marked locally immediately, and rolled back on error. Idempotent via
+ * `opRef` so retries never double-report.
+ */
+export function useReportRiderRating() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ ratingId, opRef }: { ratingId: string; opRef: string }) =>
+      riderApi.reportRiderRatingApi(ratingId, opRef),
+    onMutate: async ({ ratingId }) => {
+      await qc.cancelQueries({ queryKey: ['rider', 'ratings'] })
+      const prevQueries = qc.getQueriesData({ queryKey: ['rider', 'ratings'] })
+      qc.setQueriesData({ queryKey: ['rider', 'ratings'] }, (old: unknown) => {
+        if (!old || typeof old !== 'object') return old
+        const data = old as { items?: Array<{ id: string; reported?: boolean }> }
+        if (!data.items) return old
+        return {
+          ...data,
+          items: data.items.map((item: { id: string; reported?: boolean }) =>
+            item.id === ratingId ? { ...item, reported: true } : item,
+          ),
+        }
+      })
+      return { prevQueries }
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prevQueries) {
+        ctx.prevQueries.forEach(([key, data]) => {
+          qc.setQueryData(key, data)
+        })
+      }
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['rider', 'ratings'] })
+    },
+  })
+}
+
+/** Rider tier + standing + improvement (RP4). */
+export function useRiderTierDetail() {
+  return useQuery({
+    queryKey: KEYS.tier,
+    queryFn: () => riderApi.getRiderTierDetailApi(),
     staleTime: STALE_PERFORMANCE,
   })
 }
