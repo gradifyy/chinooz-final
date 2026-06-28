@@ -6,12 +6,20 @@ import {
   ScrollView,
   StyleSheet,
   RefreshControl,
-  Animated as RNAnimated,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
 import * as Haptics from 'expo-haptics'
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withDelay,
+  withSpring,
+  Easing,
+  ReduceMotion,
+} from 'react-native-reanimated'
 import {
   ChevronLeft,
   ChevronRight,
@@ -26,10 +34,11 @@ import {
   ArrowRight,
   Info,
 } from 'lucide-react-native'
-import { colors, radii, spacing, fontFamily, fontSize, shadow } from '@chinooz/theme'
+import { colors, radii, spacing, fontFamily, fontSize, shadow, duration, easing } from '@chinooz/theme'
 import { useReducedMotion } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
 import { useA11y } from './A11yProvider'
+import { TierUpCelebration } from './TierUpCelebration'
 import {
   getRiderTierDetail,
   RIDER_TIER_ACCENTS,
@@ -109,8 +118,8 @@ export default function TierStandingScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(false)
 
-  // Progress bar animation.
-  const progressAnim = useRef(new RNAnimated.Value(0)).current
+  // Progress bar animation (Reanimated — 60fps on UI thread).
+  const progressAnim = useSharedValue(0)
 
   useEffect(() => {
     analytics.screen({ name: 'rider-tier' })
@@ -139,16 +148,19 @@ export default function TierStandingScreen() {
   useEffect(() => {
     if (!data || loading) return
     const target = data.current.progressToNext
-    progressAnim.setValue(0)
+    progressAnim.value = 0
     if (reduced) {
-      progressAnim.setValue(target)
+      progressAnim.value = target
       return
     }
-    RNAnimated.timing(progressAnim, {
-      toValue: target,
-      duration: 900,
-      useNativeDriver: false,
-    }).start()
+    progressAnim.value = withDelay(
+      duration.normal,
+      withTiming(target, {
+        duration: duration.slower,
+        easing: Easing.bezier(...easing.easeOut),
+        reduceMotion: ReduceMotion.Never,
+      }),
+    )
   }, [data, loading, reduced, progressAnim])
 
   const onRefresh = useCallback(() => load(true), [load])
@@ -264,7 +276,7 @@ export default function TierStandingScreen() {
 
             {/* Tier perks recap */}
             <SectionHeading text={t('rider.tier.sectionPerks', { tier: tierLabel })} />
-            <PerksGrid perks={data.perks} t={t} />
+            <PerksGrid perks={data.perks} t={t} reduced={reduced} />
 
             {/* Standing / health status */}
             <SectionHeading text={t('rider.tier.sectionStanding')} />
@@ -346,12 +358,16 @@ function TierHero({
   isTopTier: boolean
   progressCaption: string
   accent: { primary: string; light: string; dark: string }
-  progressAnim: RNAnimated.Value
+  progressAnim: ReturnType<typeof useSharedValue<number>>
   reduced: boolean
   t: (key: string, opts?: Record<string, unknown>) => string
   tierAria: string
 }) {
-  const pct = Math.round(progressToNext * 100)
+  const pctVal = Math.round(progressToNext * 100)
+
+  const fillStyle = useAnimatedStyle(() => ({
+    width: `${progressAnim.value * pctVal}%`,
+  }))
 
   return (
     <View
@@ -376,17 +392,14 @@ function TierHero({
             <Text style={styles.progressLabelText}>
               {t('rider.tier.progressLabel', { tier: nextTierLabel })}
             </Text>
-            <Text style={[styles.progressPct, { color: accent.dark }]}>{pct}%</Text>
+            <Text style={[styles.progressPct, { color: accent.dark }]}>{pctVal}%</Text>
           </View>
           <View style={styles.progressTrack}>
-            <RNAnimated.View
+            <Animated.View
               style={[
                 styles.progressFill,
+                fillStyle,
                 {
-                  width: progressAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: ['0%', `${pct}%`],
-                  }),
                   backgroundColor: accent.primary,
                 },
               ]}
@@ -474,42 +487,71 @@ function CriteriaTable({
   )
 }
 
-/** Perks grid — 2-column aspirational perk cards. */
+/** Perks grid — 2-column aspirational perk cards, staggered entrance. */
 function PerksGrid({
   perks,
   t,
+  reduced,
 }: {
   perks: RiderTierPerk[]
   t: (key: string, opts?: Record<string, unknown>) => string
+  reduced: boolean
 }) {
   return (
     <View style={styles.perksGrid}>
-      {perks.map(perk => {
-        const Icon = PERK_ICONS[perk.icon] ?? Award
-        const aria = t('rider.tier.perkAria', {
-          label: t(perk.labelKey),
-          desc: t(perk.descKey),
-        })
-        return (
-          <View
-            key={perk.id}
-            style={styles.perkCard}
-            accessibilityRole="text"
-            accessibilityLabel={aria}
-          >
-            <View style={styles.perkIconWrap}>
-              <Icon size={20} color={colors.gold} />
-            </View>
-            <Text style={styles.perkLabel} numberOfLines={2}>
-              {t(perk.labelKey)}
-            </Text>
-            <Text style={styles.perkDesc} numberOfLines={2}>
-              {t(perk.descKey)}
-            </Text>
-          </View>
-        )
-      })}
+      {perks.map((perk, idx) => (
+        <PerkCard key={perk.id} perk={perk} idx={idx} t={t} reduced={reduced} />
+      ))}
     </View>
+  )
+}
+
+/** Single perk card with staggered fade+slide entrance. */
+function PerkCard({
+  perk,
+  idx,
+  t,
+  reduced,
+}: {
+  perk: RiderTierPerk
+  idx: number
+  t: (key: string, opts?: Record<string, unknown>) => string
+  reduced: boolean
+}) {
+  const Icon = PERK_ICONS[perk.icon] ?? Award
+  const aria = t('rider.tier.perkAria', {
+    label: t(perk.labelKey),
+    desc: t(perk.descKey),
+  })
+
+  const opacity = useSharedValue(reduced ? 1 : 0)
+  const translateY = useSharedValue(reduced ? 0 : 14)
+  useEffect(() => {
+    if (reduced) return
+    const delay = idx * 80
+    opacity.value = withDelay(delay, withTiming(1, { duration: duration.normal, reduceMotion: ReduceMotion.Never }))
+    translateY.value = withDelay(
+      delay,
+      withSpring(0, { damping: 20, stiffness: 300, mass: 0.8, reduceMotion: ReduceMotion.Never }),
+    )
+  }, [idx, reduced])
+  const entranceStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: translateY.value }],
+  }))
+
+  return (
+    <Animated.View style={[styles.perkCard, entranceStyle]} accessibilityRole="text" accessibilityLabel={aria}>
+      <View style={styles.perkIconWrap}>
+        <Icon size={20} color={colors.gold} />
+      </View>
+      <Text style={styles.perkLabel} numberOfLines={2}>
+        {t(perk.labelKey)}
+      </Text>
+      <Text style={styles.perkDesc} numberOfLines={2}>
+        {t(perk.descKey)}
+      </Text>
+    </Animated.View>
   )
 }
 

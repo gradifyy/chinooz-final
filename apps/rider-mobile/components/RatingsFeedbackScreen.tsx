@@ -25,11 +25,22 @@ import {
   X,
   Sparkles,
   AlertTriangle,
+  AlertCircle,
 } from 'lucide-react-native'
-import { colors, radii, spacing, fontFamily, fontSize, shadow } from '@chinooz/theme'
+import { colors, radii, spacing, fontFamily, fontSize, shadow, duration, easing } from '@chinooz/theme'
 import { useReducedMotion } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
 import { useA11y } from './A11yProvider'
+import { useAppState } from './AppStateProvider'
+import { CountUp } from './CountUp'
+import {
+  RatingsSkeleton,
+  LoadErrorState,
+  OfflineState,
+  NewRiderEmpty,
+  NoCommentsEmpty,
+  ReportFailState,
+} from './PerformanceStates'
 import {
   getRiderRatings,
   reportRiderRating,
@@ -95,9 +106,12 @@ export default function RatingsFeedbackScreen() {
   const { minTouchTarget } = useA11y()
 
   const [data, setData] = useState<RiderRatingsResult | null>(null)
+  const [cachedData, setCachedData] = useState<RiderRatingsResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(false)
+  const { connectivity } = useAppState()
+  const isOffline = connectivity === 'offline'
 
   const [starsFilter, setStarsFilter] = useState<number | 'all'>('all')
   const [tagFilter, setTagFilter] = useState<RiderRatingTag | 'all'>('all')
@@ -107,6 +121,7 @@ export default function RatingsFeedbackScreen() {
   const [reportSending, setReportSending] = useState(false)
   const [reportedIds, setReportedIds] = useState<Set<string>>(new Set())
   const [reportToast, setReportToast] = useState(false)
+  const [reportFail, setReportFail] = useState(false)
 
   // Distribution bar fill animation (SV6-style staggered).
   const barAnims = useRef<RNAnimated.Value[]>(STARS.map(() => new RNAnimated.Value(0)))
@@ -123,6 +138,7 @@ export default function RatingsFeedbackScreen() {
       try {
         const result = await getRiderRatings({ stars: starsFilter, tag: tagFilter })
         setData(result)
+        setCachedData(result)
       } catch {
         setError(true)
       } finally {
@@ -148,7 +164,7 @@ export default function RatingsFeedbackScreen() {
     RNAnimated.stagger(
       80,
       barAnims.current.map(a =>
-        RNAnimated.timing(a, { toValue: 1, duration: 700, useNativeDriver: false }),
+        RNAnimated.timing(a, { toValue: 1, duration: duration.slower, useNativeDriver: false }),
       ),
     ).start()
   }, [data, loading, reduced])
@@ -197,11 +213,13 @@ export default function RatingsFeedbackScreen() {
   const closeReport = useCallback(() => {
     setReportTarget(null)
     setReportSending(false)
+    setReportFail(false)
   }, [])
 
   const confirmReport = useCallback(async () => {
     if (!reportTarget) return
     setReportSending(true)
+    setReportFail(false)
     try {
       await reportRiderRating(reportTarget.id)
       setReportedIds(prev => new Set(prev).add(reportTarget.id))
@@ -210,6 +228,7 @@ export default function RatingsFeedbackScreen() {
       closeReport()
     } catch {
       setReportSending(false)
+      setReportFail(true)
     }
   }, [reportTarget, closeReport])
 
@@ -262,14 +281,52 @@ export default function RatingsFeedbackScreen() {
         {loading ? (
           <RatingsSkeleton ariaLabel={t('rider.ratings.skeletonAria')} />
         ) : error ? (
-          <ErrorState
-            title={t('rider.ratings.errorTitle')}
-            subtitle={t('rider.ratings.errorSubtitle')}
-            retry={t('rider.ratings.retry')}
-            onRetry={onRefresh}
-          />
+          isOffline && cachedData ? (
+            <View style={styles.body}>
+              <OfflineState
+                cachedDate={cachedData.summary.previousAverage.toString()}
+                title={t('rider.ratings.offlineTitle')}
+                body={t('rider.ratings.offlineBody', { date: cachedData.summary.previousAverage.toString() })}
+                ariaLabel={t('rider.ratings.offlineAria', { date: cachedData.summary.previousAverage.toString() })}
+                retry={t('rider.ratings.offlineRetry')}
+                retryAria={t('rider.ratings.offlineRetryAria')}
+                onRetry={onRefresh}
+              />
+              <CachedRatingsSummary data={cachedData} t={t} />
+            </View>
+          ) : (
+            <LoadErrorState
+              title={t('rider.ratings.errorTitle')}
+              subtitle={t('rider.ratings.errorSubtitle')}
+              retry={t('rider.ratings.retry')}
+              retryAria={t('rider.ratings.retry')}
+              onRetry={onRefresh}
+            />
+          )
         ) : summary ? (
           <View style={styles.body} nativeID="rider-ratings">
+            {/* Offline banner — cached data still visible */}
+            {isOffline && (
+              <OfflineState
+                cachedDate={summary.previousAverage.toString()}
+                title={t('rider.ratings.offlineTitle')}
+                body={t('rider.ratings.offlineBody', { date: summary.previousAverage.toString() })}
+                ariaLabel={t('rider.ratings.offlineAria', { date: summary.previousAverage.toString() })}
+                retry={t('rider.ratings.offlineRetry')}
+                retryAria={t('rider.ratings.offlineRetryAria')}
+                onRetry={onRefresh}
+              />
+            )}
+
+            {/* New-rider empty — no ratings yet */}
+            {totalReviews === 0 ? (
+              <NewRiderEmpty
+                title={t('rider.ratings.newRiderTitle')}
+                body={t('rider.ratings.newRiderBody')}
+                ariaLabel={t('rider.ratings.newRiderAria')}
+              />
+            ) : (
+              <>
             {/* Summary — average + stars + distribution + trend */}
             <View
               accessibilityRole="summary"
@@ -281,7 +338,13 @@ export default function RatingsFeedbackScreen() {
             >
               <View style={styles.summaryTop}>
                 <View style={styles.summaryLeft}>
-                  <Text style={styles.averageText}>{average.toFixed(1)}</Text>
+                  <CountUp
+                    value={average}
+                    format={v => v.toFixed(1)}
+                    reduced={reduced}
+                    delay={duration.normal}
+                    style={styles.averageText}
+                  />
                   <View style={styles.starRow} accessibilityLabel={t('rider.ratings.averageLabel')}>
                     {[1, 2, 3, 4, 5].map(s => (
                       <Star
@@ -445,12 +508,20 @@ export default function RatingsFeedbackScreen() {
               )}
             </View>
 
-            {/* Feedback rows */}
+            {/* Feedback rows — no-comments empty vs filtered-empty */}
             {items.length === 0 ? (
-              <View style={styles.emptyWrap}>
-                <Text style={styles.emptyTitle}>{t('rider.ratings.emptyTitle')}</Text>
-                <Text style={styles.emptySubtitle}>{t('rider.ratings.emptySubtitle')}</Text>
-              </View>
+              hasActiveFilters ? (
+                <View style={styles.emptyWrap}>
+                  <Text style={styles.emptyTitle}>{t('rider.ratings.emptyTitle')}</Text>
+                  <Text style={styles.emptySubtitle}>{t('rider.ratings.emptySubtitle')}</Text>
+                </View>
+              ) : (
+                <NoCommentsEmpty
+                  title={t('rider.ratings.noCommentsTitle')}
+                  body={t('rider.ratings.noCommentsBody')}
+                  ariaLabel={t('rider.ratings.noCommentsAria')}
+                />
+              )
             ) : (
               <View style={styles.listWrap}>
                 {items.map(row => (
@@ -463,6 +534,8 @@ export default function RatingsFeedbackScreen() {
                   />
                 ))}
               </View>
+            )}
+              </>
             )}
           </View>
         ) : null}
@@ -478,18 +551,68 @@ export default function RatingsFeedbackScreen() {
         </View>
       )}
 
-      {/* Report confirm dialog */}
+      {/* Report confirm dialog — with failure state (preserves input) */}
       <ReportDialog
         visible={!!reportTarget}
         sending={reportSending}
+        failed={reportFail}
         title={t('rider.ratings.reportConfirmTitle')}
         msg={t('rider.ratings.reportConfirmMsg')}
         cancelLabel={t('rider.ratings.reportConfirmCancel')}
         confirmLabel={t('rider.ratings.reportConfirmConfirm')}
+        failTitle={t('rider.ratings.reportFailTitle')}
+        failBody={t('rider.ratings.reportFailBody')}
+        failPreserved={t('rider.ratings.reportFailPreserved')}
+        failRetry={t('rider.ratings.reportFailRetry')}
+        failRetryAria={t('rider.ratings.reportFailRetryAria')}
+        failCancelLabel={t('rider.ratings.reportConfirmCancel')}
+        failCancelAria={t('rider.ratings.reportConfirmCancel')}
+        onFailRetry={confirmReport}
+        onFailCancel={closeReport}
         onCancel={closeReport}
         onConfirm={confirmReport}
         reduced={reduced}
       />
+    </View>
+  )
+}
+
+/** Cached ratings summary — renders a read-only summary from cached data when offline. */
+function CachedRatingsSummary({
+  data,
+  t,
+}: {
+  data: RiderRatingsResult
+  t: (key: string, opts?: Record<string, unknown>) => string
+}) {
+  const summary = data.summary
+  return (
+    <View
+      accessibilityRole="summary"
+      accessibilityLabel={t('rider.ratings.summaryAria', {
+        average: summary.average.toFixed(1),
+        total: summary.total,
+      })}
+      style={styles.summaryCard}
+    >
+      <View style={styles.summaryTop}>
+        <View style={styles.summaryLeft}>
+          <Text style={styles.averageText}>{summary.average.toFixed(1)}</Text>
+          <View style={styles.starRow} accessibilityLabel={t('rider.ratings.averageLabel')}>
+            {[1, 2, 3, 4, 5].map(s => (
+              <Star
+                key={s}
+                size={16}
+                color={s <= Math.round(summary.average) ? colors.gold : colors.border}
+                fill={s <= Math.round(summary.average) ? colors.gold : 'none'}
+              />
+            ))}
+          </View>
+          <Text style={styles.totalReviewsText}>
+            {summary.total.toLocaleString()} {t('rider.ratings.totalRatings')}
+          </Text>
+        </View>
+      </View>
     </View>
   )
 }
@@ -689,20 +812,40 @@ function FilterChip({
 function ReportDialog({
   visible,
   sending,
+  failed,
   title,
   msg,
   cancelLabel,
   confirmLabel,
+  failTitle,
+  failBody,
+  failPreserved,
+  failRetry,
+  failRetryAria,
+  failCancelLabel,
+  failCancelAria,
+  onFailRetry,
+  onFailCancel,
   onCancel,
   onConfirm,
   reduced,
 }: {
   visible: boolean
   sending: boolean
+  failed: boolean
   title: string
   msg: string
   cancelLabel: string
   confirmLabel: string
+  failTitle: string
+  failBody: string
+  failPreserved: string
+  failRetry: string
+  failRetryAria: string
+  failCancelLabel: string
+  failCancelAria: string
+  onFailRetry: () => void
+  onFailCancel: () => void
   onCancel: () => void
   onConfirm: () => void
   reduced: boolean
@@ -717,77 +860,65 @@ function ReportDialog({
     >
       <Pressable style={dialogStyles.overlay} onPress={onCancel}>
         <Pressable style={dialogStyles.sheet} onPress={e => e.stopPropagation()}>
-          <Text style={dialogStyles.title}>{title}</Text>
-          <Text style={dialogStyles.msg}>{msg}</Text>
-          <View style={dialogStyles.btnRow}>
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel={cancelLabel}
-              onPress={onCancel}
-              style={dialogStyles.cancelBtn}
-              activeOpacity={0.85}
-            >
-              <Text style={dialogStyles.cancelText}>{cancelLabel}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel={confirmLabel}
-              onPress={onConfirm}
-              disabled={sending}
-              style={[dialogStyles.confirmBtn, sending && dialogStyles.confirmBtnDisabled]}
-              activeOpacity={0.85}
-            >
-              <Text style={dialogStyles.confirmText}>{confirmLabel}</Text>
-            </TouchableOpacity>
-          </View>
+          {failed ? (
+            <>
+              <View style={dialogStyles.failIconWrap}>
+                <AlertCircle size={28} color={colors.warning} />
+              </View>
+              <Text style={dialogStyles.title}>{failTitle}</Text>
+              <Text style={dialogStyles.msg}>{failBody}</Text>
+              <Text style={dialogStyles.failPreserved}>{failPreserved}</Text>
+              <View style={dialogStyles.btnRow}>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel={failCancelAria}
+                  onPress={onFailCancel}
+                  style={dialogStyles.cancelBtn}
+                  activeOpacity={0.85}
+                >
+                  <Text style={dialogStyles.cancelText}>{failCancelLabel}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel={failRetryAria}
+                  onPress={onFailRetry}
+                  style={dialogStyles.confirmBtn}
+                  activeOpacity={0.85}
+                >
+                  <Text style={dialogStyles.confirmText}>{failRetry}</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : (
+            <>
+              <Text style={dialogStyles.title}>{title}</Text>
+              <Text style={dialogStyles.msg}>{msg}</Text>
+              <View style={dialogStyles.btnRow}>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel={cancelLabel}
+                  onPress={onCancel}
+                  style={dialogStyles.cancelBtn}
+                  activeOpacity={0.85}
+                >
+                  <Text style={dialogStyles.cancelText}>{cancelLabel}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel={confirmLabel}
+                  onPress={onConfirm}
+                  disabled={sending}
+                  style={[dialogStyles.confirmBtn, sending && dialogStyles.confirmBtnDisabled]}
+                  activeOpacity={0.85}
+                >
+                  <Text style={dialogStyles.confirmText}>{confirmLabel}</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
         </Pressable>
       </Pressable>
     </RNModal>
-  )
-}
-
-function RatingsSkeleton({ ariaLabel }: { ariaLabel: string }) {
-  return (
-    <View
-      style={styles.skeletonWrap}
-      accessibilityRole="progressbar"
-      accessibilityLabel={ariaLabel}
-      accessibilityLiveRegion="polite"
-      accessible
-    >
-      <View style={[styles.skeletonBlock, { height: 160 }]} />
-      <View style={[styles.skeletonBlock, { height: 90 }]} />
-      <View style={[styles.skeletonBlock, { height: 90 }]} />
-      <View style={[styles.skeletonBlock, { height: 56 }]} />
-      <View style={[styles.skeletonBlock, { height: 120 }]} />
-    </View>
-  )
-}
-
-function ErrorState({
-  title,
-  subtitle,
-  retry,
-  onRetry,
-}: {
-  title: string
-  subtitle: string
-  retry: string
-  onRetry: () => void
-}) {
-  return (
-    <View style={styles.errorWrap}>
-      <Text style={styles.errorTitle}>{title}</Text>
-      <Text style={styles.errorSubtitle}>{subtitle}</Text>
-      <TouchableOpacity
-        accessibilityRole="button"
-        accessibilityLabel={retry}
-        onPress={onRetry}
-        style={styles.retryBtn}
-      >
-        <Text style={styles.retryText}>{retry}</Text>
-      </TouchableOpacity>
-    </View>
   )
 }
 
@@ -1108,40 +1239,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontFamily: fontFamily.sansSemiBold[0],
   },
-
-  // Skeleton + error.
-  skeletonWrap: { padding: spacing[4], gap: spacing[3] },
-  skeletonBlock: {
-    height: 56,
-    borderRadius: radii.lg,
-    backgroundColor: colors.shimmer,
-  },
-  errorWrap: { padding: spacing[6], alignItems: 'center', gap: spacing[2] },
-  errorTitle: {
-    fontSize: fontSize.lg[0],
-    fontWeight: '700',
-    color: colors.text,
-    fontFamily: fontFamily.sansBold[0],
-  },
-  errorSubtitle: {
-    fontSize: fontSize.base[0],
-    color: colors.textMuted,
-    textAlign: 'center',
-    fontFamily: fontFamily.sans[0],
-  },
-  retryBtn: {
-    marginTop: spacing[2],
-    paddingHorizontal: spacing[5],
-    paddingVertical: spacing[2.5],
-    borderRadius: radii.lg,
-    backgroundColor: colors.primary,
-  },
-  retryText: {
-    fontSize: fontSize.base[0],
-    fontWeight: '700',
-    color: colors.white,
-    fontFamily: fontFamily.sansBold[0],
-  },
 })
 
 const dialogStyles = StyleSheet.create({
@@ -1198,5 +1295,23 @@ const dialogStyles = StyleSheet.create({
     fontWeight: '700',
     color: colors.white,
     fontFamily: fontFamily.sansBold[0],
+  },
+  failIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: radii.full,
+    backgroundColor: colors.warningLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginBottom: spacing[1],
+  },
+  failPreserved: {
+    fontSize: 12,
+    color: colors.primary,
+    fontFamily: fontFamily.sansSemiBold[0],
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: spacing[1],
   },
 })

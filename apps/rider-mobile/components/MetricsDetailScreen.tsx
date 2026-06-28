@@ -14,7 +14,12 @@ import * as Haptics from 'expo-haptics'
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
+  useAnimatedProps,
+  withTiming,
+  withDelay,
   withSpring,
+  Easing,
+  ReduceMotion,
 } from 'react-native-reanimated'
 import Svg, { Path, Line, Circle, Text as SvgText } from 'react-native-svg'
 import {
@@ -23,10 +28,17 @@ import {
   AlertTriangle,
   Info,
 } from 'lucide-react-native'
-import { colors, radii, spacing, fontFamily, fontSize, shadow } from '@chinooz/theme'
+import { colors, radii, spacing, fontFamily, fontSize, shadow, duration, easing } from '@chinooz/theme'
 import { useReducedMotion } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
 import { useA11y } from './A11yProvider'
+import { useAppState } from './AppStateProvider'
+import {
+  MetricsDetailSkeleton,
+  LoadErrorState,
+  OfflineState,
+} from './PerformanceStates'
+import { CountUp } from './CountUp'
 import {
   getRiderMetricDetail,
   RIDER_PERFORMANCE_PERIODS,
@@ -129,9 +141,12 @@ export default function MetricsDetailScreen() {
 
   const [periodKey, setPeriodKey] = useState<RiderPerformancePeriodKey>('week')
   const [detail, setDetail] = useState<RiderMetricDetail | null>(null)
+  const [cachedDetail, setCachedDetail] = useState<RiderMetricDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(false)
+  const { connectivity } = useAppState()
+  const isOffline = connectivity === 'offline'
 
   useEffect(() => {
     analytics.screen({ name: 'rider-metrics-detail', props: { metric: metricId } })
@@ -146,6 +161,7 @@ export default function MetricsDetailScreen() {
         const range = RIDER_PERFORMANCE_PERIODS.find(r => r.key === key)!
         const d = await getRiderMetricDetail(metricId, range)
         setDetail(d)
+        setCachedDetail(d)
       } catch {
         setError(true)
       } finally {
@@ -236,23 +252,56 @@ export default function MetricsDetailScreen() {
         </View>
 
         {loading ? (
-          <DetailSkeleton ariaLabel={t('rider.performance.detailSkeletonAria')} />
+          <MetricsDetailSkeleton ariaLabel={t('rider.performance.detailSkeletonAria')} />
         ) : error ? (
-          <ErrorState
-            title={t('rider.performance.detailErrorTitle')}
-            subtitle={t('rider.performance.detailErrorSubtitle')}
-            retry={t('rider.performance.detailRetry')}
-            onRetry={onRefresh}
-          />
+          isOffline && cachedDetail ? (
+            <View style={styles.body}>
+              <OfflineState
+                cachedDate={cachedDetail.period.key}
+                title={t('rider.performance.offlineTitle')}
+                body={t('rider.performance.offlineBody', { date: cachedDetail.period.key })}
+                ariaLabel={t('rider.performance.offlineAria', { date: cachedDetail.period.key })}
+                retry={t('rider.performance.offlineRetry')}
+                retryAria={t('rider.performance.offlineRetryAria')}
+                onRetry={onRefresh}
+              />
+              <View nativeID="rider-metrics-detail-cached">
+                <Section title={t('rider.performance.detailDefinition')}>
+                  <Text style={styles.definitionText}>{t(cachedDetail.definitionKey)}</Text>
+                </Section>
+                <CurrentVsTarget detail={cachedDetail} t={t} reduced={reduced} />
+              </View>
+            </View>
+          ) : (
+            <LoadErrorState
+              title={t('rider.performance.detailErrorTitle')}
+              subtitle={t('rider.performance.detailErrorSubtitle')}
+              retry={t('rider.performance.detailRetry')}
+              retryAria={t('rider.performance.detailRetry')}
+              onRetry={onRefresh}
+            />
+          )
         ) : detail ? (
           <View style={styles.body} nativeID="rider-metrics-detail">
+            {/* Offline banner — cached data still visible */}
+            {isOffline && (
+              <OfflineState
+                cachedDate={detail.period.key}
+                title={t('rider.performance.offlineTitle')}
+                body={t('rider.performance.offlineBody', { date: detail.period.key })}
+                ariaLabel={t('rider.performance.offlineAria', { date: detail.period.key })}
+                retry={t('rider.performance.offlineRetry')}
+                retryAria={t('rider.performance.offlineRetryAria')}
+                onRetry={onRefresh}
+              />
+            )}
             {/* Definition */}
             <Section title={t('rider.performance.detailDefinition')}>
               <Text style={styles.definitionText}>{t(detail.definitionKey)}</Text>
             </Section>
 
             {/* Current vs target */}
-            <CurrentVsTarget detail={detail} t={t} />
+            <CurrentVsTarget detail={detail} t={t} reduced={reduced} />
 
             {/* Trend chart (reuses SD3 SVG pattern) */}
             <Section title={t('rider.performance.detailTrendTitle', { period: periodLabel })}>
@@ -261,12 +310,13 @@ export default function MetricsDetailScreen() {
                 t={t}
                 periodLabel={periodLabel}
                 metricLabel={metricLabel}
+                reduced={reduced}
               />
             </Section>
 
             {/* Neutral breakdown */}
             <Section title={t(detail.breakdownTitleKey)}>
-              <Breakdown detail={detail} t={t} />
+              <Breakdown detail={detail} t={t} reduced={reduced} />
             </Section>
 
             {/* What affects this explainer */}
@@ -296,9 +346,11 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function CurrentVsTarget({
   detail,
   t,
+  reduced,
 }: {
   detail: RiderMetricDetail
   t: (key: string, opts?: Record<string, unknown>) => string
+  reduced: boolean
 }) {
   const unit = t(detail.unitKey).trim()
   const targetLabel = t(detail.targetLabelKey)
@@ -313,23 +365,36 @@ function CurrentVsTarget({
   const Icon = meets ? CheckCircle2 : AlertTriangle
   const iconColor = meets ? colors.success : colors.warning
 
+  const isPct = detail.metricId !== 'rating' && detail.metricId !== 'total_deliveries'
+  const isDeliveries = detail.metricId === 'total_deliveries'
+  const fmtRaw = (v: number) =>
+    isPct ? `${Math.round(v)}%` : isDeliveries ? Math.round(v).toLocaleString('en-IN') : v.toFixed(1)
+
   return (
     <View style={styles.cvtCard} accessibilityRole="summary" accessibilityLabel={statusAria}>
       <View style={styles.cvtRow}>
         <View style={styles.cvtCell}>
           <Text style={styles.cvtLabel}>{t('rider.performance.detailCurrent')}</Text>
-          <Text style={styles.cvtValue} numberOfLines={1}>
-            {detail.value}
+          <View style={styles.cvtValueRow}>
+            <CountUp
+              value={detail.rawValue}
+              format={fmtRaw}
+              reduced={reduced}
+              delay={duration.fast}
+              style={styles.cvtValue}
+            />
             {unit ? <Text style={styles.cvtUnit}> {unit}</Text> : null}
-          </Text>
+          </View>
         </View>
         <View style={styles.cvtDivider} />
         <View style={styles.cvtCell}>
           <Text style={styles.cvtLabel}>{targetLabel}</Text>
-          <Text style={[styles.cvtValue, styles.cvtTargetValue]} numberOfLines={1}>
-            {detail.targetValue}
+          <View style={styles.cvtValueRow}>
+            <Text style={[styles.cvtValue, styles.cvtTargetValue]} numberOfLines={1}>
+              {detail.targetValue}
+            </Text>
             {unit ? <Text style={styles.cvtUnit}> {unit}</Text> : null}
-          </Text>
+          </View>
         </View>
       </View>
       <View style={styles.cvtStatusRow}>
@@ -353,11 +418,13 @@ function TrendChart({
   t,
   periodLabel,
   metricLabel,
+  reduced,
 }: {
   detail: RiderMetricDetail
   t: (key: string, opts?: Record<string, unknown>) => string
   periodLabel: string
   metricLabel: string
+  reduced: boolean
 }) {
   const points = detail.trend
   const unit = t(detail.unitKey).trim()
@@ -407,6 +474,39 @@ function TrendChart({
     }
     return d
   }, [coords])
+
+  // Approximate path length for the draw-in animation.
+  const pathLen = useMemo(() => {
+    if (coords.length < 2) return 100
+    let len = 0
+    for (let i = 1; i < coords.length; i++) {
+      const dx = coords[i].x - coords[i - 1].x
+      const dy = coords[i].y - coords[i - 1].y
+      len += Math.sqrt(dx * dx + dy * dy)
+    }
+    return Math.max(len, 100)
+  }, [coords])
+
+  // Stroke draw-in: animate strokeDashoffset from pathLen → 0.
+  const AnimatedPath = Animated.createAnimatedComponent(Path)
+  const dashOffset = useSharedValue(reduced ? 0 : pathLen)
+  useEffect(() => {
+    if (reduced) {
+      dashOffset.value = 0
+      return
+    }
+    dashOffset.value = withDelay(
+      duration.normal,
+      withTiming(0, {
+        duration: duration.slower,
+        easing: Easing.bezier(...easing.easeOut),
+        reduceMotion: ReduceMotion.Never,
+      }),
+    )
+  }, [pathLen, reduced])
+  const pathAnimProps = useAnimatedProps(() => ({
+    strokeDashoffset: dashOffset.value,
+  }))
 
   const latest = points.length > 0 ? points[points.length - 1].value : detail.rawValue
   const latestFmt = fmtValue(latest, detail.metricId)
@@ -464,9 +564,16 @@ function TrendChart({
             {t('rider.performance.detailTargetLine', { value: targetValue, unit })}
           </SvgText>
 
-          {/* Trend line */}
+          {/* Trend line — animated draw-in (strokeDashoffset) */}
           {linePath ? (
-            <Path d={linePath} fill="none" stroke={colors.primary} strokeWidth={2.5} />
+            <AnimatedPath
+              d={linePath}
+              fill="none"
+              stroke={colors.primary}
+              strokeWidth={2.5}
+              strokeDasharray={pathLen}
+              animatedProps={pathAnimProps}
+            />
           ) : null}
 
           {/* Points */}
@@ -539,9 +646,11 @@ function TrendChart({
 function Breakdown({
   detail,
   t,
+  reduced,
 }: {
   detail: RiderMetricDetail
   t: (key: string, opts?: Record<string, unknown>) => string
+  reduced: boolean
 }) {
   const total = detail.breakdownTotal
   const maxShare = Math.max(...detail.breakdown.map(b => b.share), 0.0001)
@@ -552,34 +661,73 @@ function Breakdown({
         {t('rider.performance.detailBreakdownTotalCaption', { count: total })}
       </Text>
       <View style={styles.breakdownList} accessibilityRole="list">
-        {detail.breakdown.map(b => {
-          const pct = Math.round(b.share * 100)
-          const w = Math.max(2, (b.share / maxShare) * 100)
-          return (
-            <View
-              key={b.id}
-              style={styles.breakdownRow}
-              accessibilityRole="text"
-              accessibilityLabel={t('rider.performance.detailBreakdownAria', {
-                label: t(b.labelKey),
-                count: b.count,
-                pct,
-              })}
-            >
-              <View style={styles.breakdownBarTrack}>
-                <View style={[styles.breakdownBar, { width: `${w}%` }]} />
-              </View>
-              <View style={styles.breakdownMeta}>
-                <Text style={styles.breakdownLabel} numberOfLines={1}>
-                  {t(b.labelKey)}
-                </Text>
-                <Text style={styles.breakdownCount} numberOfLines={1}>
-                  {b.count.toLocaleString('en-IN')} · {pct}%
-                </Text>
-              </View>
-            </View>
-          )
-        })}
+        {detail.breakdown.map((b, idx) => (
+          <BreakdownRow
+            key={b.id}
+            b={b}
+            idx={idx}
+            maxShare={maxShare}
+            t={t}
+            reduced={reduced}
+          />
+        ))}
+      </View>
+    </View>
+  )
+}
+
+/** Single breakdown row with animated bar fill. */
+function BreakdownRow({
+  b,
+  idx,
+  maxShare,
+  t,
+  reduced,
+}: {
+  b: RiderMetricDetail['breakdown'][number]
+  idx: number
+  maxShare: number
+  t: (key: string, opts?: Record<string, unknown>) => string
+  reduced: boolean
+}) {
+  const pctVal = Math.round(b.share * 100)
+  const w = Math.max(2, (b.share / maxShare) * 100)
+
+  const fillAnim = useSharedValue(reduced ? 1 : 0)
+  useEffect(() => {
+    if (reduced) {
+      fillAnim.value = 1
+      return
+    }
+    fillAnim.value = withDelay(
+      idx * 80,
+      withTiming(1, { duration: duration.slow, easing: Easing.bezier(...easing.easeOut), reduceMotion: ReduceMotion.Never }),
+    )
+  }, [idx, reduced])
+  const barStyle = useAnimatedStyle(() => ({
+    width: `${w * fillAnim.value}%`,
+  }))
+
+  return (
+    <View
+      style={styles.breakdownRow}
+      accessibilityRole="text"
+      accessibilityLabel={t('rider.performance.detailBreakdownAria', {
+        label: t(b.labelKey),
+        count: b.count,
+        pct: pctVal,
+      })}
+    >
+      <View style={styles.breakdownBarTrack}>
+        <Animated.View style={[styles.breakdownBar, barStyle]} />
+      </View>
+      <View style={styles.breakdownMeta}>
+        <Text style={styles.breakdownLabel} numberOfLines={1}>
+          {t(b.labelKey)}
+        </Text>
+        <Text style={styles.breakdownCount} numberOfLines={1}>
+          {b.count.toLocaleString('en-IN')} · {pctVal}%
+        </Text>
       </View>
     </View>
   )
@@ -655,7 +803,7 @@ function AnimatedIndicator({
   useEffect(() => {
     x.value = reduced
       ? index * segmentWidth
-      : withSpring(index * segmentWidth, { damping: 25, stiffness: 350, mass: 0.8 })
+      : withSpring(index * segmentWidth, { damping: 25, stiffness: 350, mass: 0.8, reduceMotion: ReduceMotion.Never })
   }, [index, segmentWidth, reduced, x])
   const style = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }))
   return (
@@ -663,51 +811,6 @@ function AnimatedIndicator({
       style={[styles.periodIndicator, { width: segmentWidth || undefined }, style]}
       pointerEvents="none"
     />
-  )
-}
-
-function DetailSkeleton({ ariaLabel }: { ariaLabel: string }) {
-  return (
-    <View
-      style={styles.skeletonWrap}
-      accessibilityRole="progressbar"
-      accessibilityLabel={ariaLabel}
-      accessibilityLiveRegion="polite"
-      accessible
-    >
-      <View style={[styles.skeletonBlock, { height: 80 }]} />
-      <View style={[styles.skeletonBlock, { height: 110 }]} />
-      <View style={[styles.skeletonBlock, { height: 200 }]} />
-      <View style={[styles.skeletonBlock, { height: 140 }]} />
-      <View style={[styles.skeletonBlock, { height: 90 }]} />
-    </View>
-  )
-}
-
-function ErrorState({
-  title,
-  subtitle,
-  retry,
-  onRetry,
-}: {
-  title: string
-  subtitle: string
-  retry: string
-  onRetry: () => void
-}) {
-  return (
-    <View style={styles.errorWrap}>
-      <Text style={styles.errorTitle}>{title}</Text>
-      <Text style={styles.errorSubtitle}>{subtitle}</Text>
-      <TouchableOpacity
-        accessibilityRole="button"
-        accessibilityLabel={retry}
-        onPress={onRetry}
-        style={styles.retryBtn}
-      >
-        <Text style={styles.retryText}>{retry}</Text>
-      </TouchableOpacity>
-    </View>
   )
 }
 
@@ -795,6 +898,7 @@ const styles = StyleSheet.create({
   },
   cvtRow: { flexDirection: 'row', alignItems: 'stretch', gap: spacing[3] },
   cvtCell: { flex: 1, gap: spacing[1.5] },
+  cvtValueRow: { flexDirection: 'row', alignItems: 'baseline' },
   cvtDivider: { width: 1, backgroundColor: colors.borderLight },
   cvtLabel: {
     fontSize: 11,
@@ -933,39 +1037,5 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     color: colors.text,
     fontFamily: fontFamily.sans[0],
-  },
-
-  // Skeleton + error.
-  skeletonWrap: { padding: spacing[4], gap: spacing[3] },
-  skeletonBlock: {
-    height: 56,
-    borderRadius: radii.lg,
-    backgroundColor: colors.shimmer,
-  },
-  errorWrap: { padding: spacing[6], alignItems: 'center', gap: spacing[2] },
-  errorTitle: {
-    fontSize: fontSize.lg[0],
-    fontWeight: '700',
-    color: colors.text,
-    fontFamily: fontFamily.sansBold[0],
-  },
-  errorSubtitle: {
-    fontSize: fontSize.base[0],
-    color: colors.textMuted,
-    textAlign: 'center',
-    fontFamily: fontFamily.sans[0],
-  },
-  retryBtn: {
-    marginTop: spacing[2],
-    paddingHorizontal: spacing[5],
-    paddingVertical: spacing[2.5],
-    borderRadius: radii.lg,
-    backgroundColor: colors.primary,
-  },
-  retryText: {
-    fontSize: fontSize.base[0],
-    fontWeight: '700',
-    color: colors.white,
-    fontFamily: fontFamily.sansBold[0],
   },
 })

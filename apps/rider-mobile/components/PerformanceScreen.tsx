@@ -15,9 +15,10 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
+  withDelay,
   withSpring,
   Easing,
-  interpolateColor,
+  ReduceMotion,
 } from 'react-native-reanimated'
 import {
   ChevronLeft,
@@ -29,10 +30,20 @@ import {
   Award,
   AlertTriangle,
 } from 'lucide-react-native'
-import { colors, radii, spacing, fontFamily, fontSize, shadow } from '@chinooz/theme'
+import { colors, radii, spacing, fontFamily, fontSize, shadow, duration, easing } from '@chinooz/theme'
 import { useReducedMotion } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
 import { useA11y } from './A11yProvider'
+import { useAppState } from './AppStateProvider'
+import {
+  ScorecardSkeleton,
+  LoadErrorState,
+  OfflineState,
+  NewRiderEmpty,
+  ThresholdChangeNote,
+} from './PerformanceStates'
+import { CountUp } from './CountUp'
+import { TierUpCelebration } from './TierUpCelebration'
 import {
   getRiderPerformance,
   RIDER_PERFORMANCE_PERIODS,
@@ -96,9 +107,19 @@ export default function PerformanceScreen() {
 
   const [periodKey, setPeriodKey] = useState<RiderPerformancePeriodKey>('week')
   const [overview, setOverview] = useState<RiderPerformanceOverview | null>(null)
+  const [cachedOverview, setCachedOverview] = useState<RiderPerformanceOverview | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(false)
+  const { connectivity } = useAppState()
+  const isOffline = connectivity === 'offline'
+
+  // Threshold-change detection: compare previous vs current metric statuses.
+  const prevStatusesRef = useRef<Record<string, RiderMetricStatus> | null>(null)
+  const [thresholdChange, setThresholdChange] = useState<{
+    metric: string
+    status: string
+  } | null>(null)
 
   useEffect(() => {
     analytics.screen({ name: 'rider-performance' })
@@ -115,7 +136,27 @@ export default function PerformanceScreen() {
       try {
         const range = RIDER_PERFORMANCE_PERIODS.find(r => r.key === key)!
         const ov = await getRiderPerformance(range)
+        // Threshold-change detection: compare statuses vs previous load.
+        const prev = prevStatusesRef.current
+        if (prev) {
+          for (const m of ov.metrics) {
+            const old = prev[m.id]
+            if (old && old !== m.status) {
+              setThresholdChange({
+                metric: t(m.labelKey),
+                status: t(statusWordKey(m.status)),
+              })
+              break
+            }
+          }
+        }
+        const statuses: Record<string, RiderMetricStatus> = {}
+        ov.metrics.forEach(m => {
+          statuses[m.id] = m.status
+        })
+        prevStatusesRef.current = statuses
         setOverview(ov)
+        setCachedOverview(ov)
       } catch {
         setError(true)
       } finally {
@@ -129,6 +170,13 @@ export default function PerformanceScreen() {
   useEffect(() => {
     load(periodKey)
   }, [load, periodKey])
+
+  // Dismiss threshold-change note after a few seconds.
+  useEffect(() => {
+    if (!thresholdChange) return
+    const timer = setTimeout(() => setThresholdChange(null), 6000)
+    return () => clearTimeout(timer)
+  }, [thresholdChange])
 
   const onChangePeriod = useCallback(
     (next: RiderPerformancePeriodKey) => {
@@ -208,16 +256,76 @@ export default function PerformanceScreen() {
         </View>
 
         {loading ? (
-          <PerformanceSkeleton ariaLabel={t('rider.performance.skeletonAria')} />
+          <ScorecardSkeleton ariaLabel={t('rider.performance.skeletonAria')} />
         ) : error ? (
-          <ErrorState
-            title={t('rider.performance.errorTitle')}
-            subtitle={t('rider.performance.errorSubtitle')}
-            retry={t('rider.performance.retry')}
-            onRetry={onRefresh}
-          />
+          isOffline && cachedOverview ? (
+            <View style={styles.body}>
+              <OfflineState
+                cachedDate={cachedOverview.asOf}
+                title={t('rider.performance.offlineTitle')}
+                body={t('rider.performance.offlineBody', { date: cachedOverview.asOf })}
+                ariaLabel={t('rider.performance.offlineAria', { date: cachedOverview.asOf })}
+                retry={t('rider.performance.offlineRetry')}
+                retryAria={t('rider.performance.offlineRetryAria')}
+                onRetry={onRefresh}
+              />
+              <CachedScorecard
+                overview={cachedOverview}
+                t={t}
+                periodLabel={periodLabel}
+                reduced={reduced}
+                onMetricPress={id => {
+                  try {
+                    if (!reduced) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  } catch {}
+                  router.push({ pathname: '/profile/metrics', params: { metric: id } } as any)
+                }}
+              />
+            </View>
+          ) : (
+            <LoadErrorState
+              title={t('rider.performance.errorTitle')}
+              subtitle={t('rider.performance.errorSubtitle')}
+              retry={t('rider.performance.retry')}
+              retryAria={t('rider.performance.retry')}
+              onRetry={onRefresh}
+            />
+          )
         ) : overview ? (
           <View style={styles.body} nativeID="rider-performance-overview">
+            {/* Offline banner — cached data still visible */}
+            {isOffline && (
+              <OfflineState
+                cachedDate={overview.asOf}
+                title={t('rider.performance.offlineTitle')}
+                body={t('rider.performance.offlineBody', { date: overview.asOf })}
+                ariaLabel={t('rider.performance.offlineAria', { date: overview.asOf })}
+                retry={t('rider.performance.offlineRetry')}
+                retryAria={t('rider.performance.offlineRetryAria')}
+                onRetry={onRefresh}
+              />
+            )}
+
+            {/* Threshold-change note — supportive, dismissible */}
+            {thresholdChange && (
+              <ThresholdChangeNote
+                metric={thresholdChange.metric}
+                status={thresholdChange.status}
+                title={t('rider.performance.thresholdChangeTitle')}
+                bodyTemplate={t('rider.performance.thresholdChangeBody')}
+                ariaLabel={t('rider.performance.thresholdChangeAria')}
+              />
+            )}
+
+            {/* New-rider empty — not enough data yet */}
+            {overview.ratingCount === 0 && overview.metrics.find(m => m.id === 'total_deliveries')?.rawValue === 0 ? (
+              <NewRiderEmpty
+                title={t('rider.performance.newRiderTitle')}
+                body={t('rider.performance.newRiderBody')}
+                ariaLabel={t('rider.performance.newRiderAria')}
+              />
+            ) : (
+              <>
             {/* As-of caption — supportive framing, not a deadline */}
             <Text style={styles.asOfCaption}>
               {t('rider.performance.asOf', { date: overview.asOf })}
@@ -281,9 +389,39 @@ export default function PerformanceScreen() {
                 reduced={reduced}
               />
             </View>
+            </>
+            )}
           </View>
         ) : null}
       </ScrollView>
+    </View>
+  )
+}
+
+/**
+ * Cached scorecard — renders the scorecard from cached data when offline.
+ * Same visual as the live scorecard but without interactivity.
+ */
+function CachedScorecard({
+  overview,
+  t,
+  periodLabel,
+  reduced,
+  onMetricPress,
+}: {
+  overview: RiderPerformanceOverview
+  t: (key: string, opts?: Record<string, unknown>) => string
+  periodLabel: string
+  reduced: boolean
+  onMetricPress: (metricId: RiderPerformanceMetric['id']) => void
+}) {
+  return (
+    <View
+      accessibilityRole="summary"
+      accessibilityLabel={t('rider.performance.scorecardAria', { period: periodLabel })}
+    >
+      <Scorecard overview={overview} t={t} reduced={reduced} onMetricPress={onMetricPress} />
+      <TierStanding overview={overview} t={t} />
     </View>
   )
 }
@@ -317,7 +455,7 @@ function PeriodSwitch({
     const x = segmentWidth.value * indicatorX.value
     return {
       transform: [
-        { translateX: reduced ? x : withSpring(x, { damping: 25, stiffness: 350, mass: 0.8 }) },
+        { translateX: reduced ? x : withSpring(x, { damping: 25, stiffness: 350, mass: 0.8, reduceMotion: ReduceMotion.Never }) },
       ],
     }
   })
@@ -388,8 +526,8 @@ function Scorecard({
         />
       )}
       <View style={styles.tileGrid}>
-        {rateMetrics.map(m => (
-          <MetricTile key={m.id} metric={m} t={t} onPress={() => onMetricPress(m.id)} />
+        {rateMetrics.map((m, idx) => (
+          <MetricTile key={m.id} metric={m} t={t} onPress={() => onMetricPress(m.id)} index={idx} reduced={reduced} />
         ))}
       </View>
     </View>
@@ -430,7 +568,7 @@ function RatingHero({
       starScale.value = 1
       return
     }
-    starScale.value = withSpring(1, { damping: 18, stiffness: 220, mass: 0.8 })
+    starScale.value = withSpring(1, { damping: 18, stiffness: 220, mass: 0.8, reduceMotion: ReduceMotion.Never })
   }, [reduced])
   const starStyle = useAnimatedStyle(() => ({ transform: [{ scale: starScale.value }] }))
 
@@ -453,10 +591,16 @@ function RatingHero({
               <Star key={i} size={18} color={colors.gold} fill={i < stars ? colors.gold : 'none'} />
             ))}
           </Animated.View>
-          <Text style={styles.ratingHeroValue} accessibilityElementsHidden>
-            {metric.value}
+          <View style={styles.ratingHeroValueWrap}>
+            <CountUp
+              value={metric.rawValue}
+              format={v => v.toFixed(1)}
+              reduced={reduced}
+              delay={duration.normal}
+              style={styles.ratingHeroValue}
+            />
             {unit ? <Text style={styles.ratingHeroUnit}> {unit}</Text> : null}
-          </Text>
+          </View>
         </View>
         {hint ? <Text style={styles.ratingHeroHint}>{hint}</Text> : null}
       </View>
@@ -468,10 +612,14 @@ function MetricTile({
   metric,
   t,
   onPress,
+  index,
+  reduced,
 }: {
   metric: RiderPerformanceMetric
   t: (key: string, opts?: Record<string, unknown>) => string
   onPress: () => void
+  index: number
+  reduced: boolean
 }) {
   const status = metric.status
   const visual = STATUS_VISUAL[status]
@@ -486,36 +634,66 @@ function MetricTile({
   })
   const aria = `${tileAria}. ${t('rider.performance.entryMetricsAria')}`
 
+  // Staggered tile entrance — fade + slide up, motion-token based.
+  const opacity = useSharedValue(reduced ? 1 : 0)
+  const translateY = useSharedValue(reduced ? 0 : 16)
+  useEffect(() => {
+    if (reduced) return
+    const delay = index * 80
+    opacity.value = withDelay(delay, withTiming(1, { duration: duration.normal, reduceMotion: ReduceMotion.Never }))
+    translateY.value = withDelay(
+      delay,
+      withSpring(0, { damping: 20, stiffness: 300, mass: 0.8, reduceMotion: ReduceMotion.Never }),
+    )
+  }, [index, reduced])
+  const entranceStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: translateY.value }],
+  }))
+
+  const isPct = metric.id !== 'rating' && metric.id !== 'total_deliveries'
+  const isDeliveries = metric.id === 'total_deliveries'
+
   return (
-    <TouchableOpacity
-      style={styles.tile}
-      accessibilityRole="button"
-      accessibilityLabel={aria}
-      activeOpacity={0.85}
-      onPress={onPress}
-    >
-      <View style={styles.tileTop}>
-        <Text style={styles.tileLabel} numberOfLines={1}>
-          {t(metric.labelKey)}
-        </Text>
-        <View
-          style={[styles.statusDot, { backgroundColor: visual.ring }]}
-          accessibilityElementsHidden
-          importantForAccessibility="no"
-        />
-      </View>
-      <Text style={styles.tileValue} numberOfLines={1}>
-        {metric.value}
-        {unit ? <Text style={styles.tileUnit}> {unit}</Text> : null}
-      </Text>
-      <View style={styles.statusRow}>
-        <Icon size={12} color={visual.text} />
-        <Text style={[styles.statusWord, { color: visual.text }]} numberOfLines={1}>
-          {t(statusWordKey(status))}
-        </Text>
-      </View>
-      {hint ? <Text style={styles.tileHint} numberOfLines={2}>{hint}</Text> : null}
-    </TouchableOpacity>
+    <Animated.View style={entranceStyle}>
+      <TouchableOpacity
+        style={styles.tile}
+        accessibilityRole="button"
+        accessibilityLabel={aria}
+        activeOpacity={0.85}
+        onPress={onPress}
+      >
+        <View style={styles.tileTop}>
+          <Text style={styles.tileLabel} numberOfLines={1}>
+            {t(metric.labelKey)}
+          </Text>
+          <View
+            style={[styles.statusDot, { backgroundColor: visual.ring }]}
+            accessibilityElementsHidden
+            importantForAccessibility="no"
+          />
+        </View>
+        <View style={styles.tileValueRow}>
+          <CountUp
+            value={metric.rawValue}
+            format={v =>
+              isPct ? `${Math.round(v)}%` : isDeliveries ? Math.round(v).toLocaleString('en-IN') : v.toFixed(1)
+            }
+            reduced={reduced}
+            delay={index * 80 + duration.normal}
+            style={styles.tileValue}
+          />
+          {unit ? <Text style={styles.tileUnit}> {unit}</Text> : null}
+        </View>
+        <View style={styles.statusRow}>
+          <Icon size={12} color={visual.text} />
+          <Text style={[styles.statusWord, { color: visual.text }]} numberOfLines={1}>
+            {t(statusWordKey(status))}
+          </Text>
+        </View>
+        {hint ? <Text style={styles.tileHint} numberOfLines={2}>{hint}</Text> : null}
+      </TouchableOpacity>
+    </Animated.View>
   )
 }
 
@@ -635,55 +813,6 @@ function EntryRow({
   )
 }
 
-function PerformanceSkeleton({ ariaLabel }: { ariaLabel: string }) {
-  return (
-    <View
-      style={styles.skeletonWrap}
-      accessibilityRole="progressbar"
-      accessibilityLabel={ariaLabel}
-      accessibilityLiveRegion="polite"
-      accessible
-    >
-      <View style={[styles.skeletonBlock, { height: 96 }]} />
-      <View style={styles.skeletonTiles}>
-        <View style={styles.skeletonBlock} />
-        <View style={styles.skeletonBlock} />
-        <View style={styles.skeletonBlock} />
-        <View style={styles.skeletonBlock} />
-      </View>
-      <View style={[styles.skeletonBlock, { height: 84 }]} />
-      <View style={[styles.skeletonBlock, { height: 132 }]} />
-    </View>
-  )
-}
-
-function ErrorState({
-  title,
-  subtitle,
-  retry,
-  onRetry,
-}: {
-  title: string
-  subtitle: string
-  retry: string
-  onRetry: () => void
-}) {
-  return (
-    <View style={styles.errorWrap}>
-      <Text style={styles.errorTitle}>{title}</Text>
-      <Text style={styles.errorSubtitle}>{subtitle}</Text>
-      <TouchableOpacity
-        accessibilityRole="button"
-        accessibilityLabel={retry}
-        onPress={onRetry}
-        style={styles.retryBtn}
-      >
-        <Text style={styles.retryText}>{retry}</Text>
-      </TouchableOpacity>
-    </View>
-  )
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   headerBar: { backgroundColor: colors.primary, paddingHorizontal: spacing[4] },
@@ -775,6 +904,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   starsRow: { flexDirection: 'row', gap: 2 },
+  ratingHeroValueWrap: { flexDirection: 'row', alignItems: 'baseline' },
   ratingHeroValue: {
     fontSize: 30,
     fontWeight: '700',
@@ -823,6 +953,7 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: radii.full,
   },
+  tileValueRow: { flexDirection: 'row', alignItems: 'baseline' },
   tileValue: {
     fontSize: 22,
     fontWeight: '700',
@@ -970,44 +1101,5 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: 2,
     fontFamily: fontFamily.sans[0],
-  },
-
-  // Skeleton + error.
-  skeletonWrap: { padding: spacing[4], gap: spacing[3] },
-  skeletonBlock: {
-    height: 56,
-    borderRadius: radii.lg,
-    backgroundColor: colors.shimmer,
-  },
-  skeletonTiles: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing[2.5],
-  },
-  errorWrap: { padding: spacing[6], alignItems: 'center', gap: spacing[2] },
-  errorTitle: {
-    fontSize: fontSize.lg[0],
-    fontWeight: '700',
-    color: colors.text,
-    fontFamily: fontFamily.sansBold[0],
-  },
-  errorSubtitle: {
-    fontSize: fontSize.base[0],
-    color: colors.textMuted,
-    textAlign: 'center',
-    fontFamily: fontFamily.sans[0],
-  },
-  retryBtn: {
-    marginTop: spacing[2],
-    paddingHorizontal: spacing[5],
-    paddingVertical: spacing[2.5],
-    borderRadius: radii.lg,
-    backgroundColor: colors.primary,
-  },
-  retryText: {
-    fontSize: fontSize.base[0],
-    fontWeight: '700',
-    color: colors.white,
-    fontFamily: fontFamily.sansBold[0],
   },
 })
