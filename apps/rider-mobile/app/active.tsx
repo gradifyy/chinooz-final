@@ -8,6 +8,9 @@ import { analytics } from '@chinooz/analytics'
 import ActiveMap from '../components/active/ActiveMap'
 import ActiveTopBar from '../components/active/ActiveTopBar'
 import ActiveBottomSheet from '../components/active/ActiveBottomSheet'
+import ContactSheet from '../components/active/ContactSheet'
+import SafetySheet from '../components/active/SafetySheet'
+import IssueReportSheet from '../components/active/IssueReportSheet'
 import type { DeliveryStatus } from '@chinooz/types'
 
 /**
@@ -30,10 +33,15 @@ export default function ActiveDeliveryScreen() {
   const minimize = useActiveDeliveryStore(s => s.minimize)
   const cancel = useActiveDeliveryStore(s => s.cancel)
   const fail = useActiveDeliveryStore(s => s.fail)
+  const pause = useActiveDeliveryStore(s => s.pause)
+  const escalate = useActiveDeliveryStore(s => s.escalate)
   const tick = useActiveDeliveryStore(s => s.tick)
   const clearActiveDelivery = useActiveDeliveryStore(s => s.clearActiveDelivery)
 
   const [cancelOpen, setCancelOpen] = useState(false)
+  const [contactOpen, setContactOpen] = useState(false)
+  const [safetyOpen, setSafetyOpen] = useState(false)
+  const [issueOpen, setIssueOpen] = useState(false)
 
   useEffect(() => {
     analytics.screen({ name: 'rider-active-delivery' })
@@ -97,6 +105,18 @@ export default function ActiveDeliveryScreen() {
     fail(reason)
   }, [fail])
 
+  const handlePause = useCallback((reason: string) => {
+    pause(reason)
+  }, [pause])
+
+  const handleEscalate = useCallback((reason: string) => {
+    escalate(reason)
+  }, [escalate])
+
+  const handleIssueCancel = useCallback((reason: string) => {
+    cancel(reason)
+  }, [cancel])
+
   if (!delivery) {
     // Nothing active — bounce back to Jobs.
     return <View style={styles.empty} />
@@ -125,7 +145,14 @@ export default function ActiveDeliveryScreen() {
     <View style={styles.screen}>
       <ActiveMap delivery={delivery} a11ySummary={a11ySummary} testID="active-map" />
 
-      <ActiveTopBar delivery={delivery} onMinimize={handleMinimize} onCancel={handlePrimary} />
+      <ActiveTopBar
+        delivery={delivery}
+        onMinimize={handleMinimize}
+        onCancel={handlePrimary}
+        onContact={() => setContactOpen(true)}
+        onSafety={() => setSafetyOpen(true)}
+        onIssue={() => setIssueOpen(true)}
+      />
 
       {/* Status live-region (announces status changes, invisible visually) */}
       <View
@@ -169,6 +196,30 @@ export default function ActiveDeliveryScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Contact sheet: masked call + chat + canned messages */}
+      <ContactSheet
+        visible={contactOpen}
+        delivery={delivery}
+        onClose={() => setContactOpen(false)}
+      />
+
+      {/* Safety sheet: SOS + emergency calls + share trip + report safety */}
+      <SafetySheet
+        visible={safetyOpen}
+        delivery={delivery}
+        onClose={() => setSafetyOpen(false)}
+      />
+
+      {/* Issue report sheet: structured reasons + pause/cancel/escalate */}
+      <IssueReportSheet
+        visible={issueOpen}
+        delivery={delivery}
+        onClose={() => setIssueOpen(false)}
+        onPause={handlePause}
+        onCancel={handleIssueCancel}
+        onEscalate={handleEscalate}
+      />
     </View>
   )
 }

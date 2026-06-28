@@ -1,7 +1,6 @@
 import React, { useCallback } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
-import { useRouter } from 'expo-router'
-import { Minus, X, Siren } from 'lucide-react-native'
+import { Minus, X, Siren, Phone, AlertCircle } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
 import * as Haptics from 'expo-haptics'
@@ -14,6 +13,9 @@ interface ActiveTopBarProps {
   delivery: ActiveDelivery
   onMinimize: () => void
   onCancel: () => void
+  onContact: () => void
+  onSafety: () => void
+  onIssue: () => void
 }
 
 function isTerminal(s: DeliveryStatus): boolean {
@@ -40,9 +42,8 @@ function formatDistance(meters: number): string {
  * Minimize (left), status label (center), ETA/distance (right).
  * Drives all values from the shared activeDelivery store.
  */
-export default function ActiveTopBar({ delivery, onMinimize, onCancel }: ActiveTopBarProps) {
+export default function ActiveTopBar({ delivery, onMinimize, onCancel, onContact, onSafety, onIssue }: ActiveTopBarProps) {
   const { t } = useTranslation()
-  const router = useRouter()
   const insets = useSafeAreaInsets()
   const { reducedMotion, minTouchTarget } = useA11y()
   const terminal = isTerminal(delivery.status)
@@ -55,13 +56,23 @@ export default function ActiveTopBar({ delivery, onMinimize, onCancel }: ActiveT
     onMinimize()
   }, [reducedMotion, terminal, onMinimize])
 
-  // One-tap safety entry — always reachable in-trip, even under stress.
-  // Deep-links to SOS with trip context so the full safety toolkit is one tap away.
+  const handleContact = useCallback(() => {
+    try { if (!reducedMotion) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light) } catch {}
+    analytics.track({ event: 'rider_active_contact_tapped', screen: 'rider-active-delivery' })
+    onContact()
+  }, [reducedMotion, onContact])
+
   const handleSafety = useCallback(() => {
     try { if (!reducedMotion) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium) } catch {}
     analytics.track({ event: 'rider_active_safety_tapped', screen: 'rider-active-delivery', properties: { orderRef: delivery.orderRef } })
-    router.push({ pathname: '/support/sos', params: { from: 'active', ref: delivery.orderRef } })
-  }, [reducedMotion, router, delivery.orderRef])
+    onSafety()
+  }, [reducedMotion, onSafety, delivery.orderRef])
+
+  const handleIssue = useCallback(() => {
+    try { if (!reducedMotion) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light) } catch {}
+    analytics.track({ event: 'rider_active_issue_tapped', screen: 'rider-active-delivery' })
+    onIssue()
+  }, [reducedMotion, onIssue])
 
   const etaText = terminal
     ? delivery.status === 'delivered'
@@ -97,17 +108,41 @@ export default function ActiveTopBar({ delivery, onMinimize, onCancel }: ActiveT
           </Text>
         </View>
 
-        {/* Right: one-tap SOS + ETA/distance */}
+        {/* Right: contact + issue + SOS + ETA/distance */}
         <View style={styles.metaWrap}>
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel={t('rider.active.topbarSafetyAria')}
-            onPress={handleSafety}
-            style={[styles.safetyBtn, { minWidth: minTouchTarget, minHeight: minTouchTarget }]}
-            hitSlop={8}
-          >
-            <Siren size={20} color={colors.error} />
-          </TouchableOpacity>
+          <View style={styles.actionsRow}>
+            {!terminal && (
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={t('rider.active.contactSheetTitle')}
+                onPress={handleContact}
+                style={[styles.iconBtn, { minWidth: minTouchTarget, minHeight: minTouchTarget }]}
+                hitSlop={8}
+              >
+                <Phone size={18} color={colors.primary} />
+              </TouchableOpacity>
+            )}
+            {!terminal && (
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={t('rider.active.issueSheetTitle')}
+                onPress={handleIssue}
+                style={[styles.iconBtn, { minWidth: minTouchTarget, minHeight: minTouchTarget }]}
+                hitSlop={8}
+              >
+                <AlertCircle size={18} color={colors.warning} />
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={t('rider.active.topbarSafetyAria')}
+              onPress={handleSafety}
+              style={[styles.safetyBtn, { minWidth: minTouchTarget, minHeight: minTouchTarget }]}
+              hitSlop={8}
+            >
+              <Siren size={20} color={colors.error} />
+            </TouchableOpacity>
+          </View>
           {etaText ? (
             <Text style={styles.eta} numberOfLines={1}>{etaText}</Text>
           ) : null}

@@ -255,6 +255,32 @@ export const useActiveDeliveryStore = create<ActiveDeliveryState>()(
         })
       },
 
+      pause: reason => {
+        const { activeDelivery } = get()
+        if (!activeDelivery) return
+        if (TERMINAL.has(activeDelivery.status)) return
+        set({
+          sim: null,
+          activeDelivery: {
+            ...activeDelivery,
+            minimized: false,
+            updatedAt: Date.now(),
+            failureReason: `PAUSED: ${reason}`,
+          },
+        })
+      },
+
+      escalate: _reason => {
+        const { activeDelivery } = get()
+        if (!activeDelivery) return
+        set({
+          activeDelivery: {
+            ...activeDelivery,
+            updatedAt: Date.now(),
+          },
+        })
+      },
+
       minimize: () => {
         const { activeDelivery } = get()
         if (!activeDelivery) return
