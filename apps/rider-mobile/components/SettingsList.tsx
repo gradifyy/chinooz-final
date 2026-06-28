@@ -1,5 +1,13 @@
 import React from 'react'
 import { View, Text, StyleSheet, Pressable } from 'react-native'
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  Easing,
+  ReduceMotion,
+} from 'react-native-reanimated'
 import {
   User,
   Bike,
@@ -8,11 +16,14 @@ import {
   Globe,
   ChevronRight,
 } from 'lucide-react-native'
-import { colors, spacing, radii, fontFamily, fontSize } from '@chinooz/theme'
+import { colors, spacing, radii, fontFamily, fontSize, duration, easing } from '@chinooz/theme'
+import { useReducedMotion } from '@chinooz/ui'
 import type {
   RiderSettingsSection,
   RiderSettingsStatusKind,
 } from '@chinooz/mock-data'
+
+const AnimatedPress = Animated.createAnimatedComponent(Pressable)
 
 const ICONS: Record<string, React.ComponentType<{ size?: number; color?: string }>> = {
   user: User,
@@ -42,6 +53,8 @@ export default function SettingsList({
   groupAria,
   onPress,
 }: SettingsListProps) {
+  const reduced = useReducedMotion()
+
   return (
     <View accessibilityRole="list" accessibilityLabel={groupAria}>
       {sections.map(section => (
@@ -56,44 +69,104 @@ export default function SettingsList({
               const statusLabel = labels[row.status.labelKey]
               const tint = STATUS_TINT[row.status.kind]
               return (
-                <Pressable
+                <AnimatedSettingRow
                   key={row.id}
+                  icon={<Icon size={20} color={colors.textSecondary} />}
+                  tint={tint}
+                  label={label}
+                  desc={desc}
+                  statusLabel={statusLabel}
+                  isLast={isLast}
                   onPress={() => onPress(row.route, label)}
-                  style={({ pressed }) => [
-                    styles.row,
-                    !isLast && styles.rowBorder,
-                    pressed && styles.rowPressed,
-                  ]}
-                  accessibilityRole="link"
-                  accessibilityLabel={label}
-                  accessibilityHint={desc}
-                >
-                  <View style={[styles.iconWrap, { backgroundColor: tint.bg }]}>
-                    <Icon size={20} color={colors.textSecondary} />
-                  </View>
-                  <View style={styles.rowText}>
-                    <Text style={styles.rowLabel} numberOfLines={1}>
-                      {label}
-                    </Text>
-                    <Text style={styles.rowDesc} numberOfLines={1}>
-                      {desc}
-                    </Text>
-                  </View>
-                  <View style={styles.rowTrailing}>
-                    <View style={[styles.statusPill, { backgroundColor: tint.bg }]}>
-                      <Text style={[styles.statusText, { color: tint.fg }]}>
-                        {statusLabel}
-                      </Text>
-                    </View>
-                    <ChevronRight size={18} color={colors.textTertiary} />
-                  </View>
-                </Pressable>
+                  reduced={reduced}
+                />
               )
             })}
           </View>
         </View>
       ))}
     </View>
+  )
+}
+
+function AnimatedSettingRow({
+  icon,
+  tint,
+  label,
+  desc,
+  statusLabel,
+  isLast,
+  onPress,
+  reduced,
+}: {
+  icon: React.ReactNode
+  tint: { fg: string; bg: string }
+  label: string
+  desc: string
+  statusLabel: string
+  isLast: boolean
+  onPress: () => void
+  reduced: boolean
+}) {
+  const scale = useSharedValue(1)
+  const chevronX = useSharedValue(0)
+
+  const handlePressIn = () => {
+    if (reduced) return
+    scale.value = withSpring(0.98, { damping: 20, stiffness: 400, reduceMotion: ReduceMotion.System })
+    chevronX.value = withTiming(3, { duration: duration.fast, easing: Easing.out(Easing.ease), reduceMotion: ReduceMotion.System })
+  }
+  const handlePressOut = () => {
+    if (reduced) return
+    scale.value = withSpring(1, { damping: 20, stiffness: 400, reduceMotion: ReduceMotion.System })
+    chevronX.value = withTiming(0, { duration: duration.fast, easing: Easing.out(Easing.ease), reduceMotion: ReduceMotion.System })
+  }
+
+  const rowStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }))
+  const chevronStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: chevronX.value }],
+  }))
+
+  return (
+    <Animated.View style={rowStyle}>
+      <AnimatedPress
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        style={({ pressed }: any) => [
+          styles.row,
+          !isLast && styles.rowBorder,
+          pressed && styles.rowPressed,
+        ]}
+        accessibilityRole="link"
+        accessibilityLabel={label}
+        accessibilityHint={desc}
+      >
+        <View style={[styles.iconWrap, { backgroundColor: tint.bg }]}>
+          {icon}
+        </View>
+        <View style={styles.rowText}>
+          <Text style={styles.rowLabel} numberOfLines={1}>
+            {label}
+          </Text>
+          <Text style={styles.rowDesc} numberOfLines={1}>
+            {desc}
+          </Text>
+        </View>
+        <View style={styles.rowTrailing}>
+          <View style={[styles.statusPill, { backgroundColor: tint.bg }]}>
+            <Text style={[styles.statusText, { color: tint.fg }]}>
+              {statusLabel}
+            </Text>
+          </View>
+          <Animated.View style={chevronStyle}>
+            <ChevronRight size={18} color={colors.textTertiary} />
+          </Animated.View>
+        </View>
+      </AnimatedPress>
+    </Animated.View>
   )
 }
 

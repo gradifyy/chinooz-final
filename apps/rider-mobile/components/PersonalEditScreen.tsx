@@ -24,6 +24,8 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
+  withTiming,
+  Easing,
 } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, useFocusEffect } from 'expo-router'
@@ -404,15 +406,27 @@ export default function PersonalEditScreen() {
 
   const pressScale = useSharedValue(1)
   const saveScale = useSharedValue(1)
+  const photoScale = useSharedValue(reducedMotion ? 1 : 0.92)
+  const photoOpacity = useSharedValue(reducedMotion ? 1 : 0)
   useEffect(() => {
     if (reducedMotion) {
       pressScale.value = 1
       saveScale.value = 1
+      photoScale.value = 1
+      photoOpacity.value = 1
+      return
     }
+    // Photo entrance: subtle scale-in + fade.
+    photoScale.value = withSpring(1, { damping: 18, stiffness: 220, mass: 0.8 })
+    photoOpacity.value = withTiming(1, { duration: duration.normal, easing: Easing.bezier(...easing.easeOut) })
   }, [reducedMotion])
 
   const saveBtnStyle = useAnimatedStyle(() => ({
     transform: [{ scale: saveScale.value }],
+  }))
+  const photoStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: photoScale.value }],
+    opacity: photoOpacity.value,
   }))
 
   const onPressInSave = useCallback(() => {
@@ -490,7 +504,7 @@ export default function PersonalEditScreen() {
 
         {/* Photo */}
         <View style={styles.photoWrap}>
-          <View style={styles.photoRing}>
+          <Animated.View style={[styles.photoRing, photoStyle]}>
             {profile.avatarUri ? (
               <Image
                 source={{ uri: profile.avatarUri }}
@@ -508,7 +522,7 @@ export default function PersonalEditScreen() {
                 </Text>
               </View>
             )}
-          </View>
+          </Animated.View>
           <Pressable
             onPress={() => Alert.alert(t('rider.profile.personal.changePhoto'), t('rider.profile.personal.photo'))}
             style={({ pressed }) => [

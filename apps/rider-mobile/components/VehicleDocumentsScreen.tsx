@@ -13,6 +13,12 @@ import {
   AccessibilityInfo,
   Image,
 } from 'react-native'
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  ReduceMotion,
+} from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { useTranslation } from 'react-i18next'
@@ -508,28 +514,15 @@ export default function VehicleDocumentsScreen() {
           />
         </Field>
 
-        <Pressable
+        <AnimatedSaveButton
           onPress={handleSaveVehicle}
           disabled={!isDirty || saving}
-          style={({ pressed }) => [
-            styles.saveBtn,
-            (!isDirty || saving) && styles.saveBtnDisabled,
-            pressed && styles.saveBtnPressed,
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel={
-            saving
-              ? t('rider.profile.vehicle.saving')
-              : t('rider.profile.vehicle.saveAria')
-          }
-          accessibilityState={{ disabled: !isDirty || saving }}
-        >
-          <Text style={styles.saveBtnText}>
-            {saving
-              ? t('rider.profile.vehicle.saving')
-              : t('rider.profile.vehicle.save')}
-          </Text>
-        </Pressable>
+          saving={saving}
+          saveLabel={t('rider.profile.vehicle.save')}
+          savingLabel={t('rider.profile.vehicle.saving')}
+          saveAria={t('rider.profile.vehicle.saveAria')}
+          reduced={reducedMotion}
+        />
 
         {savedMsg && (
           <View
@@ -812,6 +805,62 @@ export default function VehicleDocumentsScreen() {
         </View>
       </ScrollView>
     </View>
+  )
+}
+
+// ----- Animated save button (press-scale) --------------------------------
+
+function AnimatedSaveButton({
+  onPress,
+  disabled,
+  saving,
+  saveLabel,
+  savingLabel,
+  saveAria,
+  reduced,
+}: {
+  onPress: () => void
+  disabled: boolean
+  saving: boolean
+  saveLabel: string
+  savingLabel: string
+  saveAria: string
+  reduced: boolean
+}) {
+  const scale = useSharedValue(1)
+  const handlePressIn = () => {
+    if (reduced) return
+    scale.value = withSpring(0.97, { damping: 20, stiffness: 400, reduceMotion: ReduceMotion.System })
+  }
+  const handlePressOut = () => {
+    if (reduced) return
+    scale.value = withSpring(1, { damping: 20, stiffness: 400, reduceMotion: ReduceMotion.System })
+  }
+  const btnStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }))
+
+  return (
+    <Animated.View style={btnStyle}>
+      <Pressable
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        disabled={disabled}
+        style={({ pressed }) => [
+          styles.saveBtn,
+          disabled && styles.saveBtnDisabled,
+          pressed && styles.saveBtnPressed,
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel={saving ? savingLabel : saveAria}
+        accessibilityState={{ disabled }}
+      >
+        <Text style={styles.saveBtnText}>
+          {saving ? savingLabel : saveLabel}
+        </Text>
+      </Pressable>
+    </Animated.View>
   )
 }
 

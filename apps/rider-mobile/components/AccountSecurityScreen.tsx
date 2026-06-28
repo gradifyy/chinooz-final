@@ -17,6 +17,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { useTranslation } from 'react-i18next'
 import * as Haptics from 'expo-haptics'
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  Easing,
+  ReduceMotion,
+} from 'react-native-reanimated'
 import {
   ChevronLeft,
   Globe,
@@ -42,7 +50,10 @@ import {
   radii,
   fontFamily,
   fontSize,
+  duration,
+  easing,
 } from '@chinooz/theme'
+import { useReducedMotion } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
 import { useA11y } from './A11yProvider'
 import { useUIStore, useRiderSessionStore } from '@chinooz/state'
@@ -58,16 +69,29 @@ import {
   type RiderActiveSession,
 } from '@chinooz/mock-data'
 
-// ----- Toggle switch ------------------------------------------------------
+// ----- Toggle switch (animated knob) --------------------------------------
 
 interface ToggleProps {
   value: boolean
   onValueChange: (v: boolean) => void
   ariaLabel: string
   disabled?: boolean
+  reduced: boolean
 }
 
-function Toggle({ value, onValueChange, ariaLabel, disabled }: ToggleProps) {
+function Toggle({ value, onValueChange, ariaLabel, disabled, reduced }: ToggleProps) {
+  const knobX = useSharedValue(value ? 1 : 0)
+
+  useEffect(() => {
+    knobX.value = reduced
+      ? value ? 1 : 0
+      : withSpring(value ? 1 : 0, { damping: 20, stiffness: 400, mass: 0.8, reduceMotion: ReduceMotion.System })
+  }, [value, reduced])
+
+  const knobStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: knobX.value * 20 }],
+  }))
+
   return (
     <Pressable
       onPress={() => !disabled && onValueChange(!value)}
@@ -82,12 +106,7 @@ function Toggle({ value, onValueChange, ariaLabel, disabled }: ToggleProps) {
         pressed && styles.togglePressed,
       ]}
     >
-      <View
-        style={[
-          styles.toggleKnob,
-          value && styles.toggleKnobOn,
-        ]}
-      />
+      <Animated.View style={[styles.toggleKnob, knobStyle]} />
     </Pressable>
   )
 }
@@ -169,6 +188,7 @@ export default function AccountSecurityScreen() {
   const { t } = useTranslation()
   const insets = useSafeAreaInsets()
   const router = useRouter()
+  const reduced = useReducedMotion()
   const { reducedMotion } = useA11y()
 
   const locale = useUIStore(s => s.locale)
@@ -443,6 +463,7 @@ export default function AccountSecurityScreen() {
               value={security.pinEnabled}
               onValueChange={v => updateSecurity('pinEnabled', v)}
               ariaLabel={t('rider.security.toggleAria', { label: t('rider.security.pinLock') })}
+              reduced={reduced}
             />
           </View>
 
@@ -481,6 +502,7 @@ export default function AccountSecurityScreen() {
               onValueChange={v => updateSecurity('biometricEnabled', v)}
               ariaLabel={t('rider.security.toggleAria', { label: t('rider.security.biometricLock') })}
               disabled={!biometricAvailable}
+              reduced={reduced}
             />
           </View>
         </View>
@@ -614,12 +636,12 @@ export default function AccountSecurityScreen() {
           />
         </View>
 
-        {/* Status message */}
+        {/* Status message — fade-in */}
         {statusMsg && (
-          <View style={styles.statusRow} accessibilityRole="summary" accessibilityLiveRegion="polite">
-            <Check size={15} color={colors.success} />
-            <Text style={styles.statusText}>{statusMsg}</Text>
-          </View>
+          <AnimatedStatusRow
+            text={statusMsg}
+            reduced={reduced}
+          />
         )}
       </ScrollView>
 
@@ -754,6 +776,41 @@ function PressableRow({
         <ChevronRight size={18} color={colors.textTertiary} />
       ) : null}
     </Pressable>
+  )
+}
+
+// ----- Animated status row (fade-in) -------------------------------------
+
+function AnimatedStatusRow({ text, reduced }: { text: string; reduced: boolean }) {
+  const opacity = useSharedValue(reduced ? 1 : 0)
+  const translateY = useSharedValue(reduced ? 0 : 8)
+
+  useEffect(() => {
+    if (reduced) {
+      opacity.value = 1
+      translateY.value = 0
+      return
+    }
+    opacity.value = 0
+    translateY.value = 8
+    opacity.value = withTiming(1, { duration: duration.normal, easing: Easing.bezier(...easing.easeOut), reduceMotion: ReduceMotion.System })
+    translateY.value = withTiming(0, { duration: duration.normal, easing: Easing.bezier(...easing.easeOut), reduceMotion: ReduceMotion.System })
+  }, [text, reduced])
+
+  const style = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: translateY.value }],
+  }))
+
+  return (
+    <Animated.View
+      style={[styles.statusRow, style]}
+      accessibilityRole="summary"
+      accessibilityLiveRegion="polite"
+    >
+      <Check size={15} color={colors.success} />
+      <Text style={styles.statusText}>{text}</Text>
+    </Animated.View>
   )
 }
 
@@ -946,9 +1003,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 2,
     elevation: 2,
-  },
-  toggleKnobOn: {
-    alignSelf: 'flex-end',
   },
   toggleDisabled: {
     opacity: 0.4,

@@ -1,9 +1,18 @@
-import React, { useEffect, useState, useMemo } from 'react'
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native'
+import React, { useEffect, useState, useMemo, useCallback } from 'react'
+import { View, Text, StyleSheet, ScrollView } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { useTranslation } from 'react-i18next'
-import { colors, spacing, radii, fontFamily, fontSize } from '@chinooz/theme'
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withDelay,
+  Easing,
+  ReduceMotion,
+} from 'react-native-reanimated'
+import { colors, spacing, radii, fontFamily, fontSize, duration, easing } from '@chinooz/theme'
+import { useReducedMotion } from '@chinooz/ui'
 import {
   getRiderProfile,
   getRiderQuickLinks,
@@ -17,6 +26,7 @@ import {
 } from '@chinooz/mock-data'
 import { useRiderSessionStore } from '@chinooz/state'
 import { analytics } from '@chinooz/analytics'
+import { ProfileHubSkeleton, LoadErrorState } from '../../components/ProfileStates'
 import ProfileHeader from '../../components/ProfileHeader'
 import QuickLinks from '../../components/QuickLinks'
 import SettingsList from '../../components/SettingsList'
@@ -26,6 +36,7 @@ export default function RiderProfileScreen() {
   const { t } = useTranslation()
   const insets = useSafeAreaInsets()
   const router = useRouter()
+  const reduced = useReducedMotion()
 
   const logout = useRiderSessionStore(s => s.logout)
 
@@ -33,26 +44,43 @@ export default function RiderProfileScreen() {
   const [quickLinks, setQuickLinks] = useState<RiderQuickLinkGroup[]>([])
   const [sections, setSections] = useState<RiderSettingsSection[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
 
-  useEffect(() => {
-    analytics.screen({ name: 'rider-profile' })
-    let active = true
-    ;(async () => {
+  // Staggered entrance: each section fades + slides in with a delay.
+  const enterOpacity = useSharedValue(reduced ? 1 : 0)
+  const enterTranslate = useSharedValue(reduced ? 0 : 12)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(false)
+    try {
       const [p, ql, ss] = await Promise.all([
         getRiderProfile(),
         Promise.resolve(getRiderQuickLinks()),
         Promise.resolve(getRiderSettingsSections()),
       ])
-      if (!active) return
       setProfile(p)
       setQuickLinks(ql)
       setSections(ss)
       setLoading(false)
-    })()
-    return () => {
-      active = false
+      // Trigger entrance animation after data settles.
+      if (!reduced) {
+        enterOpacity.value = 0
+        enterTranslate.value = 12
+        enterOpacity.value = withTiming(1, { duration: duration.normal, easing: Easing.bezier(...easing.easeOut), reduceMotion: ReduceMotion.System })
+        enterTranslate.value = withTiming(0, { duration: duration.normal, easing: Easing.bezier(...easing.easeOut), reduceMotion: ReduceMotion.System })
+      }
+    } catch {
+      setError(true)
+    } finally {
+      setLoading(false)
     }
-  }, [])
+  }, [reduced, enterOpacity, enterTranslate])
+
+  useEffect(() => {
+    analytics.screen({ name: 'rider-profile' })
+    load()
+  }, [load])
 
   // Resolve all i18n labels once into a flat map keyed by their i18n key.
   const labels = useMemo(() => {
@@ -91,11 +119,53 @@ export default function RiderProfileScreen() {
     router.replace('/home')
   }
 
-  if (loading || !profile) {
+  // Staggered entrance styles per section (hooks must be before early returns).
+  const headerStyle = useAnimatedStyle(() => ({
+    opacity: enterOpacity.value,
+    transform: [{ translateY: enterTranslate.value }],
+  }))
+  const linksStyle = useAnimatedStyle(() => ({
+    opacity: enterOpacity.value,
+    transform: [{ translateY: enterTranslate.value }],
+  }))
+  const settingsStyle = useAnimatedStyle(() => ({
+    opacity: enterOpacity.value,
+    transform: [{ translateY: enterTranslate.value }],
+  }))
+  const footerStyle = useAnimatedStyle(() => ({
+    opacity: enterOpacity.value,
+    transform: [{ translateY: enterTranslate.value }],
+  }))
+
+  if (loading) {
     return (
-      <View style={[styles.container, styles.loadingWrap]} accessibilityLiveRegion="polite">
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>{t('rider.profile.skeletonAria')}</Text>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={{
+          paddingTop: insets.top + spacing[3],
+          paddingHorizontal: spacing[5],
+          paddingBottom: insets.bottom + spacing[10],
+        }}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.screenTitle} accessibilityRole="header">
+          {t('rider.profile.title')}
+        </Text>
+        <ProfileHubSkeleton ariaLabel={t('rider.profile.skeletonHubAria')} />
+      </ScrollView>
+    )
+  }
+
+  if (error || !profile) {
+    return (
+      <View style={[styles.container, styles.errorWrap]}>
+        <LoadErrorState
+          title={t('rider.profile.errorLoadTitle')}
+          subtitle={t('rider.profile.errorLoadBody')}
+          retry={t('rider.profile.errorLoadRetry')}
+          retryAria={t('rider.profile.errorLoadRetryAria')}
+          onRetry={load}
+        />
       </View>
     )
   }
@@ -116,53 +186,61 @@ export default function RiderProfileScreen() {
         {t('rider.profile.title')}
       </Text>
 
-      <ProfileHeader
-        profile={profile}
-        tierLabel={tierLabel}
-        verificationLabel={verificationLabel}
-        memberSinceLabel={t('rider.profile.memberSince')}
-        zoneLabel={t('rider.profile.zoneLabel')}
-        headerAria={t('rider.profile.headerAria', {
-          name: profile.name,
-          rating: profile.rating,
-          count: profile.ratingCount,
-          tier: tierLabel,
-          verification: verificationLabel,
-        })}
-        ratingAria={t('rider.profile.ratingAria', {
-          rating: profile.rating,
-          count: profile.ratingCount,
-        })}
-        tierAria={t('rider.profile.tierAria', { tier: tierLabel })}
-        verificationAria={t('rider.profile.verificationAria', {
-          status: verificationLabel,
-        })}
-      />
+      <Animated.View style={headerStyle}>
+        <ProfileHeader
+          profile={profile}
+          tierLabel={tierLabel}
+          verificationLabel={verificationLabel}
+          memberSinceLabel={t('rider.profile.memberSince')}
+          zoneLabel={t('rider.profile.zoneLabel')}
+          headerAria={t('rider.profile.headerAria', {
+            name: profile.name,
+            rating: profile.rating,
+            count: profile.ratingCount,
+            tier: tierLabel,
+            verification: verificationLabel,
+          })}
+          ratingAria={t('rider.profile.ratingAria', {
+            rating: profile.rating,
+            count: profile.ratingCount,
+          })}
+          tierAria={t('rider.profile.tierAria', { tier: tierLabel })}
+          verificationAria={t('rider.profile.verificationAria', {
+            status: verificationLabel,
+          })}
+        />
+      </Animated.View>
 
-      <QuickLinks
-        groups={quickLinks}
-        labels={labels}
-        groupAria={t('rider.profile.quickLinksAria')}
-        onPress={handleNavigate}
-      />
+      <Animated.View style={linksStyle}>
+        <QuickLinks
+          groups={quickLinks}
+          labels={labels}
+          groupAria={t('rider.profile.quickLinksAria')}
+          onPress={handleNavigate}
+        />
+      </Animated.View>
 
-      <SettingsList
-        sections={sections}
-        labels={labels}
-        groupAria={t('rider.profile.settingsAria')}
-        onPress={handleNavigate}
-      />
+      <Animated.View style={settingsStyle}>
+        <SettingsList
+          sections={sections}
+          labels={labels}
+          groupAria={t('rider.profile.settingsAria')}
+          onPress={handleNavigate}
+        />
+      </Animated.View>
 
-      <SignOutFooter
-        versionLabel={t('rider.profile.appVersion', { version: RIDER_APP_VERSION })}
-        signOutLabel={t('rider.profile.signOut')}
-        signOutAria={t('rider.profile.signOutAria')}
-        confirmTitle={t('rider.profile.signOutTitle')}
-        confirmMsg={t('rider.profile.signOutMsg')}
-        cancelLabel={t('rider.profile.signOutCancel')}
-        confirmLabel={t('rider.profile.signOutConfirm')}
-        onSignOut={handleSignOut}
-      />
+      <Animated.View style={footerStyle}>
+        <SignOutFooter
+          versionLabel={t('rider.profile.appVersion', { version: RIDER_APP_VERSION })}
+          signOutLabel={t('rider.profile.signOut')}
+          signOutAria={t('rider.profile.signOutAria')}
+          confirmTitle={t('rider.profile.signOutTitle')}
+          confirmMsg={t('rider.profile.signOutMsg')}
+          cancelLabel={t('rider.profile.signOutCancel')}
+          confirmLabel={t('rider.profile.signOutConfirm')}
+          onSignOut={handleSignOut}
+        />
+      </Animated.View>
     </ScrollView>
   )
 }
@@ -182,14 +260,9 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontFamily: fontFamily.sansBold[0],
   },
-  loadingWrap: {
-    alignItems: 'center',
+  errorWrap: {
+    flex: 1,
     justifyContent: 'center',
-    gap: spacing[3],
-  },
-  loadingText: {
-    fontSize: fontSize.base[0],
-    color: colors.textMuted,
-    fontFamily: fontFamily.sans[0],
+    paddingHorizontal: spacing[5],
   },
 })
