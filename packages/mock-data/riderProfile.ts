@@ -335,3 +335,146 @@ export async function verifyRiderPhoneOtp(
 export const RIDER_OTP_DEV_CODE = '123456'
 export const RIDER_OTP_LENGTH = 6
 export const RIDER_OTP_RESEND_SECONDS = 30
+
+/**
+ * RP3 — Rider vehicle & documents management (RG3).
+ *
+ * Surfaces:
+ * - getRiderVehicle():  editable vehicle details + verification-affecting flag.
+ * - updateRiderVehicle():  mock persist; marks verification-affecting changes.
+ * - getRiderDocuments():  ID, license, registration, selfie with status/expiry.
+ * - resubmitRiderDocument():  mock re-upload for rejected/expired docs.
+ *
+ * Document statuses map to pills (verified=success, pending=warning,
+ * expired=warning, rejected=error). Expiry reminders surface when a doc
+ * expires within 30 days. Document numbers are masked in the UI.
+ */
+
+export type RiderVehicleType = 'bike' | 'scooter' | 'motorcycle' | 'bicycle' | 'other'
+
+export interface RiderVehicle {
+  type: RiderVehicleType
+  plate: string
+  model: string
+  color: string
+  /** True when the vehicle is tied to active verification. */
+  verificationLinked: boolean
+}
+
+export type RiderDocumentStatus = 'verified' | 'pending' | 'expired' | 'rejected'
+
+export type RiderDocumentKind = 'id' | 'license' | 'registration' | 'selfie'
+
+export interface RiderDocument {
+  id: string
+  kind: RiderDocumentKind
+  /** i18n key for the document label. */
+  labelKey: string
+  status: RiderDocumentStatus
+  /** ISO date (yyyy-mm-dd) the document was last uploaded. */
+  uploadedAt: string | null
+  /** ISO expiry date (yyyy-mm-dd), if applicable. */
+  expiresAt: string | null
+  /** Masked document number, if any. */
+  maskedNumber: string | null
+  /** i18n key for the rejection reason, if rejected. */
+  rejectionReasonKey: string | null
+  /** Thumbnail URI, if uploaded. */
+  thumbnailUrl: string | null
+}
+
+export async function getRiderVehicle(): Promise<RiderVehicle> {
+  await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 180))
+  return {
+    type: 'bike',
+    plate: 'Ba 1 Pa 2024',
+    model: 'Honda CB Shine',
+    color: 'Black',
+    verificationLinked: true,
+  }
+}
+
+export async function updateRiderVehicle(
+  data: Partial<RiderVehicle>,
+): Promise<{ success: boolean; requiresReverification: boolean }> {
+  await new Promise(resolve => setTimeout(resolve, 380 + Math.random() * 240))
+  // Plate/type changes trigger re-verification in a real system.
+  const requiresReverification =
+    data.plate !== undefined || data.type !== undefined
+  return { success: true, requiresReverification }
+}
+
+export async function getRiderDocuments(): Promise<RiderDocument[]> {
+  await new Promise(resolve => setTimeout(resolve, 220 + Math.random() * 200))
+  return [
+    {
+      id: 'doc-id',
+      kind: 'id',
+      labelKey: 'rider.profile.vehicle.docs.id',
+      status: 'verified',
+      uploadedAt: '2024-03-12',
+      expiresAt: '2032-03-11',
+      maskedNumber: '●●●●●●5678',
+      rejectionReasonKey: null,
+      thumbnailUrl: 'https://picsum.photos/seed/rider-id/200/200',
+    },
+    {
+      id: 'doc-license',
+      kind: 'license',
+      labelKey: 'rider.profile.vehicle.docs.license',
+      status: 'verified',
+      uploadedAt: '2024-03-12',
+      expiresAt: '2026-07-12',
+      maskedNumber: '●●●●●●1234',
+      rejectionReasonKey: null,
+      thumbnailUrl: 'https://picsum.photos/seed/rider-license/200/200',
+    },
+    {
+      id: 'doc-registration',
+      kind: 'registration',
+      labelKey: 'rider.profile.vehicle.docs.registration',
+      status: 'pending',
+      uploadedAt: '2026-06-20',
+      expiresAt: '2027-06-20',
+      maskedNumber: '●●●●●●7890',
+      rejectionReasonKey: null,
+      thumbnailUrl: 'https://picsum.photos/seed/rider-reg/200/200',
+    },
+    {
+      id: 'doc-selfie',
+      kind: 'selfie',
+      labelKey: 'rider.profile.vehicle.docs.selfie',
+      status: 'rejected',
+      uploadedAt: '2026-06-18',
+      expiresAt: null,
+      maskedNumber: null,
+      rejectionReasonKey: 'rider.profile.vehicle.docs.rejectionSelfie',
+      thumbnailUrl: null,
+    },
+  ]
+}
+
+export async function resubmitRiderDocument(
+  docId: string,
+): Promise<{ success: boolean }> {
+  await new Promise(resolve => setTimeout(resolve, 600 + Math.random() * 300))
+  void docId
+  return { success: true }
+}
+
+/**
+ * Days until expiry (negative if already expired). Returns null when the
+ * document has no expiry date.
+ */
+export function daysUntilExpiry(iso: string | null): number | null {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const diff = d.getTime() - today.getTime()
+  return Math.round(diff / 86400000)
+}
+
+/** Threshold (days) below which an expiry reminder is shown. */
+export const RIDER_DOC_EXPIRY_REMIND_DAYS = 30
