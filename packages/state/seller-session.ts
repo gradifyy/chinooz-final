@@ -8,6 +8,17 @@ export interface SellerStore {
   id: string
   name: string
   slug: string
+  tagline?: string
+  description?: string
+  logoUrl?: string
+  bannerUrl?: string
+  category?: string
+  pickupAddress?: string
+  returnAddress?: string
+  contactPhone?: string
+  contactEmail?: string
+  rating?: number
+  reviewCount?: number
 }
 
 export interface SellerProfile {
@@ -15,6 +26,34 @@ export interface SellerProfile {
   email: string
   phone: string
   language: 'en' | 'ne'
+}
+
+export interface StoreDraft {
+  storeName: string
+  handle: string
+  description: string
+  categoryId: string
+  logoUrl: string
+  bannerUrl: string
+  pickupStreet: string
+  pickupArea: string
+  pickupCity: string
+  pickupPhone: string
+  setupStep: number
+}
+
+const defaultDraft: StoreDraft = {
+  storeName: '',
+  handle: '',
+  description: '',
+  categoryId: '',
+  logoUrl: '',
+  bannerUrl: '',
+  pickupStreet: '',
+  pickupArea: '',
+  pickupCity: '',
+  pickupPhone: '',
+  setupStep: 0,
 }
 
 interface SellerSessionState {
@@ -26,15 +65,19 @@ interface SellerSessionState {
   kycStatus: KycStatus
   goLiveStatus: GoLiveStatus
   devMock: boolean
+  storeDraft: StoreDraft
   markOnboardingSeen: () => void
   login: (sellerId: string, name: string) => void
   logout: () => void
   toggleLogin: () => void
   setStore: (store: SellerStore) => void
+  updateStore: (data: Partial<SellerStore>) => void
   setKycStatus: (status: KycStatus) => void
   setGoLiveStatus: (status: GoLiveStatus) => void
   toggleDevMock: () => void
   updateSeller: (data: Partial<SellerProfile>) => void
+  updateDraft: (data: Partial<StoreDraft>) => void
+  clearDraft: () => void
 }
 
 function getStorage() {
@@ -66,6 +109,7 @@ export const useSellerSessionStore = create<SellerSessionState>()(
       kycStatus: 'none',
       goLiveStatus: 'offline',
       devMock: true,
+      storeDraft: { ...defaultDraft },
 
       markOnboardingSeen: () => set({ onboardingSeen: true }),
 
@@ -95,7 +139,7 @@ export const useSellerSessionStore = create<SellerSessionState>()(
             isLoggedIn: true,
             sellerId: 'seller-1',
             seller: { ...defaultSeller, name: 'Chinooz Seller' },
-            store: { id: 'store-1', name: 'Chinooz Store', slug: 'chinooz-store' },
+            store: { id: 'store-1', name: 'Chinooz Store', slug: 'chinooz-store', tagline: 'Authentic Nepali crafts & electronics', description: 'We bring you the best of Nepal — from handmade crafts to the latest electronics, delivered with care.', category: 'Lifestyle', rating: 4.8, reviewCount: 128, contactPhone: '9801234567', contactEmail: 'hello@chinoozstore.com' },
             kycStatus: 'verified',
             goLiveStatus: 'live',
           })
@@ -103,6 +147,11 @@ export const useSellerSessionStore = create<SellerSessionState>()(
       },
 
       setStore: store => set({ store }),
+
+      updateStore: data =>
+        set(state => ({
+          store: state.store ? { ...state.store, ...data } : state.store,
+        })),
 
       setKycStatus: status => set({ kycStatus: status }),
 
@@ -115,6 +164,13 @@ export const useSellerSessionStore = create<SellerSessionState>()(
           seller: { ...state.seller, ...data },
           sellerId: state.sellerId,
         })),
+
+      updateDraft: data =>
+        set(state => ({
+          storeDraft: { ...state.storeDraft, ...data },
+        })),
+
+      clearDraft: () => set({ storeDraft: { ...defaultDraft } }),
     }),
     {
       name: 'chinooz-seller-session',
@@ -128,6 +184,7 @@ export const useSellerSessionStore = create<SellerSessionState>()(
         kycStatus: state.kycStatus,
         goLiveStatus: state.goLiveStatus,
         devMock: state.devMock,
+        storeDraft: state.storeDraft,
       }),
     },
   ),

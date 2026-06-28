@@ -21,6 +21,12 @@ export default function RootLayout() {
                   <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
                   <Stack.Screen name="signup" options={{ animation: 'slide_from_right' }} />
                   <Stack.Screen name="login" options={{ animation: 'slide_from_right' }} />
+                  <Stack.Screen name="otp" options={{ animation: 'slide_from_right' }} />
+                  <Stack.Screen name="account-setup" options={{ animation: 'slide_from_right' }} />
+                  <Stack.Screen name="setup-store" options={{ animation: 'slide_from_right' }} />
+                  <Stack.Screen name="setup-business" options={{ animation: 'slide_from_right' }} />
+                  <Stack.Screen name="setup-bank" options={{ animation: 'slide_from_right' }} />
+                  <Stack.Screen name="setup-review" options={{ animation: 'slide_from_right' }} />
                   <Stack.Screen name="(tabs)" />
                   <Stack.Screen name="messages" options={{ animation: 'slide_from_right' }} />
                   <Stack.Screen name="messages/[thread]" options={{ animation: 'slide_from_right' }} />
@@ -31,6 +37,7 @@ export default function RootLayout() {
                   <Stack.Screen name="inventory" options={{ animation: 'slide_from_right' }} />
                   <Stack.Screen name="settings/index" options={{ animation: 'slide_from_right' }} />
                   <Stack.Screen name="settings/[id]" options={{ animation: 'slide_from_right' }} />
+                  <Stack.Screen name="settings/storefront" options={{ animation: 'slide_from_right' }} />
                 </Stack>
               </SafeAreaProvider>
             </A11yProvider>

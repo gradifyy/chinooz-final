@@ -70,6 +70,48 @@ export const reviewSchema = z.object({
   body: z.string().min(10, 'Review must be at least 10 characters').max(2000),
 })
 
+export const riderPersonalSchema = z.object({
+  name: z
+    .string()
+    .min(2, 'Name must be at least 2 characters')
+    .max(100, 'Name is too long'),
+  email: z
+    .string()
+    .email('Please enter a valid email')
+    .optional()
+    .or(z.literal('')),
+  phone: z
+    .string()
+    .min(1, 'Phone number is required')
+    .regex(/^\d{10}$/, 'Phone number must be 10 digits')
+    .refine(val => val.startsWith('97') || val.startsWith('98'), {
+      message: 'Please enter a mobile number starting with 97 or 98',
+    }),
+  city: z
+    .string()
+    .min(2, 'City is required')
+    .max(100, 'City is too long'),
+  zone: z
+    .string()
+    .min(2, 'Zone is required')
+    .max(120, 'Zone is too long'),
+  emergencyName: z
+    .string()
+    .min(2, 'Emergency contact name is required')
+    .max(100, 'Name is too long'),
+  emergencyPhone: z
+    .string()
+    .min(1, 'Emergency contact phone is required')
+    .regex(/^\d{10}$/, 'Phone number must be 10 digits')
+    .refine(val => val.startsWith('97') || val.startsWith('98'), {
+      message: 'Please enter a mobile number starting with 97 or 98',
+    }),
+  emergencyRelation: z
+    .string()
+    .min(2, 'Relation is required')
+    .max(50, 'Relation is too long'),
+})
+
 export const createProfileSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').max(100),
   email: z.string().email('Please enter a valid email').optional().or(z.literal('')),
@@ -95,3 +137,46 @@ export type AddressInput = z.infer<typeof addressSchema>
 export type CheckoutInput = z.infer<typeof checkoutSchema>
 export type LoginInput = z.infer<typeof loginSchema>
 export type ReviewInput = z.infer<typeof reviewSchema>
+export type RiderPersonalInput = z.infer<typeof riderPersonalSchema>
+
+export const storefrontSchema = z.object({
+  name: z.string().min(2, 'Store name must be at least 2 characters').max(80, 'Store name is too long'),
+  tagline: z.string().max(140, 'Tagline is too long').optional().or(z.literal('')),
+  description: z.string().max(2000, 'Description is too long').optional().or(z.literal('')),
+  category: z.string().max(60, 'Category is too long').optional().or(z.literal('')),
+  pickupAddress: z.string().max(300, 'Address is too long').optional().or(z.literal('')),
+  returnAddress: z.string().max(300, 'Address is too long').optional().or(z.literal('')),
+  contactPhone: z
+    .string()
+    .regex(/^\d{10}$/, 'Phone number must be 10 digits')
+    .optional()
+    .or(z.literal('')),
+  contactEmail: z
+    .string()
+    .email('Please enter a valid email')
+    .optional()
+    .or(z.literal('')),
+  logoUrl: z.string().max(500000, 'Image is too large').optional().or(z.literal('')),
+  bannerUrl: z.string().max(2000000, 'Banner image is too large').optional().or(z.literal('')),
+})
+
+export type StorefrontInput = z.infer<typeof storefrontSchema>
+
+export const storeSetupSchema = z.object({
+  storeName: z.string().min(2, 'Store name must be at least 2 characters').max(80, 'Store name is too long'),
+  handle: z
+    .string()
+    .min(3, 'Handle must be at least 3 characters')
+    .max(40, 'Handle is too long')
+    .regex(/^[a-z0-9-]+$/, 'Use lowercase letters, numbers and hyphens only'),
+  description: z.string().max(200, 'Description must be under 200 characters').optional().or(z.literal('')),
+  categoryId: z.string().min(1, 'Please select a category'),
+  logoUrl: z.string().optional().or(z.literal('')),
+  bannerUrl: z.string().optional().or(z.literal('')),
+  pickupStreet: z.string().min(3, 'Street address is required').max(200),
+  pickupArea: z.string().min(2, 'Area is required').max(100),
+  pickupCity: z.string().min(2, 'City is required').max(100),
+  pickupPhone: z.string().regex(/^\d{10}$/, 'Phone must be 10 digits'),
+})
+
+export type StoreSetupInput = z.infer<typeof storeSetupSchema>

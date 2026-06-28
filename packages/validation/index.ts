@@ -9,6 +9,9 @@ export {
   checkoutSchema,
   loginSchema,
   reviewSchema,
+  riderPersonalSchema,
+  storefrontSchema,
+  storeSetupSchema,
 } from './schemas'
 
 export type {
@@ -22,4 +25,7 @@ export type {
   CheckoutInput,
   LoginInput,
   ReviewInput,
+  RiderPersonalInput,
+  StorefrontInput,
+  StoreSetupInput,
 } from './schemas'

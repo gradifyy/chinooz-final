@@ -39,7 +39,6 @@ import {
   SELLER_SETTINGS_SECTIONS,
   SELLER_STORE_RATING,
   SELLER_STORE_REVIEW_COUNT,
-  getSettingsSection,
   getStoreVerification,
   type SettingsRow,
   type SettingsSection,
@@ -346,7 +345,7 @@ function SettingsSubNav({
       {sections.map(section => (
         <div key={section.id}>
           <GroupHeader label={t(section.groupKey)} />
-          <ul role="list" className="px-1.5 pb-2">
+          <ul className="px-1.5 pb-2">
             {section.rows.map(row => {
               const active = row.id === activeRowId
               const label = t(row.labelKey)
@@ -400,7 +399,7 @@ function SettingsList({
       {sections.map((section, si) => (
         <div key={section.id}>
           <GroupHeader label={t(section.groupKey)} />
-          <ul role="list">
+          <ul>
             {section.rows.map((row, ri) => {
               const label = t(row.labelKey)
               const status = statusLabel(row)
@@ -474,12 +473,21 @@ function DetailPane({
       <p className="mt-4 text-sm leading-relaxed text-text-secondary">{t(row.descKey)}</p>
 
       <div className="mt-5 flex flex-wrap gap-3">
-        <button
-          type="button"
-          className="inline-flex min-touch items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark transition-colors"
-        >
-          {t('seller.settings.manage')}
-        </button>
+        {row.id === 'store-profile' ? (
+          <Link
+            href="/settings/storefront"
+            className="inline-flex min-touch items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark transition-colors"
+          >
+            {t('seller.settings.manage')}
+          </Link>
+        ) : (
+          <button
+            type="button"
+            className="inline-flex min-touch items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark transition-colors"
+          >
+            {t('seller.settings.manage')}
+          </button>
+        )}
         <button
           type="button"
           className="inline-flex min-touch items-center justify-center rounded-lg border border-border bg-surface px-4 py-2.5 text-sm font-semibold text-text hover:bg-background transition-colors"
@@ -488,9 +496,11 @@ function DetailPane({
         </button>
       </div>
 
-      <p className="mt-4 rounded-lg bg-background px-3 py-2.5 text-xs text-text-muted">
-        {t('seller.settings.comingSoon')}
-      </p>
+      {row.id !== 'store-profile' && (
+        <p className="mt-4 rounded-lg bg-background px-3 py-2.5 text-xs text-text-muted">
+          {t('seller.settings.comingSoon')}
+        </p>
+      )}
 
       <RelatedRows section={section} activeRowId={row.id} onSelect={onSelectRow} statusLabel={statusLabel} t={t} />
     </section>
@@ -517,7 +527,7 @@ function RelatedRows({
       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">
         {t(section.groupKey)}
       </h3>
-      <ul role="list" className="overflow-hidden rounded-lg border border-border-light">
+      <ul className="overflow-hidden rounded-lg border border-border-light">
         {siblings.map((r, i) => {
           const Icon = iconFor(r.icon)
           const s = STATUS_STYLE[r.status.kind]
@@ -615,7 +625,7 @@ function MobileDetail({
           <h3 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-text-muted">
             {t(section.groupKey)}
           </h3>
-          <ul role="list" className="overflow-hidden rounded-lg border border-border-light bg-surface">
+          <ul className="overflow-hidden rounded-lg border border-border-light bg-surface">
             {siblings.map((r, i) => {
               const RIcon = iconFor(r.icon)
               const rs = STATUS_STYLE[r.status.kind]
@@ -676,7 +686,7 @@ function MoreSheet({
             <X size={18} />
           </button>
         </div>
-        <ul role="list" className="overflow-hidden rounded-lg border border-border-light">
+        <ul className="overflow-hidden rounded-lg border border-border-light">
           {items.map((it, i) => (
             <li key={it.href} className="contents">
               <button

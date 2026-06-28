@@ -8,7 +8,6 @@ import { useSellerSessionStore } from '@chinooz/state'
 import { analytics } from '@chinooz/analytics'
 import {
   SELLER_SETTINGS_SECTIONS,
-  type SettingsRow,
   type SettingsStatusKind,
 } from '@chinooz/mock-data'
 import { statusLabelFor, SETTINGS_ICONS } from './StoreSettingsList'
@@ -91,13 +90,27 @@ export default function StoreSettingsDetail() {
           </View>
           <Text style={styles.detailDesc}>{t(row.descKey)}</Text>
 
-          <TouchableOpacity style={styles.manageBtn} accessibilityRole="button" activeOpacity={0.85}>
-            <Text style={styles.manageBtnText}>{t('seller.settings.manage')}</Text>
-          </TouchableOpacity>
+          {row.id === 'store-profile' ? (
+            <TouchableOpacity
+              style={styles.manageBtn}
+              accessibilityRole="button"
+              accessibilityLabel={t('seller.settings.manage')}
+              activeOpacity={0.85}
+              onPress={() => router.push('/settings/storefront')}
+            >
+              <Text style={styles.manageBtnText}>{t('seller.settings.manage')}</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={styles.manageBtn} accessibilityRole="button" activeOpacity={0.85}>
+              <Text style={styles.manageBtnText}>{t('seller.settings.manage')}</Text>
+            </TouchableOpacity>
+          )}
 
-          <View style={styles.comingSoon}>
-            <Text style={styles.comingSoonText}>{t('seller.settings.comingSoon')}</Text>
-          </View>
+          {row.id !== 'store-profile' && (
+            <View style={styles.comingSoon}>
+              <Text style={styles.comingSoonText}>{t('seller.settings.comingSoon')}</Text>
+            </View>
+          )}
         </View>
 
         {siblings.length > 0 && (
