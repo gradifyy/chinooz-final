@@ -15,7 +15,7 @@ import * as Haptics from 'expo-haptics'
 import { Circle, Radio, Flame, ChevronRight } from 'lucide-react-native'
 import { colors, spacing, radii, fontFamily, fontSize } from '@chinooz/theme'
 import { SegmentedControl } from '@chinooz/ui'
-import { useOnlineStatusStore, useActiveDeliveryStore, hasActiveDelivery, useCodLimitStatus } from '@chinooz/state'
+import { useOnlineStatusStore, useActiveDeliveryStore, hasActiveDelivery, useCodLimitStatus, type ActiveDelivery } from '@chinooz/state'
 import { jobRequestToActivePayload } from '@chinooz/rs3'
 import { analytics } from '@chinooz/analytics'
 import { useA11y } from '../components/A11yProvider'
@@ -25,7 +25,7 @@ import HistoryTab from '../components/jobs/HistoryTab'
 import OfflinePrompt from '../components/jobs/OfflinePrompt'
 import ResumeBanner from '../components/active/ResumeBanner'
 import { AVAILABLE_REQUESTS, HISTORY_ENTRIES } from '../components/jobs/fixtures'
-import type { JobsTabKey, JobRequest } from '../components/jobs/types'
+import type { JobsTabKey, JobRequest, JobHistoryEntry } from '../components/jobs/types'
 
 const REFRESH_MS = 900
 
@@ -145,6 +145,34 @@ export default function JobsScreen() {
     router.push('/wallet/deposit' as never)
   }, [reducedMotion, router])
 
+  // Open the job detail (RJ4) surface for an available request.
+  const handleViewJob = useCallback((job: JobRequest) => {
+    try {
+      if (!reducedMotion) Haptics.selectionAsync()
+    } catch {}
+    analytics.track({ name: 'rider_view_job', properties: { jobId: job.id, orderRef: job.orderRef } })
+    router.push({ pathname: '/trip-detail', params: { id: job.id } } as never)
+  }, [reducedMotion, router])
+
+  // Resume the active delivery (open the Active route).
+  const handleResumeActive = useCallback((delivery: ActiveDelivery) => {
+    try {
+      if (!reducedMotion) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    } catch {}
+    resume()
+    analytics.track({ name: 'rider_resume_active', properties: { jobId: delivery.jobId } })
+    router.push('/active')
+  }, [reducedMotion, resume, router])
+
+  // Open the job detail (RJ4) surface for a history entry (receipt view).
+  const handleViewHistory = useCallback((entry: JobHistoryEntry) => {
+    try {
+      if (!reducedMotion) Haptics.selectionAsync()
+    } catch {}
+    analytics.track({ name: 'rider_view_history', properties: { jobId: entry.id, orderRef: entry.orderRef } })
+    router.push({ pathname: '/trip-detail', params: { id: entry.id } } as never)
+  }, [reducedMotion, router])
+
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + spacing[4] }]}>
@@ -232,12 +260,15 @@ export default function JobsScreen() {
             isOnline={isOnline}
             onGoOnline={handleGoOnline}
             onAccept={handleAccept}
+            onView={handleViewJob}
             codAtLimit={codAtLimit}
             onDepositToUnlock={handleDepositToUnlock}
           />
         )}
-        {tab === 'active' && <ActiveTab />}
-        {tab === 'history' && <HistoryTab entries={HISTORY_ENTRIES} />}
+        {tab === 'active' && (
+          <ActiveTab onResume={handleResumeActive} onView={handleResumeActive} />
+        )}
+        {tab === 'history' && <HistoryTab entries={HISTORY_ENTRIES} onView={handleViewHistory} />}
       </ScrollView>
     </View>
   )
