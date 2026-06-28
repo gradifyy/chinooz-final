@@ -23,6 +23,7 @@ import {
   TrendingUp,
   Clock,
   CheckSquare,
+  Zap,
 } from 'lucide-react-native'
 import { colors, spacing, radii, fontSize } from '@chinooz/theme'
 import { SegmentedControl, BottomSheet, EmptyState, Toast } from '@chinooz/ui'
@@ -246,6 +247,14 @@ export default function PromotionsScreen() {
               <Text style={styles.headerSubtitle}>{t('seller.promotions.subtitle')}</Text>
             </View>
           </View>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={t('seller.promotions.campaigns.tabAria')}
+            onPress={() => { haptic(); router.push('/promotions/campaigns') }}
+            style={[styles.campaignsBtn, { minHeight: minTouchTarget }]}
+          >
+            <Zap size={16} color={colors.gold} />
+          </TouchableOpacity>
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel={t('seller.promotions.createAria')}
@@ -553,6 +562,16 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[2],
   },
   createBtnText: { fontSize: fontSize.sm[0], fontWeight: '600', color: colors.white },
+  campaignsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(224,169,59,0.18)',
+    borderRadius: radii.md,
+    paddingHorizontal: spacing[2.5],
+    paddingVertical: spacing[2],
+    gap: spacing[1],
+  },
   selectBtn: {
     flexDirection: 'row',
     alignItems: 'center',

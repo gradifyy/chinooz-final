@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence, type Transition } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { useRouter } from 'next/navigation'
-import { Search, SlidersHorizontal, Plus, X, ChevronDown, Tag, ArrowUpDown, CheckSquare } from 'lucide-react'
+import { Search, SlidersHorizontal, Plus, X, ChevronDown, Tag, ArrowUpDown, CheckSquare, Zap } from 'lucide-react'
 import { duration, easing } from '@chinooz/theme'
 import { useReducedMotion, SegmentedControl, EmptyState, Screen, Container, Toast } from '@chinooz/ui-web'
 import {
@@ -230,6 +230,14 @@ export default function PromotionsClient() {
               >
                 <CheckSquare size={16} />
                 <span className="hidden sm:inline">{selectable ? `${selectedIds.size}` : 'Select'}</span>
+              </button>
+              <button
+                onClick={() => router.push('/promotions/campaigns')}
+                aria-label={t('seller.promotions.campaigns.tabAria')}
+                className="shrink-0 inline-flex items-center gap-1.5 h-10 px-3 rounded-md border border-gold/30 bg-gold/10 text-gold text-sm font-semibold hover:bg-gold/15 transition-colors min-touch"
+              >
+                <Zap size={16} />
+                <span className="hidden sm:inline">{t('seller.promotions.campaigns.tab')}</span>
               </button>
               <button
                 onClick={() => router.push('/promotions/new')}
