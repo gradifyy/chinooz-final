@@ -28,8 +28,12 @@ export interface SellerKpi {
 
 export interface SellerChartPoint {
   label: string
-  value: number
+  revenue: number
+  orders: number
+  units: number
 }
+
+export type SellerChartMetric = 'revenue' | 'orders' | 'units'
 
 export interface SellerAlert {
   id: string
@@ -192,10 +196,17 @@ export function getSellerDashboardMetrics(range: SellerDateRange): SellerDashboa
   })
 
   const labels = CHART_LABELS[days] ?? CHART_LABELS[30]
-  const chart: SellerChartPoint[] = labels.map((label, i) => ({
-    label,
-    value: Math.round(2000 * scale * (0.5 + seeded(i + 10, days) * 0.9)),
-  }))
+  const chart: SellerChartPoint[] = labels.map((label, i) => {
+    const revBase = 2000 * scale * (0.5 + seeded(i + 10, days) * 0.9)
+    const ordBase = 8 * scale * (0.5 + seeded(i + 20, days) * 0.9)
+    const unitBase = 16 * scale * (0.5 + seeded(i + 30, days) * 0.9)
+    return {
+      label,
+      revenue: Math.round(revBase),
+      orders: Math.max(0, Math.round(ordBase)),
+      units: Math.max(0, Math.round(unitBase)),
+    }
+  })
 
   return {
     range,

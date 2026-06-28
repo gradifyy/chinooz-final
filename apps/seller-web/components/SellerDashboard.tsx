@@ -34,6 +34,8 @@ import {
   type SellerDateRange,
   type SellerDateRangeKey,
   type SellerKpi,
+  type SellerChartPoint,
+  type SellerChartMetric,
 } from '@chinooz/mock-data'
 import { analytics } from '@chinooz/analytics'
 
@@ -290,14 +292,7 @@ export default function SellerDashboard() {
               </div>
             </section>
 
-            <section aria-labelledby="sd-sales">
-              <h3 id="sd-sales" className="text-lg font-semibold text-text mb-3">
-                {t('seller.dashboard.sectionSales')}
-              </h3>
-              <div className="rounded-lg border border-border-light bg-surface p-5">
-                <SalesChart points={metrics.chart} />
-              </div>
-            </section>
+            <SalesChart points={metrics.chart} rangeLabel={range.label} t={t} />
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <section aria-labelledby="sd-alerts">
@@ -519,25 +514,232 @@ function KpiCardSkeleton() {
   )
 }
 
-function SalesChart({ points }: { points: { label: string; value: number }[] }) {
-  const max = Math.max(...points.map(p => p.value), 1)
+const CHART_METRICS: { key: SellerChartMetric; labelKey: string }[] = [
+  { key: 'revenue', labelKey: 'seller.dashboard.chartMetricRevenue' },
+  { key: 'orders', labelKey: 'seller.dashboard.chartMetricOrders' },
+  { key: 'units', labelKey: 'seller.dashboard.chartMetricUnits' },
+]
+
+function metricValue(p: SellerChartPoint, metric: SellerChartMetric): number {
+  return p[metric]
+}
+
+function metricPrefix(metric: SellerChartMetric): string {
+  return metric === 'revenue' ? 'NPR ' : ''
+}
+
+function SalesChart({ points, rangeLabel, t }: { points: SellerChartPoint[]; rangeLabel: string; t: (k: string, o?: Record<string, unknown>) => string }) {
+  const reduced = useReducedMotion()
+  const [metric, setMetric] = useState<SellerChartMetric>('revenue')
+  const [hover, setHover] = useState<number | null>(null)
+
+  const h = 180
+  const padL = 8
+  const padR = 8
+  const padT = 16
+  const padB = 28
+  const innerW = 100 - padL - padR
+  const innerH = h - padT - padB
+
+  const values = points.map(p => metricValue(p, metric))
+  const maxVal = Math.max(1, ...values)
+  const allZero = values.every(v => v === 0)
+
+  const toX = (i: number) => padL + (points.length <= 1 ? innerW / 2 : (i / (points.length - 1)) * innerW)
+  const toY = (v: number) => padT + innerH - (v / maxVal) * innerH
+
+  const linePath = useMemo(() => {
+    const pts = points.map((p, i) => ({ x: toX(i), y: toY(metricValue(p, metric)) }))
+    if (pts.length === 0) return ''
+    if (pts.length === 1) return `M ${pts[0].x} ${pts[0].y}`
+    let d = `M ${pts[0].x} ${pts[0].y}`
+    for (let i = 1; i < pts.length; i++) {
+      const prev = pts[i - 1]
+      const curr = pts[i]
+      const cx = (prev.x + curr.x) / 2
+      d += ` C ${cx} ${prev.y}, ${cx} ${curr.y}, ${curr.x} ${curr.y}`
+    }
+    return d
+  }, [points, metric, maxVal])
+
+  const areaPath = useMemo(() => {
+    if (!linePath || points.length === 0) return ''
+    const lastX = toX(points.length - 1)
+    const firstX = toX(0)
+    const base = h - padB
+    return `${linePath} L ${lastX} ${base} L ${firstX} ${base} Z`
+  }, [linePath, points])
+
+  const ariaSummary = useMemo(() => {
+    if (allZero) return t('seller.dashboard.chartEmpty')
+    const metricLabel = t(`seller.dashboard.chartMetric${metric.charAt(0).toUpperCase() + metric.slice(1)}`)
+    const from = metricPrefix(metric) + Math.min(...values).toLocaleString()
+    const to = metricPrefix(metric) + Math.max(...values).toLocaleString()
+    return t('seller.dashboard.chartAriaSummary', { metric: metricLabel, range: rangeLabel, from, to })
+  }, [allZero, values, metric, rangeLabel, t])
+
   return (
-    <div className="flex items-end justify-between gap-2 h-36">
-      {points.map((p, i) => {
-        const h = Math.max(8, (p.value / max) * 100)
-        return (
-          <div key={p.label + i} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
-            <div className="w-full flex items-end justify-center flex-1">
-              <div
-                className="w-1/2 rounded-sm bg-primary min-h-[8px] transition-all"
-                style={{ height: `${h}%` }}
-                title={`${p.label}: ${p.value}`}
+    <div className="rounded-lg border border-border-light bg-surface p-4">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <h3 className="text-lg font-semibold text-text">{t('seller.dashboard.sectionSales')}</h3>
+        <div
+          className="inline-flex rounded-full bg-background border border-border-light p-0.5"
+          role="tablist"
+          aria-label={t('seller.dashboard.chartToggleAria')}
+        >
+          {CHART_METRICS.map(m => {
+            const active = m.key === metric
+            return (
+              <button
+                key={m.key}
+                role="tab"
+                aria-selected={active}
+                onClick={() => setMetric(m.key)}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                  active ? 'bg-primary text-white' : 'text-text-muted hover:text-text'
+                }`}
+              >
+                {t(m.labelKey)}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {allZero ? (
+        <div className="flex flex-col items-center justify-center h-[180px] rounded-lg border border-dashed border-border bg-background px-4">
+          <p className="text-sm font-semibold text-text">{t('seller.dashboard.chartEmpty')}</p>
+          <p className="text-xs text-text-muted mt-1 text-center">{t('seller.dashboard.chartEmptySub')}</p>
+        </div>
+      ) : (
+        <div className="relative" role="img" aria-label={ariaSummary}>
+          <svg className="w-full" height={h} viewBox={`0 0 100 ${h}`} preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#8A1B57" stopOpacity={0.15} />
+                <stop offset="100%" stopColor="#8A1B57" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+
+            {[0.25, 0.5, 0.75].map(f => (
+              <line
+                key={f}
+                x1={padL}
+                x2={100 - padR}
+                y1={padT + innerH * f}
+                y2={padT + innerH * f}
+                stroke="#E5E5E5"
+                strokeWidth={0.3}
+                vectorEffect="non-scaling-stroke"
               />
+            ))}
+
+            {areaPath && (
+              <path d={areaPath} fill="url(#chartGradient)" />
+            )}
+
+            <motion.path
+              d={linePath}
+              fill="none"
+              stroke="#8A1B57"
+              strokeWidth={0.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              vectorEffect="non-scaling-stroke"
+              initial={{ pathLength: 0 }}
+              animate={{ pathLength: reduced ? 1 : 1 }}
+              transition={{ duration: reduced ? 0 : 0.6, ease: 'easeOut' }}
+            />
+
+            {hover != null && points[hover] && (
+              <>
+                <line
+                  x1={toX(hover)}
+                  x2={toX(hover)}
+                  y1={padT}
+                  y2={h - padB}
+                  stroke="#8A1B57"
+                  strokeWidth={0.3}
+                  strokeDasharray="1 1"
+                  opacity={0.5}
+                  vectorEffect="non-scaling-stroke"
+                />
+                <circle
+                  cx={toX(hover)}
+                  cy={toY(metricValue(points[hover], metric))}
+                  r={1.5}
+                  fill="#8A1B57"
+                  stroke="#FFFFFF"
+                  strokeWidth={0.5}
+                  vectorEffect="non-scaling-stroke"
+                />
+              </>
+            )}
+
+            {points.map((p, i) => (
+              <g key={p.label + i}>
+                <rect
+                  x={`calc(${toX(i)} - 3%)`}
+                  y={0}
+                  width="6%"
+                  height={h}
+                  fill="transparent"
+                  onMouseEnter={() => setHover(i)}
+                  onMouseLeave={() => setHover(null)}
+                />
+              </g>
+            ))}
+          </svg>
+
+          {hover != null && points[hover] && (
+            <div
+              className="absolute -translate-x-1/2 z-10 pointer-events-none rounded-md bg-surface shadow-md border border-border px-3 py-2"
+              style={{ left: `${toX(hover)}%`, top: 4 }}
+            >
+              <p className="text-xs font-semibold text-text tabular-nums">
+                {metricPrefix(metric)}{metricValue(points[hover], metric).toLocaleString()}
+              </p>
+              <p className="text-xs font-normal text-text-muted mt-0.5">{points[hover].label}</p>
             </div>
-            <span className="text-[11px] text-text-muted font-medium">{p.label}</span>
+          )}
+
+          <div className="flex justify-between mt-2 px-1">
+            {points.map((p, i) => (
+              <span key={p.label + i} className="text-xs font-normal text-text-muted flex-1 text-center">
+                {p.label}
+              </span>
+            ))}
           </div>
-        )
-      })}
+        </div>
+      )}
+
+      <details className="mt-3">
+        <summary className="text-xs text-text-muted cursor-pointer hover:text-text">
+          {t('seller.dashboard.chartDataTable')}
+        </summary>
+        <table className="mt-2 w-full text-xs text-text">
+          <thead>
+            <tr className="border-b border-border-light">
+              <th scope="col" className="text-left py-1.5 font-semibold text-text-muted">
+                {t('seller.dashboard.chartColPeriod')}
+              </th>
+              <th scope="col" className="text-right py-1.5 font-semibold text-text-muted">
+                {t('seller.dashboard.chartColValue')}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {points.map((p, i) => (
+              <tr key={p.label + i} className="border-b border-border-light last:border-b-0">
+                <td className="py-1.5 text-left">{p.label}</td>
+                <td className="py-1.5 text-right tabular-nums">
+                  {metricPrefix(metric)}{metricValue(p, metric).toLocaleString()}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </details>
     </div>
   )
 }

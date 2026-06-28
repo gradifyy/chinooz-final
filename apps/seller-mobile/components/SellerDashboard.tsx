@@ -32,6 +32,7 @@ import {
   Menu,
 } from 'lucide-react-native'
 import { colors, spacing, radii, fontSize } from '@chinooz/theme'
+import Svg, { Path, Circle as SvgCircle, Line as SvgLine, Text as SvgText, Defs, LinearGradient, Stop } from 'react-native-svg'
 import { useA11y } from './A11yProvider'
 import { useSellerSessionStore } from '@chinooz/state'
 import {
@@ -40,6 +41,8 @@ import {
   type SellerDateRange,
   type SellerDateRangeKey,
   type SellerKpi,
+  type SellerChartPoint,
+  type SellerChartMetric,
 } from '@chinooz/mock-data'
 import { analytics } from '@chinooz/analytics'
 
@@ -215,8 +218,7 @@ export default function SellerDashboard() {
             <SectionHeader title={t('seller.dashboard.sectionKpis')} />
             <KpiCards kpis={metrics.kpis} loading={refreshing} onPress={(kpi) => router.push(kpi.route as any)} t={t} />
 
-            <SectionHeader title={t('seller.dashboard.sectionSales')} />
-            <SalesChart points={metrics.chart} />
+            <SalesChart points={metrics.chart} rangeLabel={range.label} t={t} />
 
             <SectionHeader title={t('seller.dashboard.sectionAlerts')} seeAllLabel={t('seller.dashboard.seeAll')} onSeeAll={() => router.push('/reviews')} />
             <Alerts alerts={metrics.alerts} onCtaPress={(id) => {
@@ -535,25 +537,237 @@ function KpiCardSkeleton({ width }: { width: number }) {
   )
 }
 
-function SalesChart({ points }: { points: { label: string; value: number }[] }) {
+const CHART_METRICS: { key: SellerChartMetric; labelKey: string }[] = [
+  { key: 'revenue', labelKey: 'seller.dashboard.chartMetricRevenue' },
+  { key: 'orders', labelKey: 'seller.dashboard.chartMetricOrders' },
+  { key: 'units', labelKey: 'seller.dashboard.chartMetricUnits' },
+]
+
+const CHART_W = 340
+const CHART_H = 180
+const C_PAD_L = 8
+const C_PAD_R = 8
+const C_PAD_T = 16
+const C_PAD_B = 28
+
+function smoothPath(pts: { x: number; y: number }[]): string {
+  if (pts.length === 0) return ''
+  if (pts.length === 1) return `M ${pts[0].x} ${pts[0].y}`
+  let d = `M ${pts[0].x} ${pts[0].y}`
+  for (let i = 1; i < pts.length; i++) {
+    const prev = pts[i - 1]
+    const curr = pts[i]
+    const cx = (prev.x + curr.x) / 2
+    d += ` C ${cx} ${prev.y}, ${cx} ${curr.y}, ${curr.x} ${curr.y}`
+  }
+  return d
+}
+
+function metricValue(p: SellerChartPoint, metric: SellerChartMetric): number {
+  return p[metric]
+}
+
+function metricPrefix(metric: SellerChartMetric): string {
+  return metric === 'revenue' ? 'NPR ' : ''
+}
+
+function SalesChart({ points, rangeLabel, t }: { points: SellerChartPoint[]; rangeLabel: string; t: (k: string, o?: Record<string, unknown>) => string }) {
   const { reducedMotion } = useA11y()
-  const max = Math.max(...points.map(p => p.value), 1)
+  const [metric, setMetric] = useState<SellerChartMetric>('revenue')
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null)
+  const [drawProgress, setDrawProgress] = useState(reducedMotion ? 1 : 0)
+
+  const values = points.map(p => metricValue(p, metric))
+  const maxVal = Math.max(1, ...values)
+  const allZero = values.every(v => v === 0)
+
+  const coords = useMemo(() => {
+    const innerW = CHART_W - C_PAD_L - C_PAD_R
+    const innerH = CHART_H - C_PAD_T - C_PAD_B
+    const n = points.length
+    return points.map((p, i) => {
+      const x = C_PAD_L + (n <= 1 ? innerW / 2 : (i / (n - 1)) * innerW)
+      const v = metricValue(p, metric)
+      const y = C_PAD_T + innerH - (v / maxVal) * innerH
+      return { x, y, p }
+    })
+  }, [points, metric, maxVal])
+
+  const linePath = useMemo(() => smoothPath(coords.map(c => ({ x: c.x, y: c.y }))), [coords])
+  const areaPath = useMemo(() => {
+    if (coords.length === 0) return ''
+    const base = CHART_H - C_PAD_B
+    return `${linePath} L ${coords[coords.length - 1].x} ${base} L ${coords[0].x} ${base} Z`
+  }, [linePath, coords])
+
+  useEffect(() => {
+    if (reducedMotion || allZero) {
+      setDrawProgress(1)
+      return
+    }
+    setDrawProgress(0)
+    const start = Date.now()
+    const dur = 600
+    const raf = setInterval(() => {
+      const tt = Math.min(1, (Date.now() - start) / dur)
+      setDrawProgress(1 - Math.pow(1 - tt, 3))
+      if (tt >= 1) clearInterval(raf)
+    }, 16)
+    return () => clearInterval(raf)
+  }, [linePath, reducedMotion, allZero])
+
+  const ariaSummary = useMemo(() => {
+    if (allZero) return t('seller.dashboard.chartEmpty')
+    const metricLabel = t(`seller.dashboard.chartMetric${metric.charAt(0).toUpperCase() + metric.slice(1)}`)
+    const from = metricPrefix(metric) + Math.min(...values).toLocaleString()
+    const to = metricPrefix(metric) + Math.max(...values).toLocaleString()
+    return t('seller.dashboard.chartAriaSummary', { metric: metricLabel, range: rangeLabel, from, to })
+  }, [allZero, values, metric, rangeLabel, t])
+
+  const hovered = hoverIdx != null ? points[hoverIdx] : null
+  const hoveredValue = hovered ? metricValue(hovered, metric) : 0
+
   return (
     <View style={styles.card}>
-      <View style={styles.chartArea}>
-        {points.map((p, i) => {
-          const h = Math.max(8, (p.value / max) * 100)
-          return (
-            <View key={p.label + i} style={styles.chartBarCol}>
-              <View style={styles.chartBarTrack}>
-                <View
-                  style={[styles.chartBar, { height: reducedMotion ? h : h, backgroundColor: colors.primary }]}
+      <View style={styles.chartHeaderRow}>
+        <Text style={styles.chartTitle}>{t('seller.dashboard.sectionSales')}</Text>
+        <View accessibilityRole="tablist" accessibilityLabel={t('seller.dashboard.chartToggleAria')} style={styles.chartToggleGroup}>
+          {CHART_METRICS.map(m => {
+            const active = m.key === metric
+            return (
+              <TouchableOpacity
+                key={m.key}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: active }}
+                onPress={() => setMetric(m.key)}
+                style={[styles.chartTogglePill, active && styles.chartTogglePillActive]}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.chartToggleText, active && styles.chartToggleTextActive]}>
+                  {t(m.labelKey)}
+                </Text>
+              </TouchableOpacity>
+            )
+          })}
+        </View>
+      </View>
+
+      {allZero ? (
+        <View style={styles.chartEmpty}>
+          <Text style={styles.chartEmptyText}>{t('seller.dashboard.chartEmpty')}</Text>
+          <Text style={styles.chartEmptySub}>{t('seller.dashboard.chartEmptySub')}</Text>
+        </View>
+      ) : (
+        <View accessibilityLabel={ariaSummary} accessibilityRole="image">
+          <Svg width="100%" height={CHART_H} viewBox={`0 0 ${CHART_W} ${CHART_H}`}>
+            <Defs>
+              <LinearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0" stopColor={colors.primary} stopOpacity={0.15} />
+                <Stop offset="1" stopColor={colors.primary} stopOpacity={0} />
+              </LinearGradient>
+            </Defs>
+
+            {[0.25, 0.5, 0.75].map(f => (
+              <SvgLine
+                key={f}
+                x1={C_PAD_L}
+                x2={CHART_W - C_PAD_R}
+                y1={C_PAD_T + (CHART_H - C_PAD_T - C_PAD_B) * f}
+                y2={C_PAD_T + (CHART_H - C_PAD_T - C_PAD_B) * f}
+                stroke={colors.border}
+                strokeWidth={1}
+              />
+            ))}
+
+            <Path d={areaPath} fill="url(#chartGradient)" />
+
+            <Path
+              d={linePath}
+              fill="none"
+              stroke={colors.primary}
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeDasharray="1"
+              strokeDashoffset={1 - drawProgress}
+            />
+
+            {hoverIdx != null && coords[hoverIdx] && (
+              <>
+                <SvgLine
+                  x1={coords[hoverIdx].x}
+                  x2={coords[hoverIdx].x}
+                  y1={C_PAD_T}
+                  y2={CHART_H - C_PAD_B}
+                  stroke={colors.primary}
+                  strokeWidth={1}
+                  strokeDasharray="2 2"
+                  opacity={0.5}
                 />
-              </View>
-              <Text style={styles.chartLabel}>{p.label}</Text>
-            </View>
-          )
-        })}
+                <SvgCircle
+                  cx={coords[hoverIdx].x}
+                  cy={coords[hoverIdx].y}
+                  r={6}
+                  fill={colors.primary}
+                  stroke={colors.white}
+                  strokeWidth={2}
+                />
+              </>
+            )}
+
+            {coords.map((c, i) => (
+              <SvgCircle
+                key={'pt' + i}
+                cx={c.x}
+                cy={c.y}
+                r={hoverIdx === i ? 6 : 3}
+                fill={hoverIdx === i ? colors.primary : colors.white}
+                stroke={colors.primary}
+                strokeWidth={2}
+              />
+            ))}
+
+            {coords.map((c, i) => (
+              <SvgText key={'lbl' + i} x={c.x} y={CHART_H - 6} textAnchor="middle" fontSize={10} fill={colors.textMuted}>
+                {c.p.label}
+              </SvgText>
+            ))}
+          </Svg>
+
+          <View style={styles.chartTouchLayer}>
+            {coords.map((c, i) => (
+              <TouchableOpacity
+                key={'hit' + i}
+                accessibilityRole="button"
+                accessibilityLabel={`${c.p.label}: ${metricPrefix(metric)}${metricValue(c.p, metric).toLocaleString()}`}
+                onPressIn={() => setHoverIdx(i)}
+                onPressOut={() => setHoverIdx(null)}
+                style={[
+                  styles.chartTouchPoint,
+                  { left: `${(c.x / CHART_W) * 100}%`, top: `${(c.y / CHART_H) * 100}%` },
+                ]}
+              />
+            ))}
+          </View>
+        </View>
+      )}
+
+      {hovered && !allZero && (
+        <View style={styles.chartTooltip} accessibilityRole="alert" accessibilityLiveRegion="polite">
+          <Text style={styles.chartTooltipValue}>
+            {metricPrefix(metric)}{hoveredValue.toLocaleString()}
+          </Text>
+          <Text style={styles.chartTooltipDate}>{hovered.label}</Text>
+        </View>
+      )}
+
+      <View style={styles.chartTableFallback} accessibilityRole="summary">
+        <Text style={styles.chartTableTitle}>{t('seller.dashboard.chartDataTable')}</Text>
+        {points.map((p, i) => (
+          <Text key={i} style={styles.chartTableRow}>
+            {p.label}: {metricPrefix(metric)}{metricValue(p, metric).toLocaleString()}
+          </Text>
+        ))}
       </View>
     </View>
   )
@@ -849,11 +1063,53 @@ const styles = StyleSheet.create({
   skeletonSpark: { width: '100%', height: 32, borderRadius: radii.sm, backgroundColor: colors.shimmer, marginTop: 4 },
   skeletonPeriod: { width: 70, height: 12, borderRadius: radii.sm, backgroundColor: colors.shimmer, marginTop: 4 },
   skeletonDelta: { width: 90, height: 12, borderRadius: radii.sm, backgroundColor: colors.shimmer, marginTop: 4 },
-  chartArea: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', height: 140, gap: spacing[2] },
-  chartBarCol: { flex: 1, alignItems: 'center', gap: spacing[1.5], height: '100%' },
-  chartBarTrack: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'flex-end' },
-  chartBar: { width: '60%', borderRadius: radii.sm, minHeight: 8 },
-  chartLabel: { fontSize: 11, color: colors.textMuted, fontWeight: '500' },
+  chartHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing[3], flexWrap: 'wrap', gap: spacing[2] },
+  chartTitle: { fontSize: 18, fontWeight: '600', color: colors.text },
+  chartToggleGroup: {
+    flexDirection: 'row',
+    backgroundColor: colors.background,
+    borderRadius: radii.full,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    padding: 2,
+  },
+  chartTogglePill: { paddingHorizontal: spacing[3], paddingVertical: spacing[1.5], borderRadius: radii.full },
+  chartTogglePillActive: { backgroundColor: colors.primary },
+  chartToggleText: { fontSize: 12, fontWeight: '600', color: colors.textMuted },
+  chartToggleTextActive: { color: colors.white },
+  chartEmpty: {
+    height: CHART_H,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing[4],
+  },
+  chartEmptyText: { fontSize: 14, fontWeight: '600', color: colors.text },
+  chartEmptySub: { fontSize: 12, color: colors.textMuted, marginTop: spacing[1], textAlign: 'center' },
+  chartTouchLayer: { position: 'absolute', top: 0, left: 0, right: 0, height: CHART_H },
+  chartTouchPoint: { position: 'absolute', width: 28, height: 28, marginLeft: -14, marginTop: -14 },
+  chartTooltip: {
+    marginTop: spacing[2],
+    backgroundColor: colors.surface,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    padding: spacing[3],
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  chartTooltipValue: { fontSize: 12, fontWeight: '600', color: colors.text, fontVariant: ['tabular-nums'] },
+  chartTooltipDate: { fontSize: 12, fontWeight: '400', color: colors.textMuted, marginTop: 2 },
+  chartTableFallback: { marginTop: spacing[3] },
+  chartTableTitle: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: spacing[1] },
+  chartTableRow: { fontSize: 12, color: colors.textSecondary, fontVariant: ['tabular-nums'], marginTop: 1 },
   alertsStack: { gap: spacing[2] },
   alertCard: { borderLeftWidth: 3 },
   alertRow: { flexDirection: 'row', gap: spacing[2.5] },
