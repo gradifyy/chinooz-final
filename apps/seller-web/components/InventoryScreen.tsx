@@ -13,10 +13,12 @@ import {
   RotateCw,
   Check,
   Minus,
+  AlertTriangle,
+  History,
 } from 'lucide-react'
-import { Container, Screen, SafeImage, Spinner, EmptyState, InventoryRow, BulkBar, BulkConfirmModal, CsvImportModal } from '@chinooz/ui-web'
+import { Container, Screen, SafeImage, Spinner, EmptyState, InventoryRow, BulkBar, BulkConfirmModal, CsvImportModal, StockHistorySheet, LowStockAlerts } from '@chinooz/ui-web'
 import { useReducedMotion } from '@chinooz/ui-web'
-import { useSellerInventory, useSellerCategories, useUpdateStock, useBulkUpdateStock, useExportStockCsv, useImportStockCsv } from '@chinooz/hooks'
+import { useSellerInventory, useSellerCategories, useUpdateStock, useBulkUpdateStock, useExportStockCsv, useImportStockCsv, useStockHistory, useLowStockAlerts, useUpdateThreshold, useSetRestockReminder } from '@chinooz/hooks'
 import { useSellerSessionStore } from '@chinooz/state'
 import { analytics } from '@chinooz/analytics'
 import { formatNPR } from '@chinooz/utils'
@@ -381,25 +383,39 @@ function ProductGroupRow({
 
 const VARIANT_GRID = 'grid grid-cols-[1.4fr_1fr_120px_110px_70px_130px] items-center'
 
-function VariantRow({ v, onStockChange, editState, selected, onToggleSelect }: {
+function VariantRow({ v, onStockChange, editState, selected, onToggleSelect, onShowHistory }: {
   v: SellerInventoryVariant
   onStockChange: (newStock: number, mode: 'set' | 'adjust', reason?: 'restock' | 'correction' | 'damage' | 'loss' | 'return' | 'other') => void
   editState: 'idle' | 'saving' | 'saved' | 'error'
   selected?: boolean
   onToggleSelect?: (id: string) => void
+  onShowHistory?: () => void
 }) {
+  const { t } = useTranslation()
   return (
-    <InventoryRow
-      variant={v}
-      lowStockThreshold={LOW_STOCK_THRESHOLD}
-      layout="table"
-      showOptionalColumns
-      editable
-      onStockChange={onStockChange}
-      editState={editState}
-      selected={selected}
-      onToggleSelect={onToggleSelect}
-    />
+    <div className="relative">
+      <InventoryRow
+        variant={v}
+        lowStockThreshold={LOW_STOCK_THRESHOLD}
+        layout="table"
+        showOptionalColumns
+        editable
+        onStockChange={onStockChange}
+        editState={editState}
+        selected={selected}
+        onToggleSelect={onToggleSelect}
+      />
+      {onShowHistory && (
+        <button
+          type="button"
+          onClick={onShowHistory}
+          aria-label={t('seller.inventory.history')}
+          className="absolute right-1 top-1/2 -translate-y-1/2 w-7 h-7 rounded-md text-text-tertiary hover:text-text hover:bg-background transition-colors flex items-center justify-center"
+        >
+          <History size={14} />
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -517,6 +533,8 @@ export default function InventoryScreen() {
   const [csvOpen, setCsvOpen] = useState(false)
   const [snackbar, setSnackbar] = useState<{ msg: string; variant: 'success' | 'error' } | null>(null)
   const snackbarTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const [historyVariant, setHistoryVariant] = useState<SellerInventoryVariant | null>(null)
+  const [showAlerts, setShowAlerts] = useState(false)
 
   useEffect(() => { analytics.screen({ name: 'seller-inventory' }) }, [])
 
@@ -534,6 +552,10 @@ export default function InventoryScreen() {
   const bulkMutation = useBulkUpdateStock()
   const exportMutation = useExportStockCsv()
   const importMutation = useImportStockCsv()
+  const alertsQ = useLowStockAlerts()
+  const historyQ = useStockHistory(historyVariant?.id)
+  const thresholdMutation = useUpdateThreshold()
+  const reminderMutation = useSetRestockReminder()
 
   const handleStockChange = (variantId: string, productId: string, newStock: number, mode: 'set' | 'adjust', reason?: 'restock' | 'correction' | 'damage' | 'loss' | 'return' | 'other') => {
     stockMutation.mutate({ productId, variantId, newCount: newStock, mode, reason: reason ?? 'restock' })
@@ -749,6 +771,32 @@ export default function InventoryScreen() {
 
             {!isLoading && !isError && products.length > 0 && (
               <>
+                {/* Low-stock alerts toggle + panel */}
+                {alertsQ.data && alertsQ.data.total > 0 && (
+                  <div className="mb-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowAlerts(s => !s)}
+                      className="inline-flex items-center gap-2 text-sm font-semibold text-error hover:underline"
+                    >
+                      <AlertTriangle size={16} />
+                      {t('seller.inventory.alertsTitle')} ({alertsQ.data.total})
+                      <ChevronDown size={14} className={'transition-transform ' + (showAlerts ? 'rotate-180' : '')} />
+                    </button>
+                    {showAlerts && (
+                      <div className="mt-2">
+                        <LowStockAlerts
+                          summary={alertsQ.data}
+                          onJumpToVariant={(variantId, productId) => {
+                            setExpanded(prev => { const n = new Set(prev); n.add(productId); return n })
+                            setShowAlerts(false)
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Bulk bar — docked above table */}
                 <div className="mb-3">
                   <BulkBar
@@ -818,6 +866,7 @@ export default function InventoryScreen() {
                                     editState={variantEditState(v.id)}
                                     selected={selected.has(v.id)}
                                     onToggleSelect={toggleSelect}
+                                    onShowHistory={() => setHistoryVariant(v)}
                                   />
                                 ))}
                               </motion.div>
@@ -866,6 +915,22 @@ export default function InventoryScreen() {
           onClose={() => setCsvOpen(false)}
           onImport={handleImport}
           isPending={importMutation.isPending}
+        />
+
+        {/* Stock history sheet */}
+        <StockHistorySheet
+          open={historyVariant !== null}
+          variant={historyVariant}
+          history={historyQ.data ?? []}
+          restockReminder={historyVariant?.restockReminder}
+          onToggleReminder={(enabled) => {
+            if (historyVariant) {
+              reminderMutation.mutate({ variantId: historyVariant.id, enabled })
+              setHistoryVariant(v => v ? { ...v, restockReminder: enabled } : v)
+            }
+          }}
+          onClose={() => setHistoryVariant(null)}
+          isPending={reminderMutation.isPending}
         />
 
         {/* Snackbar */}

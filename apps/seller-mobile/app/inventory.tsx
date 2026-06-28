@@ -22,8 +22,8 @@ import Animated, {
 } from 'react-native-reanimated'
 import { ChevronDown, Search, SlidersHorizontal, X, ArrowUpDown, PackageSearch, RotateCw } from 'lucide-react-native'
 import { colors, radii, spacing, fontFamily } from '@chinooz/theme'
-import { SafeImage, BottomSheet, EmptyState, InventoryRow, BulkBar, BulkConfirmSheet, useReducedMotion } from '@chinooz/ui'
-import { useSellerInventory, useSellerCategories, useUpdateStock, useBulkUpdateStock, useExportStockCsv, useImportStockCsv } from '@chinooz/hooks'
+import { SafeImage, BottomSheet, EmptyState, InventoryRow, BulkBar, BulkConfirmSheet, StockHistorySheet, LowStockAlerts, useReducedMotion } from '@chinooz/ui'
+import { useSellerInventory, useSellerCategories, useUpdateStock, useBulkUpdateStock, useExportStockCsv, useImportStockCsv, useStockHistory, useLowStockAlerts, useUpdateThreshold, useSetRestockReminder } from '@chinooz/hooks'
 import { useSellerSessionStore } from '@chinooz/state'
 import { analytics } from '@chinooz/analytics'
 import type { SellerInventoryProduct, SellerInventoryVariant, StockStatus, BulkStockAction, StockEditReason, CsvStockRow } from '@chinooz/types'
@@ -163,24 +163,37 @@ function Collapsible({ open, reduced, children }: { open: boolean; reduced: bool
   )
 }
 
-function VariantRowCard({ v, onStockChange, editState, selected, onToggleSelect }: {
+function VariantRowCard({ v, onStockChange, editState, selected, onToggleSelect, onShowHistory }: {
   v: SellerInventoryVariant
   onStockChange: (newStock: number, mode: 'set' | 'adjust', reason?: 'restock' | 'correction' | 'damage' | 'loss' | 'return' | 'other') => void
   editState: 'idle' | 'saving' | 'saved' | 'error'
   selected?: boolean
   onToggleSelect?: (id: string) => void
+  onShowHistory?: () => void
 }) {
   return (
-    <InventoryRow
-      variant={v}
-      lowStockThreshold={LOW_STOCK_THRESHOLD}
-      layout="compact"
-      editable
-      onStockChange={onStockChange}
-      editState={editState}
-      selected={selected}
-      onToggleSelect={onToggleSelect}
-    />
+    <View>
+      <InventoryRow
+        variant={v}
+        lowStockThreshold={LOW_STOCK_THRESHOLD}
+        layout="compact"
+        editable
+        onStockChange={onStockChange}
+        editState={editState}
+        selected={selected}
+        onToggleSelect={onToggleSelect}
+      />
+      {onShowHistory && (
+        <TouchableOpacity
+          onPress={onShowHistory}
+          accessibilityRole="button"
+          accessibilityLabel="Stock history"
+          style={styles.historyBtn}
+        >
+          <Text style={styles.historyBtnText}>History</Text>
+        </TouchableOpacity>
+      )}
+    </View>
   )
 }
 
@@ -193,6 +206,7 @@ function ProductGroupCard({
   variantEditState,
   selected,
   onToggleSelect,
+  onShowHistory,
 }: {
   product: SellerInventoryProduct
   expanded: boolean
@@ -202,6 +216,7 @@ function ProductGroupCard({
   variantEditState: (variantId: string) => 'idle' | 'saving' | 'saved' | 'error'
   selected: Set<string>
   onToggleSelect: (id: string) => void
+  onShowHistory: (variant: SellerInventoryVariant) => void
 }) {
   const { t } = useTranslation()
   const chevron = useSharedValue(expanded ? 1 : 0)
@@ -249,6 +264,7 @@ function ProductGroupCard({
               editState={variantEditState(v.id)}
               selected={selected.has(v.id)}
               onToggleSelect={onToggleSelect}
+              onShowHistory={() => onShowHistory(v)}
             />
           ))}
         </View>
@@ -278,6 +294,7 @@ export default function InventoryScreen() {
   const [bulkAction, setBulkAction] = useState<BulkStockAction | null>(null)
   const [snackbar, setSnackbar] = useState<{ msg: string; variant: 'success' | 'error' } | null>(null)
   const snackbarTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const [historyVariant, setHistoryVariant] = useState<SellerInventoryVariant | null>(null)
 
   useEffect(() => { analytics.screen({ name: 'seller-inventory' }) }, [])
 
@@ -294,6 +311,9 @@ export default function InventoryScreen() {
   const bulkMutation = useBulkUpdateStock()
   const exportMutation = useExportStockCsv()
   const importMutation = useImportStockCsv()
+  const alertsQ = useLowStockAlerts()
+  const historyQ = useStockHistory(historyVariant?.id)
+  const reminderMutation = useSetRestockReminder()
 
   const handleStockChange = (variantId: string, productId: string, newStock: number, mode: 'set' | 'adjust', reason?: 'restock' | 'correction' | 'damage' | 'loss' | 'return' | 'other') => {
     stockMutation.mutate({ productId, variantId, newCount: newStock, mode, reason: reason ?? 'restock' })
@@ -523,6 +543,15 @@ export default function InventoryScreen() {
 
         {!isLoading && !isError && products.length > 0 && (
           <View style={{ gap: spacing[2.5] }}>
+            {/* Low-stock alerts */}
+            {alertsQ.data && alertsQ.data.total > 0 && (
+              <LowStockAlerts
+                summary={alertsQ.data}
+                onJumpToVariant={(variantId, productId) => {
+                  setExpanded(prev => { const n = new Set(prev); n.add(productId); return n })
+                }}
+              />
+            )}
             {products.map(p => (
               <ProductGroupCard
                 key={p.id}
@@ -534,6 +563,7 @@ export default function InventoryScreen() {
                 variantEditState={variantEditState}
                 selected={selected}
                 onToggleSelect={toggleSelect}
+                onShowHistory={setHistoryVariant}
               />
             ))}
             <Text style={styles.countText}>
@@ -606,6 +636,22 @@ export default function InventoryScreen() {
         count={selected.size}
         onConfirm={handleBulkConfirm}
         onCancel={() => setBulkAction(null)}
+      />
+
+      {/* Stock history sheet */}
+      <StockHistorySheet
+        visible={historyVariant !== null}
+        variant={historyVariant}
+        history={historyQ.data ?? []}
+        restockReminder={historyVariant?.restockReminder}
+        onToggleReminder={(enabled) => {
+          if (historyVariant) {
+            reminderMutation.mutate({ variantId: historyVariant.id, enabled })
+            setHistoryVariant(v => v ? { ...v, restockReminder: enabled } : v)
+          }
+        }}
+        onClose={() => setHistoryVariant(null)}
+        isPending={reminderMutation.isPending}
       />
 
       {/* Snackbar */}
@@ -911,4 +957,6 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   snackbarText: { fontSize: 14, fontWeight: '600', color: colors.white, fontFamily: fontFamily.sansSemiBold[0] },
+  historyBtn: { alignSelf: 'flex-end', paddingHorizontal: spacing[3], paddingVertical: spacing[1], marginTop: spacing[1] },
+  historyBtnText: { fontSize: 12, fontWeight: '600', color: colors.primary, fontFamily: fontFamily.sansSemiBold[0] },
 })
