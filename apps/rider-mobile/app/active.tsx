@@ -29,6 +29,7 @@ export default function ActiveDeliveryScreen() {
   const advanceStatus = useActiveDeliveryStore(s => s.advanceStatus)
   const minimize = useActiveDeliveryStore(s => s.minimize)
   const cancel = useActiveDeliveryStore(s => s.cancel)
+  const fail = useActiveDeliveryStore(s => s.fail)
   const tick = useActiveDeliveryStore(s => s.tick)
   const clearActiveDelivery = useActiveDeliveryStore(s => s.clearActiveDelivery)
 
@@ -92,6 +93,10 @@ export default function ActiveDeliveryScreen() {
     setCancelOpen(true)
   }, [])
 
+  const handleFailed = useCallback((reason: string) => {
+    fail(reason)
+  }, [fail])
+
   if (!delivery) {
     // Nothing active — bounce back to Jobs.
     return <View style={styles.empty} />
@@ -130,7 +135,7 @@ export default function ActiveDeliveryScreen() {
         <Text accessibilityRole="text">{t(`rider.active.status_${delivery.status}`)}</Text>
       </View>
 
-      <ActiveBottomSheet delivery={delivery} onPrimary={handlePrimary} onCancel={handleCancelPress} />
+      <ActiveBottomSheet delivery={delivery} onPrimary={handlePrimary} onCancel={handleCancelPress} onFailed={handleFailed} />
 
       {/* Cancel confirmation modal */}
       <Modal

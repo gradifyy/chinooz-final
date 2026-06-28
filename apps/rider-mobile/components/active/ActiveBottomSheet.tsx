@@ -41,11 +41,16 @@ import { DELIVERY_FLOW } from '@chinooz/state'
 import type { ActiveDelivery, DeliveryStatus } from '@chinooz/types'
 import HeadingToPickupStep from './HeadingToPickupStep'
 import AtPickupStep from './AtPickupStep'
+import InTransitStep from './InTransitStep'
+import AtDropoffStep from './AtDropoffStep'
+import DeliveredSummary from './DeliveredSummary'
+import FailedSummary from './FailedSummary'
 
 interface ActiveBottomSheetProps {
   delivery: ActiveDelivery
   onPrimary: () => void
   onCancel: (reason?: string) => void
+  onFailed: (reason: string) => void
 }
 
 const COLLAPSED_HEIGHT = 196
@@ -53,6 +58,18 @@ const EXPANDED_HEIGHT = 420
 // heading_to_pickup needs room for the nav band + pickup card + arrived button.
 const HEADING_COLLAPSED_HEIGHT = 460
 const HEADING_EXPANDED_HEIGHT = 620
+// at_pickup needs room for checklist + verify + photo + payment + issues + primary.
+const AT_PICKUP_COLLAPSED_HEIGHT = 640
+const AT_PICKUP_EXPANDED_HEIGHT = 820
+// in_transit needs room for nav band + drop-off card + COD + can't-find + arrived.
+const IN_TRANSIT_COLLAPSED_HEIGHT = 520
+const IN_TRANSIT_EXPANDED_HEIGHT = 680
+// at_dropoff needs room for hand-over + proof options + failed + primary.
+const AT_DROPOFF_COLLAPSED_HEIGHT = 680
+const AT_DROPOFF_EXPANDED_HEIGHT = 860
+// delivered/failed summaries are compact.
+const SUMMARY_COLLAPSED_HEIGHT = 400
+const SUMMARY_EXPANDED_HEIGHT = 500
 // at_pickup needs room for checklist + verify + photo + payment + issues + primary.
 const AT_PICKUP_COLLAPSED_HEIGHT = 640
 const AT_PICKUP_EXPANDED_HEIGHT = 820
@@ -76,7 +93,7 @@ function formatNpr(amount: number): string {
  *
  * All values come from the shared activeDelivery store (single source of truth).
  */
-export default function ActiveBottomSheet({ delivery, onPrimary, onCancel }: ActiveBottomSheetProps) {
+export default function ActiveBottomSheet({ delivery, onPrimary, onCancel, onFailed }: ActiveBottomSheetProps) {
   const { t } = useTranslation()
   const insets = useSafeAreaInsets()
   const { reducedMotion, minTouchTarget } = useA11y()
@@ -87,16 +104,33 @@ export default function ActiveBottomSheet({ delivery, onPrimary, onCancel }: Act
 
   const isHeadingToPickup = delivery.status === 'heading_to_pickup'
   const isAtPickup = delivery.status === 'at_pickup'
+  const isInTransit = delivery.status === 'in_transit'
+  const isAtDropoff = delivery.status === 'at_dropoff'
+  const isDelivered = delivery.status === 'delivered'
+  const isFailed = delivery.status === 'failed'
+  const isSummary = isDelivered || isFailed
   const collapsedH = isHeadingToPickup
     ? HEADING_COLLAPSED_HEIGHT
     : isAtPickup
       ? AT_PICKUP_COLLAPSED_HEIGHT
-      : COLLAPSED_HEIGHT
+      : isInTransit
+        ? IN_TRANSIT_COLLAPSED_HEIGHT
+        : isAtDropoff
+          ? AT_DROPOFF_COLLAPSED_HEIGHT
+          : isSummary
+            ? SUMMARY_COLLAPSED_HEIGHT
+            : COLLAPSED_HEIGHT
   const expandedH = isHeadingToPickup
     ? HEADING_EXPANDED_HEIGHT
     : isAtPickup
       ? AT_PICKUP_EXPANDED_HEIGHT
-      : EXPANDED_HEIGHT
+      : isInTransit
+        ? IN_TRANSIT_EXPANDED_HEIGHT
+        : isAtDropoff
+          ? AT_DROPOFF_EXPANDED_HEIGHT
+          : isSummary
+            ? SUMMARY_EXPANDED_HEIGHT
+            : EXPANDED_HEIGHT
 
   useEffect(() => {
     const target = expanded ? expandedH : collapsedH
@@ -214,8 +248,38 @@ export default function ActiveBottomSheet({ delivery, onPrimary, onCancel }: Act
           />
         )}
 
-        {/* Default (non-heading, non-at_pickup) quick info + details + primary */}
-        {!isHeadingToPickup && !isAtPickup && !terminal && targetStop && (
+        {/* in_transit: dedicated step with nav band, drop-off card, COD
+            reminder, can't-find-address flow, and "Arrived at drop-off" primary. */}
+        {isInTransit && (
+          <InTransitStep
+            delivery={delivery}
+            onArrived={onPrimary}
+            onCancel={onCancel}
+          />
+        )}
+
+        {/* at_dropoff: proof-of-delivery (OTP/photo/signature), hand-over
+            summary, "Confirm delivered" primary, failed-delivery secondary. */}
+        {isAtDropoff && (
+          <AtDropoffStep
+            delivery={delivery}
+            onDelivered={onPrimary}
+            onFailed={onFailed}
+          />
+        )}
+
+        {/* delivered: completion summary with earnings + COD recorded. */}
+        {isDelivered && (
+          <DeliveredSummary delivery={delivery} onDone={onPrimary} />
+        )}
+
+        {/* failed: failure summary with next steps + return to seller. */}
+        {isFailed && (
+          <FailedSummary delivery={delivery} onDone={onPrimary} />
+        )}
+
+        {/* Default (non-step, non-terminal) quick info + details + primary */}
+        {!isHeadingToPickup && !isAtPickup && !isInTransit && !isAtDropoff && !isSummary && !terminal && targetStop && (
           <View style={styles.quickInfo}>
             <View style={styles.quickInfoLeft}>
               {showPickup ? <MapPin size={16} color={colors.primary} /> : <Navigation size={16} color={colors.primaryDark} />}
@@ -225,8 +289,8 @@ export default function ActiveBottomSheet({ delivery, onPrimary, onCancel }: Act
           </View>
         )}
 
-        {/* Expanded: full details (non-heading, non-at_pickup only) */}
-        {!isHeadingToPickup && !isAtPickup && expanded && (
+        {/* Expanded: full details (non-step only) */}
+        {!isHeadingToPickup && !isAtPickup && !isInTransit && !isAtDropoff && !isSummary && expanded && (
           <View style={styles.details}>
             {targetStop && (
               <InfoRow
@@ -264,8 +328,8 @@ export default function ActiveBottomSheet({ delivery, onPrimary, onCancel }: Act
           </View>
         )}
 
-        {/* Terminal messaging (non-heading, non-at_pickup; steps own their UI) */}
-        {!isHeadingToPickup && !isAtPickup && terminal && (
+        {/* Terminal messaging (cancelled only — delivered/failed have summaries) */}
+        {!isHeadingToPickup && !isAtPickup && !isInTransit && !isAtDropoff && !isDelivered && !isFailed && terminal && (
           <View style={styles.terminalMsg}>
             {statusKey === 'delivered' && <CheckCircle2 size={20} color={colors.success} />}
             {statusKey === 'cancelled' && <XCircle size={20} color={colors.error} />}
@@ -281,9 +345,9 @@ export default function ActiveBottomSheet({ delivery, onPrimary, onCancel }: Act
         )}
 
         {/* Primary action: full-width, min 56px, high-contrast plum.
-            Skipped for heading_to_pickup and at_pickup — those steps own
-            their own primary (Arrived / Picked up). */}
-        {!isHeadingToPickup && !isAtPickup && (
+            Skipped for all step-owned statuses (heading, at_pickup, in_transit,
+            at_dropoff, delivered, failed) — those steps own their own primary. */}
+        {!isHeadingToPickup && !isAtPickup && !isInTransit && !isAtDropoff && !isSummary && (
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel={primaryAria}
@@ -306,9 +370,8 @@ export default function ActiveBottomSheet({ delivery, onPrimary, onCancel }: Act
           </TouchableOpacity>
         )}
 
-        {/* Cancel (non-terminal, non-heading, non-at_pickup only — at_pickup
-            owns its own issues/cancel flow) */}
-        {!isHeadingToPickup && !isAtPickup && !terminal && (
+        {/* Cancel (non-terminal, non-step only — steps own their own flows) */}
+        {!isHeadingToPickup && !isAtPickup && !isInTransit && !isAtDropoff && !isSummary && !terminal && (
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel={t('rider.active.cancelAria')}

@@ -109,6 +109,7 @@ export function rs3SampleJobs(): RiderJob[] {
       isCod: true,
       codAmount: 1290,
       createdAt: new Date(now - 1000 * 60 * 4).toISOString(),
+      proof: { otpRequired: true, photoRequired: true },
     }),
     buildJobFromLegs({
       id: 'job-rs3-002',
@@ -139,6 +140,7 @@ export function rs3SampleJobs(): RiderJob[] {
       isCod: false,
       codAmount: 0,
       createdAt: new Date(now - 1000 * 60 * 9).toISOString(),
+      proof: { signatureRequired: true },
     }),
     buildJobFromLegs({
       id: 'job-rs3-003',
@@ -169,6 +171,7 @@ export function rs3SampleJobs(): RiderJob[] {
       isCod: true,
       codAmount: 840,
       createdAt: new Date(now - 1000 * 60 * 15).toISOString(),
+      proof: { otpRequired: true, photoRequired: true, signatureRequired: true },
     }),
   ]
 }

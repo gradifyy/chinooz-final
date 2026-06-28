@@ -125,6 +125,7 @@ export const useActiveDeliveryStore = create<ActiveDeliveryState>()(
           isCod: job.isCod,
           codAmount: job.codAmount,
           currency: job.currency,
+          proof: job.proof,
           status: 'assigned',
           legProgress: 0,
           currentPoint: job.legToPickup.points[0],
@@ -206,6 +207,7 @@ export const useActiveDeliveryStore = create<ActiveDeliveryState>()(
             distanceMeters: distance,
             updatedAt: now,
             etaDropoffMs: now + eta * 1000,
+            completedAt: nextStatus === 'delivered' ? now : activeDelivery.completedAt,
           },
         })
       },
@@ -243,6 +245,7 @@ export const useActiveDeliveryStore = create<ActiveDeliveryState>()(
             status: 'failed',
             failureReason: reason,
             minimized: false,
+            completedAt: Date.now(),
             updatedAt: Date.now(),
           },
         })
