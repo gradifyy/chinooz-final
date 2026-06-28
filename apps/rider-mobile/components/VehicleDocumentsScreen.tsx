@@ -267,6 +267,10 @@ export default function VehicleDocumentsScreen() {
       setTimeout(() => setSavedMsg(null), 4000)
     } catch {
       setSaving(false)
+      setSaveFail(true)
+      try {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+      } catch {}
     }
   }, [form, vehicle, validate, t, announce])
 
@@ -298,7 +302,9 @@ export default function VehicleDocumentsScreen() {
         announce(
           t('rider.profile.vehicle.docs.resubmittedAria', { doc: label }),
         )
-      } catch {}
+      } catch {
+        setUploadFailId(doc.id)
+      }
       setResubmittingId(null)
     },
     [resubmittingId, t, announce],
