@@ -14,7 +14,7 @@ interface SignOutFooterProps {
   onSignOut: () => void
 }
 
-export default function SignOutFooter({
+function SignOutFooterInner({
   versionLabel,
   signOutLabel,
   signOutAria,
@@ -86,6 +86,8 @@ export default function SignOutFooter({
     </View>
   )
 }
+
+export default React.memo(SignOutFooterInner)
 
 const styles = StyleSheet.create({
   wrap: {

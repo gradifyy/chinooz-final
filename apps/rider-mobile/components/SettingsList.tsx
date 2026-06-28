@@ -16,7 +16,7 @@ import {
   Globe,
   ChevronRight,
 } from 'lucide-react-native'
-import { colors, spacing, radii, fontFamily, fontSize, duration, easing } from '@chinooz/theme'
+import { colors, spacing, radii, fontFamily, fontSize, duration } from '@chinooz/theme'
 import { useReducedMotion } from '@chinooz/ui'
 import type {
   RiderSettingsSection,
@@ -47,7 +47,7 @@ interface SettingsListProps {
   onPress: (route: string, label: string) => void
 }
 
-export default function SettingsList({
+function SettingsListInner({
   sections,
   labels,
   groupAria,
@@ -169,6 +169,8 @@ function AnimatedSettingRow({
     </Animated.View>
   )
 }
+
+export default React.memo(SettingsListInner)
 
 const styles = StyleSheet.create({
   group: {

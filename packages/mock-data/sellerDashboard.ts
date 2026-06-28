@@ -35,12 +35,17 @@ export interface SellerChartPoint {
 
 export type SellerChartMetric = 'revenue' | 'orders' | 'units'
 
+export type SellerAlertSeverity = 'error' | 'warning' | 'info' | 'success'
+export type SellerAlertIcon = 'new-orders' | 'low-stock' | 'out-of-stock' | 'returns' | 'messages' | 'reviews' | 'payout' | 'kyc'
+
 export interface SellerAlert {
   id: string
-  severity: 'warning' | 'error' | 'info'
+  severity: SellerAlertSeverity
+  icon: SellerAlertIcon
   title: string
-  body: string
-  cta?: string
+  count: number
+  route: string
+  dismissible: boolean
 }
 
 export interface SellerQuickAction {
@@ -105,31 +110,76 @@ const CHART_LABELS: Record<number, string[]> = {
 
 const ALERTS: SellerAlert[] = [
   {
-    id: 'reviews-needing-response',
-    severity: 'warning',
-    title: 'Reviews need your response',
-    body: 'Several buyers left reviews waiting for a reply. Respond to build trust.',
-    cta: 'View reviews',
+    id: 'new-orders',
+    severity: 'info',
+    icon: 'new-orders',
+    title: 'New orders to fulfill',
+    count: 3,
+    route: '/orders',
+    dismissible: false,
+  },
+  {
+    id: 'out-of-stock',
+    severity: 'error',
+    icon: 'out-of-stock',
+    title: 'Products out of stock',
+    count: 1,
+    route: '/inventory',
+    dismissible: true,
   },
   {
     id: 'low-stock',
     severity: 'warning',
-    title: '2 products are low on stock',
-    body: 'Samsung Galaxy A55 and Dhaka Topi are running low.',
-    cta: 'Restock',
+    icon: 'low-stock',
+    title: 'Products running low on stock',
+    count: 2,
+    route: '/inventory',
+    dismissible: true,
   },
   {
-    id: 'pending-payout',
+    id: 'pending-returns',
+    severity: 'warning',
+    icon: 'returns',
+    title: 'Return requests need action',
+    count: 1,
+    route: '/orders',
+    dismissible: false,
+  },
+  {
+    id: 'unanswered-messages',
     severity: 'info',
-    title: 'Payout pending review',
-    body: 'NPR 12,400 will be settled to your Khalti account in 1–2 days.',
+    icon: 'messages',
+    title: 'Unanswered buyer messages',
+    count: 5,
+    route: '/messages',
+    dismissible: true,
   },
   {
-    id: 'return-request',
+    id: 'unanswered-reviews',
+    severity: 'info',
+    icon: 'reviews',
+    title: 'Reviews waiting for your response',
+    count: 4,
+    route: '/reviews',
+    dismissible: true,
+  },
+  {
+    id: 'payout-ready',
+    severity: 'success',
+    icon: 'payout',
+    title: 'Payout ready to withdraw',
+    count: 1,
+    route: '/finance',
+    dismissible: true,
+  },
+  {
+    id: 'kyc-incomplete',
     severity: 'error',
-    title: '1 return request needs action',
-    body: 'Order #ORD-2048 — approve or respond within 24h.',
-    cta: 'Review',
+    icon: 'kyc',
+    title: 'KYC verification incomplete',
+    count: 1,
+    route: '/settings',
+    dismissible: false,
   },
 ]
 

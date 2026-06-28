@@ -30,11 +30,18 @@ import {
   Minus,
   X,
   Menu,
+  MessageCircle,
+  Star,
+  PackageX,
+  RotateCcw,
+  ShieldAlert,
+  ChevronRight,
 } from 'lucide-react-native'
 import { colors, spacing, radii, fontSize } from '@chinooz/theme'
 import Svg, { Path, Circle as SvgCircle, Line as SvgLine, Text as SvgText, Defs, LinearGradient, Stop } from 'react-native-svg'
 import { useA11y } from './A11yProvider'
 import { useSellerSessionStore } from '@chinooz/state'
+import { useSellerReviews } from '@chinooz/hooks'
 import {
   getSellerDashboardMetrics,
   SELLER_GO_LIVE_TASKS,
@@ -43,6 +50,7 @@ import {
   type SellerKpi,
   type SellerChartPoint,
   type SellerChartMetric,
+  type SellerAlert,
 } from '@chinooz/mock-data'
 import { analytics } from '@chinooz/analytics'
 
@@ -220,10 +228,8 @@ export default function SellerDashboard() {
 
             <SalesChart points={metrics.chart} rangeLabel={range.label} t={t} />
 
-            <SectionHeader title={t('seller.dashboard.sectionAlerts')} seeAllLabel={t('seller.dashboard.seeAll')} onSeeAll={() => router.push('/reviews')} />
-            <Alerts alerts={metrics.alerts} onCtaPress={(id) => {
-              if (id === 'reviews-needing-response') router.push('/reviews')
-            }} />
+            <SectionHeader title={t('seller.dashboard.sectionAlerts')} seeAllLabel={t('seller.dashboard.seeAll')} onSeeAll={() => router.push('/orders')} />
+            <Alerts alerts={metrics.alerts} onRoute={(route) => router.push(route as any)} t={t} />
 
             <SectionHeader title={t('seller.dashboard.sectionQuickActions')} />
             <QuickActions
@@ -773,44 +779,115 @@ function SalesChart({ points, rangeLabel, t }: { points: SellerChartPoint[]; ran
   )
 }
 
-const ALERT_ICON = {
-  warning: { Icon: AlertTriangle, color: colors.warning },
-  error: { Icon: XCircle, color: colors.error },
-  info: { Icon: Info, color: colors.info },
+const ALERT_SEVERITY_STYLE = {
+  error: { color: colors.error, bg: colors.errorLight },
+  warning: { color: colors.warning, bg: colors.warningLight },
+  info: { color: colors.info, bg: colors.infoLight },
+  success: { color: colors.success, bg: colors.successLight },
 } as const
 
-function Alerts({ alerts, onCtaPress }: { alerts: { id: string; severity: 'warning' | 'error' | 'info'; title: string; body: string; cta?: string }[]; onCtaPress?: (id: string) => void }) {
-  const { t } = useTranslation()
-  if (alerts.length === 0) {
+const ALERT_ICON_MAP: Record<string, React.ComponentType<{ size?: number; color?: string }>> = {
+  'new-orders': Box,
+  'low-stock': AlertTriangle,
+  'out-of-stock': PackageX,
+  'returns': RotateCcw,
+  'messages': MessageCircle,
+  'reviews': Star,
+  'payout': Wallet,
+  'kyc': ShieldAlert,
+}
+
+const ALERT_TITLE_KEY: Record<string, string> = {
+  'new-orders': 'seller.dashboard.alertNewOrders',
+  'low-stock': 'seller.dashboard.alertLowStock',
+  'out-of-stock': 'seller.dashboard.alertOutOfStock',
+  'returns': 'seller.dashboard.alertReturns',
+  'messages': 'seller.dashboard.alertMessages',
+  'reviews': 'seller.dashboard.alertReviews',
+  'payout': 'seller.dashboard.alertPayout',
+  'kyc': 'seller.dashboard.alertKyc',
+}
+
+function Alerts({ alerts, onRoute, t }: { alerts: SellerAlert[]; onRoute: (route: string) => void; t: (k: string, o?: Record<string, unknown>) => string }) {
+  const { reducedMotion } = useA11y()
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set())
+  const [slidingOut, setSlidingOut] = useState<string | null>(null)
+
+  const visible = alerts.filter(a => !dismissed.has(a.id))
+  const allCaughtUp = visible.length === 0
+
+  const dismiss = useCallback((id: string) => {
+    if (reducedMotion) {
+      setDismissed(prev => new Set(prev).add(id))
+      return
+    }
+    setSlidingOut(id)
+    setTimeout(() => {
+      setDismissed(prev => new Set(prev).add(id))
+      setSlidingOut(null)
+    }, 250)
+  }, [reducedMotion])
+
+  if (allCaughtUp) {
     return (
-      <View style={styles.card}>
-        <Text style={styles.emptyText}>{t('seller.dashboard.noAlerts')}</Text>
+      <View style={styles.alertsCard}>
+        <View style={styles.allCaughtUp}>
+          <Animated.View style={styles.allCaughtUpIcon}>
+            <CheckCircle2 size={40} color={colors.success} />
+          </Animated.View>
+          <Text style={styles.allCaughtUpTitle}>{t('seller.dashboard.alertAllCaughtUp')}</Text>
+          <Text style={styles.allCaughtUpSub}>{t('seller.dashboard.alertAllCaughtUpSub')}</Text>
+        </View>
       </View>
     )
   }
+
   return (
-    <View style={styles.alertsStack}>
-      {alerts.map(a => {
-        const { Icon, color } = ALERT_ICON[a.severity]
+    <View style={styles.alertsCard}>
+      {visible.map((a, idx) => {
+        const sev = ALERT_SEVERITY_STYLE[a.severity]
+        const Icon = ALERT_ICON_MAP[a.icon] ?? AlertTriangle
+        const title = t(ALERT_TITLE_KEY[a.icon] ?? a.title)
+        const isSlidingOut = slidingOut === a.id
+        const ariaLabel = t('seller.dashboard.alertAria', { title, count: a.count })
+
         return (
-          <View key={a.id} style={[styles.card, styles.alertCard, { borderLeftColor: color }]}>
-            <View style={styles.alertRow}>
-              <Icon size={20} color={color} />
-              <View style={styles.alertBody}>
-                <Text style={styles.alertTitle}>{a.title}</Text>
-                <Text style={styles.alertText}>{a.body}</Text>
-                {a.cta && (
-                  <TouchableOpacity
-                    hitSlop={8}
-                    accessibilityRole="button"
-                    onPress={() => onCtaPress?.(a.id)}
-                  >
-                    <Text style={styles.alertCta}>{a.cta}</Text>
-                  </TouchableOpacity>
-                )}
+          <Animated.View
+            key={a.id}
+            style={[
+              styles.alertRowWrap,
+              idx > 0 && styles.alertRowBorder,
+              isSlidingOut && { opacity: reducedMotion ? 0 : 0, transform: [{ translateX: reducedMotion ? 0 : 300 }] },
+            ]}
+          >
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={ariaLabel}
+              onPress={() => onRoute(a.route)}
+              style={styles.alertRowInner}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.alertIconBox, { backgroundColor: sev.bg }]}>
+                <Icon size={24} color={sev.color} />
               </View>
-            </View>
-          </View>
+              <Text style={styles.alertRowText} numberOfLines={2}>{title}</Text>
+              <View style={[styles.alertCountBadge, { backgroundColor: sev.bg }]}>
+                <Text style={[styles.alertCountText, { color: sev.color }]}>{a.count}</Text>
+              </View>
+              <ChevronRight size={20} color={colors.textTertiary} />
+            </TouchableOpacity>
+            {a.dismissible && (
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={t('seller.dashboard.alertDismiss')}
+                onPress={() => dismiss(a.id)}
+                hitSlop={8}
+                style={styles.alertDismissBtn}
+              >
+                <X size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+            )}
+          </Animated.View>
         )
       })}
     </View>
@@ -1110,13 +1187,42 @@ const styles = StyleSheet.create({
   chartTableFallback: { marginTop: spacing[3] },
   chartTableTitle: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: spacing[1] },
   chartTableRow: { fontSize: 12, color: colors.textSecondary, fontVariant: ['tabular-nums'], marginTop: 1 },
-  alertsStack: { gap: spacing[2] },
-  alertCard: { borderLeftWidth: 3 },
-  alertRow: { flexDirection: 'row', gap: spacing[2.5] },
-  alertBody: { flex: 1, gap: 2 },
-  alertTitle: { fontSize: 14, fontWeight: '600', color: colors.text },
-  alertText: { fontSize: 13, color: colors.textMuted },
-  alertCta: { fontSize: 13, fontWeight: '600', color: colors.primary, marginTop: 4 },
+  alertsCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    overflow: 'hidden',
+  },
+  alertRowWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 56,
+    paddingHorizontal: spacing[4],
+  },
+  alertRowBorder: { borderTopWidth: 1, borderTopColor: colors.border },
+  alertRowInner: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing[3], paddingVertical: spacing[2] },
+  alertIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: radii.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  alertRowText: { flex: 1, fontSize: 16, fontWeight: '400', color: colors.text, lineHeight: 22 },
+  alertCountBadge: {
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[0.5],
+    borderRadius: radii.full,
+    flexShrink: 0,
+  },
+  alertCountText: { fontSize: 12, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  alertDismissBtn: { paddingHorizontal: spacing[2], paddingVertical: spacing[2] },
+  allCaughtUp: { alignItems: 'center', justifyContent: 'center', paddingVertical: spacing[8], gap: spacing[2] },
+  allCaughtUpIcon: { marginBottom: spacing[1] },
+  allCaughtUpTitle: { fontSize: 16, fontWeight: '600', color: colors.text },
+  allCaughtUpSub: { fontSize: 12, fontWeight: '400', color: colors.textMuted, textAlign: 'center' },
   quickActionsRow: { flexDirection: 'row', gap: spacing[2] },
   quickActionBtn: {
     flex: 1,

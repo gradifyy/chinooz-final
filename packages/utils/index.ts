@@ -28,3 +28,5 @@ export {
   MAX_TO_RENDER_PER_BATCH,
 } from './performance'
 export { maskAccountNumber, maskPhone, maskPan, maskEmail } from './masking'
+export { compressImage, uploadOpRef } from './compressImage'
+export type { CompressOptions } from './compressImage'

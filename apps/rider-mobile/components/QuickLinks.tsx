@@ -16,7 +16,7 @@ import {
   LifeBuoy,
   ChevronRight,
 } from 'lucide-react-native'
-import { colors, spacing, radii, fontFamily, fontSize, duration, easing } from '@chinooz/theme'
+import { colors, spacing, radii, fontFamily, fontSize, duration } from '@chinooz/theme'
 import { useReducedMotion } from '@chinooz/ui'
 import type { RiderQuickLinkGroup } from '@chinooz/mock-data'
 
@@ -45,7 +45,7 @@ interface QuickLinksProps {
   onPress: (route: string, label: string) => void
 }
 
-export default function QuickLinks({
+function QuickLinksInner({
   groups,
   labels,
   groupAria,
@@ -174,6 +174,8 @@ function AnimatedLinkRow({
     </Animated.View>
   )
 }
+
+export default React.memo(QuickLinksInner)
 
 const styles = StyleSheet.create({
   group: {

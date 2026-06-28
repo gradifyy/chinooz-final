@@ -60,7 +60,7 @@ function formatMemberSince(iso: string, locale: 'en' | 'ne' = 'en'): string {
   return `${m[d.getMonth()]} ${d.getFullYear()}`
 }
 
-export default function ProfileHeader({
+function ProfileHeaderInner({
   profile,
   tierLabel,
   verificationLabel,
@@ -166,6 +166,8 @@ export default function ProfileHeader({
     </View>
   )
 }
+
+export default React.memo(ProfileHeaderInner)
 
 const styles = StyleSheet.create({
   card: {

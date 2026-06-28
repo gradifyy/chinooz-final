@@ -24,10 +24,16 @@ import {
   X,
   Menu,
   Star,
+  MessageCircle,
+  PackageX,
+  RotateCcw,
+  ShieldAlert,
+  ChevronRight,
 } from 'lucide-react'
 import { Screen, Container } from '@chinooz/ui-web'
 import { useReducedMotion } from '@chinooz/ui-web'
 import { useSellerSessionStore } from '@chinooz/state'
+import { useSellerReviews } from '@chinooz/hooks'
 import {
   getSellerDashboardMetrics,
   SELLER_GO_LIVE_TASKS,
@@ -36,6 +42,7 @@ import {
   type SellerKpi,
   type SellerChartPoint,
   type SellerChartMetric,
+  type SellerAlert,
 } from '@chinooz/mock-data'
 import { analytics } from '@chinooz/analytics'
 
@@ -300,13 +307,11 @@ export default function SellerDashboard() {
                   <h3 id="sd-alerts" className="text-lg font-semibold text-text">
                     {t('seller.dashboard.sectionAlerts')}
                   </h3>
-                  <button className="text-sm font-semibold text-primary hover:underline" onClick={() => router.push('/reviews')}>
+                  <button className="text-sm font-semibold text-primary hover:underline" onClick={() => router.push('/orders')}>
                     {t('seller.dashboard.seeAll')}
                   </button>
                 </div>
-                <Alerts alerts={metrics.alerts} onCta={(id) => {
-                  if (id === 'reviews-needing-response') router.push('/reviews')
-                }} />
+                <Alerts alerts={metrics.alerts} onRoute={(route) => router.push(route)} t={t} />
               </section>
 
               <section aria-labelledby="sd-activity">
@@ -744,44 +749,101 @@ function SalesChart({ points, rangeLabel, t }: { points: SellerChartPoint[]; ran
   )
 }
 
-const ALERT_ICON = {
-  warning: { Icon: AlertTriangle, color: 'text-warning' },
-  error: { Icon: XCircle, color: 'text-error' },
-  info: { Icon: Info, color: 'text-info' },
+const ALERT_SEVERITY_STYLE = {
+  error: { color: 'text-error', bg: 'bg-error/10', hex: '#DC2626' },
+  warning: { color: 'text-warning', bg: 'bg-warning/10', hex: '#F59E0B' },
+  info: { color: 'text-info', bg: 'bg-info/10', hex: '#2563EB' },
+  success: { color: 'text-success', bg: 'bg-success/10', hex: '#16A34A' },
 } as const
 
-function Alerts({ alerts, onCta }: { alerts: { id: string; severity: 'warning' | 'error' | 'info'; title: string; body: string; cta?: string }[]; onCta?: (id: string) => void }) {
-  const { t } = useTranslation()
-  if (alerts.length === 0) {
+const ALERT_ICON_MAP: Record<string, any> = {
+  'new-orders': Box,
+  'low-stock': AlertTriangle,
+  'out-of-stock': PackageX,
+  'returns': RotateCcw,
+  'messages': MessageCircle,
+  'reviews': Star,
+  'payout': Wallet,
+  'kyc': ShieldAlert,
+}
+
+const ALERT_TITLE_KEY: Record<string, string> = {
+  'new-orders': 'seller.dashboard.alertNewOrders',
+  'low-stock': 'seller.dashboard.alertLowStock',
+  'out-of-stock': 'seller.dashboard.alertOutOfStock',
+  'returns': 'seller.dashboard.alertReturns',
+  'messages': 'seller.dashboard.alertMessages',
+  'reviews': 'seller.dashboard.alertReviews',
+  'payout': 'seller.dashboard.alertPayout',
+  'kyc': 'seller.dashboard.alertKyc',
+}
+
+function Alerts({ alerts, onRoute, t }: { alerts: SellerAlert[]; onRoute: (route: string) => void; t: (k: string, o?: Record<string, unknown>) => string }) {
+  const reduced = useReducedMotion()
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set())
+
+  const visible = alerts.filter(a => !dismissed.has(a.id))
+  const allCaughtUp = visible.length === 0
+
+  if (allCaughtUp) {
     return (
-      <div className="rounded-lg border border-border-light bg-surface p-5 text-sm text-text-muted text-center">
-        {t('seller.dashboard.noAlerts')}
+      <div className="rounded-lg border border-border-light bg-surface p-5">
+        <div className="flex flex-col items-center justify-center py-8 gap-2">
+          <motion.div
+            initial={reduced ? {} : { scale: 0.5, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={reduced ? { duration: 0 } : { type: 'spring', damping: 12, stiffness: 200 }}
+          >
+            <CheckCircle2 size={40} className="text-success" />
+          </motion.div>
+          <p className="text-base font-semibold text-text">{t('seller.dashboard.alertAllCaughtUp')}</p>
+          <p className="text-xs font-normal text-text-muted text-center">{t('seller.dashboard.alertAllCaughtUpSub')}</p>
+        </div>
       </div>
     )
   }
+
   return (
-    <div className="space-y-2">
-      {alerts.map(a => {
-        const { Icon, color } = ALERT_ICON[a.severity]
-        const borderColor = a.severity === 'warning' ? 'border-l-warning' : a.severity === 'error' ? 'border-l-error' : 'border-l-info'
+    <div className="rounded-lg border border-border-light bg-surface overflow-hidden">
+      {visible.map((a, idx) => {
+        const sev = ALERT_SEVERITY_STYLE[a.severity]
+        const Icon = ALERT_ICON_MAP[a.icon] ?? AlertTriangle
+        const title = t(ALERT_TITLE_KEY[a.icon] ?? a.title)
+        const ariaLabel = t('seller.dashboard.alertAria', { title, count: a.count })
+
         return (
-          <div key={a.id} className={`rounded-lg border border-border-light border-l-[3px] ${borderColor} bg-surface p-4`}>
-            <div className="flex gap-2.5">
-              <Icon size={20} className={color} />
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-text">{a.title}</p>
-                <p className="text-sm text-text-muted mt-0.5">{a.body}</p>
-                {a.cta && (
-                  <button
-                    className="text-sm font-semibold text-primary mt-1 hover:underline"
-                    onClick={() => onCta?.(a.id)}
-                  >
-                    {a.cta}
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
+          <motion.div
+            key={a.id}
+            layout
+            initial={false}
+            exit={reduced ? { opacity: 0 } : { opacity: 0, x: 300 }}
+            transition={{ duration: reduced ? 0 : 0.25 }}
+            className={`flex items-center min-h-[56px] px-4 ${idx > 0 ? 'border-t border-border' : ''}`}
+          >
+            <button
+              aria-label={ariaLabel}
+              onClick={() => onRoute(a.route)}
+              className="flex items-center gap-3 flex-1 py-2 text-left min-touch"
+            >
+              <span className={`inline-flex h-9 w-9 items-center justify-center rounded-full flex-shrink-0 ${sev.bg}`}>
+                <Icon size={24} className={sev.color} />
+              </span>
+              <span className="flex-1 text-base font-normal text-text leading-snug">{title}</span>
+              <span className={`inline-flex items-center rounded-full px-2 py-0.5 flex-shrink-0 ${sev.bg}`}>
+                <span className={`text-xs font-semibold tabular-nums ${sev.color}`}>{a.count}</span>
+              </span>
+              <ChevronRight size={20} className="text-text-tertiary flex-shrink-0" />
+            </button>
+            {a.dismissible && (
+              <button
+                aria-label={t('seller.dashboard.alertDismiss')}
+                onClick={() => setDismissed(prev => new Set(prev).add(a.id))}
+                className="p-2 ml-1 rounded-full hover:bg-background transition-colors flex-shrink-0"
+              >
+                <X size={16} className="text-text-muted" />
+              </button>
+            )}
+          </motion.div>
         )
       })}
     </div>

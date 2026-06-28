@@ -49,6 +49,8 @@ export type {
   DocumentDraft,
   DocumentItemDraft,
   DocumentKey,
+  ConsentState,
 } from './rider-onboarding'
 export { ONBOARDING_STEPS } from './rider-onboarding'
 export { useRiderTripsStore, computeQuestProgress } from './rider-trips'
+export { useRiderPrefsStore } from './rider-prefs'

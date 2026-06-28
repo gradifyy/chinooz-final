@@ -10,7 +10,7 @@ import Animated, {
   Easing,
   ReduceMotion,
 } from 'react-native-reanimated'
-import { colors, spacing, radii, fontFamily, fontSize, duration, easing } from '@chinooz/theme'
+import { colors, spacing, fontFamily, fontSize, duration, easing } from '@chinooz/theme'
 import { useReducedMotion } from '@chinooz/ui'
 import {
   getRiderQuickLinks,
