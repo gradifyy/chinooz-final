@@ -328,7 +328,7 @@ export default function RiderEarningsScreen() {
                 title={t('rider.earnings.entryChart')}
                 sub={t('rider.earnings.entryChartSub')}
                 ariaLabel={t('rider.earnings.entryChartAria')}
-                onPress={() => {}}
+                onPress={() => router.push('/earnings-chart')}
                 reduced={reduced}
               />
               <View style={styles.entryDivider} />
@@ -338,7 +338,7 @@ export default function RiderEarningsScreen() {
                 title={t('rider.earnings.entryLedger')}
                 sub={t('rider.earnings.entryLedgerSub')}
                 ariaLabel={t('rider.earnings.entryLedgerAria')}
-                onPress={() => {}}
+                onPress={() => router.push('/ledger')}
                 reduced={reduced}
               />
               <View style={styles.entryDivider} />

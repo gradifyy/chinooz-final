@@ -13,6 +13,7 @@ import { formatNPR } from '@chinooz/utils'
 import type { SellerProduct, SellerProductStatus, StockStatus } from '@chinooz/types'
 import type { SellerProductFilter } from '@chinooz/mock-data'
 import { useA11y } from '@/components/A11yProvider'
+import { ProductRow, ProductRowSkeleton } from '@/components/ProductRow'
 
 type StatusTab = SellerProductStatus | 'all'
 type SortKey = NonNullable<SellerProductFilter['sort']>
@@ -21,13 +22,6 @@ const STOCK_BADGE: Record<StockStatus, { label: string; cls: string; dot: string
   in_stock: { label: 'seller.products.stockInStock', cls: 'bg-success/10 text-success', dot: 'bg-success' },
   low_stock: { label: 'seller.products.stockLowStock', cls: 'bg-warning/15 text-[#92400E]', dot: 'bg-warning' },
   out_of_stock: { label: 'seller.products.stockOutOfStock', cls: 'bg-error/10 text-error', dot: 'bg-error' },
-}
-
-const STATUS_BADGE: Record<SellerProductStatus, { label: string; cls: string }> = {
-  active: { label: 'seller.products.statusActive', cls: 'bg-success/10 text-success' },
-  draft: { label: 'seller.products.statusDraft', cls: 'bg-info/10 text-info' },
-  out_of_stock: { label: 'seller.products.statusOutOfStock', cls: 'bg-error/10 text-error' },
-  archived: { label: 'seller.products.statusArchived', cls: 'bg-border text-text-secondary' },
 }
 
 function useDebounced<T>(value: T, delay = 250): T {
@@ -55,6 +49,8 @@ export default function ProductsScreen() {
   const [stockLevel, setStockLevel] = useState<StockStatus | 'all'>('all')
   const [sort, setSort] = useState<SortKey>('newest')
   const [sortOpen, setSortOpen] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const selectable = true
 
   const sortRef = useRef<HTMLDivElement>(null)
 
@@ -143,6 +139,31 @@ export default function ProductsScreen() {
 
   const onAdd = () => {
     analytics.track({ event: 'seller_add_product_tapped', screen: 'seller-products' })
+  }
+
+  const handleSelectChange = (id: string, sel: boolean) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (sel) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }
+
+  const handleEdit = (p: SellerProduct) => {
+    analytics.track({ event: 'seller_product_edit_tapped', screen: 'seller-products', properties: { productId: p.id } })
+  }
+  const handleDuplicate = (p: SellerProduct) => {
+    analytics.track({ event: 'seller_product_duplicate_tapped', screen: 'seller-products', properties: { productId: p.id } })
+  }
+  const handleToggleActive = (p: SellerProduct) => {
+    analytics.track({ event: 'seller_product_toggle_active', screen: 'seller-products', properties: { productId: p.id, from: p.status } })
+  }
+  const handleDelete = (p: SellerProduct) => {
+    analytics.track({ event: 'seller_product_delete_tapped', screen: 'seller-products', properties: { productId: p.id } })
+  }
+  const handleStockChange = (p: SellerProduct, stock: number) => {
+    analytics.track({ event: 'seller_product_stock_edit', screen: 'seller-products', properties: { productId: p.id, stock } })
   }
 
   return (
@@ -380,7 +401,7 @@ export default function ProductsScreen() {
           {/* List slot */}
           <div className="mt-4">
             {isLoading ? (
-              <ProductTableSkeleton />
+              <ProductTableSkeleton selectable={selectable} />
             ) : items.length === 0 ? (
               <EmptyState
                 icon={<Package size={40} className="text-text-tertiary" aria-hidden="true" />}
@@ -396,13 +417,23 @@ export default function ProductsScreen() {
               <>
                 {/* Web data table (md+) */}
                 <div className="hidden md:block">
-                  <ProductTable items={items} />
+                  <ProductTable
+                    items={items}
+                    selectable={selectable}
+                    selectedIds={selectedIds}
+                    onSelectChange={handleSelectChange}
+                    onEdit={handleEdit}
+                    onDuplicate={handleDuplicate}
+                    onToggleActive={handleToggleActive}
+                    onDelete={handleDelete}
+                    onStockChange={handleStockChange}
+                  />
                 </div>
 
                 {/* Mobile cards (<md) */}
                 <div className="md:hidden flex flex-col gap-3">
                   {items.map((p, i) => (
-                    <ProductCardMobile key={p.id} product={p} index={i} reduced={reduced} />
+                    <MobileCardWrapper key={p.id} product={p} index={i} reduced={reduced} />
                   ))}
                 </div>
               </>
@@ -414,7 +445,27 @@ export default function ProductsScreen() {
   )
 }
 
-function ProductTable({ items }: { items: SellerProduct[] }) {
+function ProductTable({
+  items,
+  selectable,
+  selectedIds,
+  onSelectChange,
+  onEdit,
+  onDuplicate,
+  onToggleActive,
+  onDelete,
+  onStockChange,
+}: {
+  items: SellerProduct[]
+  selectable: boolean
+  selectedIds: Set<string>
+  onSelectChange: (id: string, sel: boolean) => void
+  onEdit: (p: SellerProduct) => void
+  onDuplicate: (p: SellerProduct) => void
+  onToggleActive: (p: SellerProduct) => void
+  onDelete: (p: SellerProduct) => void
+  onStockChange: (p: SellerProduct, stock: number) => void
+}) {
   const { t } = useTranslation()
   return (
     <div className="bg-surface border border-border-light rounded-lg overflow-hidden">
@@ -422,48 +473,30 @@ function ProductTable({ items }: { items: SellerProduct[] }) {
         <table className="w-full border-collapse">
           <thead>
             <tr className="border-b border-border bg-background sticky top-0">
+              {selectable && <Th className="text-left w-10">{''}</Th>}
               <Th className="text-left min-w-[280px]">{t('seller.products.colProduct')}</Th>
               <Th className="text-left">{t('seller.products.colCategory')}</Th>
               <Th className="text-right">{t('seller.products.colPrice')}</Th>
               <Th className="text-left">{t('seller.products.colStock')}</Th>
               <Th className="text-left">{t('seller.products.colStatus')}</Th>
               <Th className="text-right">{t('seller.products.colSales')}</Th>
+              <Th className="text-right w-12">{''}</Th>
             </tr>
           </thead>
           <tbody>
             {items.map(p => (
-              <tr
+              <ProductRow
                 key={p.id}
-                className="h-16 border-b border-border last:border-b-0 hover:bg-background/60 transition-colors"
-              >
-                <td className="py-2 px-4">
-                  <div className="flex items-center gap-3">
-                    <SafeImage
-                      src={p.image}
-                      alt={p.name}
-                      className="w-10 h-10 rounded-md object-cover bg-border-light shrink-0"
-                    />
-                    <div className="min-w-0">
-                      <p className="text-[14px] font-semibold text-text truncate max-w-[220px]">{p.name}</p>
-                      <p className="text-[12px] text-text-muted truncate">{t('seller.products.sku')}: {p.sku}</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="py-2 px-4 text-[13px] text-text-secondary">{p.categoryName}</td>
-                <td className="py-2 px-4 text-right">
-                  <span className="text-[14px] font-semibold text-text">{formatNPR(p.price)}</span>
-                  {p.compareAtPrice && (
-                    <span className="block text-[12px] text-text-tertiary line-through">{formatNPR(p.compareAtPrice)}</span>
-                  )}
-                </td>
-                <td className="py-2 px-4">
-                  <StockPill stock={p.stock} count={p.stockCount} />
-                </td>
-                <td className="py-2 px-4">
-                  <StatusPill status={p.status} />
-                </td>
-                <td className="py-2 px-4 text-right text-[13px] text-text-secondary tabular-nums">{p.salesCount}</td>
-              </tr>
+                product={p}
+                selected={selectedIds.has(p.id)}
+                selectable={selectable}
+                onSelectChange={onSelectChange}
+                onEdit={onEdit}
+                onDuplicate={onDuplicate}
+                onToggleActive={onToggleActive}
+                onDelete={onDelete}
+                onStockChange={onStockChange}
+              />
             ))}
           </tbody>
         </table>
@@ -483,28 +516,35 @@ function Th({ children, className = '' }: { children: React.ReactNode; className
   )
 }
 
-function StockPill({ stock, count }: { stock: StockStatus; count: number }) {
-  const { t } = useTranslation()
-  const cfg = STOCK_BADGE[stock]
+function ProductTableSkeleton({ selectable = false }: { selectable?: boolean }) {
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[12px] font-medium ${cfg.cls}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} aria-hidden="true" />
-      {t(cfg.label)} · {count}
-    </span>
+    <div className="bg-surface border border-border-light rounded-lg overflow-hidden" aria-busy="true">
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="border-b border-border bg-background">
+              {selectable && <th className="w-10 px-4 py-2.5" />}
+              <th className="text-left min-w-[280px] px-4 py-2.5 text-[12px] font-semibold text-text-muted uppercase">{''}</th>
+              <th className="px-4 py-2.5" />
+              <th className="px-4 py-2.5" />
+              <th className="px-4 py-2.5" />
+              <th className="px-4 py-2.5" />
+              <th className="px-4 py-2.5" />
+              <th className="w-12 px-4 py-2.5" />
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <ProductRowSkeleton key={i} selectable={selectable} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   )
 }
 
-function StatusPill({ status }: { status: SellerProductStatus }) {
-  const { t } = useTranslation()
-  const cfg = STATUS_BADGE[status]
-  return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[12px] font-semibold ${cfg.cls}`}>
-      {t(cfg.label)}
-    </span>
-  )
-}
-
-function ProductCardMobile({
+function MobileCardWrapper({
   product,
   index,
   reduced,
@@ -514,46 +554,106 @@ function ProductCardMobile({
   reduced: boolean
 }) {
   const { t } = useTranslation()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [stockOpen, setStockOpen] = useState(false)
+  const [stockValue, setStockValue] = useState(String(product.stockCount))
+  const [selected, setSelected] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const onClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [menuOpen])
+
+  const sLevel = product.stockCount <= 0 ? 'out' : product.stockCount <= 10 ? 'low' : 'in_stock'
+  const sColor = sLevel === 'out' ? '#DC2626' : sLevel === 'low' ? '#F59E0B' : '#16A34A'
+  const sLabel = sLevel === 'out' ? t('seller.products.stockOutOfStock') : sLevel === 'low' ? t('seller.products.stockLowStock') : t('seller.products.stockInStock')
+  const stCfg = {
+    active: { label: t('seller.products.statusActive'), color: '#16A34A', bg: 'rgba(22,163,74,0.10)' },
+    draft: { label: t('seller.products.statusDraft'), color: '#6B7280', bg: 'rgba(107,114,128,0.10)' },
+    out_of_stock: { label: t('seller.products.statusOutOfStock'), color: '#DC2626', bg: 'rgba(220,38,38,0.10)' },
+    archived: { label: t('seller.products.statusArchived'), color: '#F59E0B', bg: 'rgba(245,158,11,0.10)' },
+  }[product.status]
+
   return (
     <motion.div
       initial={reduced ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={reduced ? { duration: 0 } : { duration: 0.2, delay: Math.min(index * 0.03, 0.2) }}
-      className="bg-surface border border-border-light rounded-lg shadow-sm p-3 flex gap-3"
+      className={`bg-surface border rounded-lg shadow-sm p-3 flex gap-3 cursor-pointer transition-colors ${selected ? 'border-primary bg-primary-50/40' : 'border-border-light hover:bg-background/60'}`}
+      onClick={() => {/* edit in SP4 */}}
+      role="button"
+      aria-label={t('seller.products.rowAria', { name: product.name, price: formatNPR(product.price), stockLabel: sLabel, count: product.stockCount, status: stCfg.label })}
     >
+      {selected && <div className="w-4 h-4 mt-1 rounded bg-primary flex items-center justify-center text-white text-[10px] font-bold">✓</div>}
       <SafeImage
         src={product.image}
         alt={product.name}
-        className="w-14 h-14 rounded-md object-cover bg-border-light shrink-0"
+        className="w-12 h-12 rounded-md object-cover bg-border-light shrink-0"
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
-          <p className="text-[14px] font-semibold text-text truncate">{product.name}</p>
-          <StatusPill status={product.status} />
+          <p className="text-[16px] font-semibold text-text truncate">{product.name}</p>
+          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[12px] font-semibold shrink-0" style={{ backgroundColor: stCfg.bg, color: stCfg.color }}>{stCfg.label}</span>
         </div>
-        <p className="text-[12px] text-text-muted truncate">{t('seller.products.sku')}: {product.sku}</p>
+        <p className="text-[12px] text-text-muted truncate font-mono">{product.sku}</p>
+        <p className="text-[12px] text-text-muted truncate">{product.categoryName}</p>
         <div className="mt-1.5 flex items-center justify-between gap-2">
-          <span className="text-[14px] font-semibold text-text">{formatNPR(product.price)}</span>
-          <StockPill stock={product.stock} count={product.stockCount} />
+          <span className="text-[14px] font-semibold text-text tabular-nums">{formatNPR(product.price)}</span>
+          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-semibold" style={{ backgroundColor: `rgba(${sLevel === 'out' ? '220,38,38' : sLevel === 'low' ? '245,158,11' : '22,163,74'},0.10)`, color: sColor }}>
+            {sLabel} · <span className="tabular-nums">{product.stockCount}</span>
+          </span>
         </div>
+        <p className="mt-1 text-[12px] text-text-muted">{t('seller.products.unitsSold', { count: product.salesCount })}</p>
+      </div>
+      <div ref={menuRef} className="relative shrink-0">
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setMenuOpen(o => !o) }}
+          aria-label={t('seller.products.actionSheetTitle')}
+          className="text-text-muted hover:text-text p-1"
+        >
+          <span className="text-[20px] font-bold leading-none">⋯</span>
+        </button>
+        <AnimatePresence>
+          {menuOpen && (
+            <motion.div
+              role="menu"
+              initial={reduced ? false : { opacity: 0, y: -4, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={reduced ? { opacity: 0 } : { opacity: 0, y: -4, scale: 0.96 }}
+              transition={reduced ? { duration: 0 } : { duration: 0.15 }}
+              className="absolute right-0 mt-1 w-44 bg-surface border border-border rounded-md shadow-lg z-dropdown overflow-hidden"
+            >
+              <MobileMenuItem label={t('seller.products.actionEdit')} ariaLabel={t('seller.products.actionEditAria')} onClick={() => { setMenuOpen(false) }} />
+              <MobileMenuItem label={t('seller.products.actionDuplicate')} ariaLabel={t('seller.products.actionDuplicateAria')} onClick={() => { setMenuOpen(false) }} />
+              <MobileMenuItem label={product.status === 'active' ? t('seller.products.actionDeactivate') : t('seller.products.actionActivate')} ariaLabel={t('seller.products.actionSheetTitle')} onClick={() => { setMenuOpen(false) }} />
+              <MobileMenuItem label={t('seller.products.actionQuickStock')} ariaLabel={t('seller.products.actionQuickStockAria')} onClick={() => { setMenuOpen(false); setStockValue(String(product.stockCount)); setStockOpen(true) }} />
+              <div className="border-t border-border-light my-1" />
+              <MobileMenuItem label={t('seller.products.actionDelete')} ariaLabel={t('seller.products.actionDeleteAria')} danger onClick={() => { setMenuOpen(false); setConfirmOpen(true) }} />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </motion.div>
   )
 }
 
-function ProductTableSkeleton() {
+function MobileMenuItem({ label, ariaLabel, onClick, danger }: { label: string; ariaLabel: string; onClick: () => void; danger?: boolean }) {
   return (
-    <div className="bg-surface border border-border-light rounded-lg overflow-hidden">
-      <div className="h-11 border-b border-border bg-background" />
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="h-16 border-b border-border last:border-b-0 flex items-center px-4 gap-3">
-          <div className="w-10 h-10 rounded-md bg-shimmer animate-pulse" />
-          <div className="flex-1 space-y-2">
-            <div className="h-3 w-1/3 rounded bg-shimmer animate-pulse" />
-            <div className="h-2.5 w-1/4 rounded bg-shimmer animate-pulse" />
-          </div>
-        </div>
-      ))}
-    </div>
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      aria-label={ariaLabel}
+      className={`w-full text-left px-3 py-2 text-[14px] transition-colors hover:bg-background ${danger ? 'text-error' : 'text-text'}`}
+    >
+      {label}
+    </button>
   )
 }

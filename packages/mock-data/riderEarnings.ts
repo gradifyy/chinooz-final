@@ -238,11 +238,101 @@ export async function getRiderEarningsChart(range: RiderEarningsRange): Promise<
   const scale = scaleFor(range.days)
   const seed = range.days + 3
   const labels = CHART_LABELS[range.days] ?? CHART_LABELS[30]
-  const points: RiderChartPoint[] = labels.map((label, i) => ({
-    label,
-    value: Math.round(420 * scale * (0.4 + seeded(i + 4, seed) * 0.9)),
-  }))
+  const dates = chartDatesFor(range.days)
+  const points: RiderChartPoint[] = labels.map((label, i) => {
+    const net = Math.round(420 * scale * (0.4 + seeded(i + 4, seed) * 0.9))
+    const base = Math.round(net * 0.55)
+    const distance = Math.round(net * 0.25)
+    const incentives = Math.round(net * 0.12)
+    const tips = Math.max(0, net - base - distance - incentives)
+    const fee = Math.round((net / 0.92) * 0.08)
+    const trips = Math.max(1, Math.round(6 * scale * (0.6 + seeded(i + 9, seed) * 0.8)))
+    const previous = Math.round(420 * scale * (0.35 + seeded(i + 20, seed + 1) * 0.8))
+    return {
+      label,
+      date: dates[i] ?? dates[0],
+      value: net,
+      base,
+      distance,
+      incentives,
+      tips,
+      fee,
+      trips,
+      previous,
+    }
+  })
   return { range, points }
+}
+
+function chartDatesFor(days: number): string[] {
+  if (days <= 1) {
+    const today = new Date().toISOString().slice(0, 10)
+    return CHART_LABELS[1].map(() => today)
+  }
+  if (days <= 7) {
+    const out: string[] = []
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date()
+      d.setDate(d.getDate() - i)
+      out.push(d.toISOString().slice(0, 10))
+    }
+    return out
+  }
+  const out: string[] = []
+  for (let i = 27; i >= 0; i -= 7) {
+    const d = new Date()
+    d.setDate(d.getDate() - i)
+    out.push(d.toISOString().slice(0, 10))
+  }
+  return out
+}
+
+export async function getRiderEarningsBreakdown(range: RiderEarningsRange): Promise<RiderEarningsBreakdown> {
+  await new Promise(resolve => setTimeout(resolve, 180 + Math.random() * 240))
+  const chart = await getRiderEarningsChart(range)
+  let base = 0
+  let distance = 0
+  let incentives = 0
+  let tips = 0
+  let fee = 0
+  let trips = 0
+  let busiestIdx = 0
+  for (let i = 0; i < chart.points.length; i++) {
+    const p = chart.points[i]
+    base += p.base
+    distance += p.distance
+    incentives += p.incentives
+    tips += p.tips
+    fee += p.fee
+    trips += p.trips
+    if (p.value > chart.points[busiestIdx].value) busiestIdx = i
+  }
+  const gross = base + distance + incentives + tips
+  const net = gross - fee
+  const previousNet = chart.points.reduce((s, p) => s + (p.previous ?? 0), 0)
+  const deltaPct = previousNet > 0 ? Math.round(((net - previousNet) / previousNet) * 100) : 0
+  const trend: 'up' | 'down' | 'flat' = deltaPct > 1 ? 'up' : deltaPct < -1 ? 'down' : 'flat'
+  const busiest = chart.points[busiestIdx]
+  const rows: RiderEarningsBreakdownRow[] = [
+    { id: 'base', label: 'Base pay', amount: base, share: gross > 0 ? Math.round((base / gross) * 100) : 0 },
+    { id: 'distance', label: 'Distance pay', amount: distance, share: gross > 0 ? Math.round((distance / gross) * 100) : 0 },
+    { id: 'incentives', label: 'Incentives & bonuses', amount: incentives, share: gross > 0 ? Math.round((incentives / gross) * 100) : 0 },
+    { id: 'tips', label: 'Tips', amount: tips, share: gross > 0 ? Math.round((tips / gross) * 100) : 0 },
+    { id: 'fee', label: 'Platform fee', amount: -fee, share: gross > 0 ? -Math.round((fee / gross) * 100) : 0 },
+  ]
+  return {
+    range,
+    gross,
+    fee,
+    net,
+    rows,
+    previousNet,
+    deltaPct,
+    trend,
+    busiestLabel: busiest.label,
+    busiestAmount: busiest.value,
+    trips,
+  }
 }
 
 export async function getRiderEarningsLedger(): Promise<RiderLedgerRow[]> {

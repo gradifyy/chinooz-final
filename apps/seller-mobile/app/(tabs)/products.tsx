@@ -14,14 +14,15 @@ import { useRouter, Redirect } from 'expo-router'
 import { useTranslation } from 'react-i18next'
 import * as Haptics from 'expo-haptics'
 import { colors, spacing, radii } from '@chinooz/theme'
-import { BottomSheet, Button, EmptyState, SafeImage, FadeIn } from '@chinooz/ui'
+import { BottomSheet, Button, EmptyState } from '@chinooz/ui'
 import { useSellerProducts, useSellerCategories } from '@chinooz/hooks'
 import { useSellerSessionStore } from '@chinooz/state'
 import { analytics } from '@chinooz/analytics'
 import { formatNPR } from '@chinooz/utils'
 import type { SellerProduct, SellerProductStatus, StockStatus } from '@chinooz/types'
 import type { SellerProductFilter } from '@chinooz/mock-data'
-import { useA11y } from '../components/A11yProvider'
+import { useA11y } from '../../components/A11yProvider'
+import { ProductListCard, ProductListCardSkeleton } from '../../components/ProductListCard'
 
 type StatusTab = SellerProductStatus | 'all'
 type SortKey = NonNullable<SellerProductFilter['sort']>
@@ -30,26 +31,6 @@ const STOCK_LABEL: Record<StockStatus, string> = {
   in_stock: 'seller.products.stockInStock',
   low_stock: 'seller.products.stockLowStock',
   out_of_stock: 'seller.products.stockOutOfStock',
-}
-
-const STOCK_COLOR: Record<StockStatus, { bg: string; text: string; dot: string }> = {
-  in_stock: { bg: 'rgba(22,163,74,0.12)', text: colors.success, dot: colors.success },
-  low_stock: { bg: 'rgba(245,158,11,0.15)', text: '#92400E', dot: colors.warning },
-  out_of_stock: { bg: 'rgba(220,38,38,0.12)', text: colors.error, dot: colors.error },
-}
-
-const STATUS_LABEL: Record<SellerProductStatus, string> = {
-  active: 'seller.products.statusActive',
-  draft: 'seller.products.statusDraft',
-  out_of_stock: 'seller.products.statusOutOfStock',
-  archived: 'seller.products.statusArchived',
-}
-
-const STATUS_COLOR: Record<SellerProductStatus, { bg: string; text: string }> = {
-  active: { bg: 'rgba(22,163,74,0.12)', text: colors.success },
-  draft: { bg: 'rgba(37,99,235,0.12)', text: colors.info },
-  out_of_stock: { bg: 'rgba(220,38,38,0.12)', text: colors.error },
-  archived: { bg: colors.border, text: colors.textSecondary },
 }
 
 function useDebounced<T>(value: T, delay = 250): T {
@@ -80,6 +61,8 @@ export default function ProductsScreen() {
   const [sortOpen, setSortOpen] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [listKey, setListKey] = useState(0)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const selectable = true
 
   const [draftCategory, setDraftCategory] = useState<string | undefined>(undefined)
   const [draftPriceMin, setDraftPriceMin] = useState('')
@@ -185,6 +168,30 @@ export default function ProductsScreen() {
   const onAdd = () => {
     try { if (!reducedMotion) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light) } catch {}
     analytics.track({ name: 'seller_add_product_tapped' })
+  }
+
+  const handleSelectChange = (id: string, sel: boolean) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (sel) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }
+  const handleEdit = (p: SellerProduct) => {
+    analytics.track({ name: 'seller_product_edit_tapped', properties: { productId: p.id } })
+  }
+  const handleDuplicate = (p: SellerProduct) => {
+    analytics.track({ name: 'seller_product_duplicate_tapped', properties: { productId: p.id } })
+  }
+  const handleToggleActive = (p: SellerProduct) => {
+    analytics.track({ name: 'seller_product_toggle_active', properties: { productId: p.id, from: p.status } })
+  }
+  const handleDelete = (p: SellerProduct) => {
+    analytics.track({ name: 'seller_product_delete_tapped', properties: { productId: p.id } })
+  }
+  const handleStockChange = (p: SellerProduct, stock: number) => {
+    analytics.track({ name: 'seller_product_stock_edit', properties: { productId: p.id, stock } })
   }
 
   return (
@@ -301,8 +308,10 @@ export default function ProductsScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         ListEmptyComponent={
           isLoading ? (
-            <View style={styles.loadingWrap}>
-              <Text style={styles.loadingText}>{t('seller.products.loading')}</Text>
+            <View style={styles.skeletonList} aria-busy={true}>
+              {Array.from({ length: 4 }).map((_, i) => (
+                <ProductListCardSkeleton key={i} />
+              ))}
             </View>
           ) : (
             <EmptyState
@@ -318,7 +327,20 @@ export default function ProductsScreen() {
           )
         }
         ListFooterComponent={isFetching && items.length > 0 ? <Text style={styles.fetchingText}>…</Text> : null}
-        renderItem={({ item, index }) => <ProductCard product={item} index={index} reduced={reducedMotion} />}
+        renderItem={({ item, index }) => (
+          <ProductListCard
+            product={item}
+            index={index}
+            selected={selectedIds.has(item.id)}
+            selectable={selectable}
+            onSelectChange={handleSelectChange}
+            onEdit={handleEdit}
+            onDuplicate={handleDuplicate}
+            onToggleActive={handleToggleActive}
+            onDelete={handleDelete}
+            onStockChange={handleStockChange}
+          />
+        )}
       />
 
       <BottomSheet visible={filterOpen} onClose={() => setFilterOpen(false)} title={t('seller.products.filterSheetTitle')}>
@@ -407,37 +429,6 @@ function FilterChip({ label, active, onPress }: { label: string; active: boolean
     >
       <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{label}</Text>
     </TouchableOpacity>
-  )
-}
-
-function ProductCard({ product, index, reduced }: { product: SellerProduct; index: number; reduced: boolean }) {
-  const { t } = useTranslation()
-  const stockCfg = STOCK_COLOR[product.stock]
-  const statusCfg = STATUS_COLOR[product.status]
-  return (
-    <FadeIn delay={Math.min(index * 60, 240)} style={styles.card}>
-      <View style={styles.cardInner}>
-        <SafeImage source={product.image} alt={product.name} style={styles.cardImage} />
-        <View style={styles.cardBody}>
-          <View style={styles.cardTopRow}>
-            <Text style={styles.cardName} numberOfLines={1}>{product.name}</Text>
-            <View style={[styles.statusPill, { backgroundColor: statusCfg.bg }]}>
-              <Text style={[styles.statusPillText, { color: statusCfg.text }]}>{t(STATUS_LABEL[product.status])}</Text>
-            </View>
-          </View>
-          <Text style={styles.cardSku} numberOfLines={1}>{t('seller.products.sku')}: {product.sku}</Text>
-          <View style={styles.cardBottomRow}>
-            <Text style={styles.cardPrice}>{formatNPR(product.price)}</Text>
-            <View style={[styles.stockPill, { backgroundColor: stockCfg.bg }]}>
-              <View style={[styles.stockDot, { backgroundColor: stockCfg.dot }]} />
-              <Text style={[styles.stockPillText, { color: stockCfg.text }]}>
-                {t(STOCK_LABEL[product.stock])} · {product.stockCount}
-              </Text>
-            </View>
-          </View>
-        </View>
-      </View>
-    </FadeIn>
   )
 }
 
@@ -551,37 +542,8 @@ const styles = StyleSheet.create({
   tabBadgeTextActive: { color: colors.white },
 
   listContent: { padding: spacing[4], gap: spacing[3] },
-  loadingWrap: { paddingVertical: spacing[10], alignItems: 'center' },
-  loadingText: { fontSize: 14, color: colors.textMuted },
+  skeletonList: { gap: spacing[3] },
   fetchingText: { textAlign: 'center', color: colors.textTertiary, fontSize: 12, paddingVertical: spacing[3] },
-
-  card: { backgroundColor: 'transparent' },
-  cardInner: {
-    flexDirection: 'row',
-    gap: spacing[3],
-    backgroundColor: colors.surface,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    padding: spacing[3],
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
-  },
-  cardImage: { width: 56, height: 56, borderRadius: radii.md, backgroundColor: colors.borderLight },
-  cardBody: { flex: 1, minWidth: 0 },
-  cardTopRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
-  cardName: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.text },
-  statusPill: { paddingHorizontal: spacing[2], paddingVertical: 2, borderRadius: radii.full },
-  statusPillText: { fontSize: 11, fontWeight: '600' },
-  cardSku: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
-  cardBottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing[2], gap: spacing[2] },
-  cardPrice: { fontSize: 15, fontWeight: '700', color: colors.text },
-  stockPill: { flexDirection: 'row', alignItems: 'center', gap: spacing[1], paddingHorizontal: spacing[2], paddingVertical: 3, borderRadius: radii.full },
-  stockDot: { width: 6, height: 6, borderRadius: 3 },
-  stockPillText: { fontSize: 12, fontWeight: '500' },
 
   emptyIcon: { fontSize: 40 },
 
