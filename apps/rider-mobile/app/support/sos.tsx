@@ -36,6 +36,7 @@ import { colors, spacing, radii, fontSize, fontFamily, easing, duration } from '
 import { analytics } from '@chinooz/analytics'
 import { useA11y } from '../../components/A11yProvider'
 import { useActiveDeliveryStore } from '@chinooz/state'
+import { useTriggerSOS } from '@chinooz/hooks'
 
 const HOLD_MS = 3000
 const TICK_MS = 100
@@ -66,7 +67,6 @@ export default function SosScreen() {
   const [secondsLeft, setSecondsLeft] = useState(Math.ceil(HOLD_MS / 1000))
   const [trustedContacts] = useState<{ name: string; phone: string }[]>([])
   const sosMutation = useTriggerSOS()
-  const shareMutation = useShareTripStatus()
 
   const holdElapsed = useRef(0)
   const holdInterval = useRef<ReturnType<typeof setInterval> | null>(null)

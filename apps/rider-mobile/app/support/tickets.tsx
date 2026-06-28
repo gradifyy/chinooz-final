@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo } from 'react'
 import {
   View,
   Text,
@@ -32,8 +32,8 @@ import { colors, spacing, radii, fontSize, fontFamily } from '@chinooz/theme'
 import { EmptyState, Skeleton } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
 import { useA11y } from '../../components/A11yProvider'
+import { useTickets } from '@chinooz/hooks'
 import {
-  getTickets,
   getRiderTicketCategoryMeta,
   type RiderTicket,
   type RiderTicketStatus,
@@ -66,31 +66,18 @@ export default function MyTicketsScreen() {
   const insets = useSafeAreaInsets()
   const { reducedMotion } = useA11y()
 
-  const [isLoading, setIsLoading] = useState(true)
-  const [isRefreshing, setIsRefreshing] = useState(false)
-  const [loadError, setLoadError] = useState(false)
-  const [tickets, setTickets] = useState<RiderTicket[]>([])
-
-  const loadTickets = async (isRefresh = false) => {
-    if (isRefresh) setIsRefreshing(true)
-    else setIsLoading(true)
-    setLoadError(false)
-    try {
-      const list = await getTickets()
-      setTickets(list)
-    } catch {
-      setLoadError(true)
-      try { AccessibilityInfo.announceForAccessibility(t('rider.support.states.ticketLoadErrorAria')) } catch {}
-    } finally {
-      setIsLoading(false)
-      setIsRefreshing(false)
-    }
-  }
+  const { data: tickets = [], isLoading, isError, refetch, isRefetching } = useTickets()
+  const loadError = isError && !isRefetching
 
   useEffect(() => {
     analytics.screen({ name: 'rider-support-tickets' })
-    loadTickets()
   }, [])
+
+  useEffect(() => {
+    if (loadError) {
+      try { AccessibilityInfo.announceForAccessibility(t('rider.support.states.ticketLoadErrorAria')) } catch {}
+    }
+  }, [loadError, t])
 
   const sorted = useMemo(
     () => [...tickets].sort((a, b) => b.updatedAt - a.updatedAt),
@@ -124,8 +111,8 @@ export default function MyTicketsScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={() => loadTickets(true)}
+            refreshing={isRefetching}
+            onRefresh={() => refetch()}
             tintColor={colors.primary}
           />
         }
@@ -179,7 +166,7 @@ export default function MyTicketsScreen() {
             <Text style={styles.errorBody}>{t('rider.support.states.ticketLoadErrorBody')}</Text>
             <TouchableOpacity
               style={styles.retryBtn}
-              onPress={() => loadTickets()}
+              onPress={() => refetch()}
               accessibilityRole="button"
               accessibilityLabel={t('rider.support.states.retryAria')}
               activeOpacity={0.85}

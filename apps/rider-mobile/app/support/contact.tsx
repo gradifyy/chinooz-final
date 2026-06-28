@@ -44,9 +44,9 @@ import { colors, spacing, radii, fontSize, fontFamily } from '@chinooz/theme'
 import { analytics } from '@chinooz/analytics'
 import { useA11y } from '../../components/A11yProvider'
 import { useActiveDeliveryStore, hasActiveDelivery } from '@chinooz/state'
+import { useSubmitTicket } from '@chinooz/hooks'
 import {
   RIDER_TICKET_CATEGORIES,
-  submitTicket,
   type RiderTicketCategory,
   type RiderTicketAttachment,
   type RiderTicketContext,
@@ -317,9 +317,10 @@ function TicketForm({
   const [description, setDescription] = useState('')
   const [attachments, setAttachments] = useState<RiderTicketAttachment[]>([])
   const [context, setContext] = useState<RiderTicketContext>(prefillContext)
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [validationError, setValidationError] = useState(false)
   const [submitError, setSubmitError] = useState(false)
+  const submitMutation = useSubmitTicket()
+  const isSubmitting = submitMutation.isPending
   const MAX_DESC = 500
 
   // Announce pre-filled context on mount.
@@ -360,14 +361,19 @@ function TicketForm({
     }
     setValidationError(false)
     setSubmitError(false)
-    setIsSubmitting(true)
     try {
-      const result = await submitTicket({
-        category,
-        subject: subject.trim(),
-        description: description.trim(),
-        attachments,
-        context,
+      // Idempotent opRef: hash of category+subject+description so retries
+      // never create duplicate tickets.
+      const opRef = `ticket-${category}-${subject.trim()}-${description.trim().slice(0, 50)}`
+      const result = await submitMutation.mutateAsync({
+        input: {
+          category,
+          subject: subject.trim(),
+          description: description.trim(),
+          attachments,
+          context,
+        },
+        opRef,
       })
       if (result.success && result.ticket) {
         try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}) } catch {}
@@ -380,8 +386,6 @@ function TicketForm({
       // Preserve draft + attachments on failure.
       setSubmitError(true)
       try { AccessibilityInfo.announceForAccessibility(t('rider.support.states.submitErrorAria')) } catch {}
-    } finally {
-      setIsSubmitting(false)
     }
   }
 

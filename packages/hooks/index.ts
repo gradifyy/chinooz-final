@@ -143,6 +143,26 @@ export {
 } from './useRider'
 
 export {
+  useHelpArticles,
+  useHelpArticle,
+  useRelatedHelpArticles,
+  useSearchHelp,
+  useSafetyTips,
+  useSafetyChecklist,
+  useTickets,
+  useTicketThread,
+  useSubmitTicket,
+  useAddTicketMessage,
+  useReopenTicket,
+  useCloseTicket,
+  useTriggerSOS,
+  useShareTripStatus,
+  useReportSafetyIncident,
+} from './useRiderSupport'
+
+export type { TriggerSosInput, TriggerSosResult } from './useRiderSupport'
+
+export {
   useSendOtp,
   useVerifyOtp,
   useCheckHandle,

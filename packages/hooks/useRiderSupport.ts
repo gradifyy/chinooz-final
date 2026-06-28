@@ -38,27 +38,19 @@ import {
   reopenTicket,
   closeTicket,
   addTicketMessage,
-  type SubmitTicketInput,
-  type RiderTicket,
-} from '@chinooz/mock-data/riderSupport'
-import {
   triggerSOS,
   shareTripStatus,
   reportSafetyIncident,
   getSafetyTips,
   getSafetyChecklist,
-  type ReportIncidentInput,
-  type SosResult,
-  type ShareTripResult,
-  type RiderSafetyTip,
-  type RiderSafetyChecklistItem,
-} from '@chinooz/mock-data/riderSafety'
-import {
   RIDER_HELP_ARTICLES,
   getRiderHelpArticle,
   getRelatedHelpArticles,
   getRiderHelpContext,
   getRelevantHelpArticles,
+  type SubmitTicketInput,
+  type ReportIncidentInput,
+  type SosResult,
   type RiderHelpArticle,
   type RiderHelpCategory,
 } from '@chinooz/mock-data'

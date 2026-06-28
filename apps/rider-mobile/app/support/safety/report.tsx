@@ -106,13 +106,18 @@ export default function ReportIncidentScreen() {
     }
     setValidationError(false)
     setSubmitError(false)
-    setIsSubmitting(true)
     try {
-      const result = await reportSafetyIncident({
-        type,
-        description: description.trim(),
-        attachments,
-        context,
+      // Idempotent opRef: hash of type+description so retries never
+      // create duplicate incident reports.
+      const opRef = `incident-${type}-${description.trim().slice(0, 50)}`
+      const result = await reportMutation.mutateAsync({
+        input: {
+          type,
+          description: description.trim(),
+          attachments,
+          context,
+        },
+        opRef,
       })
       if (result.success && result.incident) {
         try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}) } catch {}
@@ -127,8 +132,6 @@ export default function ReportIncidentScreen() {
       // Preserve draft + attachments on failure.
       setSubmitError(true)
       try { AccessibilityInfo.announceForAccessibility(t('rider.support.states.submitErrorAria')) } catch {}
-    } finally {
-      setIsSubmitting(false)
     }
   }
 

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   View,
   Text,
@@ -36,12 +36,13 @@ import { colors, spacing, radii, fontSize, fontFamily } from '@chinooz/theme'
 import { Skeleton } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
 import {
-  getTicketById,
-  addTicketMessage,
-  reopenTicket,
-  closeTicket,
+  useTicketThread,
+  useAddTicketMessage,
+  useReopenTicket,
+  useCloseTicket,
+} from '@chinooz/hooks'
+import {
   getRiderTicketCategoryMeta,
-  type RiderTicket,
   type RiderTicketStatus,
   type RiderTicketMessage,
 } from '@chinooz/mock-data'
@@ -98,59 +99,40 @@ export default function TicketThreadScreen() {
       ? params.ticket[0]
       : ''
 
-  const [ticket, setTicket] = useState<RiderTicket | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [loadError, setLoadError] = useState(false)
+  const { data: ticket = null, isLoading, isError, refetch } = useTicketThread(ticketId)
   const [replyError, setReplyError] = useState(false)
   const [reply, setReply] = useState('')
-  const [isSending, setIsSending] = useState(false)
   const [showReopen, setShowReopen] = useState(false)
   const [reopenReason, setReopenReason] = useState('')
-  const [isActioning, setIsActioning] = useState(false)
   const flatListRef = useRef<FlatList>(null)
 
-  const loadTicket = useCallback(async () => {
-    setIsLoading(true)
-    setLoadError(false)
-    try {
-      const tk = await getTicketById(ticketId)
-      setTicket(tk)
-    } catch {
-      setLoadError(true)
-      try { AccessibilityInfo.announceForAccessibility(t('rider.support.states.ticketThreadLoadErrorAria')) } catch {}
-    } finally {
-      setIsLoading(false)
-    }
-  }, [ticketId, t])
+  const sendReplyMutation = useAddTicketMessage()
+  const reopenMutation = useReopenTicket()
+  const closeMutation = useCloseTicket()
+
+  const isSending = sendReplyMutation.isPending
+  const isActioning = reopenMutation.isPending || closeMutation.isPending
+  const loadError = isError
 
   useEffect(() => {
     analytics.screen({ name: 'rider-ticket-thread', properties: { ticketId } })
-    loadTicket()
-  }, [ticketId, loadTicket])
+  }, [ticketId])
 
-  // Poll for simulated agent replies.
   useEffect(() => {
-    if (!ticket || ticket.status === 'resolved') return
-    const interval = setInterval(async () => {
-      const fresh = await getTicketById(ticketId)
-      if (fresh && fresh.messages.length !== ticket?.messages.length) {
-        setTicket(fresh)
-      }
-    }, 3000)
-    return () => clearInterval(interval)
-  }, [ticket, ticketId])
+    if (loadError) {
+      try { AccessibilityInfo.announceForAccessibility(t('rider.support.states.ticketThreadLoadErrorAria')) } catch {}
+    }
+  }, [loadError, t])
 
   const grouped = useMemo(() => ticket ? groupByDay(ticket.messages) : [], [ticket])
 
   const handleSendReply = async () => {
     const trimmed = reply.trim()
     if (!trimmed || !ticket) return
-    setIsSending(true)
     setReplyError(false)
     try {
-      const result = await addTicketMessage(ticket.id, trimmed)
+      const result = await sendReplyMutation.mutateAsync({ ticketId: ticket.id, body: trimmed })
       if (result.success && result.ticket) {
-        setTicket(result.ticket)
         setReply('')
         try { AccessibilityInfo.announceForAccessibility(t(thKey('threadReplySent'))) } catch {}
       } else {
@@ -160,25 +142,19 @@ export default function TicketThreadScreen() {
     } catch {
       setReplyError(true)
       try { AccessibilityInfo.announceForAccessibility(t('rider.support.states.replyErrorAria')) } catch {}
-    } finally {
-      setIsSending(false)
     }
   }
 
   const handleReopen = async () => {
     if (!ticket || !reopenReason.trim()) return
-    setIsActioning(true)
     try {
-      const result = await reopenTicket(ticket.id, reopenReason.trim())
+      const result = await reopenMutation.mutateAsync({ ticketId: ticket.id, reason: reopenReason.trim() })
       if (result.success && result.ticket) {
-        setTicket(result.ticket)
         setShowReopen(false)
         setReopenReason('')
         try { AccessibilityInfo.announceForAccessibility(t(thKey('threadReopened'))) } catch {}
       }
-    } finally {
-      setIsActioning(false)
-    }
+    } catch {}
   }
 
   const handleClose = () => {
@@ -192,16 +168,12 @@ export default function TicketThreadScreen() {
           text: t(thKey('threadCloseYes')),
           style: 'destructive',
           onPress: async () => {
-            setIsActioning(true)
             try {
-              const result = await closeTicket(ticket.id)
+              const result = await closeMutation.mutateAsync(ticket.id)
               if (result.success && result.ticket) {
-                setTicket(result.ticket)
                 try { AccessibilityInfo.announceForAccessibility(t(thKey('threadClosed'))) } catch {}
               }
-            } finally {
-              setIsActioning(false)
-            }
+            } catch {}
           },
         },
       ],
@@ -235,7 +207,7 @@ export default function TicketThreadScreen() {
           <Text style={styles.errorBody}>{t('rider.support.states.ticketThreadLoadErrorBody')}</Text>
           <TouchableOpacity
             style={styles.retryBtn}
-            onPress={() => loadTicket()}
+            onPress={() => refetch()}
             accessibilityRole="button"
             accessibilityLabel={t('rider.support.states.retryAria')}
             activeOpacity={0.85}
