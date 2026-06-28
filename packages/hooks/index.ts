@@ -82,6 +82,8 @@ export {
   useSellerOrderById,
   useUpdateOrderStatus,
   useFulfillOrder,
+  useRejectOrder,
+  usePartialShipOrder,
   usePromotions,
   useCreatePromotion,
   useUpdatePromotion,

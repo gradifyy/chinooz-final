@@ -31,6 +31,9 @@ import {
   useEditSellerReviewResponse,
   useDeleteSellerReviewResponse,
   useToggleSellerReviewFlag,
+  useFlagSellerReview,
+  useUnflagSellerReview,
+  useBulkUpdateSellerReviews,
 } from '@chinooz/hooks'
 import { analytics } from '@chinooz/analytics'
 import { reviewResponseSchema } from '@chinooz/validation'
@@ -41,6 +44,7 @@ import type {
   SellerReviewStatus,
   SellerReviewResponseFilter,
 } from '@chinooz/mock-data'
+import type { ReviewFlagReason } from '@chinooz/types'
 import { ReviewCard, ReviewCardSkeleton } from '@chinooz/ui'
 import BottomSheet from '@chinooz/ui/BottomSheet'
 import EmptyState from '@chinooz/ui/EmptyState'
@@ -74,6 +78,12 @@ export default function SellerReviews() {
   const [composeSuccess, setComposeSuccess] = useState(false)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [deleteReviewId, setDeleteReviewId] = useState<string | null>(null)
+  const [flagSheetOpen, setFlagSheetOpen] = useState(false)
+  const [flagReviewId, setFlagReviewId] = useState<string | null>(null)
+  const [flagReason, setFlagReason] = useState<ReviewFlagReason | null>(null)
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkBarAnim] = useState(new Animated.Value(0))
   const barAnims = useRef<Animated.Value[]>(STARS.map(() => new Animated.Value(0)))
 
   useEffect(() => {
@@ -110,6 +120,9 @@ export default function SellerReviews() {
   const editResponse = useEditSellerReviewResponse()
   const deleteResponse = useDeleteSellerReviewResponse()
   const toggleFlag = useToggleSellerReviewFlag()
+  const flagReview = useFlagSellerReview()
+  const unflagReview = useUnflagSellerReview()
+  const bulkUpdate = useBulkUpdateSellerReviews()
 
   const activeMutation = composeMode === 'edit' ? editResponse : respond
 
@@ -234,10 +247,87 @@ export default function SellerReviews() {
     })
   }
 
+  // Flag flow
+  const openFlagSheet = (reviewId: string) => {
+    setFlagReviewId(reviewId)
+    setFlagReason(null)
+    setFlagSheetOpen(true)
+  }
+
+  const submitFlag = () => {
+    if (!flagReviewId || !flagReason) return
+    flagReview.mutate(
+      { reviewId: flagReviewId, reason: flagReason },
+      { onSuccess: () => {
+        setFlagSheetOpen(false)
+        setFlagReviewId(null)
+        setFlagReason(null)
+      } },
+    )
+  }
+
+  const handleUnflag = (reviewId: string) => {
+    unflagReview.mutate(reviewId)
+  }
+
+  // Bulk selection
+  const toggleSelectMode = () => {
+    setSelectMode(v => !v)
+    setSelectedIds(new Set())
+  }
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const selectAll = () => {
+    setSelectedIds(new Set(items.map(r => r.id)))
+  }
+
+  const deselectAll = () => {
+    setSelectedIds(new Set())
+  }
+
+  const bulkMarkRespondedNotNeeded = () => {
+    if (selectedIds.size === 0) return
+    bulkUpdate.mutate(
+      { reviewIds: [...selectedIds], action: 'mark_responded_not_needed' },
+      { onSuccess: () => {
+        setSelectMode(false)
+        setSelectedIds(new Set())
+      } },
+    )
+  }
+
+  const bulkFlag = () => {
+    if (selectedIds.size === 0) return
+    bulkUpdate.mutate(
+      { reviewIds: [...selectedIds], action: 'flag', reason: 'spam' },
+      { onSuccess: () => {
+        setSelectMode(false)
+        setSelectedIds(new Set())
+      } },
+    )
+  }
+
   const onRefresh = useCallback(() => {
     setRefreshing(true)
     refetch().finally(() => setRefreshing(false))
   }, [refetch])
+
+  // Bulk bar slide-up animation
+  useEffect(() => {
+    Animated.timing(bulkBarAnim, {
+      toValue: selectMode && selectedIds.size > 0 ? 1 : 0,
+      duration: reducedMotion ? 0 : 250,
+      useNativeDriver: true,
+    }).start()
+  }, [selectMode, selectedIds.size, reducedMotion, bulkBarAnim])
 
   const selectedProductName =
     productOptions.find(p => p.id === productId)?.name ?? t('seller.reviews.filterProductAll')
@@ -739,6 +829,100 @@ export default function SellerReviews() {
           </TouchableOpacity>
         </View>
       </BottomSheet>
+
+      {/* Flag reason sheet */}
+      <BottomSheet
+        visible={flagSheetOpen}
+        onClose={() => { setFlagSheetOpen(false); setFlagReviewId(null); setFlagReason(null) }}
+        title={t('seller.reviews.flagTitle')}
+      >
+        <Text style={flagStyles.subtitle}>{t('seller.reviews.flagSubtitle')}</Text>
+        {([
+          { key: 'spam' as const, label: t('seller.reviews.flagReasonSpam') },
+          { key: 'abusive' as const, label: t('seller.reviews.flagReasonAbusive') },
+          { key: 'fake' as const, label: t('seller.reviews.flagReasonFake') },
+          { key: 'off_topic' as const, label: t('seller.reviews.flagReasonOffTopic') },
+        ]).map(r => (
+          <TouchableOpacity
+            key={r.key}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: flagReason === r.key }}
+            accessibilityLabel={t('seller.reviews.flagReasonAria', { reason: r.label })}
+            onPress={() => setFlagReason(r.key)}
+            style={[flagStyles.reasonRow, flagReason === r.key && flagStyles.reasonRowActive]}
+            activeOpacity={0.85}
+          >
+            <View style={[flagStyles.radio, flagReason === r.key && flagStyles.radioActive]}>
+              {flagReason === r.key && <View style={flagStyles.radioDot} />}
+            </View>
+            <Text style={[flagStyles.reasonLabel, flagReason === r.key && flagStyles.reasonLabelActive]}>
+              {r.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+        <View style={flagStyles.actions}>
+          <TouchableOpacity
+            onPress={() => { setFlagSheetOpen(false); setFlagReviewId(null); setFlagReason(null) }}
+            style={flagStyles.cancelBtn}
+          >
+            <Text style={flagStyles.cancelText}>{t('seller.reviews.responseDeleteConfirmCancel')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={submitFlag}
+            disabled={!flagReason || flagReview.isPending}
+            style={[flagStyles.submitBtn, (!flagReason || flagReview.isPending) && flagStyles.submitBtnDisabled]}
+          >
+            <Text style={flagStyles.submitText}>
+              {flagReview.isPending ? t('seller.reviews.flagSubmitting') : t('seller.reviews.flagSubmit')}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </BottomSheet>
+
+      {/* Bulk action bar (slide up) */}
+      {selectMode && selectedIds.size > 0 && (
+        <Animated.View
+          style={[
+            bulkBarStyles.container,
+            {
+              transform: [{
+                translateY: bulkBarAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [100, 0],
+                }),
+              }],
+            },
+          ]}
+          accessibilityRole="toolbar"
+          accessibilityLabel={t('seller.reviews.bulkBarLabel')}
+        >
+          <Text style={bulkBarStyles.selectedCount}>
+            {t('seller.reviews.bulkSelected', { count: selectedIds.size })}
+          </Text>
+          <View style={bulkBarStyles.actions}>
+            <TouchableOpacity
+              onPress={bulkMarkRespondedNotNeeded}
+              disabled={bulkUpdate.isPending}
+              style={bulkBarStyles.notNeededBtn}
+            >
+              <Text style={bulkBarStyles.notNeededText}>{t('seller.reviews.bulkMarkRespondedNotNeeded')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={bulkFlag}
+              disabled={bulkUpdate.isPending}
+              style={bulkBarStyles.flagBtn}
+            >
+              <Text style={bulkBarStyles.flagText}>{t('seller.reviews.bulkFlag')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => { setSelectMode(false); setSelectedIds(new Set()) }}
+              style={bulkBarStyles.doneBtn}
+            >
+              <Text style={bulkBarStyles.doneText}>{t('seller.reviews.bulkDone')}</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      )}
     </View>
   )
 }

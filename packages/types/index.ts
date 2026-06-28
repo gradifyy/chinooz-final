@@ -87,6 +87,8 @@ export type {
   BulkStockOperation,
   BulkStockResult,
   CsvStockRow,
+  StockAlert,
+  StockAlertSummary,
   SellerOrderStatusKey,
   SellerPaymentType,
   SellerShippingMethod,

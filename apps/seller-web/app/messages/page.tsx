@@ -188,11 +188,13 @@ export default function SellerMessagesPage() {
                     ))}
                   </div>
                 ) : sorted.length === 0 ? (
-                  <EmptyState
-                    icon={<span className="text-5xl">{'\u{1F4AC}'}</span>}
-                    title={list.length === 0 ? t('seller.messages.emptyTitle') : t('seller.messages.emptyFilteredTitle')}
-                    subtitle={list.length === 0 ? t('seller.messages.emptySubtitle') : t('seller.messages.emptyFilteredSubtitle')}
-                  />
+                  <div className={`flex-1 flex flex-col items-center justify-center gap-2 ${reduced ? '' : 'animate-[fadeIn_300ms_ease-out]'}`}  aria-label={`${list.length === 0 ? t('seller.messages.emptyTitle') : t('seller.messages.emptyFilteredTitle')}. ${list.length === 0 ? t('seller.messages.emptySubtitle') : t('seller.messages.emptyFilteredSubtitle')}`}>
+                    <EmptyState
+                      icon={<span className="text-5xl">{'\u{1F4AC}'}</span>}
+                      title={list.length === 0 ? t('seller.messages.emptyTitle') : t('seller.messages.emptyFilteredTitle')}
+                      subtitle={list.length === 0 ? t('seller.messages.emptySubtitle') : t('seller.messages.emptyFilteredSubtitle')}
+                    />
+                  </div>
                 ) : (
                   <ul className="list-none p-0 m-0">
                     {sorted.map(item => {
@@ -728,26 +730,43 @@ function ThreadView({
               )
             }
 
+            const isFailed = failedIds.has(item.id)
+            const isPending = item.status === 'sending'
+            const failedTick = isFailed ? t('seller.messages.sendFailed') : null
+            const pendingTick = isPending ? t('seller.messages.offlineQueued') : null
             const ariaParts = [item.senderName, item.body, time]
-            if (tick) ariaParts.push(tick)
+            if (isFailed) ariaParts.push(t('seller.messages.sendFailedAnnounce'))
+            else if (pendingTick) ariaParts.push(pendingTick)
+            else if (tick) ariaParts.push(tick)
             return (
               <div
                 key={item.id}
                 className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} ${reduced ? '' : 'animate-[fadeIn_200ms_ease-out]'}`}
                 aria-label={ariaParts.join('. ')}
+                role={isFailed ? 'alert' : undefined}
               >
                 <div
-                  className={`max-w-[78%] px-3 py-2 text-sm leading-5 ${isMine ? 'bg-primary text-white rounded-2xl rounded-br-sm' : 'bg-background text-text border border-border-light rounded-2xl rounded-bl-sm'}`}
+                  className={`max-w-[78%] px-3 py-2 text-sm leading-5 ${isMine ? 'bg-primary text-white rounded-2xl rounded-br-sm' : 'bg-background text-text border border-border-light rounded-2xl rounded-bl-sm'} ${isPending ? 'opacity-60' : ''} ${isFailed ? 'border-2 !border-error' : ''}`}
                 >
                   {item.body}
                 </div>
                 <div className={`flex items-center gap-1 mt-1 ${isMine ? 'flex-row-reverse' : ''}`}>
                   <span className="text-[10px] text-text-tertiary">{time}</span>
-                  {isMine && item.status && (
+                  {isMine && isFailed ? (
+                    <button
+                      onClick={() => handleRetrySend(item.id)}
+                      className="text-[10px] font-semibold text-error hover:underline"
+                      aria-label={t('seller.messages.sendFailedRetryAria')}
+                    >
+                      {t('seller.messages.sendFailedRetry')}
+                    </button>
+                  ) : isMine && isPending ? (
+                    <span className="text-[10px] text-text-tertiary">{'\u{23F3}'} {pendingTick}</span>
+                  ) : isMine && item.status ? (
                     <span className={`text-[10px] ${item.status === 'read' ? 'text-primary' : 'text-text-tertiary'}`} aria-hidden="true">
                       {item.status === 'read' ? '\u{2713}\u{2713}' : '\u{2713}'}
                     </span>
-                  )}
+                  ) : null}
                 </div>
               </div>
             )
@@ -762,8 +781,17 @@ function ThreadView({
             </div>
           )}
           {localMessages.length === 0 && !typing && (
-            <div className="m-auto text-sm text-text-muted text-center px-6">
-              {t('seller.messages.emptySubtitle')}
+            <div className={`m-auto flex flex-col items-center gap-2 text-center px-6 ${reduced ? '' : 'animate-[fadeIn_300ms_ease-out]'}`}  aria-label={`${t('seller.messages.threadStart')}. ${t('seller.messages.threadStartSubtitle')}`}>
+              <span className="text-5xl">{'\u{1F44B}'}</span>
+              <p className="text-lg font-semibold text-text">{t('seller.messages.threadStart')}</p>
+              <p className="text-sm text-text-muted max-w-xs">{t('seller.messages.threadStartSubtitle')}</p>
+              <button
+                onClick={() => handleSend(t('seller.messages.threadStartAction'))}
+                className="mt-1 rounded-lg bg-primary text-white font-semibold px-5 py-2.5 hover:bg-primary-dark transition-colors"
+                aria-label={t('seller.messages.threadStartActionAria')}
+              >
+                {t('seller.messages.threadStartAction')}
+              </button>
             </div>
           )}
         </div>
@@ -1156,6 +1184,158 @@ function AttachPickerModal({
                 <span className="text-xs text-text-muted capitalize">{p.status}</span>
               </button>
             ))
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function TemplateManagerModal({
+  visible,
+  onClose,
+  templates,
+  onAdd,
+  onUpdate,
+  onDelete,
+  awayMessage,
+  onSetAwayEnabled,
+  onSetAwayBody,
+  t,
+}: {
+  visible: boolean
+  onClose: () => void
+  templates: import('@chinooz/types').SellerMessageTemplate[]
+  onAdd: (label: string, body: string) => void
+  onUpdate: (id: string, label: string, body: string) => void
+  onDelete: (id: string) => void
+  awayMessage: import('@chinooz/types').SellerAwayMessage
+  onSetAwayEnabled: (enabled: boolean) => void
+  onSetAwayBody: (body: string) => void
+  t: (k: string, o?: any) => string
+}) {
+  const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [label, setLabel] = useState('')
+  const [body, setBody] = useState('')
+
+  const handleNew = () => { setEditingId(null); setLabel(''); setBody(''); setShowForm(true) }
+  const handleEdit = (tpl: import('@chinooz/types').SellerMessageTemplate) => {
+    setEditingId(tpl.id); setLabel(tpl.label); setBody(tpl.body); setShowForm(true)
+  }
+  const handleSave = () => {
+    if (!label.trim() || !body.trim()) return
+    if (editingId) onUpdate(editingId, label.trim(), body.trim())
+    else onAdd(label.trim(), body.trim())
+    setShowForm(false); setEditingId(null)
+  }
+
+  if (!visible) return null
+  const customs = templates.filter(tpl => !tpl.isBuiltIn)
+  const builtIns = templates.filter(tpl => tpl.isBuiltIn)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-label={t('seller.messages.templateManager')}>
+      <div
+        className="bg-surface rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[85vh] flex flex-col"
+        onKeyDown={e => { if (e.key === 'Escape') onClose() }}
+      >
+        <div className="flex items-center justify-between p-4 border-b border-border-light">
+          <h2 className="text-base font-bold text-text">{t('seller.messages.templateManager')}</h2>
+          <button onClick={onClose} className="text-text-muted hover:text-text" aria-label={t('common.close')}>{'\u{2715}'}</button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4">
+          {showForm ? (
+            <div className="flex flex-col gap-3">
+              <h3 className="text-sm font-bold text-text">{editingId ? t('seller.messages.templateEdit') : t('seller.messages.templateNew')}</h3>
+              <div>
+                <label className="text-sm font-semibold text-text block mb-1">{t('seller.messages.templateLabel')}</label>
+                <input
+                  className="w-full h-10 rounded-md bg-background px-3 text-sm text-text outline-none border border-border-light focus:border-primary"
+                  value={label}
+                  onChange={e => setLabel(e.target.value)}
+                  placeholder={t('seller.messages.templateLabelHint')}
+                  aria-label={t('seller.messages.templateLabel')}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-semibold text-text block mb-1">{t('seller.messages.templateBody')}</label>
+                <textarea
+                  className="w-full min-h-[80px] max-h-[160px] resize-none rounded-md bg-background px-3 py-2 text-sm text-text outline-none border border-border-light focus:border-primary"
+                  value={body}
+                  onChange={e => setBody(e.target.value)}
+                  placeholder={t('seller.messages.templateBodyHint')}
+                  aria-label={t('seller.messages.templateBody')}
+                />
+                <p className="text-xs text-text-tertiary mt-1">{t('seller.messages.templateBodyHint')}</p>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setShowForm(false)} className="px-4 py-2 rounded-md border border-border text-sm font-medium text-text hover:bg-background" aria-label={t('seller.messages.templateCancel')}>{t('seller.messages.templateCancel')}</button>
+                <button onClick={handleSave} className="px-4 py-2 rounded-md bg-primary text-white text-sm font-semibold hover:bg-primary-dark" aria-label={t('seller.messages.templateSave')}>{t('seller.messages.templateSave')}</button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {customs.length > 0 && (
+                <p className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-2">{t('seller.messages.templateCustom')}</p>
+              )}
+              {customs.map(tpl => (
+                <div key={tpl.id} className="flex items-start justify-between py-2 border-b border-border-light gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-semibold text-text">{tpl.label}</p>
+                      {tpl.hasPlaceholders && <span className="text-[10px] text-primary font-semibold bg-primary-50 px-1 rounded">{'}'}</span>}
+                    </div>
+                    <p className="text-xs text-text-muted mt-0.5 line-clamp-2">{tpl.body}</p>
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    <button onClick={() => handleEdit(tpl)} className="text-xs font-medium text-primary hover:underline" aria-label={`${t('seller.messages.templateEdit')} ${tpl.label}`}>{t('seller.messages.templateEdit')}</button>
+                    <button onClick={() => onDelete(tpl.id)} className="text-xs font-medium text-error hover:underline" aria-label={`${t('seller.messages.templateDelete')} ${tpl.label}`}>{t('seller.messages.templateDelete')}</button>
+                  </div>
+                </div>
+              ))}
+              <p className="text-xs font-semibold text-text-muted uppercase tracking-wide mt-3 mb-2">{t('seller.messages.templateBuiltIn')}</p>
+              {builtIns.map(tpl => (
+                <div key={tpl.id} className="flex items-start justify-between py-2 border-b border-border-light gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-semibold text-text">{tpl.label}</p>
+                      {tpl.hasPlaceholders && <span className="text-[10px] text-primary font-semibold bg-primary-50 px-1 rounded">{'}'}</span>}
+                    </div>
+                    <p className="text-xs text-text-muted mt-0.5 line-clamp-2">{tpl.body}</p>
+                  </div>
+                </div>
+              ))}
+              <button onClick={handleNew} className="w-full mt-3 py-2.5 rounded-md border border-dashed border-primary text-primary text-sm font-semibold hover:bg-primary-50 transition-colors" aria-label={t('seller.messages.templateNew')}>
+                + {t('seller.messages.templateNew')}
+              </button>
+
+              <div className="mt-6 pt-4 border-t border-border-light">
+                <h3 className="text-sm font-bold text-text">{t('seller.messages.awayTitle')}</h3>
+                <p className="text-xs text-text-muted mt-0.5">{t('seller.messages.awaySubtitle')}</p>
+                <div className="flex items-center justify-between mt-2">
+                  <span className="text-sm text-text font-medium">{t('seller.messages.awayEnabled')}</span>
+                  <button
+                    onClick={() => onSetAwayEnabled(!awayMessage.enabled)}
+                    className={`relative w-11 h-6 rounded-full transition-colors ${awayMessage.enabled ? 'bg-primary' : 'bg-border'}`}
+                    role="switch"
+                    aria-checked={awayMessage.enabled}
+                    aria-label={t('seller.messages.awayEnabledAria')}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${awayMessage.enabled ? 'translate-x-5' : ''}`} />
+                  </button>
+                </div>
+                {awayMessage.enabled && (
+                  <textarea
+                    className="w-full min-h-[60px] mt-2 rounded-md bg-background px-3 py-2 text-sm text-text outline-none border border-border-light focus:border-primary"
+                    value={awayMessage.body}
+                    onChange={e => onSetAwayBody(e.target.value)}
+                    placeholder={t('seller.messages.awayBodyHint')}
+                    aria-label={t('seller.messages.awayBody')}
+                  />
+                )}
+              </div>
+            </>
           )}
         </div>
       </div>

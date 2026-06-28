@@ -364,6 +364,8 @@ export interface SellerInventoryVariant {
   incoming?: number
   /** Parent product name (for row display). */
   productName?: string
+  /** Restock reminder enabled (mock, per variant). */
+  restockReminder?: boolean
 }
 
 export interface SellerInventoryProduct {
@@ -603,6 +605,8 @@ export interface RouteStop extends GeoPoint {
   prepNote?: string
   /** Optional area / locality label shown under the stop name. */
   area?: string
+  /** Optional delivery note from the buyer (drop-off only). */
+  deliveryNote?: string
 }
 
 export interface DeliveryLeg {
@@ -636,6 +640,18 @@ export interface RiderJob {
   codAmount: number
   currency: 'NPR'
   createdAt: string
+  /** Proof-of-delivery config: which proofs are required for this order. */
+  proof?: ProofOfDeliveryConfig
+}
+
+/** Configurable proof-of-delivery options per order. */
+export interface ProofOfDeliveryConfig {
+  /** Require an OTP code from the buyer to confirm delivery. */
+  otpRequired?: boolean
+  /** Require a delivery photo (package handed over). */
+  photoRequired?: boolean
+  /** Require a signature capture. */
+  signatureRequired?: boolean
 }
 
 export interface ActiveDelivery {
@@ -661,6 +677,10 @@ export interface ActiveDelivery {
   updatedAt: number
   cancelReason?: string
   failureReason?: string
+  /** Proof-of-delivery config for this order. */
+  proof?: ProofOfDeliveryConfig
+  /** Epoch ms when delivery was completed (delivered/failed). */
+  completedAt?: number
   /** Pickup label (store / seller name) — RJ5 Jobs tab compat. */
   pickupLabel: string
   /** Drop-off label (buyer area / tole) — RJ5 Jobs tab compat. */
