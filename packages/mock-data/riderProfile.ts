@@ -589,3 +589,83 @@ export async function updateRiderPreferences(
   void data
   return { success: true }
 }
+
+/**
+ * RP5 — Rider account & security (RG5).
+ *
+ * Surfaces:
+ * - getRiderSecurity():  PIN/biometric lock state + active sessions.
+ * - updateRiderSecurity():  toggle PIN/biometric, change PIN (mock).
+ * - signOutAllSessions():  revoke all sessions (mock).
+ * - deactivateRiderAccount():  mock deactivation (requires confirm).
+ * - deleteRiderAccount():  mock deletion (requires confirm, irreversible).
+ */
+
+export interface RiderActiveSession {
+  id: string
+  device: string
+  location: string
+  lastActive: string
+  current: boolean
+}
+
+export interface RiderSecurity {
+  pinEnabled: boolean
+  biometricEnabled: boolean
+  /** Biometric type available on device. */
+  biometricType: 'face' | 'fingerprint' | 'none'
+  sessions: RiderActiveSession[]
+}
+
+export async function getRiderSecurity(): Promise<RiderSecurity> {
+  await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 180))
+  return {
+    pinEnabled: true,
+    biometricEnabled: false,
+    biometricType: 'fingerprint',
+    sessions: [
+      {
+        id: 'sess-1',
+        device: 'iPhone 15 — Chinooz Rider',
+        location: 'Kathmandu, NP',
+        lastActive: '2026-06-28T14:30:00Z',
+        current: true,
+      },
+      {
+        id: 'sess-2',
+        device: 'Chrome — Windows PC',
+        location: 'Lalitpur, NP',
+        lastActive: '2026-06-27T09:12:00Z',
+        current: false,
+      },
+    ],
+  }
+}
+
+export async function updateRiderSecurity(
+  data: Partial<Pick<RiderSecurity, 'pinEnabled' | 'biometricEnabled'>>,
+): Promise<{ success: boolean }> {
+  await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 160))
+  void data
+  return { success: true }
+}
+
+export async function changeRiderPin(): Promise<{ success: boolean }> {
+  await new Promise(resolve => setTimeout(resolve, 400 + Math.random() * 200))
+  return { success: true }
+}
+
+export async function signOutAllSessions(): Promise<{ success: boolean }> {
+  await new Promise(resolve => setTimeout(resolve, 300 + Math.random() * 200))
+  return { success: true }
+}
+
+export async function deactivateRiderAccount(): Promise<{ success: boolean }> {
+  await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 250))
+  return { success: true }
+}
+
+export async function deleteRiderAccount(): Promise<{ success: boolean }> {
+  await new Promise(resolve => setTimeout(resolve, 600 + Math.random() * 300))
+  return { success: true }
+}

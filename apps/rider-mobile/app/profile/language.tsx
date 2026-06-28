@@ -1,15 +1,5 @@
-import React from 'react'
-import { Globe } from 'lucide-react-native'
-import { colors } from '@chinooz/theme'
-import { useTranslation } from 'react-i18next'
-import ComingSoonScreen from '../../components/ComingSoonScreen'
+import AccountSecurityScreen from '../../components/AccountSecurityScreen'
 
 export default function LanguageScreen() {
-  const { t } = useTranslation()
-  return (
-    <ComingSoonScreen
-      title={t('rider.profile.rowLanguage')}
-      icon={<Globe size={28} color={colors.textSecondary} />}
-    />
-  )
+  return <AccountSecurityScreen />
 }
