@@ -313,3 +313,183 @@ export function exportTransactionsCSV(items: Transaction[]): string {
   )
   return [header, ...rows].join('\n')
 }
+
+// --- Payouts ---
+
+export type FinancePayoutStatus = 'scheduled' | 'processing' | 'paid' | 'failed'
+export type FinancePayoutMethod = 'bank' | 'esewa' | 'khalti'
+
+export interface FinancePayoutLineItem {
+  orderId: string
+  date: string
+  gross: number
+  commission: number
+  paymentFee: number
+  refund: number
+  net: number
+}
+
+export interface FinancePayoutBreakdownRow {
+  label: string
+  amount: number
+  direction: 'credit' | 'debit'
+  explainer?: string
+}
+
+export interface FinancePayoutTimelineStep {
+  key: string
+  label: string
+  status: 'completed' | 'current' | 'upcoming'
+  timestamp?: string
+  note?: string
+}
+
+export interface FinancePayout {
+  id: string
+  date: string
+  amount: number
+  method: FinancePayoutMethod
+  methodLabel: string
+  accountMasked: string
+  status: FinancePayoutStatus
+  failureReason?: string
+  orderCount: number
+}
+
+export interface FinancePayoutDetail extends FinancePayout {
+  grossSales: number
+  platformCommission: number
+  paymentFees: number
+  refunds: number
+  adjustments: number
+  vat: number
+  netPayout: number
+  lineItems: FinancePayoutLineItem[]
+  breakdown: FinancePayoutBreakdownRow[]
+  timeline: FinancePayoutTimelineStep[]
+}
+
+const PAYOUT_METHODS: { method: FinancePayoutMethod; label: string; mask: string }[] = [
+  { method: 'bank', label: 'Bank transfer', mask: 'NIBL •••• 4521' },
+  { method: 'khalti', label: 'Khalti', mask: 'Khalti •••• 4321' },
+  { method: 'esewa', label: 'eSewa', mask: 'eSewa •••• 8899' },
+]
+
+function buildPayouts(): FinancePayout[] {
+  const list: FinancePayout[] = []
+  const now = new Date()
+  for (let i = 0; i < 12; i++) {
+    const m = PAYOUT_METHODS[Math.floor(seeded(i, 77) * PAYOUT_METHODS.length)]
+    const status: FinancePayoutStatus = i < 2 ? 'scheduled' : i === 2 ? 'processing' : i === 3 ? 'failed' : 'paid'
+    const d = new Date(now)
+    d.setDate(d.getDate() - i * 4)
+    const amount = Math.round((5000 + seeded(i + 10, 77) * 20000) / 100) * 100
+    list.push({
+      id: `payout-${i}`,
+      date: d.toISOString(),
+      amount,
+      method: m.method,
+      methodLabel: m.label,
+      accountMasked: m.mask,
+      status,
+      failureReason: status === 'failed' ? 'Bank rejected: invalid account number' : undefined,
+      orderCount: Math.floor(3 + seeded(i + 20, 77) * 12),
+    })
+  }
+  return list
+}
+
+const ALL_PAYOUTS: FinancePayout[] = buildPayouts()
+
+const VAT_RATE = 0.13
+const COMMISSION_RATE = 0.04
+const PAYMENT_FEE_RATE = 0.025
+
+export async function getFinancePayouts(): Promise<FinancePayout[]> {
+  await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 300))
+  return [...ALL_PAYOUTS].sort((a, b) => b.date.localeCompare(a.date))
+}
+
+export async function getFinancePayoutById(id: string): Promise<FinancePayoutDetail | null> {
+  await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 250))
+  const payout = ALL_PAYOUTS.find(p => p.id === id)
+  if (!payout) return null
+
+  const grossSales = payout.amount + Math.round(payout.amount * 0.15)
+  const platformCommission = Math.round(grossSales * COMMISSION_RATE)
+  const paymentFees = Math.round(grossSales * PAYMENT_FEE_RATE)
+  const refunds = Math.round(grossSales * 0.03)
+  const adjustments = Math.round(seeded(parseInt(id.split('-')[1] || '0'), 55) * 200)
+  const vat = Math.round((grossSales * VAT_RATE) / (1 + VAT_RATE))
+  const netPayout = payout.amount
+
+  const lineItems: FinancePayoutLineItem[] = []
+  for (let i = 0; i < payout.orderCount; i++) {
+    const gross = Math.round((500 + seeded(i + 30, 88) * 8000) / 10) * 10
+    const commission = Math.round(gross * COMMISSION_RATE)
+    const paymentFee = Math.round(gross * PAYMENT_FEE_RATE)
+    const refund = seeded(i + 40, 88) > 0.85 ? Math.round(gross * 0.5) : 0
+    const net = gross - commission - paymentFee - refund
+    const d = new Date(payout.date)
+    d.setDate(d.getDate() - Math.floor(seeded(i, 88) * 5))
+    lineItems.push({ orderId: `ORD-${2051 - i}`, date: d.toISOString(), gross, commission, paymentFee, refund, net })
+  }
+
+  const breakdown: FinancePayoutBreakdownRow[] = [
+    { label: 'Gross sales', amount: grossSales, direction: 'credit', explainer: 'Total value of all orders included in this payout before any deductions.' },
+    { label: 'Platform commission (4%)', amount: -platformCommission, direction: 'debit', explainer: 'Chinooz marketplace fee — 4% of gross sales for platform maintenance and seller tools.' },
+    { label: 'Payment processing fees (2.5%)', amount: -paymentFees, direction: 'debit', explainer: 'Fees charged by payment gateways (Khalti, eSewa, card processors) for handling buyer payments.' },
+    { label: 'Refunds', amount: -refunds, direction: 'debit', explainer: 'Amounts returned to buyers for cancelled or returned orders within this period.' },
+    { label: 'Adjustments', amount: -adjustments, direction: 'debit', explainer: 'Rounding corrections, dispute resolutions, and manual adjustments applied by Chinooz support.' },
+    { label: 'VAT (13%, inclusive)', amount: -vat, direction: 'debit', explainer: 'VAT is already included in sale prices. This line shows the VAT portion remitted to tax authorities.' },
+    { label: 'Net payout', amount: netPayout, direction: 'credit', explainer: 'The final amount transferred to your account.' },
+  ]
+
+  const timeline: FinancePayoutTimelineStep[] = buildPayoutTimeline(payout)
+
+  return { ...payout, grossSales, platformCommission, paymentFees, refunds, adjustments, vat, netPayout, lineItems, breakdown, timeline }
+}
+
+function buildPayoutTimeline(payout: FinancePayout): FinancePayoutTimelineStep[] {
+  const steps: FinancePayoutTimelineStep[] = []
+  const d = new Date(payout.date)
+
+  if (payout.status === 'scheduled') {
+    steps.push({ key: 'scheduled', label: 'Scheduled', status: 'current', timestamp: d.toISOString(), note: `Payout queued for ${d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}` })
+    steps.push({ key: 'processing', label: 'Processing', status: 'upcoming' })
+    steps.push({ key: 'paid', label: 'Paid', status: 'upcoming' })
+  } else if (payout.status === 'processing') {
+    steps.push({ key: 'scheduled', label: 'Scheduled', status: 'completed', timestamp: new Date(d.getTime() - 86400000).toISOString() })
+    steps.push({ key: 'processing', label: 'Processing', status: 'current', timestamp: d.toISOString(), note: 'Funds being transferred to your account' })
+    steps.push({ key: 'paid', label: 'Paid', status: 'upcoming' })
+  } else if (payout.status === 'paid') {
+    steps.push({ key: 'scheduled', label: 'Scheduled', status: 'completed', timestamp: new Date(d.getTime() - 86400000 * 2).toISOString() })
+    steps.push({ key: 'processing', label: 'Processing', status: 'completed', timestamp: new Date(d.getTime() - 86400000).toISOString() })
+    steps.push({ key: 'paid', label: 'Paid', status: 'completed', timestamp: d.toISOString(), note: `NPR ${formatNPRAmount(payout.amount)} sent to ${payout.accountMasked}` })
+  } else {
+    steps.push({ key: 'scheduled', label: 'Scheduled', status: 'completed', timestamp: new Date(d.getTime() - 86400000 * 2).toISOString() })
+    steps.push({ key: 'processing', label: 'Processing', status: 'completed', timestamp: new Date(d.getTime() - 86400000).toISOString() })
+    steps.push({ key: 'failed', label: 'Failed', status: 'current', timestamp: d.toISOString(), note: payout.failureReason ?? 'Payout failed — please update your payout method' })
+  }
+
+  return steps
+}
+
+export function exportFinancePayoutStatementCSV(detail: FinancePayoutDetail): string {
+  const header = 'order_id,date,gross,commission,payment_fee,refund,net'
+  const rows = detail.lineItems.map(li =>
+    [li.orderId, li.date.slice(0, 10), li.gross, li.commission, li.paymentFee, li.refund, li.net].join(','),
+  )
+  const summary = [
+    '',
+    'Summary',
+    `Gross sales,${detail.grossSales}`,
+    `Platform commission,${detail.platformCommission}`,
+    `Payment fees,${detail.paymentFees}`,
+    `Refunds,${detail.refunds}`,
+    `Adjustments,${detail.adjustments}`,
+    `VAT,${detail.vat}`,
+    `Net payout,${detail.netPayout}`,
+  ].join('\n')
+  return [header, ...rows, summary].join('\n')
+}
