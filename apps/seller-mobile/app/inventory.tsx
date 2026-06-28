@@ -22,11 +22,11 @@ import Animated, {
 } from 'react-native-reanimated'
 import { ChevronDown, Search, SlidersHorizontal, X, ArrowUpDown, PackageSearch, RotateCw } from 'lucide-react-native'
 import { colors, radii, spacing, fontFamily } from '@chinooz/theme'
-import { SafeImage, BottomSheet, EmptyState, InventoryRow, useReducedMotion } from '@chinooz/ui'
-import { useSellerInventory, useSellerCategories, useUpdateStock } from '@chinooz/hooks'
+import { SafeImage, BottomSheet, EmptyState, InventoryRow, BulkBar, BulkConfirmSheet, useReducedMotion } from '@chinooz/ui'
+import { useSellerInventory, useSellerCategories, useUpdateStock, useBulkUpdateStock, useExportStockCsv, useImportStockCsv } from '@chinooz/hooks'
 import { useSellerSessionStore } from '@chinooz/state'
 import { analytics } from '@chinooz/analytics'
-import type { SellerInventoryProduct, SellerInventoryVariant, StockStatus } from '@chinooz/types'
+import type { SellerInventoryProduct, SellerInventoryVariant, StockStatus, BulkStockAction, StockEditReason, CsvStockRow } from '@chinooz/types'
 import { LOW_STOCK_THRESHOLD, type InventorySort } from '@chinooz/mock-data'
 
 type TabKey = 'all' | 'in_stock' | 'low_stock' | 'out_of_stock'
@@ -163,10 +163,12 @@ function Collapsible({ open, reduced, children }: { open: boolean; reduced: bool
   )
 }
 
-function VariantRowCard({ v, onStockChange, editState }: {
+function VariantRowCard({ v, onStockChange, editState, selected, onToggleSelect }: {
   v: SellerInventoryVariant
   onStockChange: (newStock: number, mode: 'set' | 'adjust', reason?: 'restock' | 'correction' | 'damage' | 'loss' | 'return' | 'other') => void
   editState: 'idle' | 'saving' | 'saved' | 'error'
+  selected?: boolean
+  onToggleSelect?: (id: string) => void
 }) {
   return (
     <InventoryRow
@@ -176,6 +178,8 @@ function VariantRowCard({ v, onStockChange, editState }: {
       editable
       onStockChange={onStockChange}
       editState={editState}
+      selected={selected}
+      onToggleSelect={onToggleSelect}
     />
   )
 }
@@ -187,6 +191,8 @@ function ProductGroupCard({
   reduced,
   onStockChange,
   variantEditState,
+  selected,
+  onToggleSelect,
 }: {
   product: SellerInventoryProduct
   expanded: boolean
@@ -194,6 +200,8 @@ function ProductGroupCard({
   reduced: boolean
   onStockChange: (variantId: string, productId: string, newStock: number, mode: 'set' | 'adjust', reason?: 'restock' | 'correction' | 'damage' | 'loss' | 'return' | 'other') => void
   variantEditState: (variantId: string) => 'idle' | 'saving' | 'saved' | 'error'
+  selected: Set<string>
+  onToggleSelect: (id: string) => void
 }) {
   const { t } = useTranslation()
   const chevron = useSharedValue(expanded ? 1 : 0)
@@ -239,6 +247,8 @@ function ProductGroupCard({
               v={v}
               onStockChange={(ns, m, r) => onStockChange(v.id, product.id, ns, m, r)}
               editState={variantEditState(v.id)}
+              selected={selected.has(v.id)}
+              onToggleSelect={onToggleSelect}
             />
           ))}
         </View>
@@ -264,6 +274,10 @@ export default function InventoryScreen() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [filterOpen, setFilterOpen] = useState(false)
   const [sortOpen, setSortOpen] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkAction, setBulkAction] = useState<BulkStockAction | null>(null)
+  const [snackbar, setSnackbar] = useState<{ msg: string; variant: 'success' | 'error' } | null>(null)
+  const snackbarTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   useEffect(() => { analytics.screen({ name: 'seller-inventory' }) }, [])
 
@@ -277,6 +291,9 @@ export default function InventoryScreen() {
     sort,
   })
   const stockMutation = useUpdateStock()
+  const bulkMutation = useBulkUpdateStock()
+  const exportMutation = useExportStockCsv()
+  const importMutation = useImportStockCsv()
 
   const handleStockChange = (variantId: string, productId: string, newStock: number, mode: 'set' | 'adjust', reason?: 'restock' | 'correction' | 'damage' | 'loss' | 'return' | 'other') => {
     stockMutation.mutate({ productId, variantId, newCount: newStock, mode, reason: reason ?? 'restock' })
@@ -286,6 +303,64 @@ export default function InventoryScreen() {
     if (stockMutation.isError && stockMutation.variables?.variantId === variantId) return 'error'
     if (stockMutation.isSuccess && stockMutation.variables?.variantId === variantId) return 'saved'
     return 'idle'
+  }
+
+  const showSnackbar = (msg: string, variant: 'success' | 'error') => {
+    setSnackbar({ msg, variant })
+    clearTimeout(snackbarTimer.current)
+    snackbarTimer.current = setTimeout(() => setSnackbar(null), 3000)
+  }
+
+  const allVisibleVariants = useMemo(() => {
+    return (invQ.data?.products ?? []).flatMap(p => p.variants.map(v => ({ id: v.id, productId: p.id })))
+  }, [invQ.data])
+
+  const allSelected = allVisibleVariants.length > 0 && allVisibleVariants.every(v => selected.has(v.id))
+  const someSelected = selected.size > 0 && !allSelected
+
+  const toggleSelect = (id: string) => {
+    setSelected(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  }
+  const toggleSelectAll = () => {
+    if (allSelected) { setSelected(new Set()) }
+    else { setSelected(new Set(allVisibleVariants.map(v => v.id))) }
+  }
+  const clearSelection = () => setSelected(new Set())
+
+  const handleBulkConfirm = (value: number | undefined, reason: StockEditReason) => {
+    if (!bulkAction) return
+    bulkMutation.mutate(
+      { variantIds: [...selected], action: bulkAction, value, reason },
+      {
+        onSuccess: (data) => {
+          showSnackbar(
+            data.failed > 0
+              ? t('seller.inventory.bulkResultFailed', { count: data.failed, total: data.updated + data.failed })
+              : t('seller.inventory.bulkResult', { count: data.updated }),
+            data.failed > 0 ? 'error' : 'success',
+          )
+          clearSelection()
+        },
+        onError: () => showSnackbar(t('seller.inventory.bulkError'), 'error'),
+      },
+    )
+    setBulkAction(null)
+  }
+
+  const handleExport = () => {
+    exportMutation.mutate(undefined as never, {
+      onSuccess: () => showSnackbar(t('seller.inventory.exportReady'), 'success'),
+      onError: () => showSnackbar(t('seller.inventory.bulkError'), 'error'),
+    })
+  }
+
+  const handleImport = (rows: CsvStockRow[]) => {
+    importMutation.mutate(rows, {
+      onSuccess: (data) => {
+        showSnackbar(t('seller.inventory.bulkResult', { count: data.updated }), 'success')
+      },
+      onError: () => showSnackbar(t('seller.inventory.bulkError'), 'error'),
+    })
   }
 
   const counts = useMemo<Record<TabKey, number>>(() => {
@@ -457,6 +532,8 @@ export default function InventoryScreen() {
                 reduced={reduced}
                 onStockChange={handleStockChange}
                 variantEditState={variantEditState}
+                selected={selected}
+                onToggleSelect={toggleSelect}
               />
             ))}
             <Text style={styles.countText}>
@@ -502,6 +579,45 @@ export default function InventoryScreen() {
           })}
         </View>
       </BottomSheet>
+
+      {/* Bulk bar — slides up from bottom */}
+      {selected.size > 0 && (
+        <View style={[styles.bulkBarWrap, { paddingBottom: insets.bottom + spacing[2] }]}>
+          <BulkBar
+            selectedCount={selected.size}
+            onAction={(a) => setBulkAction(a)}
+            onClear={clearSelection}
+            onExport={handleExport}
+            onImport={() => {
+              const mockRows: CsvStockRow[] = (invQ.data?.products ?? [])
+                .flatMap(p => p.variants)
+                .slice(0, 5)
+                .map(v => ({ sku: v.sku, stockCount: v.stockCount, lowStockThreshold: v.lowStockThreshold ?? LOW_STOCK_THRESHOLD }))
+              handleImport(mockRows)
+            }}
+          />
+        </View>
+      )}
+
+      {/* Bulk confirm sheet */}
+      <BulkConfirmSheet
+        visible={bulkAction !== null}
+        action={bulkAction ?? 'set'}
+        count={selected.size}
+        onConfirm={handleBulkConfirm}
+        onCancel={() => setBulkAction(null)}
+      />
+
+      {/* Snackbar */}
+      {snackbar && (
+        <View
+          style={[styles.snackbar, { bottom: insets.bottom + (selected.size > 0 ? 90 : 24), backgroundColor: snackbar.variant === 'success' ? colors.success : colors.error }]}
+          accessibilityRole="alert"
+          accessibilityLiveRegion="polite"
+        >
+          <Text style={styles.snackbarText}>{snackbar.msg}</Text>
+        </View>
+      )}
     </View>
   )
 }
@@ -773,4 +889,26 @@ const styles = StyleSheet.create({
   sortOptionText: { fontSize: 15, color: colors.text, fontFamily: fontFamily.sans[0] },
   sortOptionTextActive: { color: colors.primary, fontWeight: '700', fontFamily: fontFamily.sansBold[0] },
   sortOptionDot: { width: 8, height: 8, borderRadius: radii.full, backgroundColor: colors.primary },
+  bulkBarWrap: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: spacing[4],
+    paddingTop: spacing[2],
+  },
+  snackbar: {
+    position: 'absolute',
+    left: spacing[4],
+    right: spacing[4],
+    borderRadius: radii.lg,
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  snackbarText: { fontSize: 14, fontWeight: '600', color: colors.white, fontFamily: fontFamily.sansSemiBold[0] },
 })

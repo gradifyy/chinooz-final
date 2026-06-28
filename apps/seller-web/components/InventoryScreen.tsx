@@ -11,6 +11,8 @@ import {
   ArrowUpDown,
   PackageSearch,
   RotateCw,
+  Check,
+  Minus,
 } from 'lucide-react'
 import { Container, Screen, SafeImage, Spinner, EmptyState, InventoryRow, BulkBar, BulkConfirmModal, CsvImportModal } from '@chinooz/ui-web'
 import { useReducedMotion } from '@chinooz/ui-web'
@@ -379,10 +381,12 @@ function ProductGroupRow({
 
 const VARIANT_GRID = 'grid grid-cols-[1.4fr_1fr_120px_110px_70px_130px] items-center'
 
-function VariantRow({ v, onStockChange, editState }: {
+function VariantRow({ v, onStockChange, editState, selected, onToggleSelect }: {
   v: SellerInventoryVariant
   onStockChange: (newStock: number, mode: 'set' | 'adjust', reason?: 'restock' | 'correction' | 'damage' | 'loss' | 'return' | 'other') => void
   editState: 'idle' | 'saving' | 'saved' | 'error'
+  selected?: boolean
+  onToggleSelect?: (id: string) => void
 }) {
   return (
     <InventoryRow
@@ -393,6 +397,8 @@ function VariantRow({ v, onStockChange, editState }: {
       editable
       onStockChange={onStockChange}
       editState={editState}
+      selected={selected}
+      onToggleSelect={onToggleSelect}
     />
   )
 }
@@ -401,10 +407,14 @@ function ProductGroupCard({
   product,
   expanded,
   onToggle,
+  selected,
+  onToggleSelect,
 }: {
   product: SellerInventoryProduct
   expanded: boolean
   onToggle: () => void
+  selected: Set<string>
+  onToggleSelect: (id: string) => void
 }) {
   const { t } = useTranslation()
   const reduced = useReducedMotion()
@@ -457,6 +467,19 @@ function ProductGroupCard({
             <div className="divide-y divide-border-light border-t border-border-light">
               {product.variants.map(v => (
                 <div key={v.id} className="flex items-center gap-3 px-3 py-3 pl-16">
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={selected.has(v.id)}
+                    aria-label="Select variant"
+                    onClick={() => onToggleSelect(v.id)}
+                    className={[
+                      'w-5 h-5 rounded-md border flex items-center justify-center transition-colors flex-shrink-0',
+                      selected.has(v.id) ? 'bg-primary border-primary' : 'bg-surface border-border hover:border-primary',
+                    ].join(' ')}
+                  >
+                    {selected.has(v.id) && <Check size={14} className="text-white" strokeWidth={3} />}
+                  </button>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-text truncate">{v.name}</p>
                     <p className="text-xs text-text-muted tabular-nums" style={TABNUM}>{v.sku}</p>
@@ -726,6 +749,17 @@ export default function InventoryScreen() {
 
             {!isLoading && !isError && products.length > 0 && (
               <>
+                {/* Bulk bar — docked above table */}
+                <div className="mb-3">
+                  <BulkBar
+                    selectedCount={selected.size}
+                    onAction={(a) => setBulkAction(a)}
+                    onClear={clearSelection}
+                    onExport={handleExport}
+                    onImport={() => setCsvOpen(true)}
+                  />
+                </div>
+
                 {/* Web data table */}
                 <div
                   className="hidden md:block rounded-xl border border-border-light bg-surface overflow-hidden"
@@ -735,7 +769,23 @@ export default function InventoryScreen() {
                   {/* Sticky header */}
                   <div role="rowgroup" className="sticky top-[112px] z-10 bg-surface border-b border-border">
                     <div role="row" className={`${VARIANT_GRID} px-4 h-10`}>
-                      <span role="columnheader" className="text-xs font-semibold text-text-muted">{t('seller.inventory.colProduct')}</span>
+                      <span role="columnheader" className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          role="checkbox"
+                          aria-checked={allSelected ? 'true' : someSelected ? 'mixed' : 'false'}
+                          aria-label={t('seller.inventory.selectAllAria')}
+                          onClick={toggleSelectAll}
+                          className={[
+                            'w-5 h-5 rounded-md border flex items-center justify-center transition-colors flex-shrink-0',
+                            allSelected ? 'bg-primary border-primary' : someSelected ? 'bg-primary-50 border-primary' : 'bg-surface border-border hover:border-primary',
+                          ].join(' ')}
+                        >
+                          {allSelected && <Check size={14} className="text-white" strokeWidth={3} />}
+                          {someSelected && <Minus size={12} className="text-primary" />}
+                        </button>
+                        {t('seller.inventory.colProduct')}
+                      </span>
                       <span role="columnheader" className="text-xs font-semibold text-text-muted">{t('seller.inventory.colVariant')}</span>
                       <span role="columnheader" className="text-xs font-semibold text-text-muted">{t('seller.inventory.colSku')}</span>
                       <span role="columnheader" className="text-xs font-semibold text-text-muted">{t('seller.inventory.colPrice')}</span>
@@ -766,6 +816,8 @@ export default function InventoryScreen() {
                                     v={v}
                                     onStockChange={(ns, m, r) => handleStockChange(v.id, p.id, ns, m, r)}
                                     editState={variantEditState(v.id)}
+                                    selected={selected.has(v.id)}
+                                    onToggleSelect={toggleSelect}
                                   />
                                 ))}
                               </motion.div>
@@ -785,6 +837,8 @@ export default function InventoryScreen() {
                       product={p}
                       expanded={expanded.has(p.id)}
                       onToggle={() => toggleGroup(p.id)}
+                      selected={selected}
+                      onToggleSelect={toggleSelect}
                     />
                   ))}
                 </div>
@@ -796,6 +850,44 @@ export default function InventoryScreen() {
             )}
           </div>
         </div>
+
+        {/* Bulk confirm modal */}
+        <BulkConfirmModal
+          open={bulkAction !== null}
+          action={bulkAction ?? 'set'}
+          count={selected.size}
+          onConfirm={handleBulkConfirm}
+          onCancel={() => setBulkAction(null)}
+        />
+
+        {/* CSV import modal */}
+        <CsvImportModal
+          open={csvOpen}
+          onClose={() => setCsvOpen(false)}
+          onImport={handleImport}
+          isPending={importMutation.isPending}
+        />
+
+        {/* Snackbar */}
+        <AnimatePresence>
+          {snackbar && (
+            <motion.div
+              role="status"
+              aria-live="polite"
+              initial={reduced ? { opacity: 1 } : { y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={reduced ? { opacity: 0 } : { y: 20, opacity: 0 }}
+              transition={reduced ? { duration: 0 } : { type: 'spring', damping: 25, stiffness: 300 }}
+              className={[
+                'fixed bottom-4 left-4 right-4 md:left-1/2 md:right-auto md:-translate-x-1/2 z-50',
+                'rounded-xl px-4 py-3 shadow-lg max-w-sm',
+                snackbar.variant === 'success' ? 'bg-success text-white' : 'bg-error text-white',
+              ].join(' ')}
+            >
+              <span className="text-sm font-semibold">{snackbar.msg}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </Container>
     </Screen>
   )
