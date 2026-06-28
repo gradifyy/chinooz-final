@@ -14,6 +14,8 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
+  withTiming,
+  Easing,
 } from 'react-native-reanimated'
 import {
   ChevronLeft,
@@ -30,7 +32,7 @@ import {
   TriangleAlert,
   type LucideIcon,
 } from 'lucide-react-native'
-import { colors, spacing, radii, fontSize, fontFamily } from '@chinooz/theme'
+import { colors, spacing, radii, fontSize, fontFamily, easing, duration } from '@chinooz/theme'
 import { EmptyState, Skeleton } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
 import {
@@ -71,10 +73,11 @@ export default function HelpArticleScreen() {
   const [vote, setVote] = useState<'yes' | 'no' | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
+  const contentOpacity = useSharedValue(0)
+  const contentTranslateY = useSharedValue(12)
 
   useEffect(() => {
     analytics.screen({ name: 'rider-help-article', properties: { articleId } })
-    // Simulate async article load (mock data is sync but real API would be async).
     const id = setTimeout(() => {
       const art = getRiderHelpArticle(articleId)
       if (!art) setLoadError(true)
@@ -82,6 +85,18 @@ export default function HelpArticleScreen() {
     }, 400)
     return () => clearTimeout(id)
   }, [articleId])
+
+  // Reveal content with a calm fade + slide when loading completes.
+  useEffect(() => {
+    if (isLoading || loadError || !article || reducedMotion) return
+    contentOpacity.value = withTiming(1, { duration: duration.normal, easing: Easing.bezier(...easing.easeOut) })
+    contentTranslateY.value = withTiming(0, { duration: duration.normal, easing: Easing.bezier(...easing.easeOut) })
+  }, [isLoading, loadError, article, reducedMotion])
+
+  const contentRevealStyle = useAnimatedStyle(() => ({
+    opacity: contentOpacity.value,
+    transform: [{ translateY: contentTranslateY.value }],
+  }))
 
   const handleVote = (choice: 'yes' | 'no') => {
     setVote(choice)
@@ -228,6 +243,7 @@ export default function HelpArticleScreen() {
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + spacing[8] }]}
         showsVerticalScrollIndicator={false}
       >
+      <Animated.View style={contentRevealStyle}>
         {/* Article header */}
         <View style={styles.articleHeader}>
           <View style={styles.categoryPill}>
@@ -325,6 +341,7 @@ export default function HelpArticleScreen() {
             <ChevronRight size={16} color={colors.white} />
           </TouchableOpacity>
         </View>
+      </Animated.View>
       </ScrollView>
     </View>
   )

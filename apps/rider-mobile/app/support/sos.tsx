@@ -32,7 +32,7 @@ import {
   Navigation,
   type LucideIcon,
 } from 'lucide-react-native'
-import { colors, spacing, radii, fontSize, fontFamily, easing } from '@chinooz/theme'
+import { colors, spacing, radii, fontSize, fontFamily, easing, duration } from '@chinooz/theme'
 import { analytics } from '@chinooz/analytics'
 import { useA11y } from '../../components/A11yProvider'
 import { useActiveDeliveryStore } from '@chinooz/state'
@@ -80,8 +80,8 @@ export default function SosScreen() {
       pulse.value = 0
       return
     }
-    pulse.value = withTiming(1, { duration: 1800, easing: Easing.bezier(...easing.easeInOut) }, () => {
-      pulse.value = withTiming(0, { duration: 1800, easing: Easing.bezier(...easing.easeInOut) })
+    pulse.value = withTiming(1, { duration: duration.slower, easing: Easing.bezier(...easing.easeInOut) }, () => {
+      pulse.value = withTiming(0, { duration: duration.slower, easing: Easing.bezier(...easing.easeInOut) })
     })
   }, [reducedMotion, phase])
 
@@ -385,8 +385,8 @@ function ActivePanel({
   const breathe = useSharedValue(0)
 
   useEffect(() => {
-    breathe.value = withTiming(1, { duration: 2000, easing: Easing.bezier(...easing.easeInOut) }, () => {
-      breathe.value = withTiming(0, { duration: 2000, easing: Easing.bezier(...easing.easeInOut) })
+    breathe.value = withTiming(1, { duration: duration.slower, easing: Easing.bezier(...easing.easeInOut) }, () => {
+      breathe.value = withTiming(0, { duration: duration.slower, easing: Easing.bezier(...easing.easeInOut) })
     })
   }, [])
 

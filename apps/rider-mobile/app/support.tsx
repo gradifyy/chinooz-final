@@ -39,7 +39,7 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react-native'
-import { colors, spacing, radii, fontSize, fontFamily, easing } from '@chinooz/theme'
+import { colors, spacing, radii, fontSize, fontFamily, easing, duration } from '@chinooz/theme'
 import { useActiveDeliveryStore } from '@chinooz/state'
 import { analytics } from '@chinooz/analytics'
 import { useA11y } from '../components/A11yProvider'
@@ -374,8 +374,8 @@ function SosButton({
       return
     }
     // Subtle, slow pulsing ring so SOS is unmistakable but not alarming.
-    ring.value = withTiming(1, { duration: 1600, easing: Easing.bezier(...easing.easeInOut) }, () => {
-      ring.value = withTiming(0, { duration: 1600, easing: Easing.bezier(...easing.easeInOut) })
+    ring.value = withTiming(1, { duration: duration.slower, easing: Easing.bezier(...easing.easeInOut) }, () => {
+      ring.value = withTiming(0, { duration: duration.slower, easing: Easing.bezier(...easing.easeInOut) })
     })
   }, [reducedMotion])
 
