@@ -62,6 +62,11 @@ interface FormState {
   firstOrderOnly: boolean
   perCustomerLimit: string
   combinable: boolean
+  activeImmediately: boolean
+  noEndDate: boolean
+  totalUses: string
+  visibility: 'auto' | 'code'
+  showOnStorefront: boolean
 }
 
 const EMPTY_FORM: FormState = {
@@ -83,6 +88,11 @@ const EMPTY_FORM: FormState = {
   firstOrderOnly: false,
   perCustomerLimit: '',
   combinable: false,
+  activeImmediately: true,
+  noEndDate: false,
+  totalUses: '',
+  visibility: 'auto',
+  showOnStorefront: true,
 }
 
 const SECTION_ICONS: Record<SectionKey, string> = {
@@ -185,6 +195,11 @@ export default function PromotionFormScreen() {
       firstOrderOnly: false,
       perCustomerLimit: '',
       combinable: false,
+      activeImmediately: true,
+      noEndDate: false,
+      totalUses: '',
+      visibility: 'auto',
+      showOnStorefront: true,
     }
     setForm(loaded)
     setInitialForm(loaded)
@@ -966,43 +981,194 @@ function EffectivePriceCard({ form, t }: { form: FormState; t: TT }) {
 }
 
 function ScheduleSection({ form, errors, updateField, t }: { form: FormState; errors: Record<string, string>; updateField: (f: keyof FormState, v: string | boolean) => void; t: TT }) {
+  const visibilitySegs = [
+    { key: 'auto' as const, label: t('seller.promotions.builder.visibilityAuto') },
+    { key: 'code' as const, label: t('seller.promotions.builder.visibilityCode') },
+  ]
+
   return (
     <View style={styles.sectionContent}>
-      <Field label={t('seller.promotions.builder.fieldStartsAt')} hint={t('seller.promotions.builder.fieldStartsAtHint')} error={errors.startsAt}>
-        <TextInput
-          value={form.startsAt}
-          onChangeText={v => updateField('startsAt', v)}
-          placeholder="YYYY-MM-DD"
-          placeholderTextColor={colors.textTertiary}
-          accessibilityLabel={t('seller.promotions.builder.fieldStartsAt')}
-          style={[styles.input, errors.startsAt && styles.inputError]}
-        />
-      </Field>
-      <Field label={t('seller.promotions.builder.fieldEndsAt')} hint={t('seller.promotions.builder.fieldEndsAtHint')} error={errors.endsAt}>
-        <TextInput
-          value={form.endsAt}
-          onChangeText={v => updateField('endsAt', v)}
-          placeholder="YYYY-MM-DD"
-          placeholderTextColor={colors.textTertiary}
-          accessibilityLabel={t('seller.promotions.builder.fieldEndsAt')}
-          style={[styles.input, errors.endsAt && styles.inputError]}
-        />
-      </Field>
-      <Field label={t('seller.promotions.builder.fieldBudget')} hint={t('seller.promotions.builder.fieldBudgetHint')}>
-        <View style={styles.inputWithSuffix}>
+      {/* Active immediately toggle */}
+      <ToggleRow
+        label={t('seller.promotions.builder.fieldActiveImmediately')}
+        hint={t('seller.promotions.builder.fieldActiveImmediatelyHint')}
+        checked={form.activeImmediately}
+        onChange={v => updateField('activeImmediately', v)}
+      />
+
+      {/* Start date-time */}
+      {!form.activeImmediately && (
+        <Field label={t('seller.promotions.builder.fieldStartsAt')} hint={t('seller.promotions.builder.fieldStartsAtHint')} error={errors.startsAt}>
           <TextInput
-            value={form.budget}
-            onChangeText={v => updateField('budget', v)}
-            placeholder="0"
+            value={form.startsAt}
+            onChangeText={v => updateField('startsAt', v)}
+            placeholder="YYYY-MM-DDTHH:MM"
             placeholderTextColor={colors.textTertiary}
-            accessibilityLabel={t('seller.promotions.builder.fieldBudget')}
-            keyboardType="numeric"
-            inputMode="numeric"
-            style={[styles.input, styles.inputWithSuffixInput]}
+            accessibilityLabel={t('seller.promotions.builder.fieldStartsAt')}
+            style={[styles.input, errors.startsAt && styles.inputError]}
           />
-          <Text style={styles.suffixText}>NPR</Text>
+          <Text style={styles.timezoneText}>{t('seller.promotions.builder.timezone')}</Text>
+        </Field>
+      )}
+
+      {/* No end date toggle */}
+      <ToggleRow
+        label={t('seller.promotions.builder.fieldNoEndDate')}
+        hint={t('seller.promotions.builder.fieldNoEndDateHint')}
+        checked={form.noEndDate}
+        onChange={v => updateField('noEndDate', v)}
+      />
+
+      {/* End date-time */}
+      {!form.noEndDate && (
+        <Field label={t('seller.promotions.builder.fieldEndsAt')} hint={t('seller.promotions.builder.fieldEndsAtHint')} error={errors.endsAt}>
+          <TextInput
+            value={form.endsAt}
+            onChangeText={v => updateField('endsAt', v)}
+            placeholder="YYYY-MM-DDTHH:MM"
+            placeholderTextColor={colors.textTertiary}
+            accessibilityLabel={t('seller.promotions.builder.fieldEndsAt')}
+            style={[styles.input, errors.endsAt && styles.inputError]}
+          />
+        </Field>
+      )}
+
+      {/* Usage limits */}
+      <View style={styles.conditionsGroup}>
+        <Text style={styles.conditionsTitle}>Usage limits</Text>
+        <View style={{ gap: spacing[3], marginTop: spacing[3] }}>
+          <View style={{ flexDirection: 'row', gap: spacing[3] }}>
+            <View style={{ flex: 1 }}>
+              <Field label={t('seller.promotions.builder.fieldTotalUses')} hint={t('seller.promotions.builder.fieldTotalUsesHint')} error={errors.totalUses}>
+                <TextInput
+                  value={form.totalUses}
+                  onChangeText={v => updateField('totalUses', v)}
+                  placeholder="0 = unlimited"
+                  placeholderTextColor={colors.textTertiary}
+                  accessibilityLabel={t('seller.promotions.builder.fieldTotalUses')}
+                  keyboardType="numeric"
+                  inputMode="numeric"
+                  style={[styles.input, errors.totalUses && styles.inputError]}
+                />
+              </Field>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Field label={t('seller.promotions.builder.fieldPerCustomerLimit')} hint={t('seller.promotions.builder.fieldPerCustomerLimitHint')}>
+                <TextInput
+                  value={form.perCustomerLimit}
+                  onChangeText={v => updateField('perCustomerLimit', v)}
+                  placeholder="0 = unlimited"
+                  placeholderTextColor={colors.textTertiary}
+                  accessibilityLabel={t('seller.promotions.builder.fieldPerCustomerLimit')}
+                  keyboardType="numeric"
+                  inputMode="numeric"
+                  style={styles.input}
+                />
+              </Field>
+            </View>
+          </View>
+          <Field label={t('seller.promotions.builder.fieldBudgetCap')} hint={t('seller.promotions.builder.fieldBudgetCapHint')}>
+            <View style={styles.inputWithSuffix}>
+              <TextInput
+                value={form.budget}
+                onChangeText={v => updateField('budget', v)}
+                placeholder="0 = unlimited"
+                placeholderTextColor={colors.textTertiary}
+                accessibilityLabel={t('seller.promotions.builder.fieldBudgetCap')}
+                keyboardType="numeric"
+                inputMode="numeric"
+                style={[styles.input, styles.inputWithSuffixInput]}
+              />
+              <Text style={styles.suffixText}>NPR</Text>
+            </View>
+          </Field>
         </View>
-      </Field>
+      </View>
+
+      {/* Visibility */}
+      <View style={styles.conditionsGroup}>
+        <Text style={styles.conditionsTitle}>{t('seller.promotions.builder.visibilityTitle')}</Text>
+        <View style={{ flexDirection: 'row', gap: spacing[2], marginTop: spacing[2] }}>
+          {visibilitySegs.map(seg => (
+            <TouchableOpacity
+              key={seg.key}
+              onPress={() => updateField('visibility', seg.key)}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: form.visibility === seg.key }}
+              accessibilityLabel={seg.label}
+              style={[styles.scopeChip, { flex: 1, alignItems: 'center' }, form.visibility === seg.key && styles.scopeChipActive]}
+            >
+              <Text style={[styles.scopeChipText, form.visibility === seg.key && styles.scopeChipTextActive]}>
+                {seg.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <Text style={styles.conditionsHint}>
+          {form.visibility === 'auto' ? t('seller.promotions.builder.visibilityAutoHint') : t('seller.promotions.builder.visibilityCodeHint')}
+        </Text>
+        <View style={{ marginTop: spacing[3] }}>
+          <ToggleRow
+            label={t('seller.promotions.builder.fieldShowOnStorefront')}
+            hint={t('seller.promotions.builder.fieldShowOnStorefrontHint')}
+            checked={form.showOnStorefront}
+            onChange={v => updateField('showOnStorefront', v)}
+          />
+        </View>
+      </View>
+
+      {/* Plain-language rule summary */}
+      <RuleSummaryCard form={form} t={t} />
+    </View>
+  )
+}
+
+function RuleSummaryCard({ form, t }: { form: FormState; t: TT }) {
+  const dv = Number(form.discountValue) || 0
+  const discountLabel = form.type === 'percentage' || form.type === 'flash_sale'
+    ? t('seller.promotions.builder.ruleSummaryDiscount', { value: `${dv}%` })
+    : form.type === 'fixed'
+      ? t('seller.promotions.builder.ruleSummaryDiscount', { value: `NPR ${fmtNPR(dv)}` })
+      : form.type === 'bogo'
+        ? t('seller.promotions.builder.effectiveBogo', { buy: form.bogoBuyQty || '2', get: form.bogoGetQty || '1' })
+        : t('seller.promotions.builder.effectiveFreeShip')
+
+  const scopeLabel = form.scope === 'all'
+    ? t('seller.promotions.builder.ruleSummaryScope')
+    : form.scope === 'category'
+      ? t('seller.promotions.builder.ruleSummaryScopeCategory', { label: form.scopeLabel || '—' })
+      : form.scope === 'products'
+        ? t('seller.promotions.builder.ruleSummaryScopeProducts')
+        : t('seller.promotions.builder.ruleSummaryScopeOrder')
+
+  const fmtDate = (d: string) => {
+    if (!d) return '—'
+    try { return new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) } catch { return d }
+  }
+
+  const scheduleLabel = form.noEndDate
+    ? t('seller.promotions.builder.ruleSummaryNoEnd', { start: form.activeImmediately ? t('seller.promotions.builder.ruleSummaryActiveNow') : fmtDate(form.startsAt) })
+    : t('seller.promotions.builder.ruleSummarySchedule', {
+        start: form.activeImmediately ? t('seller.promotions.builder.ruleSummaryActiveNow') : fmtDate(form.startsAt),
+        end: fmtDate(form.endsAt),
+      })
+
+  const parts: string[] = [discountLabel, scopeLabel, scheduleLabel]
+  if (form.totalUses && Number(form.totalUses) > 0) {
+    parts.push(t('seller.promotions.builder.ruleSummaryUses', { count: form.totalUses }))
+  }
+  if (form.budget && Number(form.budget) > 0) {
+    parts.push(t('seller.promotions.builder.ruleSummaryBudget', { amount: fmtNPR(Number(form.budget)) }))
+  }
+  parts.push(form.visibility === 'auto' ? t('seller.promotions.builder.ruleSummaryVisibility') : t('seller.promotions.builder.ruleSummaryVisibilityCode'))
+  if (form.showOnStorefront) {
+    parts.push(t('seller.promotions.builder.ruleSummaryStorefront'))
+  }
+
+  return (
+    <View style={styles.effectiveCard} accessibilityLabel={t('seller.promotions.builder.ruleSummaryTitle')}>
+      <Text style={styles.effectiveTitle}>{t('seller.promotions.builder.ruleSummaryTitle')}</Text>
+      <Text style={styles.ruleSummaryText}>{parts.join(' · ')}</Text>
     </View>
   )
 }
@@ -1304,6 +1470,8 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   effectiveBadgeText: { fontSize: 10, fontWeight: '700', color: colors.white },
+  timezoneText: { fontSize: fontSize.xs[0], color: colors.textTertiary, marginTop: spacing[1] },
+  ruleSummaryText: { fontSize: fontSize.base[0], color: colors.text, lineHeight: 20, marginTop: spacing[2] },
 
   // Type grid
   typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
