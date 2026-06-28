@@ -571,3 +571,114 @@ export function rollbackWithdraw(amount: number): void {
   mockAvailableBalance += amount
   mockPendingBalance -= amount
 }
+
+// --- Payout method management ---
+
+export interface PayoutMethodEntry {
+  id: string
+  type: FinancePayoutMethod
+  label: string
+  accountMasked: string
+  accountName?: string
+  bankName?: string
+  branch?: string
+  walletNumber?: string
+  isDefault: boolean
+}
+
+export interface PayoutMethodInput {
+  type: FinancePayoutMethod
+  bankName?: string
+  accountName?: string
+  accountNumber?: string
+  branch?: string
+  walletNumber?: string
+  isDefault?: boolean
+}
+
+let PAYOUT_METHODS_DB: PayoutMethodEntry[] = [
+  { id: 'pm1', type: 'bank', label: 'Bank transfer', accountMasked: 'NIBL •••• 4521', accountName: 'Ayush Chaudhary', bankName: 'Nepal Investment Bank', branch: 'Baneshwor', isDefault: true },
+  { id: 'pm2', type: 'khalti', label: 'Khalti', accountMasked: 'Khalti •••• 4321', walletNumber: '9841234321', isDefault: false },
+  { id: 'pm3', type: 'esewa', label: 'eSewa', accountMasked: 'eSewa •••• 8899', walletNumber: '9841238899', isDefault: false },
+]
+
+function maskAccountNumber(num: string): string {
+  if (num.length <= 4) return `•••• ${num}`
+  return `•••• ${num.slice(-4)}`
+}
+
+function maskWallet(num: string): string {
+  if (num.length <= 4) return `•••• ${num}`
+  return `•••• ${num.slice(-4)}`
+}
+
+export async function getPayoutMethodEntries(): Promise<PayoutMethodEntry[]> {
+  await new Promise(resolve => setTimeout(resolve, 150 + Math.random() * 200))
+  return [...PAYOUT_METHODS_DB]
+}
+
+export async function addPayoutMethod(input: PayoutMethodInput): Promise<PayoutMethodEntry> {
+  await new Promise(resolve => setTimeout(resolve, 300 + Math.random() * 300))
+  const id = `pm-${Date.now()}`
+  const masked = input.type === 'bank' ? maskAccountNumber(input.accountNumber ?? '') : maskWallet(input.walletNumber ?? '')
+  const entry: PayoutMethodEntry = {
+    id, type: input.type,
+    label: input.type === 'bank' ? 'Bank transfer' : input.type === 'khalti' ? 'Khalti' : 'eSewa',
+    accountMasked: masked,
+    accountName: input.accountName, bankName: input.bankName, branch: input.branch, walletNumber: input.walletNumber,
+    isDefault: input.isDefault ?? false,
+  }
+  if (entry.isDefault) PAYOUT_METHODS_DB = PAYOUT_METHODS_DB.map(m => ({ ...m, isDefault: false }))
+  PAYOUT_METHODS_DB.push(entry)
+  syncWithdrawMethods()
+  return entry
+}
+
+export async function updatePayoutMethod(id: string, input: Partial<PayoutMethodInput>): Promise<PayoutMethodEntry | null> {
+  await new Promise(resolve => setTimeout(resolve, 300 + Math.random() * 300))
+  const idx = PAYOUT_METHODS_DB.findIndex(m => m.id === id)
+  if (idx < 0) return null
+  const updated = { ...PAYOUT_METHODS_DB[idx], ...input }
+  if (input.accountNumber) updated.accountMasked = maskAccountNumber(input.accountNumber)
+  if (input.walletNumber) updated.accountMasked = maskWallet(input.walletNumber)
+  if (input.isDefault) PAYOUT_METHODS_DB = PAYOUT_METHODS_DB.map(m => ({ ...m, isDefault: m.id === id }))
+  PAYOUT_METHODS_DB[idx] = updated
+  syncWithdrawMethods()
+  return updated
+}
+
+export async function deletePayoutMethod(id: string): Promise<boolean> {
+  await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 200))
+  const idx = PAYOUT_METHODS_DB.findIndex(m => m.id === id)
+  if (idx < 0) return false
+  const wasDefault = PAYOUT_METHODS_DB[idx].isDefault
+  PAYOUT_METHODS_DB.splice(idx, 1)
+  if (wasDefault && PAYOUT_METHODS_DB.length > 0) PAYOUT_METHODS_DB[0].isDefault = true
+  syncWithdrawMethods()
+  return true
+}
+
+export async function setDefaultPayoutMethod(id: string): Promise<boolean> {
+  await new Promise(resolve => setTimeout(resolve, 150 + Math.random() * 150))
+  const idx = PAYOUT_METHODS_DB.findIndex(m => m.id === id)
+  if (idx < 0) return false
+  PAYOUT_METHODS_DB = PAYOUT_METHODS_DB.map(m => ({ ...m, isDefault: m.id === id }))
+  syncWithdrawMethods()
+  return true
+}
+
+function syncWithdrawMethods(): void {
+  WITHDRAW_METHODS.length = 0
+  for (const m of PAYOUT_METHODS_DB) {
+    WITHDRAW_METHODS.push({ id: m.id, type: m.type, label: m.label, accountMasked: m.accountMasked, isDefault: m.isDefault })
+  }
+}
+
+export const NEPAL_BANKS = [
+  'Nepal Bank Limited', 'Rastriya Banijya Bank', 'Nabil Bank',
+  'Nepal Investment Bank', 'Standard Chartered Bank Nepal',
+  'Himalayan Bank Limited', 'Nepal SBI Bank', 'Everest Bank Limited',
+  'Bank of Kathmandu', 'Global IME Bank', 'Prime Commercial Bank',
+  'Laxmi Sunrise Bank', 'Mega Bank Nepal', 'Citizens Bank International',
+  'Nepal Bangladesh Bank',
+]

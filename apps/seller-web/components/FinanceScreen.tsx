@@ -9,13 +9,13 @@ import { useA11y } from '@/components/A11yProvider'
 import { useSellerSessionStore } from '@chinooz/state'
 import { analytics } from '@chinooz/analytics'
 import {
-  getFinanceSummary,
   FINANCE_DATE_RANGES,
   formatNPRAmount,
   type FinanceRange,
   type FinanceRangeKey,
   type FinanceSummary,
 } from '@chinooz/mock-data'
+import { useFinanceSummary } from '@chinooz/hooks'
 import EarningsChart from '@/components/EarningsChart'
 import WithdrawSheet from '@/components/WithdrawSheet'
 import { HeroSkeleton, CardsSkeleton, KycRequiredBanner, FinanceErrorState } from '@/components/FinanceStates'
@@ -56,42 +56,16 @@ export default function FinanceScreen() {
   const { reducedMotion } = useA11y()
   const isLoggedIn = useSellerSessionStore(s => s.isLoggedIn)
   const [rangeKey, setRangeKey] = useState<FinanceRangeKey>('30d')
-  const [summary, setSummary] = useState<FinanceSummary | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+  const [withdrawOpen, setWithdrawOpen] = useState(false)
   const kycStatus = useSellerSessionStore(s => s.kycStatus)
   const isKycVerified = kycStatus === 'verified'
-  const [withdrawOpen, setWithdrawOpen] = useState(false)
-  const [availBalance, setAvailBalance] = useState(0)
-  const [pendingBalanceState, setPendingBalanceState] = useState(0)
 
-  useEffect(() => {
-    analytics.screen({ name: 'seller-finance' })
-  }, [])
-
-  useEffect(() => {
-    if (!isLoggedIn) return
-    setLoading(true)
+  const range: FinanceRange = useMemo(() => {
     const meta = FINANCE_DATE_RANGES.find(r => r.key === rangeKey)
-    const range: FinanceRange = {
-      key: rangeKey,
-      label: meta?.label ?? '30d',
-      days: meta?.days ?? 30,
-    }
-    let active = true
-    getFinanceSummary(range).then(data => {
-      if (!active) return
-      setSummary(data)
-      setLoading(false)
-    }).catch(() => {
-      if (!active) return
-      setError(true)
-      setLoading(false)
-    })
-    return () => {
-      active = false
-    }
-  }, [rangeKey, isLoggedIn])
+    return { key: rangeKey, label: meta?.label ?? '30d', days: meta?.days ?? 30 }
+  }, [rangeKey])
+
+  const { data: summary, isLoading: loading, isError: error } = useFinanceSummary(range)
 
   const available = summary?.availableBalance ?? 0
   const animatedAvailable = useCountUp(available, !loading && !reducedMotion)

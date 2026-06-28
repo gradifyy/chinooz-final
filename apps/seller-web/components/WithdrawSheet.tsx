@@ -6,10 +6,9 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { X, Check, AlertCircle, ChevronRight } from 'lucide-react'
 import { useReducedMotion } from '@chinooz/ui-web'
 import { duration } from '@chinooz/theme'
+import { useSellerSessionStore } from '@chinooz/state'
+import { useWithdrawMethods, useRequestWithdraw } from '@chinooz/hooks'
 import {
-  requestWithdraw,
-  getWithdrawMethods,
-  rollbackWithdraw,
   formatNPRAmount,
   MIN_WITHDRAWAL,
   type WithdrawMethod,
@@ -34,11 +33,14 @@ export default function WithdrawSheet({
 }: Props) {
   const { t } = useTranslation()
   const reduced = useReducedMotion()
+  const kycStatus = useSellerSessionStore(s => s.kycStatus)
+  const isKycVerified = kycStatus === 'verified'
   const [step, setStep] = useState<Step>('form')
   const [amountStr, setAmountStr] = useState('')
-  const [methods, setMethods] = useState<WithdrawMethod[]>([])
+  const { data: methodsData, isLoading: methodsLoading } = useWithdrawMethods()
+  const withdrawMutation = useRequestWithdraw()
+  const methods = methodsData ?? []
   const [selectedMethodId, setSelectedMethodId] = useState<string | null>(null)
-  const [methodsLoading, setMethodsLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState('')
   const [result, setResult] = useState<{
     payoutId?: string
@@ -52,19 +54,14 @@ export default function WithdrawSheet({
     setAmountStr('')
     setErrorMsg('')
     setResult({})
-    setMethodsLoading(true)
-    let active = true
-    getWithdrawMethods().then(ms => {
-      if (!active) return
-      setMethods(ms)
-      const def = ms.find(m => m.isDefault)
-      setSelectedMethodId(def?.id ?? ms[0]?.id ?? null)
-      setMethodsLoading(false)
-    })
-    return () => {
-      active = false
-    }
   }, [open])
+
+  useEffect(() => {
+    if (methods.length > 0 && !selectedMethodId) {
+      const def = methods.find(m => m.isDefault)
+      setSelectedMethodId(def?.id ?? methods[0]?.id ?? null)
+    }
+  }, [methods, selectedMethodId])
 
   const amount = useMemo(() => parseInt(amountStr || '0', 10) || 0, [amountStr])
 
@@ -89,13 +86,13 @@ export default function WithdrawSheet({
     setStep('submitting')
     setErrorMsg('')
 
-    // Optimistic balance update
+    // Optimistic balance update via parent
     const prevAvailable = availableBalance
     const prevPending = pendingBalance
     onBalancesUpdate(prevAvailable - amount, prevPending + amount)
 
     try {
-      const res = await requestWithdraw({ amount, methodId: selectedMethodId })
+      const res = await withdrawMutation.mutateAsync({ amount, methodId: selectedMethodId })
       if (res.success) {
         setResult({
           payoutId: res.payoutId,
@@ -104,8 +101,6 @@ export default function WithdrawSheet({
         })
         setStep('success')
       } else {
-        // Rollback
-        rollbackWithdraw(amount)
         onBalancesUpdate(prevAvailable, prevPending)
         const errKey =
           res.error === 'below_minimum'
@@ -121,12 +116,11 @@ export default function WithdrawSheet({
         setStep('error')
       }
     } catch {
-      rollbackWithdraw(amount)
       onBalancesUpdate(prevAvailable, prevPending)
       setErrorMsg(t('seller.finance.withdraw.errorGeneric'))
       setStep('error')
     }
-  }, [amount, selectedMethodId, availableBalance, pendingBalance, onBalancesUpdate, t])
+  }, [amount, selectedMethodId, availableBalance, pendingBalance, onBalancesUpdate, t, withdrawMutation])
 
   const handleClose = useCallback(() => {
     onClose()
@@ -179,7 +173,20 @@ export default function WithdrawSheet({
               </div>
 
               {/* Form step */}
-              {step === 'form' && (
+              {step === 'form' && !isKycVerified && (
+                <div className="py-6 text-center" role="alert" aria-live="assertive">
+                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-info-light mb-3">
+                    <AlertCircle className="h-6 w-6 text-info" />
+                  </div>
+                  <p className="text-sm font-semibold text-text mb-1">{t('seller.finance.states.kycRequiredTitle')}</p>
+                  <p className="text-sm text-text-muted mb-4">{t('seller.finance.states.kycRequiredSubtitle')}</p>
+                  <a href="/setup-business" className="inline-flex items-center rounded-lg border border-info text-info px-4 py-2.5 text-sm font-semibold hover:bg-info/10 transition-colors" aria-label={t('seller.finance.states.kycRequiredCtaAria')}>
+                    {t('seller.finance.states.kycRequiredCta')}
+                  </a>
+                </div>
+              )}
+
+              {step === 'form' && isKycVerified && (
                 <div className="space-y-4">
                   {/* Amount input */}
                   <div>
