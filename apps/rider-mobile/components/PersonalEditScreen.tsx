@@ -43,12 +43,14 @@ import {
 } from '@chinooz/theme'
 import { riderPersonalSchema } from '@chinooz/validation'
 import { analytics } from '@chinooz/analytics'
+import {
+  useRiderPersonalProfile,
+  useUpdateRiderPersonalProfile,
+  useRequestRiderPhoneOtp,
+  useVerifyRiderPhoneOtp,
+} from '@chinooz/hooks'
 import { useA11y } from './A11yProvider'
 import {
-  getRiderPersonalProfile,
-  updateRiderPersonalProfile,
-  requestRiderPhoneOtp,
-  verifyRiderPhoneOtp,
   RIDER_OTP_LENGTH,
   RIDER_OTP_RESEND_SECONDS,
   RIDER_OTP_DEV_CODE,
@@ -87,7 +89,12 @@ export default function PersonalEditScreen() {
   const router = useRouter()
   const { reducedMotion } = useA11y()
 
-  const [loading, setLoading] = useState(true)
+  // TanStack Query: profile (120s staleTime, shared cache).
+  const { data: profileData, isLoading: loading } = useRiderPersonalProfile()
+  const updateProfile = useUpdateRiderPersonalProfile()
+  const requestOtp = useRequestRiderPhoneOtp()
+  const verifyOtp = useVerifyRiderPhoneOtp()
+
   const [profile, setProfile] = useState<RiderPersonalProfile | null>(null)
   const [form, setForm] = useState<FormState | null>(null)
   const [initial, setInitial] = useState<FormState | null>(null)
@@ -111,21 +118,20 @@ export default function PersonalEditScreen() {
   // Dirty-guard dialog.
   const [dirtyOpen, setDirtyOpen] = useState(false)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    const p = await getRiderPersonalProfile()
-    const f = toForm(p)
-    setProfile(p)
-    setForm(f)
-    setInitial(f)
-    setLoading(false)
-  }, [])
+  // Sync query data → local state (form).
+  useEffect(() => {
+    if (profileData) {
+      const f = toForm(profileData)
+      setProfile(profileData)
+      setForm(f)
+      setInitial(f)
+    }
+  }, [profileData])
 
   useFocusEffect(
     React.useCallback(() => {
       analytics.screen({ name: 'rider-personal-edit' })
-      load()
-    }, [load]),
+    }, []),
   )
 
   // Resend countdown.
@@ -218,7 +224,7 @@ export default function PersonalEditScreen() {
       // Send the first code automatically.
       setOtpSending(true)
       try {
-        await requestRiderPhoneOtp(form.phone)
+        await requestOtp.mutateAsync(form.phone)
         setOtpResendIn(RIDER_OTP_RESEND_SECONDS)
         announce(t('rider.profile.personal.otp.sentAnnounce'))
       } catch {}
@@ -228,7 +234,7 @@ export default function PersonalEditScreen() {
 
     setSaving(true)
     try {
-      await updateRiderPersonalProfile({
+      await updateProfile.mutateAsync({
         name: form.name,
         email: form.email,
         city: form.city,
@@ -302,7 +308,7 @@ export default function PersonalEditScreen() {
     setOtpVerifying(true)
     setOtpError('')
     try {
-      const res = await verifyRiderPhoneOtp(form.phone, code)
+      const res = await verifyOtp.mutateAsync({ phone: form.phone, code })
       if (res.success) {
         setOtpSuccess(true)
         try {
@@ -310,7 +316,7 @@ export default function PersonalEditScreen() {
         } catch {}
         // Commit the save including the new phone.
         setSaving(true)
-        await updateRiderPersonalProfile({
+        await updateProfile.mutateAsync({
           name: form.name,
           email: form.email,
           phone: form.phone,

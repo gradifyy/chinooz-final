@@ -29,8 +29,38 @@ import {
 } from './riderJobs'
 import { getRiderProfile, type RiderProfileHub } from './riderProfile'
 import {
+  getRiderVehicle as getRiderVehicleMock,
+  updateRiderVehicle as updateRiderVehicleMock,
+  getRiderDocuments as getRiderDocumentsMock,
+  resubmitRiderDocument as resubmitRiderDocumentMock,
+  getRiderPreferences as getRiderPreferencesMock,
+  updateRiderPreferences as updateRiderPreferencesMock,
+  getRiderSecurity as getRiderSecurityMock,
+  updateRiderSecurity as updateRiderSecurityMock,
+  changeRiderPin as changeRiderPinMock,
+  signOutAllSessions as signOutAllSessionsMock,
+  deactivateRiderAccount as deactivateRiderAccountMock,
+  deleteRiderAccount as deleteRiderAccountMock,
+  type RiderVehicle,
+  type RiderDocument,
+  type RiderPreferences,
+  type RiderSecurity,
+} from './riderProfile'
+import {
   getRiderEarnings,
   type RiderEarningsOverview,
+  getRiderPayoutMethods,
+  addRiderPayoutMethod as addRiderPayoutMethodMock,
+  setDefaultRiderPayoutMethod as setDefaultRiderPayoutMethodMock,
+  deleteRiderPayoutMethod as deleteRiderPayoutMethodMock,
+  getRiderWithdrawals,
+  getRiderWithdrawalById,
+  requestRiderWithdrawal as requestRiderWithdrawalMock,
+  type RiderPayoutMethod,
+  type PayoutMethodKind,
+  type RiderWithdrawal,
+  type RiderWithdrawalDetail,
+  type WithdrawalStatus,
 } from './riderEarnings'
 import { getCODWallet, type CODWalletSnapshot } from './riderEarnings'
 import { getIncentives, type RiderIncentives } from './riderIncentives'
@@ -433,6 +463,95 @@ export async function requestWithdrawal(
   )
 }
 
+// ---------------------------------------------------------------------------
+// Payout methods (eSewa / Khalti / bank) — clean boundary for real providers
+// ---------------------------------------------------------------------------
+
+/** List rider payout methods. */
+export async function getRiderPayoutMethodsApi(): Promise<RiderPayoutMethod[]> {
+  await randomDelay(150, 300)
+  maybeThrow(0.02)
+  return getRiderPayoutMethods()
+}
+
+/** Add a new payout method. Idempotent via `opRef`. */
+export async function addRiderPayoutMethodApi(
+  method: Omit<RiderPayoutMethod, 'id' | 'isDefault' | 'createdAt'>,
+  opRef: string,
+): Promise<{ success: boolean; method?: RiderPayoutMethod; error?: string }> {
+  return runIdempotent(
+    opRef,
+    'status',
+    `add-payout-${opRef}`,
+    async () => {
+      await randomDelay(300, 600)
+      maybeThrow(0.04)
+      const added = await addRiderPayoutMethodMock(method)
+      return { success: true, method: added }
+    },
+  )
+}
+
+/** Set a payout method as default. Idempotent via `opRef`. */
+export async function setDefaultRiderPayoutMethodApi(
+  methodId: string,
+  opRef: string,
+): Promise<{ success: boolean; error?: string }> {
+  return runIdempotent(
+    opRef,
+    'status',
+    `set-default-payout-${methodId}`,
+    async () => {
+      await randomDelay(200, 400)
+      maybeThrow(0.03)
+      await setDefaultRiderPayoutMethodMock(methodId)
+      return { success: true }
+    },
+  )
+}
+
+/** Delete a payout method. Idempotent via `opRef`. */
+export async function deleteRiderPayoutMethodApi(
+  methodId: string,
+  opRef: string,
+): Promise<{ success: boolean; error?: string }> {
+  return runIdempotent(
+    opRef,
+    'status',
+    `delete-payout-${methodId}`,
+    async () => {
+      await randomDelay(200, 400)
+      maybeThrow(0.03)
+      await deleteRiderPayoutMethodMock(methodId)
+      return { success: true }
+    },
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Withdrawals — history + detail
+// ---------------------------------------------------------------------------
+
+/** List rider withdrawals (history). */
+export async function getRiderWithdrawalsApi(): Promise<RiderWithdrawal[]> {
+  await randomDelay(150, 300)
+  maybeThrow(0.02)
+  return getRiderWithdrawals()
+}
+
+/** Get a single withdrawal by id (receipt detail). */
+export async function getRiderWithdrawalByIdApi(
+  withdrawalId: string,
+): Promise<RiderWithdrawalDetail | null> {
+  await randomDelay(150, 300)
+  maybeThrow(0.02)
+  return getRiderWithdrawalById(withdrawalId)
+}
+
+// ---------------------------------------------------------------------------
+// Incentives + quests
+// ---------------------------------------------------------------------------
+
 /** Get incentives/quests. */
 export async function getIncentivesApi(): Promise<RiderIncentives> {
   return getIncentives()
@@ -561,4 +680,141 @@ export async function getRiderTierDetailApi(): Promise<RiderTierDetail> {
   await randomDelay(200, 450)
   maybeThrow()
   return getRiderTierDetailMock()
+}
+
+// ---------------------------------------------------------------------------
+// Vehicle & documents (RP1 profile sub-screen)
+// ---------------------------------------------------------------------------
+
+export async function getRiderVehicleApi(): Promise<RiderVehicle> {
+  await randomDelay(200, 400)
+  maybeThrow()
+  return getRiderVehicleMock()
+}
+
+export async function updateRiderVehicleApi(
+  data: Parameters<typeof updateRiderVehicleMock>[0],
+): Promise<Awaited<ReturnType<typeof updateRiderVehicleMock>>> {
+  await randomDelay(300, 600)
+  maybeThrow(0.05)
+  return updateRiderVehicleMock(data)
+}
+
+export async function getRiderDocumentsApi(): Promise<RiderDocument[]> {
+  await randomDelay(200, 400)
+  maybeThrow()
+  return getRiderDocumentsMock()
+}
+
+export async function resubmitRiderDocumentApi(
+  docId: string,
+  opRef: string,
+): Promise<{ success: boolean }> {
+  return runIdempotent(
+    opRef,
+    'status',
+    `resubmit-${docId}`,
+    async () => {
+      await randomDelay(400, 800)
+      maybeThrow(0.06)
+      await resubmitRiderDocumentMock(docId)
+      return { success: true }
+    },
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Preferences (notifications + app + job prefs)
+// ---------------------------------------------------------------------------
+
+export async function getRiderPreferencesApi(): Promise<RiderPreferences> {
+  await randomDelay(200, 400)
+  maybeThrow()
+  return getRiderPreferencesMock()
+}
+
+export async function updateRiderPreferencesApi(
+  data: Parameters<typeof updateRiderPreferencesMock>[0],
+): Promise<Awaited<ReturnType<typeof updateRiderPreferencesMock>>> {
+  await randomDelay(300, 500)
+  maybeThrow(0.04)
+  return updateRiderPreferencesMock(data)
+}
+
+// ---------------------------------------------------------------------------
+// Security (PIN, biometric, sessions, account actions)
+// ---------------------------------------------------------------------------
+
+export async function getRiderSecurityApi(): Promise<RiderSecurity> {
+  await randomDelay(200, 400)
+  maybeThrow()
+  return getRiderSecurityMock()
+}
+
+export async function updateRiderSecurityApi(
+  data: Parameters<typeof updateRiderSecurityMock>[0],
+): Promise<Awaited<ReturnType<typeof updateRiderSecurityMock>>> {
+  await randomDelay(250, 450)
+  maybeThrow(0.04)
+  return updateRiderSecurityMock(data)
+}
+
+export async function changeRiderPinApi(
+  opRef: string,
+): Promise<{ success: boolean }> {
+  return runIdempotent(
+    opRef,
+    'status',
+    'change-pin',
+    async () => {
+      await randomDelay(400, 700)
+      maybeThrow(0.05)
+      return changeRiderPinMock()
+    },
+  )
+}
+
+export async function signOutAllSessionsApi(
+  opRef: string,
+): Promise<{ success: boolean }> {
+  return runIdempotent(
+    opRef,
+    'status',
+    'signout-all',
+    async () => {
+      await randomDelay(300, 600)
+      maybeThrow(0.04)
+      return signOutAllSessionsMock()
+    },
+  )
+}
+
+export async function deactivateRiderAccountApi(
+  opRef: string,
+): Promise<{ success: boolean }> {
+  return runIdempotent(
+    opRef,
+    'status',
+    'deactivate',
+    async () => {
+      await randomDelay(500, 900)
+      maybeThrow(0.05)
+      return deactivateRiderAccountMock()
+    },
+  )
+}
+
+export async function deleteRiderAccountApi(
+  opRef: string,
+): Promise<{ success: boolean }> {
+  return runIdempotent(
+    opRef,
+    'status',
+    'delete-account',
+    async () => {
+      await randomDelay(500, 900)
+      maybeThrow(0.05)
+      return deleteRiderAccountMock()
+    },
+  )
 }

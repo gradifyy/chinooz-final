@@ -42,11 +42,13 @@ import {
   fontSize,
 } from '@chinooz/theme'
 import { analytics } from '@chinooz/analytics'
-import { useA11y } from './A11yProvider'
-import { useCanAcceptCodJob } from '@chinooz/state'
 import {
-  getRiderPreferences,
-  updateRiderPreferences,
+  useRiderPreferences,
+  useUpdateRiderPreferences,
+} from '@chinooz/hooks'
+import { useA11y } from './A11yProvider'
+import { useCanAcceptCodJob, useRiderPrefsStore } from '@chinooz/state'
+import {
   RIDER_PREFERENCE_ZONES,
   RIDER_MAX_DISTANCE_OPTIONS,
   type RiderPreferences,
@@ -155,7 +157,13 @@ export default function NotificationsPreferencesScreen() {
   const { reducedMotion } = useA11y()
   const canAcceptCod = useCanAcceptCodJob()
 
-  const [loading, setLoading] = useState(true)
+  // TanStack Query: preferences (120s staleTime, shared cache + optimistic).
+  const { data: prefsData, isLoading: loading } = useRiderPreferences()
+  const updatePrefsMutation = useUpdateRiderPreferences()
+
+  // Local persistence: app prefs survive app restarts even offline.
+  const localPrefs = useRiderPrefsStore()
+
   const [prefs, setPrefs] = useState<RiderPreferences | null>(null)
   const [savedMsg, setSavedMsg] = useState(false)
 
@@ -165,18 +173,30 @@ export default function NotificationsPreferencesScreen() {
     } catch {}
   }, [])
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    const p = await getRiderPreferences()
-    setPrefs(p)
-    setLoading(false)
-  }, [])
+  // Sync query data → local state + hydrate local prefs store.
+  useEffect(() => {
+    if (prefsData) {
+      setPrefs(prefsData)
+      // Hydrate local store from server (one-way sync on load).
+      localPrefs.hydrateFromServer({
+        navApp: prefsData.app.navApp,
+        distanceUnit: prefsData.app.distanceUnit,
+        soundLevel: prefsData.app.soundLevel,
+        hapticsLevel: prefsData.app.hapticsLevel,
+        batterySaver: prefsData.app.batterySaver,
+        dataSaver: prefsData.app.dataSaver,
+        mapStyle: prefsData.app.mapStyle,
+        preferredZones: prefsData.job.preferredZones,
+        maxDistanceKm: prefsData.job.maxDistanceKm,
+        codPreference: prefsData.job.codPreference,
+      })
+    }
+  }, [prefsData])
 
   useFocusEffect(
     React.useCallback(() => {
       analytics.screen({ name: 'rider-notifications-prefs' })
-      load()
-    }, [load]),
+    }, []),
   )
 
   // ----- Update helpers (instant + persist) ------------------------------
@@ -192,7 +212,7 @@ export default function NotificationsPreferencesScreen() {
           notifications: { ...prev.notifications, [key]: value },
         }
         // Fire-and-forget persist.
-        updateRiderPreferences({ notifications: { [key]: value } })
+        updatePrefsMutation.mutate({ notifications: { [key]: value } })
         return next
       })
       // Instant haptic feedback on toggle.
@@ -221,16 +241,26 @@ export default function NotificationsPreferencesScreen() {
           ...prev,
           app: { ...prev.app, [key]: value },
         }
-        updateRiderPreferences({ app: { [key]: value } })
+        updatePrefsMutation.mutate({ app: { [key]: value } })
         return next
       })
+      // Persist locally so settings take effect app-wide immediately.
+      switch (key) {
+        case 'navApp': localPrefs.setNavApp(value as RiderNavApp); break
+        case 'distanceUnit': localPrefs.setDistanceUnit(value as RiderDistanceUnit); break
+        case 'soundLevel': localPrefs.setSoundLevel(value as RiderSoundLevel); break
+        case 'hapticsLevel': localPrefs.setHapticsLevel(value as RiderHapticsLevel); break
+        case 'batterySaver': localPrefs.setBatterySaver(value as boolean); break
+        case 'dataSaver': localPrefs.setDataSaver(value as boolean); break
+        case 'mapStyle': localPrefs.setMapStyle(value as RiderMapStyle); break
+      }
       try {
         if (typeof value === 'boolean') {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
         }
       } catch {}
     },
-    [],
+    [localPrefs],
   )
 
   const updateJob = useCallback(
@@ -244,9 +274,14 @@ export default function NotificationsPreferencesScreen() {
           ...prev,
           job: { ...prev.job, [key]: value },
         }
-        updateRiderPreferences({ job: { [key]: value } })
+        updatePrefsMutation.mutate({ job: { [key]: value } })
         return next
       })
+      // Persist locally so job prefs take effect app-wide immediately.
+      switch (key) {
+        case 'maxDistanceKm': localPrefs.setMaxDistanceKm(value as number); break
+        case 'codPreference': localPrefs.setCodPreference(value as RiderCodPreference); break
+      }
       setSavedMsg(true)
       try {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -254,7 +289,7 @@ export default function NotificationsPreferencesScreen() {
       announce(t('rider.prefs.savedAria'))
       setTimeout(() => setSavedMsg(false), 2500)
     },
-    [announce, t],
+    [announce, t, localPrefs],
   )
 
   const toggleZone = useCallback(
@@ -269,14 +304,16 @@ export default function NotificationsPreferencesScreen() {
           ...prev,
           job: { ...prev.job, preferredZones },
         }
-        updateRiderPreferences({ job: { preferredZones } })
+        updatePrefsMutation.mutate({ job: { preferredZones } })
+        // Persist locally.
+        localPrefs.setPreferredZones(preferredZones)
         return next
       })
       try {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
       } catch {}
     },
-    [],
+    [localPrefs],
   )
 
   // ----- Loading ---------------------------------------------------------

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react'
+import React, { useEffect, useMemo } from 'react'
 import { View, Text, StyleSheet, ScrollView } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
@@ -7,25 +7,21 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  withDelay,
   Easing,
   ReduceMotion,
 } from 'react-native-reanimated'
 import { colors, spacing, radii, fontFamily, fontSize, duration, easing } from '@chinooz/theme'
 import { useReducedMotion } from '@chinooz/ui'
 import {
-  getRiderProfile,
   getRiderQuickLinks,
   getRiderSettingsSections,
   RIDER_TIER_LABEL_KEY,
   RIDER_VERIFICATION_LABEL_KEY,
   RIDER_APP_VERSION,
-  type RiderProfileHub,
-  type RiderQuickLinkGroup,
-  type RiderSettingsSection,
 } from '@chinooz/mock-data'
 import { useRiderSessionStore } from '@chinooz/state'
 import { analytics } from '@chinooz/analytics'
+import { useRiderProfile } from '@chinooz/hooks'
 import { ProfileHubSkeleton, LoadErrorState } from '../../components/ProfileStates'
 import ProfileHeader from '../../components/ProfileHeader'
 import QuickLinks from '../../components/QuickLinks'
@@ -40,47 +36,31 @@ export default function RiderProfileScreen() {
 
   const logout = useRiderSessionStore(s => s.logout)
 
-  const [profile, setProfile] = useState<RiderProfileHub | null>(null)
-  const [quickLinks, setQuickLinks] = useState<RiderQuickLinkGroup[]>([])
-  const [sections, setSections] = useState<RiderSettingsSection[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+  // Profile via TanStack Query (120s staleTime, shared cache).
+  const { data: profile, isLoading, isError, refetch } = useRiderProfile()
+
+  // Quick links + settings sections are static config (no API call).
+  const quickLinks = useMemo(() => getRiderQuickLinks(), [])
+  const sections = useMemo(() => getRiderSettingsSections(), [])
 
   // Staggered entrance: each section fades + slides in with a delay.
   const enterOpacity = useSharedValue(reduced ? 1 : 0)
   const enterTranslate = useSharedValue(reduced ? 0 : 12)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(false)
-    try {
-      const [p, ql, ss] = await Promise.all([
-        getRiderProfile(),
-        Promise.resolve(getRiderQuickLinks()),
-        Promise.resolve(getRiderSettingsSections()),
-      ])
-      setProfile(p)
-      setQuickLinks(ql)
-      setSections(ss)
-      setLoading(false)
-      // Trigger entrance animation after data settles.
-      if (!reduced) {
-        enterOpacity.value = 0
-        enterTranslate.value = 12
-        enterOpacity.value = withTiming(1, { duration: duration.normal, easing: Easing.bezier(...easing.easeOut), reduceMotion: ReduceMotion.System })
-        enterTranslate.value = withTiming(0, { duration: duration.normal, easing: Easing.bezier(...easing.easeOut), reduceMotion: ReduceMotion.System })
-      }
-    } catch {
-      setError(true)
-    } finally {
-      setLoading(false)
-    }
-  }, [reduced, enterOpacity, enterTranslate])
-
   useEffect(() => {
     analytics.screen({ name: 'rider-profile' })
-    load()
-  }, [load])
+  }, [])
+
+  // Trigger entrance animation after data settles.
+  useEffect(() => {
+    if (isLoading || !profile) return
+    if (!reduced) {
+      enterOpacity.value = 0
+      enterTranslate.value = 12
+      enterOpacity.value = withTiming(1, { duration: duration.normal, easing: Easing.bezier(...easing.easeOut), reduceMotion: ReduceMotion.System })
+      enterTranslate.value = withTiming(0, { duration: duration.normal, easing: Easing.bezier(...easing.easeOut), reduceMotion: ReduceMotion.System })
+    }
+  }, [isLoading, profile, reduced])
 
   // Resolve all i18n labels once into a flat map keyed by their i18n key.
   const labels = useMemo(() => {
@@ -137,7 +117,7 @@ export default function RiderProfileScreen() {
     transform: [{ translateY: enterTranslate.value }],
   }))
 
-  if (loading) {
+  if (isLoading) {
     return (
       <ScrollView
         style={styles.container}
@@ -156,7 +136,7 @@ export default function RiderProfileScreen() {
     )
   }
 
-  if (error || !profile) {
+  if (isError || !profile) {
     return (
       <View style={[styles.container, styles.errorWrap]}>
         <LoadErrorState
@@ -164,7 +144,7 @@ export default function RiderProfileScreen() {
           subtitle={t('rider.profile.errorLoadBody')}
           retry={t('rider.profile.errorLoadRetry')}
           retryAria={t('rider.profile.errorLoadRetryAria')}
-          onRetry={load}
+          onRetry={() => refetch()}
         />
       </View>
     )

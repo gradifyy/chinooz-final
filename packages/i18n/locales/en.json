@@ -3423,7 +3423,19 @@
       "chartColPeriod": "Period",
       "chartColValue": "Value",
       "chartTooltipValue": "{{value}}",
-      "chartTooltipDate": "{{date}}"
+      "chartTooltipDate": "{{date}}",
+      "alertNewOrders": "New orders to fulfill",
+      "alertLowStock": "Products running low on stock",
+      "alertOutOfStock": "Products out of stock",
+      "alertReturns": "Return requests need action",
+      "alertMessages": "Unanswered buyer messages",
+      "alertReviews": "Reviews waiting for your response",
+      "alertPayout": "Payout ready to withdraw",
+      "alertKyc": "KYC verification incomplete",
+      "alertDismiss": "Dismiss alert",
+      "alertAria": "{{title}}, {{count}} items",
+      "alertAllCaughtUp": "All caught up",
+      "alertAllCaughtUpSub": "No actions needed right now."
     },
     "messages": {
       "tab": "Messages",

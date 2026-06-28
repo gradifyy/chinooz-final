@@ -55,16 +55,18 @@ import {
 } from '@chinooz/theme'
 import { useReducedMotion } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
+import {
+  useRiderSecurity,
+  useUpdateRiderSecurity,
+  useChangeRiderPin,
+  useSignOutAllSessions,
+  useDeactivateRiderAccount,
+  useDeleteRiderAccount,
+} from '@chinooz/hooks'
 import { useA11y } from './A11yProvider'
 import { useUIStore, useRiderSessionStore } from '@chinooz/state'
 import type { Locale } from '@chinooz/state'
 import {
-  getRiderSecurity,
-  updateRiderSecurity,
-  changeRiderPin,
-  signOutAllSessions,
-  deactivateRiderAccount,
-  deleteRiderAccount,
   type RiderSecurity,
   type RiderActiveSession,
 } from '@chinooz/mock-data'
@@ -195,7 +197,14 @@ export default function AccountSecurityScreen() {
   const setLocale = useUIStore(s => s.setLocale)
   const logout = useRiderSessionStore(s => s.logout)
 
-  const [loading, setLoading] = useState(true)
+  // TanStack Query: security (120s staleTime, shared cache + optimistic).
+  const { data: securityData, isLoading: loading } = useRiderSecurity()
+  const updateSecurityMutation = useUpdateRiderSecurity()
+  const changePinMutation = useChangeRiderPin()
+  const signOutAllMutation = useSignOutAllSessions()
+  const deactivateMutation = useDeactivateRiderAccount()
+  const deleteMutation = useDeleteRiderAccount()
+
   const [security, setSecurity] = useState<RiderSecurity | null>(null)
   const [statusMsg, setStatusMsg] = useState<string | null>(null)
 
@@ -212,18 +221,15 @@ export default function AccountSecurityScreen() {
     } catch {}
   }, [])
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    const s = await getRiderSecurity()
-    setSecurity(s)
-    setLoading(false)
-  }, [])
+  // Sync query data → local state.
+  useEffect(() => {
+    if (securityData) setSecurity(securityData)
+  }, [securityData])
 
   useFocusEffect(
     React.useCallback(() => {
       analytics.screen({ name: 'rider-account-security' })
-      load()
-    }, [load]),
+    }, []),
   )
 
   // ----- Language switch (instant, app-wide) -----------------------------
@@ -245,7 +251,7 @@ export default function AccountSecurityScreen() {
   const updateSecurity = useCallback(
     (key: 'pinEnabled' | 'biometricEnabled', value: boolean) => {
       setSecurity(prev => (prev ? { ...prev, [key]: value } : prev))
-      updateRiderSecurity({ [key]: value })
+      updateSecurityMutation.mutate({ [key]: value })
       try {
         Haptics.impactAsync(
           value ? Haptics.ImpactFeedbackStyle.Light : Haptics.ImpactFeedbackStyle.Medium,
@@ -263,7 +269,7 @@ export default function AccountSecurityScreen() {
   const handleChangePin = useCallback(async () => {
     setActionLoading(true)
     try {
-      await changeRiderPin()
+      await changePinMutation.mutateAsync(`change-pin-${Date.now()}`)
       try {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       } catch {}
@@ -279,7 +285,7 @@ export default function AccountSecurityScreen() {
     setDialog(null)
     setActionLoading(true)
     try {
-      await signOutAllSessions()
+      await signOutAllMutation.mutateAsync(`signout-all-${Date.now()}`)
       // Keep only the current session.
       setSecurity(prev =>
         prev ? { ...prev, sessions: prev.sessions.filter(s => s.current) } : prev,
@@ -299,7 +305,7 @@ export default function AccountSecurityScreen() {
     setDialog(null)
     setActionLoading(true)
     try {
-      await deactivateRiderAccount()
+      await deactivateMutation.mutateAsync(`deactivate-${Date.now()}`)
       try {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning)
       } catch {}
@@ -318,7 +324,7 @@ export default function AccountSecurityScreen() {
     setDialog(null)
     setActionLoading(true)
     try {
-      await deleteRiderAccount()
+      await deleteMutation.mutateAsync(`delete-account-${Date.now()}`)
       try {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
       } catch {}

@@ -47,6 +47,12 @@ import { analytics } from '@chinooz/analytics'
 import { useA11y } from './A11yProvider'
 import { useAppState } from './AppStateProvider'
 import {
+  useRiderVehicle,
+  useUpdateRiderVehicle,
+  useRiderDocuments,
+  useResubmitDocument,
+} from '@chinooz/hooks'
+import {
   VehicleDocsSkeleton,
   LoadErrorState,
   SaveFailState,
@@ -57,10 +63,6 @@ import {
   VerificationPendingLock,
 } from './ProfileStates'
 import {
-  getRiderVehicle,
-  updateRiderVehicle,
-  getRiderDocuments,
-  resubmitRiderDocument,
   daysUntilExpiry,
   RIDER_DOC_EXPIRY_REMIND_DAYS,
   type RiderVehicle,
@@ -139,14 +141,18 @@ export default function VehicleDocumentsScreen() {
   const router = useRouter()
   const { reducedMotion } = useA11y()
 
-  const [loading, setLoading] = useState(true)
+  // TanStack Query: vehicle + documents (120s staleTime, shared cache).
+  const { data: vehicleData, isLoading: loading, isError: loadError } = useRiderVehicle()
+  const { data: docsData } = useRiderDocuments()
+  const updateVehicle = useUpdateRiderVehicle()
+  const resubmitDoc = useResubmitDocument()
+
   const [vehicle, setVehicle] = useState<RiderVehicle | null>(null)
   const [form, setForm] = useState<VehicleForm | null>(null)
   const [initial, setInitial] = useState<VehicleForm | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
   const [savedMsg, setSavedMsg] = useState<string | null>(null)
-  const [loadError, setLoadError] = useState(false)
   const [saveFail, setSaveFail] = useState(false)
   const [uploadFailId, setUploadFailId] = useState<string | null>(null)
   const { connectivity } = useAppState()
@@ -161,33 +167,29 @@ export default function VehicleDocumentsScreen() {
     } catch {}
   }, [])
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setLoadError(false)
-    try {
-      const [v, d] = await Promise.all([getRiderVehicle(), getRiderDocuments()])
+  // Sync query data → local state (form + docs).
+  useEffect(() => {
+    if (vehicleData) {
       const f: VehicleForm = {
-        type: v.type,
-        plate: v.plate,
-        model: v.model,
-        color: v.color,
+        type: vehicleData.type,
+        plate: vehicleData.plate,
+        model: vehicleData.model,
+        color: vehicleData.color,
       }
-      setVehicle(v)
+      setVehicle(vehicleData)
       setForm(f)
       setInitial(f)
-      setDocs(d)
-    } catch {
-      setLoadError(true)
-    } finally {
-      setLoading(false)
     }
-  }, [])
+  }, [vehicleData])
+
+  useEffect(() => {
+    if (docsData) setDocs(docsData)
+  }, [docsData])
 
   useFocusEffect(
     React.useCallback(() => {
       analytics.screen({ name: 'rider-vehicle-documents' })
-      load()
-    }, [load]),
+    }, []),
   )
 
   // ----- Vehicle edit ----------------------------------------------------
@@ -238,7 +240,7 @@ export default function VehicleDocumentsScreen() {
     if (!validate()) return
     setSaving(true)
     try {
-      const res = await updateRiderVehicle({
+      const res = await updateVehicle.mutateAsync({
         type: form.type,
         plate: form.plate,
         model: form.model,
@@ -286,7 +288,7 @@ export default function VehicleDocumentsScreen() {
       if (resubmittingId) return
       setResubmittingId(doc.id)
       try {
-        await resubmitRiderDocument(doc.id)
+        await resubmitDoc.mutateAsync({ docId: doc.id, opRef: `resubmit-${doc.id}-${Date.now()}` })
         // Move the doc to pending after re-upload.
         setDocs(prev =>
           prev.map(d =>

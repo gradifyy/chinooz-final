@@ -35,13 +35,24 @@ import {
   requestRiderPhoneOtp,
   verifyRiderPhoneOtp,
   getCODWalletSync,
+  getRiderCashWallet,
+  getCodCollections,
+  getDepositHistory,
+  getDepositReceipt,
+  type RiderVehicle,
+  type RiderDocument,
+  type RiderPreferences,
+  type RiderSecurity,
+  type RiderCashWallet,
 } from '@chinooz/mock-data'
-import type { RiderPerformanceRange, RiderEarningsRange, GeoPoint, RiderMetricId } from '@chinooz/mock-data'
+import type { RiderPerformanceRange, RiderEarningsRange, GeoPoint, RiderMetricId, PayoutMethodKind, RiderPayoutMethod, RiderWithdrawal, RiderWithdrawalDetail, RiderEarningsOverview } from '@chinooz/mock-data'
 import type {
   RiderJob,
   ActiveDelivery,
   DeliveryStatus,
 } from '@chinooz/types'
+import { analytics } from '@chinooz/analytics'
+import { useRiderEarningsStore, useCODWalletStore } from '@chinooz/state'
 
 // ---------------------------------------------------------------------------
 // StaleTime convention (seconds → ms)
@@ -52,9 +63,12 @@ const STALE_JOBS = 1000 * 15
 const STALE_ACTIVE = 0
 const STALE_EARNINGS = 1000 * 30
 const STALE_WALLET = 1000 * 30
+const STALE_LEDGER = 1000 * 30
 const STALE_INCENTIVES = 1000 * 60
 const STALE_DEMAND = 1000 * 30
 const STALE_PERFORMANCE = 1000 * 120
+const STALE_PAYOUT_METHODS = 1000 * 60
+const STALE_WITHDRAWALS = 1000 * 30
 
 // ---------------------------------------------------------------------------
 // Query keys
@@ -71,6 +85,9 @@ const KEYS = {
     ['rider', 'earnings', 'breakdown', range.key] as const,
   earningsLedger: ['rider', 'earnings', 'ledger'] as const,
   wallet: ['rider', 'cod-wallet'] as const,
+  codCollections: ['rider', 'cod-collections'] as const,
+  depositHistory: ['rider', 'deposit-history'] as const,
+  depositReceipt: (id: string) => ['rider', 'deposit-receipt', id] as const,
   incentives: ['rider', 'incentives'] as const,
   demand: ['rider', 'demand-zones'] as const,
   surge: ['rider', 'surge-zones'] as const,
@@ -87,6 +104,13 @@ const KEYS = {
     ['rider', 'ratings', { stars, tag }] as const,
   tier: ['rider', 'tier'] as const,
   personal: ['rider', 'personal-profile'] as const,
+  vehicle: ['rider', 'vehicle'] as const,
+  documents: ['rider', 'documents'] as const,
+  preferences: ['rider', 'preferences'] as const,
+  security: ['rider', 'security'] as const,
+  payoutMethods: ['rider', 'payout-methods'] as const,
+  withdrawals: ['rider', 'withdrawals'] as const,
+  withdrawal: (id: string) => ['rider', 'withdrawal', id] as const,
 }
 
 // ---------------------------------------------------------------------------
@@ -367,8 +391,19 @@ export function useRiderTripDetail(tripId: string | null | undefined) {
   })
 }
 
+export function useRiderCashWallet() {
+  return useQuery({
+    queryKey: ['rider', 'cash-wallet'] as const,
+    queryFn: () => getRiderCashWallet(),
+    staleTime: STALE_WALLET,
+  })
+}
+
 export function useRiderRequestWithdrawal() {
   const qc = useQueryClient()
+  const beginCashout = useRiderEarningsStore(s => s.beginCashout)
+  const completeCashout = useRiderEarningsStore(s => s.completeCashout)
+  const cancelCashout = useRiderEarningsStore(s => s.cancelCashout)
   return useMutation({
     mutationFn: ({
       amountNpr,
@@ -376,12 +411,132 @@ export function useRiderRequestWithdrawal() {
       opRef,
     }: {
       amountNpr: number
-      destination: 'esewa' | 'khalti' | 'bank'
+      destination: PayoutMethodKind
       opRef: string
     }) => riderApi.requestWithdrawal(amountNpr, destination, opRef),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: KEYS.earnings })
+    onMutate: async ({ amountNpr }) => {
+      // Optimistic: reduce the displayed balance immediately.
+      beginCashout()
+      const prev = qc.getQueryData<RiderEarningsOverview | undefined>(KEYS.earnings)
+      if (prev) {
+        qc.setQueryData<RiderEarningsOverview>(KEYS.earnings, {
+          ...prev,
+          withdrawableBalance: Math.max(0, prev.withdrawableBalance - Math.round(amountNpr)),
+        })
+      }
+      return { prev }
     },
+    onError: (_err, _vars, ctx) => {
+      // Rollback on failure.
+      cancelCashout()
+      if (ctx?.prev) qc.setQueryData(KEYS.earnings, ctx.prev)
+    },
+    onSuccess: (_data, { amountNpr }) => {
+      completeCashout(amountNpr)
+      qc.invalidateQueries({ queryKey: KEYS.earnings })
+      qc.invalidateQueries({ queryKey: KEYS.withdrawals })
+      analytics.track('rider_withdrawal_requested', { amountNpr })
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Payout methods (eSewa / Khalti / bank)
+// ---------------------------------------------------------------------------
+
+export function useRiderPayoutMethods() {
+  return useQuery({
+    queryKey: KEYS.payoutMethods,
+    queryFn: () => riderApi.getRiderPayoutMethodsApi(),
+    staleTime: STALE_PAYOUT_METHODS,
+  })
+}
+
+export function useAddRiderPayoutMethod() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      method,
+      opRef,
+    }: {
+      method: Omit<RiderPayoutMethod, 'id' | 'isDefault' | 'createdAt'>
+      opRef: string
+    }) => riderApi.addRiderPayoutMethodApi(method, opRef),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.payoutMethods })
+      analytics.track('rider_payout_method_added')
+    },
+  })
+}
+
+export function useSetDefaultRiderPayoutMethod() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ methodId, opRef }: { methodId: string; opRef: string }) =>
+      riderApi.setDefaultRiderPayoutMethodApi(methodId, opRef),
+    onMutate: async ({ methodId }) => {
+      await qc.cancelQueries({ queryKey: KEYS.payoutMethods })
+      const prev = qc.getQueryData<RiderPayoutMethod[]>(KEYS.payoutMethods)
+      if (prev) {
+        qc.setQueryData<RiderPayoutMethod[]>(
+          KEYS.payoutMethods,
+          prev.map(m => ({ ...m, isDefault: m.id === methodId })),
+        )
+      }
+      return { prev }
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(KEYS.payoutMethods, ctx.prev)
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: KEYS.payoutMethods })
+    },
+  })
+}
+
+export function useDeleteRiderPayoutMethod() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ methodId, opRef }: { methodId: string; opRef: string }) =>
+      riderApi.deleteRiderPayoutMethodApi(methodId, opRef),
+    onMutate: async ({ methodId }) => {
+      await qc.cancelQueries({ queryKey: KEYS.payoutMethods })
+      const prev = qc.getQueryData<RiderPayoutMethod[]>(KEYS.payoutMethods)
+      if (prev) {
+        qc.setQueryData<RiderPayoutMethod[]>(
+          KEYS.payoutMethods,
+          prev.filter(m => m.id !== methodId),
+        )
+      }
+      return { prev }
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(KEYS.payoutMethods, ctx.prev)
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: KEYS.payoutMethods })
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Withdrawals (history + detail)
+// ---------------------------------------------------------------------------
+
+export function useRiderWithdrawals() {
+  return useQuery({
+    queryKey: KEYS.withdrawals,
+    queryFn: () => riderApi.getRiderWithdrawalsApi(),
+    staleTime: STALE_WITHDRAWALS,
+  })
+}
+
+export function useRiderWithdrawalDetail(withdrawalId: string | null | undefined) {
+  return useQuery({
+    queryKey: KEYS.withdrawal(withdrawalId ?? ''),
+    queryFn: () => riderApi.getRiderWithdrawalByIdApi(withdrawalId!),
+    enabled: !!withdrawalId,
+    staleTime: STALE_WITHDRAWALS,
   })
 }
 
@@ -602,5 +757,165 @@ export function useRiderTierDetail() {
     queryKey: KEYS.tier,
     queryFn: () => riderApi.getRiderTierDetailApi(),
     staleTime: STALE_PERFORMANCE,
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Vehicle & documents
+// ---------------------------------------------------------------------------
+
+export function useRiderVehicle() {
+  return useQuery({
+    queryKey: KEYS.vehicle,
+    queryFn: () => riderApi.getRiderVehicleApi(),
+    staleTime: STALE_PROFILE,
+  })
+}
+
+export function useUpdateRiderVehicle() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: riderApi.updateRiderVehicleApi,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.vehicle })
+      qc.invalidateQueries({ queryKey: KEYS.profile })
+    },
+  })
+}
+
+export function useRiderDocuments() {
+  return useQuery({
+    queryKey: KEYS.documents,
+    queryFn: () => riderApi.getRiderDocumentsApi(),
+    staleTime: STALE_PROFILE,
+  })
+}
+
+export function useResubmitDocument() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ docId, opRef }: { docId: string; opRef: string }) =>
+      riderApi.resubmitRiderDocumentApi(docId, opRef),
+    onMutate: async ({ docId }) => {
+      await qc.cancelQueries({ queryKey: KEYS.documents })
+      const prev = qc.getQueryData<RiderDocument[]>(KEYS.documents)
+      if (prev) {
+        qc.setQueryData<RiderDocument[]>(
+          KEYS.documents,
+          prev.map(d =>
+            d.id === docId
+              ? { ...d, status: 'pending', uploadedAt: new Date().toISOString().slice(0, 10), rejectionReasonKey: null }
+              : d,
+          ),
+        )
+      }
+      return { prev }
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(KEYS.documents, ctx.prev)
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: KEYS.documents })
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Preferences (optimistic toggle + rollback)
+// ---------------------------------------------------------------------------
+
+export function useRiderPreferences() {
+  return useQuery({
+    queryKey: KEYS.preferences,
+    queryFn: () => riderApi.getRiderPreferencesApi(),
+    staleTime: STALE_PROFILE,
+  })
+}
+
+export function useUpdateRiderPreferences() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: riderApi.updateRiderPreferencesApi,
+    onMutate: async (data) => {
+      await qc.cancelQueries({ queryKey: KEYS.preferences })
+      const prev = qc.getQueryData<RiderPreferences>(KEYS.preferences)
+      if (prev) {
+        // Deep-merge the partial update into the cached preferences.
+        const merged: RiderPreferences = {
+          notifications: { ...prev.notifications, ...(data as Partial<RiderPreferences>).notifications },
+          app: { ...prev.app, ...(data as Partial<RiderPreferences>).app },
+          job: { ...prev.job, ...(data as Partial<RiderPreferences>).job },
+        }
+        qc.setQueryData<RiderPreferences>(KEYS.preferences, merged)
+      }
+      return { prev }
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(KEYS.preferences, ctx.prev)
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: KEYS.preferences })
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Security (optimistic toggle + rollback)
+// ---------------------------------------------------------------------------
+
+export function useRiderSecurity() {
+  return useQuery({
+    queryKey: KEYS.security,
+    queryFn: () => riderApi.getRiderSecurityApi(),
+    staleTime: STALE_PROFILE,
+  })
+}
+
+export function useUpdateRiderSecurity() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: riderApi.updateRiderSecurityApi,
+    onMutate: async (data) => {
+      await qc.cancelQueries({ queryKey: KEYS.security })
+      const prev = qc.getQueryData<RiderSecurity>(KEYS.security)
+      if (prev) {
+        qc.setQueryData<RiderSecurity>(KEYS.security, { ...prev, ...data })
+      }
+      return { prev }
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(KEYS.security, ctx.prev)
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: KEYS.security })
+    },
+  })
+}
+
+export function useChangeRiderPin() {
+  return useMutation({
+    mutationFn: (opRef: string) => riderApi.changeRiderPinApi(opRef),
+  })
+}
+
+export function useSignOutAllSessions() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (opRef: string) => riderApi.signOutAllSessionsApi(opRef),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.security })
+    },
+  })
+}
+
+export function useDeactivateRiderAccount() {
+  return useMutation({
+    mutationFn: (opRef: string) => riderApi.deactivateRiderAccountApi(opRef),
+  })
+}
+
+export function useDeleteRiderAccount() {
+  return useMutation({
+    mutationFn: (opRef: string) => riderApi.deleteRiderAccountApi(opRef),
   })
 }
