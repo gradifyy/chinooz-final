@@ -1195,6 +1195,384 @@ export async function verifyDeposit(
   return { id: depositId, status: 'verified' }
 }
 
+
+/**
+ * RW5 - Deposit history + receipt types + mock.
+ *
+ * The deposit history lists past deposits (amount, method, reference,
+ * status, timestamp) grouped by date. Each deposit expands into a receipt
+ * showing which COD collections it settled, the reference code, proof of
+ * deposit, and a timeline. A reconciliation summary compares total collected
+ * vs total deposited over the filtered period.
+ */
+
+export type DepositStatus = 'settled' | 'pending' | 'failed'
+
+/** A single deposit row in the history list. */
+export interface DepositHistoryEntry extends CODDepositEntry {
+  /** Human-readable method label, e.g. "Bank deposit". */
+  methodLabel: string
+  /** Formatted date label for grouping, e.g. "Today", "Yesterday", "Jun 25". */
+  dateLabel: string
+}
+
+/** A day group in the deposit history. */
+export interface DepositHistoryDay {
+  /** ISO date (yyyy-mm-dd). */
+  date: string
+  /** Human-readable label, e.g. "Today", "Yesterday", "Jun 25". */
+  label: string
+  /** Deposits on this day, newest first. */
+  deposits: DepositHistoryEntry[]
+  /** Total NPR deposited on this day. */
+  dayTotal: number
+  /** Count of deposits on this day. */
+  dayCount: number
+}
+
+/** The full deposit history response. */
+export interface DepositHistory {
+  /** Day groups, newest date first. */
+  days: DepositHistoryDay[]
+  /** Grand total NPR deposited across all entries. */
+  grandTotal: number
+  /** Total number of deposits. */
+  totalCount: number
+  /** Count of pending deposits. */
+  pendingCount: number
+  /** Count of failed deposits. */
+  failedCount: number
+  /** Reconciliation: total COD collected in the period. */
+  collectedInPeriod: number
+  /** Reconciliation: total deposited in the period. */
+  depositedInPeriod: number
+  /** Reconciliation: outstanding (collected minus deposited) in the period. */
+  outstanding: number
+}
+
+/** A COD collection settled by a specific deposit (for the receipt). */
+export interface SettledCollection {
+  id: string
+  orderId: string
+  jobRef: string
+  amount: number
+  collectedAt: string
+  buyerArea: string
+  status: 'collected' | 'partial' | 'disputed'
+}
+
+/** Timeline step for the deposit receipt. */
+export interface DepositTimelineStep {
+  key: string
+  label: string
+  timestamp?: string
+  status: 'completed' | 'current' | 'pending'
+  note?: string
+}
+
+/** Deposit receipt detail (shown when a row is tapped). */
+export interface DepositReceipt {
+  id: string
+  reference: string
+  amount: number
+  method: DepositMethodKind
+  methodLabel: string
+  status: DepositStatus
+  depositedAt: string
+  verifiedAt?: string
+  /** The COD collections this deposit settled. */
+  settledCollections: SettledCollection[]
+  /** Timeline of the deposit lifecycle. */
+  timeline: DepositTimelineStep[]
+  /** Agent or office name (if applicable). */
+  locationName?: string
+  /** Bank name (if bank method). */
+  bankName?: string
+  /** Proof note - mock verification text. */
+  proofNote: string
+}
+
+const DEPOSIT_HISTORY_FIXTURES: CODDepositEntry[] = [
+  {
+    id: 'dep-1',
+    amount: 2000,
+    depositedAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+    reference: 'CHZ-DEP-K4M2-X8',
+    status: 'settled',
+    method: 'office',
+    verifiedAt: new Date(Date.now() - 4.5 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'dep-2',
+    amount: 4500,
+    depositedAt: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString(),
+    reference: 'CHZ-DEP-J9P3-Q2',
+    status: 'settled',
+    method: 'agent',
+    verifiedAt: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'dep-3',
+    amount: 3200,
+    depositedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    reference: 'CHZ-DEP-H7N1-R5',
+    status: 'settled',
+    method: 'bank',
+    verifiedAt: new Date(
+      Date.now() - 2 * 24 * 60 * 60 * 1000 + 3 * 60 * 60 * 1000,
+    ).toISOString(),
+  },
+  {
+    id: 'dep-4',
+    amount: 1800,
+    depositedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    reference: 'CHZ-DEP-G6L0-T3',
+    status: 'settled',
+    method: 'agent',
+    verifiedAt: new Date(
+      Date.now() - 3 * 24 * 60 * 60 * 1000 + 2 * 60 * 60 * 1000,
+    ).toISOString(),
+  },
+  {
+    id: 'dep-5',
+    amount: 5200,
+    depositedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    reference: 'CHZ-DEP-F5K9-S1',
+    status: 'settled',
+    method: 'office',
+    verifiedAt: new Date(
+      Date.now() - 5 * 24 * 60 * 60 * 1000 + 1 * 60 * 60 * 1000,
+    ).toISOString(),
+  },
+  {
+    id: 'dep-6',
+    amount: 2800,
+    depositedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    reference: 'CHZ-DEP-E4J8-W7',
+    status: 'pending',
+    method: 'bank',
+  },
+  {
+    id: 'dep-7',
+    amount: 1500,
+    depositedAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
+    reference: 'CHZ-DEP-D3I7-V6',
+    status: 'failed',
+    method: 'agent',
+  },
+  {
+    id: 'dep-8',
+    amount: 3800,
+    depositedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+    reference: 'CHZ-DEP-C2H6-U4',
+    status: 'settled',
+    method: 'bank',
+    verifiedAt: new Date(
+      Date.now() - 10 * 24 * 60 * 60 * 1000 + 4 * 60 * 60 * 1000,
+    ).toISOString(),
+  },
+  {
+    id: 'dep-9',
+    amount: 2400,
+    depositedAt: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000).toISOString(),
+    reference: 'CHZ-DEP-B1G5-Z9',
+    status: 'settled',
+    method: 'office',
+    verifiedAt: new Date(
+      Date.now() - 12 * 24 * 60 * 60 * 1000 + 1 * 60 * 60 * 1000,
+    ).toISOString(),
+  },
+  {
+    id: 'dep-10',
+    amount: 4100,
+    depositedAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
+    reference: 'CHZ-DEP-A0F4-Y8',
+    status: 'settled',
+    method: 'agent',
+    verifiedAt: new Date(
+      Date.now() - 15 * 24 * 60 * 60 * 1000 + 2 * 60 * 60 * 1000,
+    ).toISOString(),
+  },
+]
+
+function dateLabelFor(iso: string): string {
+  const date = new Date(iso)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const that = new Date(date)
+  that.setHours(0, 0, 0, 0)
+  const diffDays = Math.round(
+    (today.getTime() - that.getTime()) / (24 * 60 * 60 * 1000),
+  )
+  if (diffDays === 0) return 'Today'
+  if (diffDays === 1) return 'Yesterday'
+  return date.toLocaleDateString(undefined, { day: '2-digit', month: 'short' })
+}
+
+function methodLabelFor(method: DepositMethodKind): string {
+  return DEPOSIT_METHODS.find(m => m.kind === method)?.label ?? method
+}
+
+function buildDepositHistory(): DepositHistory {
+  const sorted = [...DEPOSIT_HISTORY_FIXTURES].sort((a, b) =>
+    a.depositedAt < b.depositedAt ? 1 : -1,
+  )
+
+  const byDate = new Map<string, CODDepositEntry[]>()
+  for (const dep of sorted) {
+    const dateKey = dep.depositedAt.slice(0, 10)
+    const arr = byDate.get(dateKey) ?? []
+    arr.push(dep)
+    byDate.set(dateKey, arr)
+  }
+
+  const days: DepositHistoryDay[] = []
+  for (const [date, deposits] of byDate) {
+    const entries: DepositHistoryEntry[] = deposits.map(d => ({
+      ...d,
+      methodLabel: methodLabelFor(d.method),
+      dateLabel: dateLabelFor(d.depositedAt),
+    }))
+    days.push({
+      date,
+      label: dateLabelFor(deposits[0].depositedAt),
+      deposits: entries,
+      dayTotal: entries.reduce((s, e) => s + e.amount, 0),
+      dayCount: entries.length,
+    })
+  }
+
+  days.sort((a, b) => (a.date < b.date ? 1 : -1))
+
+  const grandTotal = sorted.reduce((s, d) => s + d.amount, 0)
+  const pendingCount = sorted.filter(d => d.status === 'pending').length
+  const failedCount = sorted.filter(d => d.status === 'failed').length
+
+  const depositedInPeriod = sorted
+    .filter(d => d.status === 'settled')
+    .reduce((s, d) => s + d.amount, 0)
+  const collectedInPeriod = depositedInPeriod + 13450
+
+  return {
+    days,
+    grandTotal,
+    totalCount: sorted.length,
+    pendingCount,
+    failedCount,
+    collectedInPeriod,
+    depositedInPeriod,
+    outstanding: collectedInPeriod - depositedInPeriod,
+  }
+}
+
+/**
+ * Mock async fetcher for the deposit history (RW5). Returns day-grouped
+ * deposits + reconciliation summary.
+ */
+export async function getDepositHistory(): Promise<DepositHistory> {
+  await new Promise(resolve => setTimeout(resolve, 240 + seeded(6, 11) * 260))
+  return buildDepositHistory()
+}
+
+/**
+ * Mock async fetcher for a single deposit receipt (RW5). Returns the full
+ * breakdown of which COD collections the deposit settled, the reference,
+ * proof note, and timeline.
+ */
+export async function getDepositReceipt(
+  depositId: string,
+): Promise<DepositReceipt | null> {
+  await new Promise(resolve => setTimeout(resolve, 180 + seeded(7, 13) * 200))
+  const dep = DEPOSIT_HISTORY_FIXTURES.find(d => d.id === depositId)
+  if (!dep) return null
+
+  const collectionCount = 2 + (Math.abs(depositId.charCodeAt(4)) % 3)
+  const settledCollections: SettledCollection[] = []
+  const perCollection = Math.round(dep.amount / collectionCount)
+  let remaining = dep.amount
+  for (let i = 0; i < collectionCount; i++) {
+    const amt = i === collectionCount - 1 ? remaining : perCollection
+    remaining -= amt
+    settledCollections.push({
+      id: `${dep.id}-col-${i}`,
+      orderId: `CHZ-${20480 - i * 3}`,
+      jobRef: `rj5-h${10 + i}`,
+      amount: amt,
+      collectedAt: new Date(
+        new Date(dep.depositedAt).getTime() - (i + 1) * 2 * 60 * 60 * 1000,
+      ).toISOString(),
+      buyerArea: ['Balaju', 'Thamel', 'Patan', 'Koteshwor'][i % 4],
+      status: i === 1 ? 'partial' : 'collected',
+    })
+  }
+
+  const timeline: DepositTimelineStep[] = [
+    {
+      key: 'submitted',
+      label: 'Deposit submitted',
+      timestamp: dep.depositedAt,
+      status: 'completed',
+      note: `Reference: ${dep.reference}`,
+    },
+  ]
+
+  if (dep.status === 'settled' && dep.verifiedAt) {
+    timeline.push({
+      key: 'verified',
+      label: 'Cash verified by Chinooz',
+      timestamp: dep.verifiedAt,
+      status: 'completed',
+      note: 'Cash received and reconciled',
+    })
+  } else if (dep.status === 'pending') {
+    timeline.push({
+      key: 'verifying',
+      label: 'Pending verification',
+      status: 'current',
+      note: 'Waiting for Chinooz to confirm the cash',
+    })
+  } else if (dep.status === 'failed') {
+    timeline.push({
+      key: 'failed',
+      label: 'Deposit failed',
+      status: 'completed',
+      note: 'Cash was not received. Please re-deposit.',
+    })
+  }
+
+  const locationName =
+    dep.method === 'agent'
+      ? 'Chinooz Drop Point - Balaju'
+      : dep.method === 'office'
+        ? 'Chinooz Hub - Teku'
+        : undefined
+
+  const bankName = dep.method === 'bank' ? 'Nepal Investment Bank' : undefined
+
+  const proofNote =
+    dep.status === 'settled'
+      ? 'Verified by Chinooz finance. Cash received and reconciled against your COD collections.'
+      : dep.status === 'pending'
+        ? 'Awaiting verification. The agent or bank will confirm once the cash is processed.'
+        : 'Deposit could not be verified. The cash was not received at the destination.'
+
+  return {
+    id: dep.id,
+    reference: dep.reference,
+    amount: dep.amount,
+    method: dep.method,
+    methodLabel: methodLabelFor(dep.method),
+    status: dep.status,
+    depositedAt: dep.depositedAt,
+    verifiedAt: dep.verifiedAt,
+    settledCollections,
+    timeline,
+    locationName,
+    bankName,
+    proofNote,
+  }
+}
+
 // ─── RE5/RE6 — Payout methods + withdrawal history ──────────────────────
 
 /** Payout instrument types the rider can link. */

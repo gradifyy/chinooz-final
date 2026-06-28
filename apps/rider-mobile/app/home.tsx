@@ -2,7 +2,7 @@ import React, { useEffect, useMemo } from 'react'
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native'
 import { useTranslation } from 'react-i18next'
 import { useRouter } from 'expo-router'
-import { Target, ChevronRight, Wallet, AlertTriangle, Lock } from 'lucide-react-native'
+import { Target, ChevronRight, Wallet, AlertTriangle, Lock, Bell } from 'lucide-react-native'
 import { colors, spacing, radii, fontFamily, fontSize } from '@chinooz/theme'
 import { SegmentedControl } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
@@ -30,6 +30,9 @@ import MapSlot from '../components/MapSlot'
 import RequestSlot from '../components/RequestSlot'
 import SnapshotSlot from '../components/SnapshotSlot'
 import ResumeBanner from '../components/active/ResumeBanner'
+import QuickControls from '../components/QuickControls'
+import StatusIndicators from '../components/StatusIndicators'
+import IncentiveNudge from '../components/IncentiveNudge'
 
 /**
  * Rider Home — smoke-test screen.
@@ -81,6 +84,11 @@ export default function RiderHomeScreen() {
   // approaching chip on the entry (RW6).
   const cashInHand = useCODWalletStore(s => s.cashInHand)
   const codLimitStatus = useCodLimitStatus()
+
+  // Mock notification unread count + GPS state. In production these would
+  // read from a notifications store and expo-location respectively.
+  const unreadNotifications = 2
+  const gpsState: 'good' | 'weak' | 'off' = 'good'
 
   // Reuse the shared no-op analytics wrapper (not a fork).
   useEffect(() => {
@@ -176,6 +184,24 @@ export default function RiderHomeScreen() {
               : t('rider.home.statusOffline')}
           </Text>
         </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={
+            unreadNotifications > 0
+              ? t('rider.home.notifEntryAria', { count: unreadNotifications })
+              : t('rider.home.notifEntryAriaZero')
+          }
+          style={[styles.bellBtn, { minHeight: minTouchTarget, minWidth: minTouchTarget }]}
+          onPress={() => router.push('/notifications')}
+          hitSlop={8}
+        >
+          <Bell size={20} color={colors.textSecondary} />
+          {unreadNotifications > 0 && (
+            <View style={styles.bellBadge}>
+              <Text style={styles.bellBadgeText}>{unreadNotifications}</Text>
+            </View>
+          )}
+        </Pressable>
       </View>
 
       {/* Language toggle (reuse shared SegmentedControl) */}
@@ -191,6 +217,9 @@ export default function RiderHomeScreen() {
           testID="rider-language-toggle"
         />
       </View>
+
+      {/* GPS / connection status indicator (mock) */}
+      <StatusIndicators gpsState={gpsState} />
 
       {/* Resume banner: minimized active delivery stays reachable from Home. */}
       {activeDelivery?.minimized && hasActiveDelivery(activeDelivery) && (
@@ -222,6 +251,9 @@ export default function RiderHomeScreen() {
         {status === 'online' ? t('rider.home.listening') : t('rider.home.offlineSubtitle')}
       </Text>
 
+      {/* Quick controls: break/pause, go-offline, job filter */}
+      <QuickControls status={status} />
+
       {/* Incoming request slot (only when online) */}
       <View style={styles.section}>
         <RequestSlot
@@ -245,6 +277,9 @@ export default function RiderHomeScreen() {
       <View style={styles.section}>
         <SnapshotSlot title={t('rider.home.snapshotTitle')} />
       </View>
+
+      {/* Incentive nudge: today's mission progress (dismissible) */}
+      <IncentiveNudge />
 
       {/* Incentives & Quests entry — reachable from Home, not a bottom tab */}
       <Pressable
@@ -403,6 +438,33 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.borderLight,
+  },
+  bellBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radii.full,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    position: 'relative',
+  },
+  bellBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    minWidth: 18,
+    height: 18,
+    borderRadius: radii.full,
+    backgroundColor: colors.error,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  bellBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.white,
+    fontFamily: fontFamily.sansBold[0],
   },
   statusDot: {
     width: 8,
