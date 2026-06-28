@@ -10,7 +10,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   AccessibilityInfo,
-  Alert,
 } from 'react-native'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -199,7 +198,6 @@ export default function ContactSupportScreen() {
           {activeOption === 'ticket' && (
             <TicketForm
               t={t}
-              reducedMotion={reducedMotion}
               prefillContext={prefillContext}
               prefillCategory={prefillCategory}
               onCancel={() => setActiveOption(null)}
@@ -303,14 +301,12 @@ function ContactCardRow({
 
 function TicketForm({
   t,
-  reducedMotion,
   prefillContext,
   prefillCategory,
   onCancel,
   onSuccess,
 }: {
   t: (k: string, o?: Record<string, unknown>) => string
-  reducedMotion: boolean
   prefillContext: RiderTicketContext
   prefillCategory: RiderTicketCategory
   onCancel: () => void

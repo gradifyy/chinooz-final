@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   TextInput,
   KeyboardAvoidingView,
@@ -16,11 +15,6 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-} from 'react-native-reanimated'
 import {
   ChevronLeft,
   MessageCircle,
@@ -40,7 +34,6 @@ import {
 import { colors, spacing, radii, fontSize, fontFamily } from '@chinooz/theme'
 import { Skeleton } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
-import { useA11y } from '../../../components/A11yProvider'
 import {
   getTicketById,
   addTicketMessage,
@@ -96,7 +89,6 @@ export default function TicketThreadScreen() {
   const { t } = useTranslation()
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const { reducedMotion } = useA11y()
   const params = useLocalSearchParams<{ ticket?: string }>()
 
   const ticketId = typeof params.ticket === 'string'
@@ -208,7 +200,7 @@ export default function TicketThreadScreen() {
   if (isLoading) {
     return (
       <View style={styles.container}>
-        <TopBar title={t(thKey('threadTitle'), { id: ticketId })} onBack={() => router.back()} backAria={t(thKey('threadBack'))} t={t} />
+        <TopBar title={t(thKey('threadTitle'), { id: ticketId })} onBack={() => router.back()} backAria={t(thKey('threadBack'))} />
         <View style={styles.skeletonWrap} accessibilityRole="none" accessibilityState={{ busy: true }} accessibilityLabel={t(thKey('threadLoading'))}>
           {Array.from({ length: 4 }).map((_, i) => (
             <View key={i} style={[styles.skeletonRow, { justifyContent: i % 2 === 0 ? 'flex-start' : 'flex-end' }]}>
@@ -224,7 +216,7 @@ export default function TicketThreadScreen() {
   if (!ticket) {
     return (
       <View style={styles.container}>
-        <TopBar title={t(thKey('threadTitle'), { id: ticketId })} onBack={() => router.back()} backAria={t(thKey('threadBack'))} t={t} />
+        <TopBar title={t(thKey('threadTitle'), { id: ticketId })} onBack={() => router.back()} backAria={t(thKey('threadBack'))} />
         <View style={styles.notFoundWrap}>
           <Text style={{ fontSize: 44 }}>{'\u{1F4CB}'}</Text>
           <Text accessibilityRole="header" style={styles.notFoundTitle}>{t(thKey('threadNotFoundTitle'))}</Text>
@@ -457,7 +449,7 @@ export default function TicketThreadScreen() {
 // Top bar
 // ---------------------------------------------------------------------------
 
-function TopBar({ title, onBack, backAria, t }: { title: string; onBack: () => void; backAria: string; t: (k: string, o?: Record<string, unknown>) => string }) {
+function TopBar({ title, onBack, backAria }: { title: string; onBack: () => void; backAria: string }) {
   return (
     <View style={styles.topBar}>
       <TouchableOpacity
