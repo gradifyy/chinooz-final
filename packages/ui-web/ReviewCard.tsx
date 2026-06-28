@@ -47,6 +47,9 @@ export interface ReviewCardProps {
   onFlag?: () => void
   onContactBuyer?: () => void
   responding?: boolean
+  selectable?: boolean
+  selected?: boolean
+  onSelectToggle?: () => void
   className?: string
   testID?: string
 }
@@ -59,6 +62,9 @@ export default function ReviewCard({
   onFlag,
   onContactBuyer,
   responding = false,
+  selectable = false,
+  selected = false,
+  onSelectToggle,
   className = '',
   testID,
 }: ReviewCardProps) {
@@ -118,8 +124,25 @@ export default function ReviewCard({
       <article
         data-testid={testID}
         aria-label={cardAria}
-        className={`rounded-lg border ${cardCls} p-4 shadow-sm transition-colors hover:border-border ${className}`}
+        className={`rounded-lg border ${cardCls} p-4 shadow-sm transition-colors hover:border-border ${selected ? 'ring-2 ring-primary border-primary' : ''} ${className}`}
       >
+        {selectable && (
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={selected}
+            aria-label={cardAria}
+            onClick={onSelectToggle}
+            className="absolute top-3 right-3 z-10"
+          >
+            <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full border-2 transition-colors ${
+              selected ? 'bg-primary border-primary text-white' : 'bg-surface border-border'
+            }`}>
+              {selected && <CheckCircle2 size={16} aria-hidden="true" />}
+            </span>
+          </button>
+        )}
+
         {/* Header */}
         <div className="flex items-start gap-2.5">
           <div
@@ -358,10 +381,27 @@ export default function ReviewCard({
 function StatusPill({ review }: { review: SellerReview }) {
   const { t } = useTranslation()
   if (review.flagged) {
+    const status = review.moderationStatus ?? 'pending'
+    if (status === 'pending') {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-warning/15 px-1.5 py-0.5 shrink-0">
+          <Flag size={10} className="text-warning" aria-hidden="true" />
+          <span className="text-[10px] font-bold uppercase tracking-wide text-[#92400E]">{t('seller.reviews.statusPending')}</span>
+        </span>
+      )
+    }
+    if (status === 'removed') {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-error/10 px-1.5 py-0.5 shrink-0">
+          <Flag size={10} className="text-error" aria-hidden="true" />
+          <span className="text-[10px] font-bold uppercase tracking-wide text-error">{t('seller.reviews.statusRemoved')}</span>
+        </span>
+      )
+    }
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-error/10 px-1.5 py-0.5 shrink-0">
-        <Flag size={10} className="text-error" aria-hidden="true" />
-        <span className="text-[10px] font-bold uppercase tracking-wide text-error">{t('reviewCard.flagged')}</span>
+      <span className="inline-flex items-center gap-1 rounded-full bg-border px-1.5 py-0.5 shrink-0">
+        <Flag size={10} className="text-text-muted" aria-hidden="true" />
+        <span className="text-[10px] font-bold uppercase tracking-wide text-text-muted">{t('seller.reviews.statusDismissed')}</span>
       </span>
     )
   }

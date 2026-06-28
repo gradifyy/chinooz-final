@@ -124,3 +124,18 @@ export type {
   RiderJob,
   ActiveDelivery,
 } from './entities'
+
+export type {
+  SellerAuthService,
+  StoreService,
+  KycService,
+  PaymentService,
+  SellerSubmitService,
+  SendOtpResult,
+  VerifyOtpResult,
+  HandleCheckResult,
+  SaveDraftResult,
+  SubmitKycResult,
+  SavePayoutResult,
+  SubmitSellerResult,
+} from './seller-services'

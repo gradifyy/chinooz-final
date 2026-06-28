@@ -130,4 +130,14 @@ export {
   useRiderPerformanceDetail,
 } from './useRider'
 
+export {
+  useSendOtp,
+  useVerifyOtp,
+  useCheckHandle,
+  useSaveStoreDraft,
+  useSubmitKyc,
+  useSavePayout,
+  useSubmitSeller,
+} from './useSellerOnboarding'
+
 export type { SuggestionItem } from './useProducts'

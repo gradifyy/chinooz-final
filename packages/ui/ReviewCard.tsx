@@ -55,6 +55,9 @@ export interface ReviewCardProps {
   onFlag?: () => void
   onContactBuyer?: () => void
   responding?: boolean
+  selectable?: boolean
+  selected?: boolean
+  onSelectToggle?: () => void
   testID?: string
 }
 
@@ -66,6 +69,9 @@ export default function ReviewCard({
   onFlag,
   onContactBuyer,
   responding = false,
+  selectable = false,
+  selected = false,
+  onSelectToggle,
   testID,
 }: ReviewCardProps) {
   const { t } = useTranslation()
@@ -103,8 +109,24 @@ export default function ReviewCard({
         testID={testID}
         accessibilityRole="summary"
         accessibilityLabel={cardAria}
-        style={cardStyle}
+        style={[cardStyle, selected && styles.cardSelected]}
       >
+        {selectable && (
+          <TouchableOpacity
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: selected }}
+            accessibilityLabel={cardAria}
+            onPress={onSelectToggle}
+            style={styles.checkbox}
+            activeOpacity={0.85}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <View style={[styles.checkboxBox, selected && styles.checkboxBoxChecked]}>
+              {selected && <CheckCircle2 size={18} color={colors.white} />}
+            </View>
+          </TouchableOpacity>
+        )}
+
         {/* Header: avatar + name + verified + stars + date */}
         <View style={styles.header}>
           <View style={styles.avatar} accessibilityLabel={review.userName}>
@@ -337,10 +359,27 @@ export default function ReviewCard({
 function StatusPill({ review }: { review: SellerReview }) {
   const { t } = useTranslation()
   if (review.flagged) {
+    const status = review.moderationStatus ?? 'pending'
+    if (status === 'pending') {
+      return (
+        <View style={[styles.statusPill, { backgroundColor: colors.warningLight }]}>
+          <Flag size={10} color={colors.warning} />
+          <Text style={[styles.statusPillText, { color: '#92400E' }]}>{t('seller.reviews.statusPending')}</Text>
+        </View>
+      )
+    }
+    if (status === 'removed') {
+      return (
+        <View style={[styles.statusPill, { backgroundColor: colors.errorLight }]}>
+          <Flag size={10} color={colors.error} />
+          <Text style={[styles.statusPillText, { color: colors.error }]}>{t('seller.reviews.statusRemoved')}</Text>
+        </View>
+      )
+    }
     return (
-      <View style={[styles.statusPill, { backgroundColor: colors.errorLight }]}>
-        <Flag size={10} color={colors.error} />
-        <Text style={[styles.statusPillText, { color: colors.error }]}>{t('reviewCard.flagged')}</Text>
+      <View style={[styles.statusPill, { backgroundColor: colors.border }]}>
+        <Flag size={10} color={colors.textMuted} />
+        <Text style={[styles.statusPillText, { color: colors.textMuted }]}>{t('seller.reviews.statusDismissed')}</Text>
       </View>
     )
   }
@@ -499,6 +538,29 @@ const styles = StyleSheet.create({
   cardLowRating: {
     borderLeftWidth: 3,
     borderLeftColor: colors.warning,
+  },
+  cardSelected: {
+    borderColor: colors.primary,
+    borderWidth: 2,
+  },
+  checkbox: {
+    position: 'absolute',
+    top: spacing[3],
+    right: spacing[3],
+    zIndex: 1,
+  },
+  checkboxBox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxBoxChecked: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
 
   header: {
