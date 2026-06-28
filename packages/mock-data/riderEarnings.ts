@@ -988,6 +988,203 @@ export async function getCodCollections(): Promise<CodCollectionLedger> {
   return buildCodCollectionLedger()
 }
 
+/**
+ * RW4 — Deposit / settle-cash flow types + mock.
+ *
+ * The rider chooses a deposit method (bank, agent/drop-point, or Chinooz
+ * office), enters an amount (default = full cash-in-hand, partial allowed),
+ * sees method-specific instructions, confirms, and gets a deposit reference
+ * to quote. The deposit is "marked as deposited" (mock `submitCodDeposit`)
+ * and enters a pending-verification state until confirmed, at which point
+ * cash-in-hand reduces and the COD limit frees up (via the shared store).
+ */
+export type DepositMethodKind = 'bank' | 'agent' | 'office'
+
+export interface DepositMethod {
+  kind: DepositMethodKind
+  label: string
+  description: string
+}
+
+export interface DepositAgent {
+  id: string
+  name: string
+  area: string
+  address: string
+  /** Approximate lat/lng for the agent map. */
+  point: { lat: number; lng: number }
+  /** Distance from the rider in km (mock). */
+  distanceKm: number
+  /** Hours label, e.g. "Open · 9am-6pm". */
+  hours: string
+  /** Open now (mock). */
+  open: boolean
+}
+
+export interface DepositInstructions {
+  /** Bank account details (bank method only). */
+  bank?: {
+    bankName: string
+    accountName: string
+    accountNumber: string
+    /** QR string (mock - a URL the app could render as a QR). */
+    qrData: string
+  }
+  /** Nearest agents (agent method only). */
+  agents?: DepositAgent[]
+  /** Office address (office method only). */
+  office?: {
+    name: string
+    address: string
+    hours: string
+  }
+  /** Reference code the rider quotes when depositing. */
+  referenceCode: string
+}
+
+export interface DepositResult {
+  /** Deposit id (mock). */
+  id: string
+  /** The deposit reference to quote / track. */
+  reference: string
+  /** Amount deposited (NPR). */
+  amount: number
+  /** Method used. */
+  method: DepositMethodKind
+  /** ISO timestamp of the deposit request. */
+  requestedAt: string
+  /** Pending until Chinooz verifies the cash was received. */
+  status: 'pending' | 'verified' | 'failed'
+}
+
+export const DEPOSIT_METHODS: DepositMethod[] = [
+  {
+    kind: 'bank',
+    label: 'Bank deposit',
+    description: "Transfer to Chinooz's bank account - verify in 1-2 hours",
+  },
+  {
+    kind: 'agent',
+    label: 'Authorized agent',
+    description: 'Hand cash to a drop-point agent near you - instant receipt',
+  },
+  {
+    kind: 'office',
+    label: 'Chinooz office',
+    description: 'Drop cash at a Chinooz hub - verified on the spot',
+  },
+]
+
+const DEPOSIT_AGENTS: DepositAgent[] = [
+  {
+    id: 'agent-1',
+    name: 'Chinooz Drop Point - Balaju',
+    area: 'Balaju',
+    address: 'Balaju Chowk, near Himalayan Bank',
+    point: { lat: 27.7185, lng: 85.302 },
+    distanceKm: 1.8,
+    hours: 'Open - 9am-6pm',
+    open: true,
+  },
+  {
+    id: 'agent-2',
+    name: 'Chinooz Drop Point - Patan',
+    area: 'Patan',
+    address: 'Lagankhel, opposite Patan Hospital',
+    point: { lat: 27.672, lng: 85.329 },
+    distanceKm: 3.2,
+    hours: 'Open - 8am-7pm',
+    open: true,
+  },
+  {
+    id: 'agent-3',
+    name: 'Chinooz Drop Point - Koteshwor',
+    area: 'Koteshwor',
+    address: 'Tinkune Chowk, near Civil Mall',
+    point: { lat: 27.678, lng: 85.35 },
+    distanceKm: 4.1,
+    hours: 'Closed - opens 8am',
+    open: false,
+  },
+]
+
+const CHINOOZ_OFFICE = {
+  name: 'Chinooz Hub - Teku',
+  address: 'Teku, Tripureshwor, Kathmandu',
+  hours: 'Open - 9am-5pm, Mon-Sat',
+}
+
+const BANK_DETAILS = {
+  bankName: 'Nepal Investment Bank',
+  accountName: 'Chinooz Pvt. Ltd.',
+  accountNumber: '0123-4567-8901',
+  qrData: 'chinooz://deposit/bank/012345678901',
+}
+
+function genReferenceCode(): string {
+  const ts = Date.now()
+    .toString(36)
+    .toUpperCase()
+    .slice(-5)
+  const rand = Math.floor(Math.random() * 1000)
+    .toString(36)
+    .toUpperCase()
+    .padStart(2, '0')
+  return `CHZ-DEP-${ts}-${rand}`
+}
+
+/**
+ * Get method-specific deposit instructions (bank details, agent list, office
+ * address) + a reference code to quote when depositing.
+ */
+export async function getDepositInstructions(
+  method: DepositMethodKind,
+): Promise<DepositInstructions> {
+  await new Promise(resolve => setTimeout(resolve, 160 + seeded(3, 13) * 140))
+  const base: DepositInstructions = { referenceCode: genReferenceCode() }
+  if (method === 'bank') base.bank = { ...BANK_DETAILS }
+  if (method === 'agent') base.agents = [...DEPOSIT_AGENTS]
+  if (method === 'office') base.office = { ...CHINOOZ_OFFICE }
+  return base
+}
+
+/**
+ * Mock deposit-cash: mark a deposit as submitted (pending verification).
+ * The shared `codWalletStatus` store's `recordDeposit` is called by the
+ * screen once verification completes (mock auto-verify after a short delay),
+ * which reduces cash-in-hand and frees the COD limit.
+ *
+ * Named `submitCodDeposit` to avoid a collision with the idempotent
+ * `depositCash(amountNpr, opRef)` in `riderApi.ts`.
+ */
+export async function submitCodDeposit(
+  amount: number,
+  method: DepositMethodKind,
+  referenceCode: string,
+): Promise<DepositResult> {
+  await new Promise(resolve => setTimeout(resolve, 600 + seeded(4, 17) * 400))
+  return {
+    id: `dep-req-${Date.now()}`,
+    reference: referenceCode,
+    amount,
+    method,
+    requestedAt: new Date().toISOString(),
+    status: 'pending',
+  }
+}
+
+/**
+ * Mock verification: simulates Chinooz confirming the cash was received.
+ * Called after a short delay following `submitCodDeposit`. The screen then
+ * calls `recordDeposit` on the shared store to reduce cash-in-hand.
+ */
+export async function verifyDeposit(
+  depositId: string,
+): Promise<{ id: string; status: 'verified' | 'failed' }> {
+  await new Promise(resolve => setTimeout(resolve, 1200 + seeded(5, 19) * 600))
+  return { id: depositId, status: 'verified' }
+}
+
 // ─── RE5/RE6 — Payout methods + withdrawal history ──────────────────────
 
 /** Payout instrument types the rider can link. */
