@@ -393,6 +393,28 @@ export interface StockHistoryEntry {
   createdAt: string
 }
 
+export type BulkStockAction = 'set' | 'adjust' | 'threshold' | 'mark_out'
+
+export interface BulkStockOperation {
+  variantIds: string[]
+  action: BulkStockAction
+  value?: number
+  reason?: StockEditReason
+}
+
+export interface BulkStockResult {
+  success: boolean
+  updated: number
+  failed: number
+  error?: string
+}
+
+export interface CsvStockRow {
+  sku: string
+  stockCount: number
+  lowStockThreshold?: number
+}
+
 // ---- RS3 map / trip simulator + rider delivery ----
 
 // ---- Seller domain: store, payouts, transactions, staff, notifications, stats ----
