@@ -545,3 +545,130 @@ export async function attachConversationContext(
   return { success: true }
 }
 
+// --- Settings: Shipping ---
+
+import { SELLER_SHIPPING_DEFAULTS, type ShippingSettings } from './sellerShipping'
+
+let shippingSettingsCache: ShippingSettings = JSON.parse(JSON.stringify(SELLER_SHIPPING_DEFAULTS))
+
+export async function getShippingSettings(sellerId: string = SELLER_ID): Promise<ShippingSettings> {
+  await randomDelay(200, 500)
+  maybeError()
+  return JSON.parse(JSON.stringify(shippingSettingsCache))
+}
+
+export async function updateShippingSettings(
+  sellerId: string,
+  data: Partial<ShippingSettings>,
+): Promise<ShippingSettings> {
+  await randomDelay(300, 600)
+  maybeError()
+  shippingSettingsCache = { ...shippingSettingsCache, ...data }
+  return JSON.parse(JSON.stringify(shippingSettingsCache))
+}
+
+// --- Settings: Business / KYC ---
+
+import { SELLER_BUSINESS_DETAILS, SELLER_KYC_DOCUMENTS, type BusinessDetails, type KycDocument } from './sellerKyc'
+
+let businessCache: BusinessDetails = JSON.parse(JSON.stringify(SELLER_BUSINESS_DETAILS))
+let kycDocsCache: KycDocument[] = JSON.parse(JSON.stringify(SELLER_KYC_DOCUMENTS))
+
+export async function getBusinessProfile(sellerId: string = SELLER_ID): Promise<{ details: BusinessDetails; documents: KycDocument[] }> {
+  await randomDelay(200, 500)
+  maybeError()
+  return { details: JSON.parse(JSON.stringify(businessCache)), documents: JSON.parse(JSON.stringify(kycDocsCache)) }
+}
+
+export async function updateBusinessProfile(sellerId: string, data: Partial<BusinessDetails>): Promise<BusinessDetails> {
+  await randomDelay(300, 600)
+  maybeError()
+  businessCache = { ...businessCache, ...data }
+  return JSON.parse(JSON.stringify(businessCache))
+}
+
+export async function resubmitKycDocument(docId: string): Promise<KycDocument> {
+  await randomDelay(300, 600)
+  maybeError()
+  kycDocsCache = kycDocsCache.map(d => d.id === docId ? { ...d, status: 'pending' as const, rejectionReasonKey: undefined } : d)
+  return kycDocsCache.find(d => d.id === docId)!
+}
+
+// --- Settings: Notification Preferences ---
+
+import { SELLER_NOTIFICATION_DEFAULTS, type NotificationPreferences } from './sellerNotifications'
+
+let notifPrefsCache: NotificationPreferences = JSON.parse(JSON.stringify(SELLER_NOTIFICATION_DEFAULTS))
+
+export async function getNotificationPrefs(sellerId: string = SELLER_ID): Promise<NotificationPreferences> {
+  await randomDelay(200, 400)
+  maybeError()
+  return JSON.parse(JSON.stringify(notifPrefsCache))
+}
+
+export async function updateNotificationPrefs(sellerId: string, data: Partial<NotificationPreferences>): Promise<NotificationPreferences> {
+  await randomDelay(300, 500)
+  maybeError()
+  notifPrefsCache = { ...notifPrefsCache, ...data }
+  return JSON.parse(JSON.stringify(notifPrefsCache))
+}
+
+// --- Settings: Staff ---
+
+export async function inviteStaffMember(input: { name: string; email: string; phone: string; role: StaffRole }): Promise<StaffMember> {
+  await randomDelay(300, 600)
+  maybeError()
+  const newMember: StaffMember = {
+    id: `staff-${Date.now()}`,
+    sellerId: SELLER_ID,
+    name: input.name,
+    email: input.email,
+    phone: input.phone,
+    role: input.role,
+    status: 'invited' as const,
+    permissions: [],
+    invitedAt: new Date().toISOString().slice(0, 10),
+  }
+  sellerStaff.push(newMember)
+  return newMember
+}
+
+export async function removeStaffMember(staffId: string): Promise<{ success: boolean }> {
+  await randomDelay(200, 400)
+  maybeError()
+  const idx = sellerStaff.findIndex(s => s.id === staffId)
+  if (idx >= 0) sellerStaff.splice(idx, 1)
+  return { success: true }
+}
+
+// --- Settings: Account ---
+
+import { SELLER_ACTIVE_SESSIONS, SELLER_ACCOUNT_DEFAULTS, type ActiveSession } from './sellerAccount'
+
+let sessionsCache: ActiveSession[] = JSON.parse(JSON.stringify(SELLER_ACTIVE_SESSIONS))
+
+export async function getActiveSessions(sellerId: string = SELLER_ID): Promise<ActiveSession[]> {
+  await randomDelay(200, 400)
+  maybeError()
+  return JSON.parse(JSON.stringify(sessionsCache))
+}
+
+export async function signOutSession(sessionId: string): Promise<{ success: boolean }> {
+  await randomDelay(200, 400)
+  maybeError()
+  sessionsCache = sessionsCache.filter(s => s.id !== sessionId)
+  return { success: true }
+}
+
+export async function updateAccountProfile(sellerId: string, data: { name?: string; phone?: string; email?: string }): Promise<{ success: boolean }> {
+  await randomDelay(300, 600)
+  maybeError()
+  return { success: true }
+}
+
+export async function changePassword(current: string, newPwd: string): Promise<{ success: boolean }> {
+  await randomDelay(300, 600)
+  maybeError()
+  return { success: true }
+}
+

@@ -10,15 +10,17 @@ import { Skeleton } from '@chinooz/ui'
 export function useOnline(): boolean {
   const [online, setOnline] = useState(true)
   useEffect(() => {
-    let unsub: (() => void) | undefined
-    import('@react-native-community/netinfo').then(({ default: NetInfo }) => {
-      unsub = NetInfo.addEventListener((state: { isConnected: boolean; isInternetReachable: boolean | null }) => {
-        setOnline(state.isConnected && state.isInternetReachable !== false)
+    let active = true
+    import('@react-native-community/netinfo')
+      .then(({ default: NetInfo }) => {
+        if (!active) return
+        const unsub = NetInfo.addEventListener((state) => {
+          setOnline(Boolean(state.isConnected && state.isInternetReachable !== false))
+        })
+        return () => { if (typeof unsub === 'function') unsub() }
       })
-    }).catch(() => {
-      // NetInfo not available, assume online
-    })
-    return () => { unsub?.() }
+      .catch(() => {})
+    return () => { active = false }
   }, [])
   return online
 }
@@ -27,7 +29,7 @@ export function useOnline(): boolean {
 
 export function SettingsHubSkeleton() {
   return (
-    <View style={styles.skeletonWrap} accessible={false} aria-busy="true">
+    <View style={styles.skeletonWrap} accessibilityLiveRegion="polite" accessible={true}>
       <View style={styles.skelCard}>
         <View style={styles.skelHeaderRow}>
           <Skeleton circle width={48} height={48} />
@@ -65,7 +67,7 @@ export function SettingsHubSkeleton() {
 
 export function FormSkeleton() {
   return (
-    <View style={styles.skeletonWrap} aria-busy="true">
+    <View style={styles.skeletonWrap} accessibilityLiveRegion="polite" accessible={true}>
       {[0, 1].map(s => (
         <View key={s} style={styles.skelCard}>
           <View style={styles.skelGroupHeader}>
@@ -76,7 +78,7 @@ export function FormSkeleton() {
               <View key={f}>
                 <Skeleton width={96} height={14} />
                 <View style={{ height: 6 }} />
-                <Skeleton width={'100%'} height={40} style={{ borderRadius: radii.md }} />
+                <Skeleton width={'100%'} height={40} borderRadius={radii.md} />
               </View>
             ))}
           </View>
@@ -122,7 +124,7 @@ export function SaveErrorBanner({ onRetry }: { onRetry: () => void }) {
 export function SellerOfflineBanner({ blocked }: { blocked?: boolean }) {
   const { t } = useTranslation()
   return (
-    <View style={styles.offlineBanner} accessibilityRole="status" accessibilityLiveRegion="polite">
+    <View style={styles.offlineBanner} accessibilityLiveRegion="polite">
       <WifiOff size={16} color={colors.warning} />
       <Text style={styles.offlineText}>{blocked ? t('seller.settings.states.offlineBlockSensitive') : t('seller.settings.states.offlineTitle')}</Text>
     </View>

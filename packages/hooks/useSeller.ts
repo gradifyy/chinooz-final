@@ -28,6 +28,7 @@ import type {
   ExportReportResult,
 } from '@chinooz/types'
 import type { SellerProductFilter, SellerInventoryFilter } from '@chinooz/mock-data'
+import type { ShippingSettings, BusinessDetails, KycDocument, NotificationPreferences, ActiveSession } from '@chinooz/mock-data'
 
 /**
  * staleTime convention for seller data:
@@ -619,6 +620,169 @@ export function useMarkAllSellerNotificationsRead() {
       qc.invalidateQueries({ queryKey: ['seller-notifications'] })
       qc.invalidateQueries({ queryKey: ['seller-unread-notif-count'] })
     },
+  })
+}
+
+// --- Settings: Shipping ---
+
+export function useShippingSettings(sellerId?: string) {
+  return useQuery<ShippingSettings>({
+    queryKey: ['seller-shipping', sellerId ?? 'me'],
+    queryFn: () => api.getShippingSettings(sellerId),
+    staleTime: STALE.store,
+  })
+}
+
+export function useUpdateShippingSettings() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ sellerId, data }: { sellerId: string; data: Partial<ShippingSettings> }) =>
+      api.updateShippingSettings(sellerId, data),
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ['seller-shipping', variables.sellerId] })
+    },
+  })
+}
+
+// --- Settings: Business / KYC ---
+
+export function useBusinessProfile(sellerId?: string) {
+  return useQuery<{ details: BusinessDetails; documents: KycDocument[] }>({
+    queryKey: ['seller-business', sellerId ?? 'me'],
+    queryFn: () => api.getBusinessProfile(sellerId),
+    staleTime: STALE.store,
+  })
+}
+
+export function useUpdateBusinessProfile() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ sellerId, data }: { sellerId: string; data: Partial<BusinessDetails> }) =>
+      api.updateBusinessProfile(sellerId, data),
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ['seller-business', variables.sellerId] })
+    },
+  })
+}
+
+export function useResubmitKycDocument() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (docId: string) => api.resubmitKycDocument(docId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['seller-business'] })
+    },
+  })
+}
+
+// --- Settings: Notification Preferences ---
+
+export function useNotificationPrefs(sellerId?: string) {
+  return useQuery<NotificationPreferences>({
+    queryKey: ['seller-notif-prefs', sellerId ?? 'me'],
+    queryFn: () => api.getNotificationPrefs(sellerId),
+    staleTime: STALE.notifications,
+  })
+}
+
+export function useUpdateNotificationPrefs() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ sellerId, data }: { sellerId: string; data: Partial<NotificationPreferences> }) =>
+      api.updateNotificationPrefs(sellerId, data),
+    onMutate: async (variables) => {
+      const key = ['seller-notif-prefs', variables.sellerId]
+      await qc.cancelQueries({ queryKey: key })
+      const prev = qc.getQueryData<NotificationPreferences>(key)
+      if (prev) qc.setQueryData(key, { ...prev, ...variables.data })
+      return { prev, key }
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev !== undefined) qc.setQueryData(ctx.key, ctx.prev)
+    },
+    onSettled: (_data, _err, variables) => {
+      qc.invalidateQueries({ queryKey: ['seller-notif-prefs', variables.sellerId] })
+    },
+  })
+}
+
+// --- Settings: Staff (extended) ---
+
+export function useInviteStaff() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.inviteStaffMember,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['seller-staff'] })
+    },
+  })
+}
+
+export function useRemoveStaff() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (staffId: string) => api.removeStaffMember(staffId),
+    onMutate: async (staffId) => {
+      const key = ['seller-staff', 'me']
+      await qc.cancelQueries({ queryKey: key })
+      const prev = qc.getQueryData<StaffMember[]>(key)
+      if (prev) qc.setQueryData(key, prev.filter(s => s.id !== staffId))
+      return { prev, key }
+    },
+    onError: (_err, _staffId, ctx) => {
+      if (ctx?.prev) qc.setQueryData(ctx.key, ctx.prev)
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['seller-staff'] })
+    },
+  })
+}
+
+// --- Settings: Account ---
+
+export function useActiveSessions(sellerId?: string) {
+  return useQuery<ActiveSession[]>({
+    queryKey: ['seller-sessions', sellerId ?? 'me'],
+    queryFn: () => api.getActiveSessions(sellerId),
+    staleTime: STALE.store,
+  })
+}
+
+export function useSignOutSession() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (sessionId: string) => api.signOutSession(sessionId),
+    onMutate: async (sessionId) => {
+      const key = ['seller-sessions', 'me']
+      await qc.cancelQueries({ queryKey: key })
+      const prev = qc.getQueryData<ActiveSession[]>(key)
+      if (prev) qc.setQueryData(key, prev.filter(s => s.id !== sessionId))
+      return { prev, key }
+    },
+    onError: (_err, _sessionId, ctx) => {
+      if (ctx?.prev) qc.setQueryData(ctx.key, ctx.prev)
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['seller-sessions'] })
+    },
+  })
+}
+
+export function useUpdateAccountProfile() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ sellerId, data }: { sellerId: string; data: { name?: string; phone?: string; email?: string } }) =>
+      api.updateAccountProfile(sellerId, data),
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ['seller-store', variables.sellerId] })
+    },
+  })
+}
+
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: ({ current, newPwd }: { current: string; newPwd: string }) =>
+      api.changePassword(current, newPwd),
   })
 }
 

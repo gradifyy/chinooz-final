@@ -27,3 +27,4 @@ export {
   INITIAL_NUM_TO_RENDER,
   MAX_TO_RENDER_PER_BATCH,
 } from './performance'
+export { maskAccountNumber, maskPhone, maskPan, maskEmail } from './masking'
