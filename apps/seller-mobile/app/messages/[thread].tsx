@@ -28,7 +28,6 @@ import Animated, {
 } from 'react-native-reanimated'
 
 export default function SellerThreadScreen() {
-  const { t } = useTranslation()
   const router = useRouter()
   const { thread } = useLocalSearchParams<{ thread: string }>()
   const { data: conversations } = useSellerConversations()

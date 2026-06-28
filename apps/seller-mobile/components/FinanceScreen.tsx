@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  ActivityIndicator,
   useWindowDimensions,
 } from 'react-native'
 import { useTranslation } from 'react-i18next'
@@ -31,6 +30,7 @@ import {
   type FinanceRangeKey,
   type FinanceSummary,
 } from '@chinooz/mock-data'
+import EarningsChart from './EarningsChart'
 
 const RANGE_LABEL_KEY: Record<FinanceRangeKey, string> = {
   today: 'rangeToday',
@@ -101,11 +101,6 @@ export default function FinanceScreen() {
   const available = summary?.availableBalance ?? 0
   const animatedAvailable = useCountUp(available, !loading && !reducedMotion)
   const displayAvailable = loading ? available : animatedAvailable
-
-  const maxChart = useMemo(
-    () => (summary?.chart ? Math.max(1, ...summary.chart.map(p => p.value)) : 1),
-    [summary],
-  )
 
   const cards = useMemo(() => {
     if (!summary) return [] as { label: string; value: string }[]
@@ -266,24 +261,8 @@ export default function FinanceScreen() {
             })}
           </View>
 
-          <Text style={styles.chartLabel}>{t('seller.finance.chartLabel')}</Text>
-          <View style={styles.chart}>
-            {loading ? (
-              <ActivityIndicator color={colors.primary} />
-            ) : (
-              summary?.chart.map((pt, i) => {
-                const h = Math.round((pt.value / maxChart) * 100)
-                return (
-                  <View key={pt.label + i} style={styles.chartCol}>
-                    <View style={styles.chartBarWrap}>
-                      <View style={[styles.chartBar, { height: `${h}%` }]} />
-                    </View>
-                    <Text style={styles.chartAxis}>{pt.label}</Text>
-                  </View>
-                )
-              })
-            )}
-          </View>
+          <Text style={styles.chartLabel}>{t('seller.finance.chartNetEarnings')}</Text>
+          <EarningsChart series={summary?.earnings ?? null} loading={loading} />
         </View>
 
         {/* Section entry points (SF3/SF4/SF6) */}

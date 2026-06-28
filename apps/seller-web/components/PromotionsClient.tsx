@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { motion, AnimatePresence, type Transition } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
-import { Search, SlidersHorizontal, Plus, X, ChevronDown, Tag, ArrowRight } from 'lucide-react'
+import { Search, SlidersHorizontal, Plus, X, ChevronDown, Tag, ArrowUpDown } from 'lucide-react'
 import { duration, easing } from '@chinooz/theme'
 import { useReducedMotion, SegmentedControl, EmptyState, Screen, Container } from '@chinooz/ui-web'
 import {
@@ -170,7 +170,7 @@ export default function PromotionsClient() {
           </div>
 
           {/* Sticky controls */}
-          <div className="sticky top-0 z-sticky -mx-4 px-4 md:-mx-6 md:px-6 py-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border-light">
+          <div className="sticky top-0 z-sticky -mx-4 px-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8 py-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border-light">
             <div className="flex flex-col gap-3">
               <SegmentedControl
                 segments={segments}
@@ -249,9 +249,9 @@ export default function PromotionsClient() {
                   </div>
 
                   <div className="relative">
-                    <ArrowRight
+                    <ArrowUpDown
                       size={15}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none rotate-90"
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
                     />
                     <select
                       aria-label={t('seller.promotions.sortAria')}
@@ -386,7 +386,9 @@ export default function PromotionsClient() {
   )
 }
 
-function PromotionRow({ promo, t }: { promo: Promotion; t: (k: string) => string }) {
+type T = (key: string, opts?: Record<string, unknown>) => string
+
+function PromotionRow({ promo, t }: { promo: Promotion; t: T }) {
   const sb = statusBadge[promo.status]
   const isSale = promo.type === 'flash_sale' || promo.type === 'percentage'
   return (
@@ -437,7 +439,7 @@ function PromotionRow({ promo, t }: { promo: Promotion; t: (k: string) => string
   )
 }
 
-function PromotionCard({ promo, t }: { promo: Promotion; t: (k: string) => string }) {
+function PromotionCard({ promo, t }: { promo: Promotion; t: T }) {
   const sb = statusBadge[promo.status]
   const isSale = promo.type === 'flash_sale' || promo.type === 'percentage'
   const scheduleKey =

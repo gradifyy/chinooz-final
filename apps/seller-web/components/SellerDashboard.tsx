@@ -1,8 +1,9 @@
 'use client'
 
-import React, { useMemo, useState, useCallback, useEffect } from 'react'
+import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Bell,
@@ -11,6 +12,7 @@ import {
   Box,
   Layers,
   Wallet,
+  Tag,
   CheckCircle2,
   Circle,
   AlertTriangle,
@@ -20,6 +22,8 @@ import {
   TrendingDown,
   Minus,
   X,
+  Menu,
+  Star,
 } from 'lucide-react'
 import { Screen, Container } from '@chinooz/ui-web'
 import { useReducedMotion } from '@chinooz/ui-web'
@@ -71,6 +75,17 @@ export default function SellerDashboard() {
   const [rangeKey, setRangeKey] = useState<SellerDateRangeKey>('7d')
   const [customRange, setCustomRange] = useState<{ start: string; end: string } | null>(null)
   const [customOpen, setCustomOpen] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
+  const moreRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!moreOpen) return
+    const onClick = (e: MouseEvent) => {
+      if (moreRef.current && !moreRef.current.contains(e.target as Node)) setMoreOpen(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [moreOpen])
 
   const range: SellerDateRange = useMemo(() => {
     const days = rangeKey === 'today' ? 1 : rangeKey === '7d' ? 7 : 30
@@ -141,6 +156,34 @@ export default function SellerDashboard() {
             >
               <Bell size={20} />
             </button>
+            {/* ☰ More */}
+            <div ref={moreRef} className="relative">
+              <button
+                aria-label={t('seller.reviews.moreAria')}
+                aria-haspopup="menu"
+                aria-expanded={moreOpen}
+                onClick={() => setMoreOpen(o => !o)}
+                className="min-touch rounded-full hover:bg-background flex items-center justify-center text-text"
+              >
+                {moreOpen ? <X size={20} /> : <Menu size={20} />}
+              </button>
+              {moreOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 mt-1 w-52 bg-surface text-text rounded-md shadow-lg border border-border z-50 overflow-hidden"
+                >
+                  <Link
+                    href="/reviews"
+                    role="menuitem"
+                    onClick={() => setMoreOpen(false)}
+                    className="flex items-center gap-2.5 px-3 py-2.5 text-sm font-medium text-text hover:bg-background transition-colors"
+                  >
+                    <span className="text-primary"><Star size={16} aria-hidden="true" /></span>
+                    {t('seller.reviews.moreReviews')}
+                  </Link>
+                </div>
+              )}
+            </div>
           </div>
         </Container>
       </div>
@@ -158,7 +201,7 @@ export default function SellerDashboard() {
               className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold"
               style={{ backgroundColor: status.bg, color: status.color }}
               aria-label={t('seller.dashboard.statusAria', { status: statusLabel })}
-              role="status"
+              aria-live="polite"
             >
               <span className="h-2 w-2 rounded-full" style={{ backgroundColor: status.color }} aria-hidden />
               {statusLabel}
@@ -258,11 +301,13 @@ export default function SellerDashboard() {
                   <h3 id="sd-alerts" className="text-lg font-semibold text-text">
                     {t('seller.dashboard.sectionAlerts')}
                   </h3>
-                  <button className="text-sm font-semibold text-primary hover:underline" onClick={() => {}}>
+                  <button className="text-sm font-semibold text-primary hover:underline" onClick={() => router.push('/reviews')}>
                     {t('seller.dashboard.seeAll')}
                   </button>
                 </div>
-                <Alerts alerts={metrics.alerts} />
+                <Alerts alerts={metrics.alerts} onCta={(id) => {
+                  if (id === 'reviews-needing-response') router.push('/reviews')
+                }} />
               </section>
 
               <section aria-labelledby="sd-activity">
@@ -270,7 +315,7 @@ export default function SellerDashboard() {
                   <h3 id="sd-activity" className="text-lg font-semibold text-text">
                     {t('seller.dashboard.sectionActivity')}
                   </h3>
-                  <button className="text-sm font-semibold text-primary hover:underline" onClick={() => {}}>
+                  <button className="text-sm font-semibold text-primary hover:underline" onClick={() => router.push('/analytics')}>
                     {t('seller.dashboard.seeAll')}
                   </button>
                 </div>
@@ -282,7 +327,13 @@ export default function SellerDashboard() {
               <h3 id="sd-actions" className="text-lg font-semibold text-text mb-3">
                 {t('seller.dashboard.sectionQuickActions')}
               </h3>
-              <QuickActions actions={metrics.quickActions} onPress={() => {}} />
+              <QuickActions
+                actions={metrics.quickActions}
+                onPress={id => {
+                  const action = metrics.quickActions.find(a => a.id === id)
+                  if (action?.href) router.push(action.href)
+                }}
+              />
             </section>
           </motion.div>
         </AnimatePresence>
@@ -398,7 +449,7 @@ const ALERT_ICON = {
   info: { Icon: Info, color: 'text-info' },
 } as const
 
-function Alerts({ alerts }: { alerts: { id: string; severity: 'warning' | 'error' | 'info'; title: string; body: string; cta?: string }[] }) {
+function Alerts({ alerts, onCta }: { alerts: { id: string; severity: 'warning' | 'error' | 'info'; title: string; body: string; cta?: string }[]; onCta?: (id: string) => void }) {
   const { t } = useTranslation()
   if (alerts.length === 0) {
     return (
@@ -420,7 +471,12 @@ function Alerts({ alerts }: { alerts: { id: string; severity: 'warning' | 'error
                 <p className="text-sm font-semibold text-text">{a.title}</p>
                 <p className="text-sm text-text-muted mt-0.5">{a.body}</p>
                 {a.cta && (
-                  <button className="text-sm font-semibold text-primary mt-1 hover:underline">{a.cta}</button>
+                  <button
+                    className="text-sm font-semibold text-primary mt-1 hover:underline"
+                    onClick={() => onCta?.(a.id)}
+                  >
+                    {a.cta}
+                  </button>
                 )}
               </div>
             </div>
@@ -436,6 +492,7 @@ const ACTION_ICON: Record<string, any> = {
   box: Box,
   layers: Layers,
   wallet: Wallet,
+  tag: Tag,
 }
 
 function QuickActions({ actions, onPress }: { actions: { id: string; label: string; icon: string }[]; onPress: (id: string) => void }) {

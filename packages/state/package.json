@@ -4,6 +4,8 @@
   "main": "index.ts",
   "types": "index.ts",
   "dependencies": {
+    "@chinooz/rs3": "workspace:*",
+    "@chinooz/types": "workspace:*",
     "zustand": "^4.5.0"
   },
   "scripts": {

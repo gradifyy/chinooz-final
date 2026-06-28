@@ -57,6 +57,56 @@ export interface RiderEarningsOverview {
 export interface RiderChartPoint {
   label: string
   value: number
+  /** ISO date (yyyy-mm-dd) for the point, used for ledger deep-links. */
+  date: string
+  /** Base pay component for the point (NPR). */
+  base: number
+  /** Distance pay component for the point (NPR). */
+  distance: number
+  /** Incentives/bonuses component for the point (NPR). */
+  incentives: number
+  /** Tips component for the point (NPR). */
+  tips: number
+  /** Platform fee deducted for the point (NPR, positive number). */
+  fee: number
+  /** Trips count for the point. */
+  trips: number
+  /** Previous-period net value for comparison (NPR). */
+  previous?: number
+}
+
+export interface RiderEarningsBreakdownRow {
+  /** Stable id, e.g. "base". */
+  id: 'base' | 'distance' | 'incentives' | 'tips' | 'fee'
+  /** Human label. */
+  label: string
+  /** Signed NPR total for the period (fee is negative). */
+  amount: number
+  /** Share of gross, 0-100. */
+  share: number
+}
+
+export interface RiderEarningsBreakdown {
+  range: RiderEarningsRange
+  /** Gross earnings before fee (base + distance + incentives + tips). */
+  gross: number
+  /** Platform fee (positive number). */
+  fee: number
+  /** Net earnings (gross - fee). */
+  net: number
+  rows: RiderEarningsBreakdownRow[]
+  /** Previous-period net for comparison (NPR). */
+  previousNet: number
+  /** Percent change vs previous period. */
+  deltaPct: number
+  /** Trend direction. */
+  trend: 'up' | 'down' | 'flat'
+  /** Busiest day/time hint label, e.g. "Fri 6–8p". */
+  busiestLabel: string
+  /** Busiest period earnings (NPR). */
+  busiestAmount: number
+  /** Trip count in the period. */
+  trips: number
 }
 
 export interface RiderEarningsChart {
@@ -109,6 +159,31 @@ const CHART_LABELS: Record<number, string[]> = {
   1: ['12a', '4a', '8a', '12p', '4p', '8p'],
   7: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
   30: ['W1', 'W2', 'W3', 'W4'],
+}
+
+const CHART_DATES: Record<number, () => string[]> = {
+  1: () => {
+    const today = new Date()
+    return ['12a', '4a', '8a', '12p', '4p', '8p'].map(() => today.toISOString().slice(0, 10))
+  },
+  7: () => {
+    const out: string[] = []
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date()
+      d.setDate(d.getDate() - i)
+      out.push(d.toISOString().slice(0, 10))
+    }
+    return out
+  },
+  30: () => {
+    const out: string[] = []
+    for (let i = 27; i >= 0; i -= 7) {
+      const d = new Date()
+      d.setDate(d.getDate() - i)
+      out.push(d.toISOString().slice(0, 10))
+    }
+    return out
+  },
 }
 
 function seeded(n: number, seed: number): number {

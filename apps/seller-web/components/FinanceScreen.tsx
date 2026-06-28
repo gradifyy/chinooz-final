@@ -84,11 +84,6 @@ export default function FinanceScreen() {
   const animatedAvailable = useCountUp(available, !loading && !reducedMotion)
   const displayAvailable = loading ? available : animatedAvailable
 
-  const maxChart = useMemo(
-    () => (summary?.chart ? Math.max(1, ...summary.chart.map(p => p.value)) : 1),
-    [summary],
-  )
-
   const cards = useMemo(() => {
     if (!summary) return [] as { label: string; value: string }[]
     return [

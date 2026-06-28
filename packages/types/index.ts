@@ -73,4 +73,11 @@ export type {
   SellerOrderSortKey,
   SellerSubOrderItem,
   SellerSubOrder,
+  GeoPoint,
+  MapBoundary,
+  RouteStop,
+  DeliveryLeg,
+  DeliveryStatus,
+  RiderJob,
+  ActiveDelivery,
 } from './entities'

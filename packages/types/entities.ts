@@ -310,3 +310,92 @@ export interface SellerInventoryProduct {
   salesCount: number
   variants: SellerInventoryVariant[]
 }
+
+// ---- RS3 map / trip simulator + rider delivery ----
+
+export interface GeoPoint {
+  lat: number
+  lng: number
+}
+
+export interface MapBoundary {
+  id: string
+  label: string
+  minLat: number
+  maxLat: number
+  minLng: number
+  maxLng: number
+}
+
+export interface RouteStop extends GeoPoint {
+  label: string
+  address: string
+  contactName: string
+  contactPhone: string
+}
+
+export interface DeliveryLeg {
+  /** Ordered points from the start of the leg to its end (inclusive). */
+  points: GeoPoint[]
+  distanceMeters: number
+  etaSeconds: number
+}
+
+export type DeliveryStatus =
+  | 'assigned'
+  | 'heading_to_pickup'
+  | 'at_pickup'
+  | 'picked_up'
+  | 'in_transit'
+  | 'at_dropoff'
+  | 'delivered'
+  | 'cancelled'
+  | 'failed'
+
+export interface RiderJob {
+  id: string
+  orderRef: string
+  customerName: string
+  pickup: RouteStop
+  dropoff: RouteStop
+  legToPickup: DeliveryLeg
+  legToDropoff: DeliveryLeg
+  payout: number
+  isCod: boolean
+  codAmount: number
+  currency: 'NPR'
+  createdAt: string
+}
+
+export interface ActiveDelivery {
+  jobId: string
+  orderRef: string
+  customerName: string
+  pickup: RouteStop
+  dropoff: RouteStop
+  legToPickup: DeliveryLeg
+  legToDropoff: DeliveryLeg
+  payout: number
+  isCod: boolean
+  codAmount: number
+  currency: 'NPR'
+  status: DeliveryStatus
+  /** 0..1 progress within the currently active leg. */
+  legProgress: number
+  currentPoint: GeoPoint
+  etaSeconds: number
+  distanceMeters: number
+  minimized: boolean
+  startedAt: number
+  updatedAt: number
+  cancelReason?: string
+  failureReason?: string
+  /** Pickup label (store / seller name) — RJ5 Jobs tab compat. */
+  pickupLabel: string
+  /** Drop-off label (buyer area / tole) — RJ5 Jobs tab compat. */
+  dropoffLabel: string
+  /** Epoch ms when the job was accepted — RJ5 Jobs tab compat. */
+  acceptedAt: number
+  /** Epoch ms of the ETA at drop-off, if known — RJ5 Jobs tab compat. */
+  etaDropoffMs: number | null
+}

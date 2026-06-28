@@ -16,7 +16,7 @@ import { useTranslation } from 'react-i18next'
 import { Screen, EmptyState, Skeleton, useReducedMotion } from '@chinooz/ui'
 import { useSellerConversations, useMarkSellerConversationRead } from '@chinooz/hooks'
 import { useSellerSessionStore, useSellerMessagesStore } from '@chinooz/state'
-import { colors, spacing, radii, fontSize, fontFamily, duration } from '@chinooz/theme'
+import { colors, spacing, radii, fontSize, fontFamily } from '@chinooz/theme'
 import type { Conversation } from '@chinooz/types'
 import Animated, {
   useSharedValue,
@@ -237,7 +237,7 @@ function FilterChip({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={ariaLabel}
-      accessibilityState={{ pressed: active }}
+      accessibilityState={{ selected: active }}
     >
       <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
     </TouchableOpacity>

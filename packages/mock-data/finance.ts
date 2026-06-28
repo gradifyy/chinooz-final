@@ -7,9 +7,21 @@ export interface FinanceRange {
   custom?: { start: string; end: string }
 }
 
-export interface FinanceChartPoint {
+export interface FinanceEarningsPoint {
   label: string
-  value: number
+  date: string
+  gross: number
+  net: number
+  sales: number
+  refunds: number
+  fees: number
+}
+
+export interface FinanceEarningsSeries {
+  points: FinanceEarningsPoint[]
+  previousPoints: FinanceEarningsPoint[]
+  comparisonPct: number
+  peak: FinanceEarningsPoint | null
 }
 
 export interface FinanceSummary {
@@ -21,7 +33,7 @@ export interface FinanceSummary {
   thisPeriodNet: number
   pendingPayout: number
   nextScheduledPayoutDate: string
-  chart: FinanceChartPoint[]
+  earnings: FinanceEarningsSeries
 }
 
 export const FINANCE_DATE_RANGES: { key: FinanceRangeKey; label: string; days: number }[] = [
@@ -43,6 +55,38 @@ function seeded(n: number, seed: number): number {
   return x - Math.floor(x)
 }
 
+const FEE_RATE = 0.04
+const REFUND_RATE = 0.03
+
+function buildEarnings(
+  days: number,
+  scale: number,
+  seed: number,
+  previous = false,
+): FinanceEarningsPoint[] {
+  const labels = CHART_LABELS[days] ?? CHART_LABELS[30]
+  const seedOffset = previous ? 50 : 0
+  const base = new Date()
+  base.setDate(base.getDate() - (previous ? days : 0))
+  return labels.map((label, i) => {
+    const gross = Math.round(2000 * scale * (0.5 + seeded(i + 10 + seedOffset, seed) * 0.9))
+    const fees = Math.round(gross * FEE_RATE)
+    const refunds = Math.round(gross * REFUND_RATE * (0.6 + seeded(i + 30 + seedOffset, seed) * 0.6))
+    const sales = gross + refunds
+    const net = gross - fees - refunds
+    const d = new Date(base)
+    d.setDate(d.getDate() + (days === 1 ? 0 : Math.round((i / Math.max(1, labels.length - 1)) * days)))
+    return { label, date: d.toISOString().slice(0, 10), gross, net, sales, refunds, fees }
+  })
+}
+
+function computeComparison(current: number[], previous: number[]): number {
+  const c = current.reduce((a, b) => a + b, 0)
+  const p = previous.reduce((a, b) => a + b, 0)
+  if (p === 0) return c > 0 ? 100 : 0
+  return Math.round(((c - p) / p) * 100)
+}
+
 export async function getFinanceSummary(range: FinanceRange): Promise<FinanceSummary> {
   await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 350))
 
@@ -60,11 +104,10 @@ export async function getFinanceSummary(range: FinanceRange): Promise<FinanceSum
   next.setDate(next.getDate() + 3)
   const nextScheduledPayoutDate = next.toISOString().slice(0, 10)
 
-  const labels = CHART_LABELS[days] ?? CHART_LABELS[30]
-  const chart: FinanceChartPoint[] = labels.map((label, i) => ({
-    label,
-    value: Math.round(2000 * scale * (0.5 + seeded(i + 10, seed) * 0.9)),
-  }))
+  const points = buildEarnings(days, scale, seed, false)
+  const previousPoints = buildEarnings(days, scale, seed, true)
+  const comparisonPct = computeComparison(points.map(p => p.net), previousPoints.map(p => p.net))
+  const peak = points.reduce((m, p) => (m && m.net > p.net ? m : p), null as FinanceEarningsPoint | null)
 
   return {
     range,
@@ -75,7 +118,7 @@ export async function getFinanceSummary(range: FinanceRange): Promise<FinanceSum
     thisPeriodNet,
     pendingPayout,
     nextScheduledPayoutDate,
-    chart,
+    earnings: { points, previousPoints, comparisonPct, peak },
   }
 }
 

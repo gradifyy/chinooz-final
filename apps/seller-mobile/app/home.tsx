@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import * as Haptics from 'expo-haptics'
 import { colors, spacing, radii } from '@chinooz/theme'
 import { useA11y } from '../components/A11yProvider'
-import { useSellerSessionStore } from '@chinooz/state'
+import { useSellerSessionStore, useSellerMessagesStore } from '@chinooz/state'
 import { analytics } from '@chinooz/analytics'
 
 export default function SellerHomeScreen() {
@@ -20,6 +20,7 @@ export default function SellerHomeScreen() {
   const devMock = useSellerSessionStore(s => s.devMock)
   const toggleDevMock = useSellerSessionStore(s => s.toggleDevMock)
   const logout = useSellerSessionStore(s => s.logout)
+  const unread = useSellerMessagesStore(s => s.unreadCount)
 
   useEffect(() => {
     analytics.screen({ name: 'seller-home' })
@@ -35,6 +36,13 @@ export default function SellerHomeScreen() {
     } catch {}
     logout()
     router.replace('/onboarding')
+  }
+
+  const handleMessages = () => {
+    try {
+      if (!reducedMotion) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    } catch {}
+    router.push('/messages')
   }
 
   return (
@@ -68,6 +76,20 @@ export default function SellerHomeScreen() {
         )}
 
         <Text style={styles.placeholder}>{t('seller.placeholder')}</Text>
+
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={unread > 0 ? `${t('seller.messages.tab')} · ${unread} ${t('seller.messages.unreadAria', { count: unread })}` : t('seller.messages.tab')}
+          onPress={handleMessages}
+          style={[styles.devToggle, { minHeight: minTouchTarget }]}
+        >
+          <Text style={styles.devToggleText}>{t('seller.messages.tab')}</Text>
+          {unread > 0 ? (
+            <View style={styles.unreadBadge}>
+              <Text style={styles.unreadBadgeText}>{unread}</Text>
+            </View>
+          ) : null}
+        </TouchableOpacity>
 
         <TouchableOpacity
           accessibilityRole="button"
@@ -153,6 +175,18 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[3],
   },
   devToggleText: { fontSize: 14, color: colors.text, fontWeight: '600' },
+  unreadBadge: {
+    position: 'absolute',
+    right: spacing[4],
+    backgroundColor: '#DC2626',
+    borderRadius: radii.full,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing[1.5],
+  },
+  unreadBadgeText: { color: colors.white, fontSize: 12, fontWeight: '600' },
   logout: {
     backgroundColor: colors.error,
     borderRadius: radii.lg,

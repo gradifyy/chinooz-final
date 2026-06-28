@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useMemo, useState, useCallback } from 'react'
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
@@ -92,14 +92,10 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-function statusOf(o: SellerSubOrder): SellerOrderStatusKey {
-  return o.actionNeeded && o.statusKey !== 'cancelled_returned' ? o.statusKey : o.statusKey
-}
-
 function matchesTab(o: SellerSubOrder, tab: TabKey): boolean {
   if (tab === 'action_needed') return o.actionNeeded
   if (tab === 'cancelled_returned') return o.statusKey === 'cancelled_returned'
-  return o.statusKey === tab && !o.actionNeeded ? o.statusKey === tab : o.statusKey === tab
+  return o.statusKey === tab && !o.actionNeeded
 }
 
 function applyFilters(
@@ -550,6 +546,8 @@ export default function SellerOrders() {
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS)
   const [sort, setSort] = useState<SellerOrderSortKey>('newest')
   const [showFilters, setShowFilters] = useState(false)
+  const [headerHeight, setHeaderHeight] = useState(0)
+  const headerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     analytics.screen({ name: 'seller-orders' })
@@ -558,6 +556,16 @@ export default function SellerOrders() {
   useEffect(() => {
     if (!isLoggedIn) router.replace('/onboarding')
   }, [isLoggedIn, router])
+
+  useEffect(() => {
+    if (!headerRef.current) return
+    const el = headerRef.current
+    const update = () => setHeaderHeight(el.offsetHeight)
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [showFilters, activeFilterCount])
 
   const { data: allOrders = [], isLoading, isError, refetch } = useSellerOrders(sellerId ?? null)
 
@@ -582,7 +590,6 @@ export default function SellerOrders() {
       else if (o.statusKey === 'to_ship' && !o.actionNeeded) c.to_ship++
       else if (o.statusKey === 'shipped') c.shipped++
       else if (o.statusKey === 'completed') c.completed++
-      else if (o.statusKey === 'cancelled_returned') c.cancelled_returned++
     }
     return c
   }, [allOrders])
@@ -629,7 +636,7 @@ export default function SellerOrders() {
   return (
     <Screen>
       {/* Sticky header: title + status tabs + search/filter/sort */}
-      <div className="sticky top-0 z-sticky bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border-light">
+      <div ref={headerRef} className="sticky top-0 z-sticky bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border-light">
         <Container className="max-w-[1280px]">
           {/* Title row */}
           <div className="flex items-center gap-3 pt-5 pb-3">
@@ -816,7 +823,7 @@ export default function SellerOrders() {
             {/* Web: dense table */}
             <div className="hidden md:block overflow-x-auto rounded-lg border border-border-light bg-surface">
               <table className="w-full border-collapse" role="table">
-                <thead className="sticky top-[184px] z-sticky bg-surface">
+                <thead className="sticky z-sticky bg-surface" style={{ top: headerHeight }}>
                   <tr className="border-b border-[#E5E5E5]">
                     {[
                       { key: 'order', label: 'seller.orders.columnOrder', cls: 'text-left' },

@@ -422,7 +422,9 @@ export default function PromotionsScreen() {
   )
 }
 
-function PromotionCard({ promo, t }: { promo: Promotion; t: (k: string) => string }) {
+type T = (key: string, opts?: Record<string, unknown>) => string
+
+function PromotionCard({ promo, t }: { promo: Promotion; t: T }) {
   const sb = statusStyle[promo.status]
   const isSale = promo.type === 'flash_sale' || promo.type === 'percentage'
   const scheduleKey =

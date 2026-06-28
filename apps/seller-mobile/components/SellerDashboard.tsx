@@ -28,6 +28,7 @@ import {
   TrendingDown,
   Minus,
   X,
+  Menu,
 } from 'lucide-react-native'
 import { colors, spacing, radii, fontSize } from '@chinooz/theme'
 import { useA11y } from './A11yProvider'
@@ -162,7 +163,7 @@ export default function SellerDashboard() {
 
   return (
     <View style={styles.container}>
-      <SellerTopBar onSearch={() => {}} onNotifications={() => {}} />
+      <SellerTopBar onSearch={() => {}} onNotifications={() => {}} onMore={() => router.push('/settings')} />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -215,8 +216,10 @@ export default function SellerDashboard() {
             <SectionHeader title={t('seller.dashboard.sectionSales')} />
             <SalesChart points={metrics.chart} />
 
-            <SectionHeader title={t('seller.dashboard.sectionAlerts')} seeAllLabel={t('seller.dashboard.seeAll')} onSeeAll={() => {}} />
-            <Alerts alerts={metrics.alerts} />
+            <SectionHeader title={t('seller.dashboard.sectionAlerts')} seeAllLabel={t('seller.dashboard.seeAll')} onSeeAll={() => router.push('/reviews')} />
+            <Alerts alerts={metrics.alerts} onCtaPress={(id) => {
+              if (id === 'reviews-needing-response') router.push('/reviews')
+            }} />
 
             <SectionHeader title={t('seller.dashboard.sectionQuickActions')} />
             <QuickActions
@@ -227,7 +230,7 @@ export default function SellerDashboard() {
               }}
             />
 
-            <SectionHeader title={t('seller.dashboard.sectionActivity')} seeAllLabel={t('seller.dashboard.seeAll')} onSeeAll={() => {}} />
+            <SectionHeader title={t('seller.dashboard.sectionActivity')} seeAllLabel={t('seller.dashboard.seeAll')} onSeeAll={() => router.push('/analytics')} />
             <RecentActivity items={metrics.activity} />
           </View>
         </Animated.View>
@@ -248,7 +251,7 @@ export default function SellerDashboard() {
   )
 }
 
-function SellerTopBar({ onSearch, onNotifications }: { onSearch: () => void; onNotifications: () => void }) {
+function SellerTopBar({ onSearch, onNotifications, onMore }: { onSearch: () => void; onNotifications: () => void; onMore: () => void }) {
   const { t } = useTranslation()
   const { minTouchTarget } = useA11y()
   return (
@@ -277,6 +280,15 @@ function SellerTopBar({ onSearch, onNotifications }: { onSearch: () => void; onN
           style={[styles.topBarIconBtn, { minWidth: minTouchTarget, minHeight: minTouchTarget }]}
         >
           <Bell size={20} color={colors.text} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={t('seller.reviews.moreAria')}
+          onPress={onMore}
+          hitSlop={8}
+          style={[styles.topBarIconBtn, { minWidth: minTouchTarget, minHeight: minTouchTarget }]}
+        >
+          <Menu size={20} color={colors.text} />
         </TouchableOpacity>
       </View>
     </View>
@@ -429,7 +441,7 @@ const ALERT_ICON = {
   info: { Icon: Info, color: colors.info },
 } as const
 
-function Alerts({ alerts }: { alerts: { id: string; severity: 'warning' | 'error' | 'info'; title: string; body: string; cta?: string }[] }) {
+function Alerts({ alerts, onCtaPress }: { alerts: { id: string; severity: 'warning' | 'error' | 'info'; title: string; body: string; cta?: string }[]; onCtaPress?: (id: string) => void }) {
   const { t } = useTranslation()
   if (alerts.length === 0) {
     return (
@@ -450,7 +462,11 @@ function Alerts({ alerts }: { alerts: { id: string; severity: 'warning' | 'error
                 <Text style={styles.alertTitle}>{a.title}</Text>
                 <Text style={styles.alertText}>{a.body}</Text>
                 {a.cta && (
-                  <TouchableOpacity hitSlop={8} accessibilityRole="button">
+                  <TouchableOpacity
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    onPress={() => onCtaPress?.(a.id)}
+                  >
                     <Text style={styles.alertCta}>{a.cta}</Text>
                   </TouchableOpacity>
                 )}

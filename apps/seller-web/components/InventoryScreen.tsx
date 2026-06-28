@@ -18,9 +18,9 @@ import { useSellerInventory, useSellerCategories } from '@chinooz/hooks'
 import { useSellerSessionStore } from '@chinooz/state'
 import { analytics } from '@chinooz/analytics'
 import { formatNPR } from '@chinooz/utils'
-import { duration, easing } from '@chinooz/theme'
+import { easing } from '@chinooz/theme'
 import type { SellerInventoryProduct, SellerInventoryVariant, StockStatus } from '@chinooz/types'
-import type { InventoryStatus, InventorySort } from '@chinooz/mock-data'
+import type { InventorySort } from '@chinooz/mock-data'
 
 type TabKey = 'all' | 'in_stock' | 'low_stock' | 'out_of_stock'
 
@@ -478,7 +478,6 @@ function ProductGroupCard({
 export default function InventoryScreen() {
   const { t } = useTranslation()
   const reduced = useReducedMotion()
-  const { minTouchTarget } = useA11y()
   const isLoggedIn = useSellerSessionStore(s => s.isLoggedIn)
 
   const [tab, setTab] = useState<TabKey>('all')
@@ -732,6 +731,7 @@ function MobileFilterSheet({
   onReset: () => void
 }) {
   const { t } = useTranslation()
+  const reduced = useReducedMotion()
   const [open, setOpen] = useState(false)
   const [min, setMin] = useState(stockMin?.toString() ?? '')
   const [max, setMax] = useState(stockMax?.toString() ?? '')
@@ -768,13 +768,20 @@ function MobileFilterSheet({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
           >
-            <div className="absolute inset-0 bg-overlay" onClick={() => setOpen(false)} />
+            <div
+              className="absolute inset-0 bg-overlay"
+              role="button"
+              aria-label="Close"
+              tabIndex={0}
+              onClick={() => setOpen(false)}
+              onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}
+            />
             <motion.div
               className="absolute bottom-0 inset-x-0 bg-surface rounded-t-2xl p-5 pb-8 max-h-[85vh] overflow-y-auto"
               initial={{ y: '100%' }}
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
-              transition={reducedMotionTransition()}
+              transition={reduced ? { duration: 0 } : { duration: 0.25, ease: easing.easeOut }}
               role="dialog"
               aria-modal="true"
               aria-label={t('seller.inventory.filterTitle')}
@@ -840,8 +847,4 @@ function MobileFilterSheet({
       </AnimatePresence>
     </>
   )
-}
-
-function reducedMotionTransition() {
-  return { duration: 0.2, ease: 'easeOut' }
 }
