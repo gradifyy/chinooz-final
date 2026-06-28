@@ -4,6 +4,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query'
 import * as api from '@chinooz/mock-data'
+import { orderService } from '@chinooz/mock-data'
 import type {
   SellerStatsRange,
   SellerStats,
@@ -362,7 +363,7 @@ export function useImportStockCsv() {
 export function useSellerOrdersApi(sellerId: string | null, status?: SellerOrderStatusKey) {
   return useQuery<SellerSubOrder[]>({
     queryKey: ['seller-orders', sellerId, status],
-    queryFn: () => api.getSellerOrdersApi(sellerId as string, status),
+    queryFn: () => orderService.getOrders(sellerId as string, status),
     enabled: !!sellerId,
     staleTime: STALE.orders,
   })
@@ -371,7 +372,7 @@ export function useSellerOrdersApi(sellerId: string | null, status?: SellerOrder
 export function useSellerOrderById(sellerId: string | null, subOrderId: string | null) {
   return useQuery<SellerSubOrder | null>({
     queryKey: ['seller-order', sellerId, subOrderId],
-    queryFn: () => api.getSellerOrderById(sellerId as string, subOrderId as string),
+    queryFn: () => orderService.getOrderById(sellerId as string, subOrderId as string),
     enabled: !!sellerId && !!subOrderId,
     staleTime: STALE.orders,
   })
@@ -388,7 +389,7 @@ export function useUpdateOrderStatus() {
   type Result = { subOrderId: string; statusKey: SellerOrderStatusKey; success: boolean }
 
   const opts = {
-    mutationFn: (vars: Vars) => api.updateOrderStatus(vars.subOrderId, vars.newStatusKey),
+    mutationFn: (vars: Vars) => orderService.updateStatus(vars.subOrderId, vars.newStatusKey),
     onMutate: async (vars: Vars) => {
       await qc.cancelQueries({ queryKey: ['seller-orders'] })
       const prevOrders = qc.getQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] })
@@ -409,6 +410,10 @@ export function useUpdateOrderStatus() {
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ['seller-orders'] })
+      qc.invalidateQueries({ queryKey: ['seller-order'] })
+      qc.invalidateQueries({ queryKey: ['orders'], exact: false })
+      qc.invalidateQueries({ queryKey: ['order'], exact: false })
+      qc.invalidateQueries({ queryKey: ['seller-inventory'] })
     },
   }
 
@@ -417,61 +422,113 @@ export function useUpdateOrderStatus() {
 
 export function useFulfillOrder() {
   const qc = useQueryClient()
+  type Vars = { subOrderId: string; trackingNumber?: string; carrier?: string }
   return useMutation({
-    mutationFn: ({
-      subOrderId,
-      trackingNumber,
-      carrier,
-    }: {
-      subOrderId: string
-      trackingNumber?: string
-      carrier?: string
-    }) => api.fulfillOrder(subOrderId, trackingNumber, carrier),
-    onSuccess: () => {
+    mutationFn: (vars: Vars) => orderService.fulfill(vars.subOrderId, vars.trackingNumber, vars.carrier),
+    onMutate: async (vars: Vars) => {
+      await qc.cancelQueries({ queryKey: ['seller-orders'] })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const prevOrders = qc.getQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] })
+      qc.setQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] }, (old) => {
+        if (!old) return old
+        return old.map(o =>
+          o.subOrderId === vars.subOrderId
+            ? { ...o, statusKey: 'shipped' as SellerOrderStatusKey, status: 'shipped', trackingNumber: vars.trackingNumber ?? o.trackingNumber, carrier: vars.carrier ?? o.carrier }
+            : o,
+        )
+      })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return { prevOrders }
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (_err: Error, _vars: Vars, ctx: any) => {
+      if (ctx?.prevOrders) {
+        for (const [key, data] of ctx.prevOrders) {
+          qc.setQueryData(key, data)
+        }
+      }
+    },
+    onSettled: (_data, _err, _vars) => {
       qc.invalidateQueries({ queryKey: ['seller-orders'] })
       qc.invalidateQueries({ queryKey: ['seller-order'] })
+      qc.invalidateQueries({ queryKey: ['orders'], exact: false })
+      qc.invalidateQueries({ queryKey: ['order'], exact: false })
+      qc.invalidateQueries({ queryKey: ['seller-inventory'] })
     },
   })
 }
 
 export function useRejectOrder() {
   const qc = useQueryClient()
+  type Vars = { subOrderId: string; reason: string; reasonDetail?: string }
   return useMutation({
-    mutationFn: ({
-      subOrderId,
-      reason,
-      reasonDetail,
-    }: {
-      subOrderId: string
-      reason: string
-      reasonDetail?: string
-    }) => api.rejectOrder(subOrderId, reason, reasonDetail),
-    onSuccess: () => {
+    mutationFn: (vars: Vars) => orderService.reject(vars.subOrderId, vars.reason, vars.reasonDetail),
+    onMutate: async (vars: Vars) => {
+      await qc.cancelQueries({ queryKey: ['seller-orders'] })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const prevOrders = qc.getQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] })
+      const now = new Date().toISOString()
+      qc.setQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] }, (old) => {
+        if (!old) return old
+        return old.map(o =>
+          o.subOrderId === vars.subOrderId
+            ? { ...o, statusKey: 'cancelled_returned' as SellerOrderStatusKey, status: 'cancelled', cancelledAt: now, actionNeeded: false }
+            : o,
+        )
+      })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return { prevOrders }
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (_err: Error, _vars: Vars, ctx: any) => {
+      if (ctx?.prevOrders) {
+        for (const [key, data] of ctx.prevOrders) {
+          qc.setQueryData(key, data)
+        }
+      }
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ['seller-orders'] })
       qc.invalidateQueries({ queryKey: ['seller-order'] })
+      qc.invalidateQueries({ queryKey: ['orders'], exact: false })
+      qc.invalidateQueries({ queryKey: ['order'], exact: false })
     },
   })
 }
 
 export function usePartialShipOrder() {
   const qc = useQueryClient()
+  type Vars = { subOrderId: string; itemIds: string[]; trackingNumber: string; carrier: string; shipDate?: string }
   return useMutation({
-    mutationFn: ({
-      subOrderId,
-      itemIds,
-      trackingNumber,
-      carrier,
-      shipDate,
-    }: {
-      subOrderId: string
-      itemIds: string[]
-      trackingNumber: string
-      carrier: string
-      shipDate?: string
-    }) => api.partialShipOrder(subOrderId, itemIds, trackingNumber, carrier, shipDate),
-    onSuccess: () => {
+    mutationFn: (vars: Vars) => orderService.partialShip(vars.subOrderId, vars.itemIds, vars.trackingNumber, vars.carrier, vars.shipDate),
+    onMutate: async (vars: Vars) => {
+      await qc.cancelQueries({ queryKey: ['seller-orders'] })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const prevOrders = qc.getQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] })
+      qc.setQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] }, (old) => {
+        if (!old) return old
+        return old.map(o =>
+          o.subOrderId === vars.subOrderId
+            ? { ...o, trackingNumber: vars.trackingNumber, carrier: vars.carrier }
+            : o,
+        )
+      })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return { prevOrders }
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (_err: Error, _vars: Vars, ctx: any) => {
+      if (ctx?.prevOrders) {
+        for (const [key, data] of ctx.prevOrders) {
+          qc.setQueryData(key, data)
+        }
+      }
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ['seller-orders'] })
       qc.invalidateQueries({ queryKey: ['seller-order'] })
+      qc.invalidateQueries({ queryKey: ['orders'], exact: false })
+      qc.invalidateQueries({ queryKey: ['order'], exact: false })
     },
   })
 }
@@ -482,7 +539,7 @@ export function useBulkUpdateStatus() {
   type Result = { results: { subOrderId: string; success: boolean; statusKey: SellerOrderStatusKey }[]; succeeded: number; failed: number }
 
   return useMutation<Result, Error, Vars>({
-    mutationFn: vars => api.bulkUpdateStatus(vars.subOrderIds, vars.newStatusKey),
+    mutationFn: vars => orderService.bulkUpdateStatus(vars.subOrderIds, vars.newStatusKey),
     onMutate: async (vars: Vars) => {
       await qc.cancelQueries({ queryKey: ['seller-orders'] })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -518,7 +575,7 @@ export function useBulkFulfillOrders() {
   type Result = { results: { subOrderId: string; success: boolean; trackingNumber: string }[]; succeeded: number; failed: number }
 
   return useMutation<Result, Error, Vars>({
-    mutationFn: vars => api.bulkFulfillOrders(vars.shipments),
+    mutationFn: vars => orderService.bulkFulfill(vars.shipments),
     onMutate: async (vars: Vars) => {
       await qc.cancelQueries({ queryKey: ['seller-orders'] })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -608,13 +665,15 @@ export function useMarkLabelPrinted() {
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ['seller-orders'] })
       qc.invalidateQueries({ queryKey: ['seller-order'] })
+      qc.invalidateQueries({ queryKey: ['orders'], exact: false })
+      qc.invalidateQueries({ queryKey: ['order'], exact: false })
     },
   })
 }
 
 // --- Cancel / Refund / Return (mock) ---
 
-export function useCancelOrder() {
+export function useSellerCancelOrder() {
   const qc = useQueryClient()
   type Vars = { subOrderId: string; reason: SellerCancelReason; reasonDetail?: string }
   type Result = {
@@ -627,7 +686,7 @@ export function useCancelOrder() {
   }
 
   return useMutation<Result, Error, Vars>({
-    mutationFn: vars => api.cancelOrder(vars.subOrderId, vars.reason, vars.reasonDetail),
+    mutationFn: vars => orderService.cancel(vars.subOrderId, vars.reason, vars.reasonDetail),
     onMutate: async (vars: Vars) => {
       await qc.cancelQueries({ queryKey: ['seller-orders'] })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -666,6 +725,8 @@ export function useCancelOrder() {
       qc.invalidateQueries({ queryKey: ['seller-orders'] })
       qc.invalidateQueries({ queryKey: ['seller-order'] })
       qc.invalidateQueries({ queryKey: ['seller-inventory'] })
+      qc.invalidateQueries({ queryKey: ['orders'], exact: false })
+      qc.invalidateQueries({ queryKey: ['order'], exact: false })
     },
   })
 }
@@ -673,9 +734,9 @@ export function useCancelOrder() {
 export function useSellerReturnRequests(sellerId: string | null) {
   return useQuery<SellerReturnRequest[]>({
     queryKey: ['seller-return-requests', sellerId],
-    queryFn: () => api.getSellerReturnRequests(sellerId as string),
+    queryFn: () => orderService.getReturnRequests(sellerId as string),
     enabled: !!sellerId,
-    staleTime: 30_000,
+    staleTime: STALE.orders,
   })
 }
 
@@ -691,7 +752,7 @@ export function useApproveReturnRequest() {
   }
 
   return useMutation<Result, Error, Vars>({
-    mutationFn: vars => api.approveReturnRequest(vars.requestId, vars.resolutionNote),
+    mutationFn: vars => orderService.approveReturn(vars.requestId, vars.resolutionNote),
     onMutate: async (vars: Vars) => {
       await qc.cancelQueries({ queryKey: ['seller-return-requests'] })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -736,7 +797,7 @@ export function useRejectReturnRequest() {
   }
 
   return useMutation<Result, Error, Vars>({
-    mutationFn: vars => api.rejectReturnRequest(vars.requestId, vars.resolutionNote),
+    mutationFn: vars => orderService.rejectReturn(vars.requestId, vars.resolutionNote),
     onMutate: async (vars: Vars) => {
       await qc.cancelQueries({ queryKey: ['seller-return-requests'] })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -781,7 +842,7 @@ export function useProcessRefund() {
   }
 
   return useMutation<Result, Error, Vars>({
-    mutationFn: vars => api.processRefund(vars.subOrderId),
+    mutationFn: vars => orderService.processRefundOrder(vars.subOrderId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['seller-orders'] })
       qc.invalidateQueries({ queryKey: ['seller-order'] })

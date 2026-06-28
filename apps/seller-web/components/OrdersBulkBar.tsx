@@ -10,10 +10,12 @@ import {
   Printer,
   X,
   Loader2,
+  AlertCircle,
 } from 'lucide-react'
 import { useReducedMotion } from '@chinooz/ui-web'
 import { useBulkUpdateStatus, useBulkFulfillOrders } from '@chinooz/hooks'
 import { duration, easing } from '@chinooz/theme'
+import PrintDocsSheet from '@/components/PrintDocsSheet'
 import type { SellerSubOrder, SellerOrderStatusKey } from '@chinooz/types'
 
 const CARRIERS = [
@@ -25,18 +27,25 @@ const CARRIERS = [
   { key: 'other', labelKey: 'seller.orders.carrierOther' },
 ]
 
-type BulkResult = { count: number; action: 'accept' | 'pack' | 'ship' | 'print'; failed: number } | null
+type BulkResult = {
+  count: number
+  action: 'accept' | 'pack' | 'ship' | 'print'
+  failed: number
+  failedOrders?: { subOrderId: string; orderId: string }[]
+  action_key?: 'accept' | 'pack' | 'ship'
+} | null
 
-function ResultSnackbar({ result, t, onDismiss }: { result: BulkResult; t: (k: string, o?: Record<string, unknown>) => string; onDismiss: () => void }) {
+function ResultSnackbar({ result, t, onDismiss, onRetryFailed }: { result: BulkResult; t: (k: string, o?: Record<string, unknown>) => string; onDismiss: () => void; onRetryFailed?: () => void }) {
   const reduced = useReducedMotion()
   if (!result) return null
+  const isPartialFail = result.failed > 0 && result.failedOrders && result.failedOrders.length > 0
   const msg = result.action === 'ship'
     ? t('seller.orders.bulkResultShipped', { count: result.count })
     : result.action === 'accept'
       ? t('seller.orders.bulkResultAccepted', { count: result.count })
       : result.action === 'pack'
         ? t('seller.orders.bulkResultPacked', { count: result.count })
-        : t('seller.orders.bulkResultShipped', { count: result.count })
+        : t('seller.orders.printDocsBulkResult', { count: result.count })
   return (
     <AnimatePresence>
       <motion.div
@@ -44,16 +53,24 @@ function ResultSnackbar({ result, t, onDismiss }: { result: BulkResult; t: (k: s
         animate={{ opacity: 1, y: 0 }}
         exit={reduced ? undefined : { opacity: 0, y: 20 }}
         transition={reduced ? { duration: 0 } : { type: 'spring', damping: 20, stiffness: 300 }}
-        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-success text-white rounded-full px-5 py-2.5 text-sm font-semibold shadow-lg flex items-center gap-2.5"
+        className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-full px-5 py-2.5 text-sm font-semibold shadow-lg flex items-center gap-2.5 ${
+          isPartialFail ? 'bg-warning text-white' : 'bg-success text-white'
+        }`}
         role="status"
         aria-live="assertive"
       >
-        <Check size={16} strokeWidth={3} />
-        {msg}
-        {result.failed > 0 && (
-          <span className="text-white/80">· {t('seller.orders.bulkResultFailed', { count: result.failed })}</span>
+        {isPartialFail ? <AlertCircle size={16} /> : <Check size={16} strokeWidth={3} />}
+        {isPartialFail ? t('seller.orders.bulkPartialFailSubtitle', { failed: result.failed, total: result.count + result.failed }) : msg}
+        {isPartialFail && onRetryFailed && (
+          <button
+            onClick={onRetryFailed}
+            className="ml-1 hover:bg-white/20 rounded-full px-2 py-0.5 text-xs font-bold"
+            aria-label={t('seller.orders.bulkRetryFailedAria', { count: result.failed })}
+          >
+            {t('seller.orders.bulkRetryFailed', { count: result.failed })}
+          </button>
         )}
-        <button onClick={onDismiss} className="ml-1 hover:bg-white/20 rounded-full p-0.5" aria-label="Dismiss">
+        <button onClick={onDismiss} className="ml-1 hover:bg-white/20 rounded-full p-0.5" aria-label={t('seller.orders.bulkDismissFailures')}>
           <X size={14} />
         </button>
       </motion.div>
@@ -174,16 +191,33 @@ export function OrdersBulkBar({
 }) {
   const reduced = useReducedMotion()
   const [showTracking, setShowTracking] = useState(false)
+  const [showPrintSheet, setShowPrintSheet] = useState(false)
   const [result, setResult] = useState<BulkResult>(null)
   const [busy, setBusy] = useState(false)
 
   const bulkUpdate = useBulkUpdateStatus()
   const bulkFulfill = useBulkFulfillOrders()
 
-  const showResult = useCallback((r: BulkResult) => {
+  const showResult = useCallback((r: NonNullable<BulkResult>) => {
     setResult(r)
-    setTimeout(() => setResult(null), 3000)
+    if (r.failed > 0) {
+      // Keep partial-failure visible longer until user dismisses/retries
+    } else {
+      setTimeout(() => setResult(null), 3000)
+    }
   }, [])
+
+  const buildFailedOrders = (
+    results: { subOrderId: string; success: boolean }[],
+    orders: SellerSubOrder[],
+  ): { subOrderId: string; orderId: string }[] => {
+    return results
+      .filter(r => !r.success)
+      .map(r => {
+        const o = orders.find(o => o.subOrderId === r.subOrderId)
+        return { subOrderId: r.subOrderId, orderId: o?.orderId ?? r.subOrderId }
+      })
+  }
 
   const handleAccept = useCallback(async () => {
     setBusy(true)
@@ -192,8 +226,9 @@ export function OrdersBulkBar({
         subOrderIds: selectedOrders.map(o => o.subOrderId),
         newStatusKey: 'to_pack',
       })
-      showResult({ count: res.succeeded, action: 'accept', failed: res.failed })
-      onClear()
+      const failedOrders = buildFailedOrders(res.results, selectedOrders)
+      showResult({ count: res.succeeded, action: 'accept', failed: res.failed, failedOrders, action_key: 'accept' })
+      if (res.failed === 0) { onClear() }
       onRefetch?.()
     } catch {} finally { setBusy(false) }
   }, [selectedOrders, bulkUpdate, showResult, onClear, onRefetch])
@@ -205,8 +240,9 @@ export function OrdersBulkBar({
         subOrderIds: selectedOrders.map(o => o.subOrderId),
         newStatusKey: 'to_ship',
       })
-      showResult({ count: res.succeeded, action: 'pack', failed: res.failed })
-      onClear()
+      const failedOrders = buildFailedOrders(res.results, selectedOrders)
+      showResult({ count: res.succeeded, action: 'pack', failed: res.failed, failedOrders, action_key: 'pack' })
+      if (res.failed === 0) { onClear() }
       onRefetch?.()
     } catch {} finally { setBusy(false) }
   }, [selectedOrders, bulkUpdate, showResult, onClear, onRefetch])
@@ -216,16 +252,47 @@ export function OrdersBulkBar({
     setShowTracking(false)
     try {
       const res = await bulkFulfill.mutateAsync({ shipments })
-      showResult({ count: res.succeeded, action: 'ship', failed: res.failed })
-      onClear()
+      const failedOrders = buildFailedOrders(res.results, selectedOrders)
+      showResult({ count: res.succeeded, action: 'ship', failed: res.failed, failedOrders, action_key: 'ship' })
+      if (res.failed === 0) { onClear() }
       onRefetch?.()
     } catch {} finally { setBusy(false) }
-  }, [bulkFulfill, showResult, onClear, onRefetch])
+  }, [bulkFulfill, showResult, onClear, onRefetch, selectedOrders])
+
+  const handleRetryFailed = useCallback(async () => {
+    if (!result?.failedOrders || result.failedOrders.length === 0) return
+    const failedIds = new Set(result.failedOrders.map(f => f.subOrderId))
+    const failedSelectedOrders = selectedOrders.filter(o => failedIds.has(o.subOrderId))
+    setBusy(true)
+    try {
+      if (result.action_key === 'ship') {
+        // Can't retry ship without tracking — just re-show tracking sheet
+        setShowTracking(true)
+      } else {
+        const newStatusKey = result.action_key === 'accept' ? 'to_pack' : 'to_ship'
+        const res = await bulkUpdate.mutateAsync({
+          subOrderIds: failedSelectedOrders.map(o => o.subOrderId),
+          newStatusKey,
+        })
+        const stillFailed = buildFailedOrders(res.results, failedSelectedOrders)
+        showResult({
+          count: res.succeeded,
+          action: result.action_key as 'accept' | 'pack' | 'ship',
+          failed: res.failed,
+          failedOrders: stillFailed,
+          action_key: result.action_key,
+        })
+        if (res.failed === 0) { onClear() }
+        onRefetch?.()
+      }
+    } catch {} finally {
+      setBusy(false)
+    }
+  }, [result, selectedOrders, bulkUpdate, showResult, onClear, onRefetch])
 
   const handlePrint = useCallback(() => {
-    showResult({ count: selectedOrders.length, action: 'print', failed: 0 })
-    onClear()
-  }, [selectedOrders, showResult, onClear])
+    setShowPrintSheet(true)
+  }, [])
 
   if (selectedOrders.length === 0) return null
 
@@ -236,7 +303,7 @@ export function OrdersBulkBar({
 
   return (
     <>
-      <ResultSnackbar result={result} t={t} onDismiss={() => setResult(null)} />
+      <ResultSnackbar result={result} t={t} onDismiss={() => setResult(null)} onRetryFailed={handleRetryFailed} />
 
       <AnimatePresence>
         <motion.div
@@ -325,6 +392,20 @@ export function OrdersBulkBar({
             orders={selectedOrders}
             onClose={() => setShowTracking(false)}
             onConfirm={handleShip}
+            t={t}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showPrintSheet && (
+          <PrintDocsSheet
+            orders={selectedOrders}
+            onClose={() => setShowPrintSheet(false)}
+            onPrinted={(ids) => {
+              showResult({ count: ids.length, action: 'print', failed: 0 })
+              onClear()
+            }}
             t={t}
           />
         )}

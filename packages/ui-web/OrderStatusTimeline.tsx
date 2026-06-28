@@ -4,6 +4,7 @@ import React, { useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { duration, easing } from '@chinooz/theme'
+import { getLocale } from '@chinooz/utils'
 import { useReducedMotion } from './hooks/useReducedMotion'
 import type {
   OrderStatusTimelineProps,
@@ -11,9 +12,9 @@ import type {
   ShipmentTimeline,
 } from '@chinooz/types'
 
-function formatTimestamp(iso?: string): string {
+function formatTimestamp(iso?: string, lang?: string): string {
   if (!iso) return ''
-  return new Date(iso).toLocaleDateString('en-US', {
+  return new Date(iso).toLocaleDateString(getLocale(lang), {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -28,9 +29,10 @@ interface TimelineNodeProps {
   totalSteps: number
   isLast: boolean
   reduced: boolean
+  lang?: string
 }
 
-function TimelineNode({ step, index, totalSteps, isLast, reduced }: TimelineNodeProps) {
+function TimelineNode({ step, index, totalSteps, isLast, reduced, lang }: TimelineNodeProps) {
   const isCompleted = step.status === 'completed'
   const isCurrent = step.status === 'current'
   const isCancelled = step.key === 'cancelled' || step.key === 'returned'
@@ -80,6 +82,7 @@ function TimelineNode({ step, index, totalSteps, isLast, reduced }: TimelineNode
       <div className="flex flex-col items-center" style={{ width: 24 }}>
         {/* Node circle */}
         <motion.div
+          initial={reduced ? false : { scale: 0 }}
           animate={
             isCurrent && !reduced
               ? { scale: [1, 1.1, 1] }
@@ -88,14 +91,15 @@ function TimelineNode({ step, index, totalSteps, isLast, reduced }: TimelineNode
           transition={
             isCurrent && !reduced
               ? { duration: 1.5, repeat: Infinity, ease: 'easeInOut' }
-              : {}
+              : reduced
+                ? { duration: 0 }
+                : { type: 'spring', damping: 18, stiffness: 200, duration: 0.6 }
           }
-          className={`
+            className={`
             w-6 h-6 rounded-full flex items-center justify-center
             border-2 ${getNodeBg()} ${getNodeBorder()}
           `}
-          role="text"
-          aria-label={`${step.label}, ${step.status}${step.timestamp ? `, ${formatTimestamp(step.timestamp)}` : ''}`}
+            aria-label={`${step.label}, ${step.status}${step.timestamp ? `, ${formatTimestamp(step.timestamp, lang)}` : ''}`}
         >
           {(isCompleted || isCurrent) && !isCancelled && (
             <span className="text-xs text-white">✓</span>
@@ -132,7 +136,7 @@ function TimelineNode({ step, index, totalSteps, isLast, reduced }: TimelineNode
         </p>
         {step.timestamp && (
           <p className="text-xs text-text-muted mt-0.5">
-            {formatTimestamp(step.timestamp)}
+            {formatTimestamp(step.timestamp, lang)}
           </p>
         )}
         {step.note && (
@@ -190,9 +194,11 @@ function CodBadge() {
 function ShipmentCard({
   shipment,
   reduced,
+  lang,
 }: {
   shipment: ShipmentTimeline
   reduced: boolean
+  lang?: string
 }) {
   const { t } = useTranslation()
 
@@ -235,6 +241,7 @@ function ShipmentCard({
             totalSteps={shipment.steps.length}
             isLast={index === shipment.steps.length - 1}
             reduced={reduced}
+            lang={lang}
           />
         ))}
       </div>
@@ -257,13 +264,13 @@ export default function OrderStatusTimeline({
   className = '',
   testID,
 }: OrderStatusTimelineProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const reduced = useReducedMotion()
+  const lang = i18n.language
 
   const completedCount = steps.filter(s => s.status === 'completed').length
   const currentStep = steps.find(s => s.status === 'current')
   const currentStatusLabel = currentStep?.label || steps[steps.length - 1]?.label || ''
-
   const multiSeller = shipments && shipments.length > 1
 
   return (
@@ -287,6 +294,7 @@ export default function OrderStatusTimeline({
               totalSteps={steps.length}
               isLast={index === steps.length - 1}
               reduced={reduced}
+              lang={lang}
             />
           ))}
 
@@ -320,6 +328,7 @@ export default function OrderStatusTimeline({
               key={shipment.sellerName}
               shipment={shipment}
               reduced={reduced}
+              lang={lang}
             />
           ))}
         </div>

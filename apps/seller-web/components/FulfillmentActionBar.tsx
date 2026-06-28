@@ -14,7 +14,7 @@ import {
   X,
   Loader2,
 } from 'lucide-react'
-import { useReducedMotion } from '@chinooz/ui-web'
+import { useReducedMotion, SafeImage } from '@chinooz/ui-web'
 import {
   useUpdateOrderStatus,
   useFulfillOrder,
@@ -23,7 +23,9 @@ import {
   useUpdateStock,
 } from '@chinooz/hooks'
 import { duration, easing } from '@chinooz/theme'
-import type { SellerSubOrder, SellerOrderStatusKey } from '@chinooz/types'
+import PrintDocsSheet from '@/components/PrintDocsSheet'
+import { CancelOrderSheet, RefundStatusPill, RefundBreakdownTable } from '@/components/CancelReturnRefund'
+import type { SellerSubOrder, SellerOrderStatusKey, SellerCancelReason } from '@chinooz/types'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type IconType = any
@@ -54,7 +56,7 @@ const FULFILL_ACTIONS: Record<SellerOrderStatusKey, { labelKey: string; ariaKey:
   action_needed: null,
 }
 
-type SuccessState = 'accept' | 'reject' | 'pack' | 'ship' | 'partial_ship' | null
+type SuccessState = 'accept' | 'reject' | 'pack' | 'ship' | 'partial_ship' | 'cancel' | null
 
 function SuccessCheck({ message, show, reduced }: { message: string; show: boolean; reduced: boolean }) {
   return (
@@ -161,7 +163,7 @@ function ShipSheet({
                     className="w-5 h-5 rounded border-border text-primary focus:ring-primary/20"
                     aria-checked={selectedItems.has(item.id)}
                   />
-                  <img src={item.image} alt="" className="w-10 h-10 rounded-md object-cover bg-shimmer" />
+                  <SafeImage src={item.image} alt="" className="w-10 h-10 rounded-md object-cover bg-shimmer" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-text truncate">{item.name}</p>
                     <p className="text-xs text-text-muted">{t('seller.orders.qty')}: {item.quantity}</p>
@@ -364,7 +366,10 @@ export function FulfillmentActionBar({
   const [showShipSheet, setShowShipSheet] = useState(false)
   const [showPartialShipSheet, setShowPartialShipSheet] = useState(false)
   const [showRejectSheet, setShowRejectSheet] = useState(false)
+  const [showPrintSheet, setShowPrintSheet] = useState(false)
+  const [showCancelSheet, setShowCancelSheet] = useState(false)
   const [success, setSuccess] = useState<SuccessState>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   const updateStatus = useUpdateOrderStatus()
@@ -375,11 +380,18 @@ export function FulfillmentActionBar({
 
   const showSuccess = useCallback((state: SuccessState) => {
     setSuccess(state)
+    setActionError(null)
     setTimeout(() => setSuccess(null), 2500)
   }, [])
 
+  const handleActionError = useCallback(() => {
+    setActionError(t('seller.orders.actionFailedRollback'))
+    setTimeout(() => setActionError(null), 4000)
+  }, [t])
+
   const handleAccept = useCallback(async () => {
     setBusy(true)
+    setActionError(null)
     try {
       await updateStatus.mutateAsync({ subOrderId: order.subOrderId, newStatusKey: 'to_pack' })
       for (const item of order.items) {
@@ -388,27 +400,29 @@ export function FulfillmentActionBar({
       showSuccess('accept')
       setTimeout(() => onNavigateBack(), 1200)
     } catch {
-      // error handled by mutation
+      handleActionError()
     } finally {
       setBusy(false)
     }
-  }, [order, updateStatus, updateStock, showSuccess, onNavigateBack])
+  }, [order, updateStatus, updateStock, showSuccess, onNavigateBack, handleActionError])
 
   const handlePack = useCallback(async () => {
     setBusy(true)
+    setActionError(null)
     try {
       await updateStatus.mutateAsync({ subOrderId: order.subOrderId, newStatusKey: 'to_ship' })
       showSuccess('pack')
     } catch {
-      // noop
+      handleActionError()
     } finally {
       setBusy(false)
     }
-  }, [order, updateStatus, showSuccess])
+  }, [order, updateStatus, showSuccess, handleActionError])
 
   const handleShip = useCallback(async (data: { carrier: string; trackingNumber: string; shipDate?: string; itemIds?: string[] }) => {
     setBusy(true)
     setShowShipSheet(false)
+    setActionError(null)
     try {
       if (data.itemIds && data.itemIds.length < order.items.length) {
         await partialShip.mutateAsync({
@@ -430,11 +444,11 @@ export function FulfillmentActionBar({
       }
       setTimeout(() => onNavigateBack(), 1200)
     } catch {
-      // noop
+      handleActionError()
     } finally {
       setBusy(false)
     }
-  }, [order, fulfillOrder, partialShip, updateStatus, showSuccess, onNavigateBack])
+  }, [order, fulfillOrder, partialShip, updateStatus, showSuccess, onNavigateBack, handleActionError])
 
   const handleReject = useCallback(async (reason: string, reasonDetail?: string) => {
     setBusy(true)
@@ -461,6 +475,7 @@ export function FulfillmentActionBar({
     pack: t('seller.orders.successPack'),
     ship: t('seller.orders.successShip'),
     partial_ship: t('seller.orders.successPartialShip'),
+    cancel: t('seller.orders.successCancel'),
   }
 
   return (
@@ -468,8 +483,28 @@ export function FulfillmentActionBar({
       <span className="sr-only" role="status" aria-live="polite">
         {success ? successMessages[success] : ''}
       </span>
+      <span className="sr-only" role="alert" aria-live="assertive">
+        {actionError ?? ''}
+      </span>
 
       <SuccessCheck message={success ? successMessages[success] : ''} show={!!success} reduced={reduced} />
+
+      {/* Action failure banner — gentle, recoverable, role=alert */}
+      <AnimatePresence>
+        {actionError && (
+          <motion.div
+            initial={reduced ? false : { opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reduced ? undefined : { opacity: 0, y: -8 }}
+            transition={reduced ? { duration: 0 } : { duration: duration.normal / 1000, ease: easing.easeOut as any }}
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-error/10 text-error border border-error/20 rounded-lg px-4 py-2.5 text-sm font-semibold shadow-lg flex items-center gap-2"
+            role="alert"
+          >
+            <AlertTriangle size={16} aria-hidden="true" />
+            {actionError}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="sticky bottom-0 z-sticky bg-surface border-t border-border-light shadow-lg px-4 py-3">
         <div className="max-w-[800px] mx-auto flex items-center gap-2 justify-end flex-wrap">
@@ -546,6 +581,7 @@ export function FulfillmentActionBar({
             <motion.button
               whileHover={reduced ? undefined : { scale: 1.02 }}
               whileTap={reduced ? undefined : { scale: 0.98 }}
+              onClick={() => setShowPrintSheet(true)}
               className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface text-text px-4 py-2.5 text-sm font-semibold hover:bg-background min-h-[40px]"
               aria-label={t('seller.orders.actionPrintLabelAria')}
             >
@@ -569,7 +605,7 @@ export function FulfillmentActionBar({
             <motion.button
               whileHover={reduced ? undefined : { scale: 1.02 }}
               whileTap={reduced ? undefined : { scale: 0.98 }}
-              onClick={() => setShowRejectSheet(true)}
+              onClick={() => setShowCancelSheet(true)}
               disabled={busy}
               className="inline-flex items-center gap-1.5 rounded-md border border-error/30 bg-error/5 text-error px-4 py-2.5 text-sm font-semibold hover:bg-error/10 min-h-[40px] disabled:opacity-50"
               aria-label={t('seller.orders.actionCancelAria')}
@@ -594,6 +630,28 @@ export function FulfillmentActionBar({
       <AnimatePresence>
         {showRejectSheet && (
           <RejectSheet order={order} onClose={() => setShowRejectSheet(false)} onConfirm={handleReject} t={t} />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showPrintSheet && (
+          <PrintDocsSheet
+            orders={[order]}
+            onClose={() => setShowPrintSheet(false)}
+            t={t}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showCancelSheet && (
+          <CancelOrderSheet
+            order={order}
+            onClose={() => setShowCancelSheet(false)}
+            onCancelled={() => {
+              showSuccess('cancel')
+              setTimeout(() => onNavigateBack(), 1200)
+            }}
+            t={t}
+          />
         )}
       </AnimatePresence>
     </>

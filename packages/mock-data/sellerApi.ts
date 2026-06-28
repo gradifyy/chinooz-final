@@ -18,6 +18,10 @@ import type {
   Promotion,
   ExportReportType,
   ExportReportResult,
+  SellerCancelReason,
+  RefundStatus,
+  SellerReturnRequest,
+  RefundBreakdown,
 } from '@chinooz/types'
 import {
   sellerStore,
@@ -373,7 +377,166 @@ export async function bulkFulfillOrders(
   return { results, succeeded: results.length, failed: 0 }
 }
 
-// --- Promotions ---
+// --- Cancel / Refund / Return (mock) ---
+
+const RETURN_REQUESTS: SellerReturnRequest[] = [
+  {
+    id: 'ret-001',
+    subOrderId: 'SUB-sell-01-ORD-2057',
+    orderId: 'ORD-2057',
+    sellerId: SELLER_ID,
+    buyerName: 'Maya Limbu',
+    items: [
+      { itemId: 'si-3-0', name: 'Redmi Note 13 Pro — Midnight Black 128GB', image: 'https://picsum.photos/seed/redmiblk/200/200', quantity: 1, price: 34999 },
+    ],
+    reason: 'changed_mind',
+    reasonDetail: 'Found a better price elsewhere, would like to return.',
+    photoUrls: ['photo-1', 'photo-2'],
+    requestedAmount: 34999,
+    status: 'requested',
+    refundStatus: 'pending',
+    createdAt: new Date(Date.now() - 2 * 86400000).toISOString(),
+  },
+  {
+    id: 'ret-002',
+    subOrderId: 'SUB-sell-01-ORD-2059',
+    orderId: 'ORD-2059',
+    sellerId: SELLER_ID,
+    buyerName: 'Kabir Shrestha',
+    items: [
+      { itemId: 'si-4-0', name: 'Samsung Galaxy A35 5G — Awesome Navy 128GB', image: 'https://picsum.photos/seed/a35/200/200', quantity: 1, price: 38999 },
+      { itemId: 'si-4-1', name: 'Daraz 20000mAh Power Bank PD', image: 'https://picsum.photos/seed/powerbank20k/200/200', quantity: 1, price: 2199 },
+    ],
+    reason: 'ordered_by_mistake',
+    reasonDetail: 'Ordered the wrong model by mistake.',
+    photoUrls: ['photo-3'],
+    requestedAmount: 41198,
+    status: 'requested',
+    refundStatus: 'pending',
+    createdAt: new Date(Date.now() - 5 * 86400000).toISOString(),
+  },
+  {
+    id: 'ret-003',
+    subOrderId: 'SUB-sell-01-ORD-2061',
+    orderId: 'ORD-2061',
+    sellerId: SELLER_ID,
+    buyerName: 'Aarav Sharma',
+    items: [
+      { itemId: 'si-0-0', name: 'Samsung Galaxy A55 5G — Ice Blue 128GB', image: 'https://picsum.photos/seed/a55/200/200', quantity: 1, price: 45999 },
+    ],
+    reason: 'other',
+    reasonDetail: 'Phone screen has a dead pixel on arrival.',
+    photoUrls: ['photo-4', 'photo-5', 'photo-6'],
+    requestedAmount: 45999,
+    status: 'approved',
+    refundStatus: 'refunded',
+    createdAt: new Date(Date.now() - 12 * 86400000).toISOString(),
+    resolvedAt: new Date(Date.now() - 8 * 86400000).toISOString(),
+    resolutionNote: 'Approved — defective unit, full refund issued.',
+  },
+]
+
+export async function sellerCancelOrder(
+  subOrderId: string,
+  reason: SellerCancelReason,
+  reasonDetail?: string,
+): Promise<{
+  subOrderId: string
+  success: boolean
+  reason: SellerCancelReason
+  restocked: boolean
+  refundTriggered: boolean
+  refundStatus: RefundStatus
+}> {
+  await randomDelay(400, 800)
+  maybeError()
+  return {
+    subOrderId,
+    success: true,
+    reason,
+    restocked: true,
+    refundTriggered: true,
+    refundStatus: 'pending',
+  }
+}
+
+export async function getSellerReturnRequests(
+  sellerId: string,
+): Promise<SellerReturnRequest[]> {
+  await randomDelay(300, 600)
+  maybeError()
+  return RETURN_REQUESTS.filter(r => r.sellerId === sellerId)
+}
+
+export async function approveReturnRequest(
+  requestId: string,
+  resolutionNote?: string,
+): Promise<{
+  requestId: string
+  success: boolean
+  status: 'approved'
+  refundStatus: RefundStatus
+  restocked: boolean
+}> {
+  await randomDelay(400, 800)
+  maybeError()
+  const req = RETURN_REQUESTS.find(r => r.id === requestId)
+  if (req) {
+    req.status = 'approved'
+    req.refundStatus = 'refunded'
+    req.resolvedAt = new Date().toISOString()
+    req.resolutionNote = resolutionNote
+  }
+  return { requestId, success: true, status: 'approved', refundStatus: 'refunded', restocked: true }
+}
+
+export async function rejectReturnRequest(
+  requestId: string,
+  resolutionNote?: string,
+): Promise<{
+  requestId: string
+  success: boolean
+  status: 'rejected'
+  refundStatus: RefundStatus
+}> {
+  await randomDelay(400, 800)
+  maybeError()
+  const req = RETURN_REQUESTS.find(r => r.id === requestId)
+  if (req) {
+    req.status = 'rejected'
+    req.refundStatus = 'rejected'
+    req.resolvedAt = new Date().toISOString()
+    req.resolutionNote = resolutionNote
+  }
+  return { requestId, success: true, status: 'rejected', refundStatus: 'rejected' }
+}
+
+export async function processRefund(
+  subOrderId: string,
+): Promise<{
+  subOrderId: string
+  success: boolean
+  refundStatus: RefundStatus
+  refundAmount: number
+  breakdown: RefundBreakdown
+}> {
+  await randomDelay(500, 900)
+  maybeError()
+  return {
+    subOrderId,
+    success: true,
+    refundStatus: 'refunded',
+    refundAmount: 0,
+    breakdown: {
+      subtotal: 0,
+      vatInclusive: 0,
+      deliveryFee: 0,
+      discount: 0,
+      refundTotal: 0,
+      currency: 'NPR',
+    },
+  }
+}
 
 export async function getPromotionsApi(
   params?: Parameters<typeof import('./promotions').getPromotions>[0],

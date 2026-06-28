@@ -4,7 +4,7 @@ import React, { useCallback, memo } from 'react'
 import { motion } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { Check, AlertTriangle, Clock, Printer, Eye, Package, Truck } from 'lucide-react'
-import { formatNPR } from '@chinooz/utils'
+import { formatNPR, getLocale } from '@chinooz/utils'
 import { duration } from '@chinooz/theme'
 import { useReducedMotion } from './hooks/useReducedMotion'
 import SafeImage from './SafeImage'
@@ -44,9 +44,9 @@ const THUMB_SIZE = 32
 const THUMB_OVERLAP = 8
 const MAX_THUMBS = 3
 
-function formatDate(iso: string): string {
+function formatDate(iso: string, lang?: string): string {
   const d = new Date(iso)
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return d.toLocaleDateString(getLocale(lang), { month: 'short', day: 'numeric' })
 }
 
 function formatTime(iso: string): string {
@@ -71,14 +71,25 @@ function computeShipBy(order: SellerSubOrder): { date: Date; isOverdue: boolean;
 }
 
 function StatusPill({ statusKey, t }: { statusKey: SellerOrderStatusKey; t: (k: string, opts?: Record<string, unknown>) => string }) {
+  const reduced = useReducedMotion()
   const m = STATUS_META[statusKey]
   return (
-    <span
+    <motion.span
+      key={statusKey}
+      initial={reduced ? false : { opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={reduced ? { duration: 0 } : { duration: 0.6, ease: 'easeOut' }}
       className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[12px] font-semibold ${m.bg} ${m.text}`}
     >
-      <span className={`h-1.5 w-1.5 rounded-full ${m.dot}`} aria-hidden="true" />
+      <motion.span
+        className={`h-1.5 w-1.5 rounded-full ${m.dot}`}
+        initial={reduced ? false : { scale: 0 }}
+        animate={{ scale: 1 }}
+        transition={reduced ? { duration: 0 } : { type: 'spring', damping: 18, stiffness: 300, duration: 0.6 }}
+        aria-hidden="true"
+      />
       {t(m.labelKey)}
-    </span>
+    </motion.span>
   )
 }
 
@@ -155,10 +166,10 @@ function Checkbox({ checked, onChange, ariaLabel }: { checked: boolean; onChange
   )
 }
 
-function SlaIndicator({ order, t }: { order: SellerSubOrder; t: (k: string, opts?: Record<string, unknown>) => string }) {
+function SlaIndicator({ order, t, lang }: { order: SellerSubOrder; t: (k: string, opts?: Record<string, unknown>) => string; lang?: string }) {
   const sla = computeShipBy(order)
   if (!sla) return null
-  const dateStr = sla.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  const dateStr = sla.date.toLocaleDateString(getLocale(lang), { month: 'short', day: 'numeric' })
   const text = sla.isOverdue
     ? t('seller.orders.slaOverdue')
     : sla.isDueToday
@@ -258,8 +269,9 @@ const SellerOrderRow = memo(function SellerOrderRow({
   loading = false,
   testID,
 }: SellerOrderRowProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const reduced = useReducedMotion()
+  const lang = i18n.language
 
   if (loading) return <SellerOrderRowSkeleton />
 
@@ -290,8 +302,8 @@ const SellerOrderRow = memo(function SellerOrderRow({
       role="row"
       aria-label={ariaLabel}
       initial={reduced ? false : { opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={reduced ? { duration: 0 } : { duration: duration.normal / 1000, delay: Math.min(index * 0.03, 0.2) }}
+      animate={{ opacity: 1, backgroundColor: isNew ? 'rgba(124, 58, 237, 0.06)' : 'rgba(255, 255, 255, 1)' }}
+      transition={reduced ? { duration: 0 } : { duration: duration.normal / 1000, delay: Math.min(index * 0.03, 0.2), backgroundColor: { duration: 0.6, ease: 'easeOut' } }}
       onClick={handleRowClick}
       className={`group h-[72px] cursor-pointer border-b border-[#E5E5E5] transition-colors duration-200 hover:bg-primary/[0.03] ${
         isNew ? 'bg-primary/[0.06]' : 'bg-surface'
@@ -315,7 +327,7 @@ const SellerOrderRow = memo(function SellerOrderRow({
               {order.orderId}
             </p>
             <p className="text-[12px] font-normal text-text-muted truncate">
-              {formatDate(order.createdAt)} · {formatTime(order.createdAt)}
+              {formatDate(order.createdAt, lang)} · {formatTime(order.createdAt)}
             </p>
           </div>
         </div>
@@ -347,13 +359,22 @@ const SellerOrderRow = memo(function SellerOrderRow({
 
       <td className="px-4 py-3 hidden md:table-cell">
         <span className="text-sm font-normal text-text-muted tabular-nums" style={TABNUM}>
-          {formatDate(order.createdAt)}
+          {formatDate(order.createdAt, lang)}
         </span>
       </td>
 
       <td className="px-4 py-3">
         <div className="flex flex-col items-start gap-1">
           <StatusPill statusKey={order.statusKey} t={t} />
+          {order.labelPrinted && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 text-[11px] font-semibold text-success"
+              aria-label={t('seller.orders.labelPrintedChipAria')}
+            >
+              <Printer size={11} aria-hidden="true" />
+              {t('seller.orders.labelPrintedChip')}
+            </span>
+          )}
           {order.actionNeeded && (
             <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-error" title={order.actionReason ?? undefined}>
               <AlertTriangle size={12} />
@@ -364,7 +385,7 @@ const SellerOrderRow = memo(function SellerOrderRow({
       </td>
 
       <td className="px-4 py-3 hidden xl:table-cell">
-        <SlaIndicator order={order} t={t} />
+        <SlaIndicator order={order} t={t} lang={lang} />
       </td>
 
       <td className="px-4 py-3 text-right">

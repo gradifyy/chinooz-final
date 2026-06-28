@@ -249,6 +249,53 @@ export interface UserProfile {
 
 export type CancelReason = 'changed_mind' | 'cheaper_elsewhere' | 'ordered_by_mistake' | 'other'
 
+export type SellerCancelReason =
+  | 'out_of_stock'
+  | 'pricing_error'
+  | 'shipping_unavailable'
+  | 'buyer_request'
+  | 'fraud_suspected'
+  | 'other'
+
+export type RefundStatus = 'none' | 'pending' | 'refunded' | 'rejected'
+
+export type ReturnRequestStatus = 'requested' | 'approved' | 'rejected' | 'refund_processed'
+
+export interface ReturnRequestItem {
+  itemId: string
+  name: string
+  image: string
+  quantity: number
+  price: number
+}
+
+export interface SellerReturnRequest {
+  id: string
+  subOrderId: string
+  orderId: string
+  sellerId: string
+  buyerName: string
+  items: ReturnRequestItem[]
+  reason: CancelReason
+  reasonDetail?: string
+  photoUrls: string[]
+  requestedAmount: number
+  status: ReturnRequestStatus
+  refundStatus: RefundStatus
+  createdAt: string
+  resolvedAt?: string
+  resolutionNote?: string
+}
+
+export interface RefundBreakdown {
+  subtotal: number
+  vatInclusive: number
+  deliveryFee: number
+  discount: number
+  refundTotal: number
+  currency: 'NPR'
+}
+
 export interface ReturnRequest {
   orderId: string
   itemIds: string[]
@@ -318,6 +365,21 @@ export interface SellerSubOrder {
   estimatedDelivery?: string
   actionNeeded: boolean
   actionReason?: string
+  labelPrinted?: boolean
+  labelPrintedAt?: string
+  trackingNumber?: string
+  carrier?: string
+  weightGrams?: number
+  refundStatus?: RefundStatus
+  refundAmount?: number
+  refundBreakdown?: RefundBreakdown
+  refundProcessedAt?: string
+  cancelReason?: SellerCancelReason
+  cancelReasonDetail?: string
+  cancelledAt?: string
+  restockedAt?: string
+  hasReturnRequest?: boolean
+  returnRequestId?: string
 }
 
 export type SellerProductStatus = 'active' | 'draft' | 'out_of_stock' | 'archived'

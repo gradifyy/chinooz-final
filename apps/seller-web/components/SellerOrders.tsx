@@ -10,15 +10,19 @@ import {
   ArrowUpDown,
   X,
   ChevronDown,
-  AlertTriangle,
   Package,
   Inbox,
   RotateCcw,
+  CheckCircle2,
+  WifiOff,
+  Truck,
+  AlertCircle,
 } from 'lucide-react'
 import { Container, Screen } from '@chinooz/ui-web'
 import { useReducedMotion, SellerOrderRow, SellerOrderRowSkeleton } from '@chinooz/ui-web'
-import { useSellerOrders } from '@chinooz/hooks'
+import { useSellerOrders, useSellerReturnRequests } from '@chinooz/hooks'
 import OrdersBulkBar from '@/components/OrdersBulkBar'
+import { ReturnRequestsQueue } from '@/components/CancelReturnRefund'
 import { useSellerSessionStore } from '@chinooz/state'
 import { analytics } from '@chinooz/analytics'
 import { formatNPR } from '@chinooz/utils'
@@ -351,27 +355,43 @@ function SortSelect({
 
 function EmptyState({ tab, t }: { tab: TabKey; t: (k: string) => string }) {
   const reduced = useReducedMotion()
-  const icon = tab === 'action_needed' ? <CheckIcon /> : tab === 'cancelled_returned' ? <RotateCcw size={40} /> : <Inbox size={40} />
-  const title =
-    tab === 'action_needed'
-      ? t('seller.orders.emptyActionNeeded')
-      : t('seller.orders.emptyTitle')
-  const subtitle =
-    tab === 'action_needed'
-      ? t('seller.orders.emptyActionNeededSubtitle')
-      : t('seller.orders.emptySubtitle')
+
+  const TAB_EMPTY: Record<TabKey, { titleKey: string; subtitleKey: string; Icon: typeof Package; rewarding?: boolean }> = {
+    new: { titleKey: 'seller.orders.emptyTabNew', subtitleKey: 'seller.orders.emptyTabNewSubtitle', Icon: Inbox },
+    to_pack: { titleKey: 'seller.orders.emptyTabToPack', subtitleKey: 'seller.orders.emptyTabToPackSubtitle', Icon: Package, rewarding: true },
+    to_ship: { titleKey: 'seller.orders.emptyTabToShip', subtitleKey: 'seller.orders.emptyTabToShipSubtitle', Icon: Truck, rewarding: true },
+    shipped: { titleKey: 'seller.orders.emptyTabShipped', subtitleKey: 'seller.orders.emptyTabShippedSubtitle', Icon: Truck },
+    completed: { titleKey: 'seller.orders.emptyTabCompleted', subtitleKey: 'seller.orders.emptyTabCompletedSubtitle', Icon: CheckCircle2 },
+    cancelled_returned: { titleKey: 'seller.orders.emptyTabCancelledReturned', subtitleKey: 'seller.orders.emptyTabCancelledReturnedSubtitle', Icon: RotateCcw },
+    action_needed: { titleKey: 'seller.orders.emptyActionNeeded', subtitleKey: 'seller.orders.emptyActionNeededSubtitle', Icon: CheckCircle2, rewarding: true },
+  }
+
+  const meta = TAB_EMPTY[tab]
+  const Icon = meta.Icon
+
   return (
     <motion.div
       initial={reduced ? false : { opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={reduced ? { duration: 0 } : { duration: duration.slow / 1000, ease: easing.easeOut as any }}
       className="flex flex-col items-center justify-center py-20 px-8 text-center"
+      role="status"
+      aria-live="polite"
+      aria-label={`${t(meta.titleKey)}. ${t(meta.subtitleKey)}`}
     >
-      <span className="text-text-tertiary mb-4" aria-hidden="true">
-        {icon}
-      </span>
-      <h3 className="text-lg font-semibold text-text">{title}</h3>
-      <p className="text-sm text-text-muted mt-2 max-w-xs">{subtitle}</p>
+      <motion.span
+        initial={reduced ? false : { opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={reduced ? { duration: 0 } : { duration: duration.slow / 1000, ease: easing.spring as any, delay: reduced ? 0 : 0.1 }}
+        className={`mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full ${
+          meta.rewarding ? 'bg-success-light text-success' : 'bg-background text-text-tertiary'
+        }`}
+        aria-hidden="true"
+      >
+        <Icon size={32} />
+      </motion.span>
+      <h3 className="text-lg font-semibold text-text">{t(meta.titleKey)}</h3>
+      <p className="text-sm text-text-muted mt-2 max-w-xs">{t(meta.subtitleKey)}</p>
     </motion.div>
   )
 }
@@ -399,7 +419,20 @@ export default function SellerOrders() {
   const [showFilters, setShowFilters] = useState(false)
   const [headerHeight, setHeaderHeight] = useState(0)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [isOffline, setIsOffline] = useState(false)
   const headerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false)
+    const handleOffline = () => setIsOffline(true)
+    setIsOffline(!navigator.onLine)
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [])
 
   useEffect(() => {
     analytics.screen({ name: 'seller-orders' })
@@ -420,6 +453,9 @@ export default function SellerOrders() {
   }, [showFilters])
 
   const { data: allOrders = [], isLoading, isError, refetch } = useSellerOrders(sellerId ?? null)
+  const { data: returnRequests = [] } = useSellerReturnRequests(sellerId ?? null)
+
+  const showReturnQueue = activeTab === 'action_needed' || activeTab === 'cancelled_returned'
 
   const counts = useMemo(() => {
     const c: Record<TabKey, number> = {
@@ -642,8 +678,27 @@ export default function SellerOrders() {
           {t('seller.orders.newCountAria', { count: counts.new })}
         </span>
 
+        {/* Offline banner — shared pattern */}
+        <AnimatePresence>
+          {isOffline && !isLoading && !isError && (
+            <motion.div
+              initial={reduced ? false : { opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={reduced ? undefined : { opacity: 0, height: 0 }}
+              transition={reduced ? { duration: 0 } : { duration: duration.normal / 1000, ease: easing.easeOut as any }}
+              className="mb-4 rounded-lg bg-warning-light border border-warning/30 px-4 py-2.5 flex items-center gap-2"
+              role="status"
+              aria-live="polite"
+              aria-label={t('seller.orders.offlineBannerAria')}
+            >
+              <WifiOff size={16} className="text-warning shrink-0" aria-hidden="true" />
+              <span className="text-sm font-medium text-[#92400E]">{t('seller.orders.offlineBanner')}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {isLoading ? (
-          <div className="space-y-2 md:space-y-0" aria-busy="true" aria-label={t('seller.orders.loading')}>
+          <div className="space-y-2 md:space-y-0" aria-busy="true" aria-label={t('seller.orders.loadingAria')}>
             {/* Mobile skeletons */}
             <div className="md:hidden flex flex-col gap-3">
               {[0, 1, 2, 3].map(i => (
@@ -658,22 +713,41 @@ export default function SellerOrders() {
             </div>
           </div>
         ) : isError ? (
-          <div className="flex flex-col items-center justify-center py-20 px-8 text-center">
-            <span className="text-4xl mb-3">⚠️</span>
+          <div
+            className="flex flex-col items-center justify-center py-20 px-8 text-center"
+            role="alert"
+            aria-label={t('seller.orders.errorAria')}
+          >
+            <span className="mb-4 inline-flex h-14 w-14 items-center justify-center rounded-full bg-error/5 text-error" aria-hidden="true">
+              <AlertCircle size={28} />
+            </span>
             <h3 className="text-lg font-semibold text-text">{t('seller.orders.errorTitle')}</h3>
-            <p className="text-sm text-text-muted mt-2">{t('seller.orders.errorSubtitle')}</p>
+            <p className="text-sm text-text-muted mt-2 max-w-sm">{t('seller.orders.errorSubtitle')}</p>
             <button
               onClick={() => refetch()}
               className="mt-4 px-5 py-2.5 rounded-md border border-primary text-primary font-semibold text-sm hover:bg-primary-50 transition-colors"
-              aria-label={t('seller.orders.retry')}
+              aria-label={t('seller.orders.retryAria')}
             >
               {t('seller.orders.retry')}
             </button>
           </div>
-        ) : visibleOrders.length === 0 ? (
+        ) : visibleOrders.length === 0 && !(showReturnQueue && returnRequests.length > 0) ? (
           <EmptyState tab={activeTab} t={t} />
         ) : (
           <>
+            {/* Return requests queue (Action needed / Returned tabs) */}
+            {showReturnQueue && returnRequests.length > 0 && (
+              <div className="mb-6">
+                <ReturnRequestsQueue
+                  requests={returnRequests}
+                  onMessage={(orderId) => router.push(`/messages?order=${orderId}`)}
+                  t={t}
+                />
+              </div>
+            )}
+
+            {visibleOrders.length > 0 && (
+              <>
             {/* Mobile: cards */}
             <div className="md:hidden flex flex-col gap-3">
               <AnimatePresence mode="popLayout">
@@ -735,6 +809,8 @@ export default function SellerOrders() {
                 </tbody>
               </table>
             </div>
+              </>
+            )}
           </>
         )}
       </Container>

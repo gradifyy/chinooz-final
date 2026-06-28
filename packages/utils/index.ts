@@ -30,3 +30,4 @@ export {
 export { maskAccountNumber, maskPhone, maskPan, maskEmail } from './masking'
 export { compressImage, uploadOpRef } from './compressImage'
 export type { CompressOptions } from './compressImage'
+export { getLocale, formatDateLocalized, formatDateShort, formatDateLong } from './dates'

@@ -75,3 +75,651 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* =========================================================================
+   Print documents — packing slip & shipping label (mock, front-end)
+   ========================================================================= */
+
+.print-docs-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+}
+
+.print-docs-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.print-docs-shell {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background: #f4f4f5;
+}
+
+.print-docs-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: #fff;
+  border-bottom: 1px solid #e5e5e5;
+  flex-wrap: wrap;
+}
+
+.print-docs-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.print-docs-titles {
+  display: flex;
+  flex-direction: column;
+}
+
+.print-docs-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #111;
+  line-height: 1.2;
+}
+
+.print-docs-subtitle {
+  font-size: 12px;
+  color: #71717a;
+  margin-top: 2px;
+}
+
+.print-docs-tabs {
+  display: inline-flex;
+  background: #f4f4f5;
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.print-docs-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #71717a;
+  transition: background 0.15s, color 0.15s;
+}
+
+.print-docs-tab-active {
+  background: #fff;
+  color: #111;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.print-docs-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.print-docs-phase {
+  font-size: 12px;
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+.print-docs-phase-prep {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #71717a;
+}
+
+.print-docs-phase-ready {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #16a34a;
+}
+
+.print-docs-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 0.15s, color 0.15s, transform 0.1s;
+  min-height: 36px;
+}
+
+.print-docs-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.print-docs-btn-primary {
+  background: #111;
+  color: #fff;
+}
+
+.print-docs-btn-primary:hover:not(:disabled) {
+  background: #000;
+}
+
+.print-docs-btn-ghost {
+  background: #fff;
+  color: #3f3f46;
+  border: 1px solid #e5e5e5;
+}
+
+.print-docs-btn-ghost:hover:not(:disabled) {
+  background: #f4f4f5;
+}
+
+.print-docs-btn-icon {
+  width: 36px;
+  padding: 0;
+  justify-content: center;
+  background: #fff;
+  color: #3f3f46;
+  border: 1px solid #e5e5e5;
+}
+
+.print-docs-btn-icon:hover {
+  background: #f4f4f5;
+}
+
+.print-docs-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: flex-start;
+  margin: 10px 16px 0;
+  padding: 8px 14px;
+  border-radius: 9999px;
+  background: #16a34a;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 6px 20px rgba(22, 163, 74, 0.35);
+}
+
+.print-docs-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 16px 60px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.print-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  max-width: 820px;
+  margin: 0 auto;
+}
+
+.print-doc-group {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  align-items: center;
+}
+
+/* The printable page — A4 portrait on screen, scales down on mobile */
+.print-page {
+  width: 100%;
+  max-width: 794px; /* A4 @ 96dpi */
+  min-height: 1123px;
+  background: #fff;
+  color: #111;
+  padding: 36px 40px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.print-page-label {
+  max-width: 794px;
+  min-height: 560px; /* shorter, label-sized */
+}
+
+.print-page-head,
+.print-label-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 2px solid #111;
+  padding-bottom: 12px;
+  margin-bottom: 18px;
+}
+
+.print-page-title {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #111;
+  margin: 0;
+}
+
+.print-store {
+  font-size: 12px;
+  color: #52525b;
+  margin-top: 4px;
+}
+
+.print-page-id {
+  text-align: right;
+}
+
+.print-meta-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #71717a;
+  margin: 0;
+}
+
+.print-order-id {
+  font-size: 18px;
+  font-weight: 700;
+  color: #111;
+  letter-spacing: 0.02em;
+  margin: 2px 0;
+}
+
+.print-meta {
+  font-size: 12px;
+  color: #3f3f46;
+  margin: 0;
+}
+
+.print-meta-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111;
+  margin: 2px 0 0;
+}
+
+.print-barcode-block {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 14px 16px;
+  border: 1px solid #d4d4d8;
+  border-radius: 8px;
+  margin-bottom: 18px;
+  background: #fafafa;
+}
+
+.print-label-barcode {
+  margin-bottom: 10px;
+}
+
+.print-barcode {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.print-barcode-bars {
+  display: flex;
+  align-items: stretch;
+  height: 48px;
+  gap: 0;
+}
+
+.print-bar-on {
+  background: #111;
+  display: block;
+  height: 100%;
+}
+
+.print-bar-off {
+  background: transparent;
+  display: block;
+  height: 100%;
+}
+
+.print-barcode-value {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: #111;
+}
+
+.print-qr {
+  display: block;
+}
+
+.print-qr-grid {
+  display: grid;
+  width: 96px;
+  height: 96px;
+  background: #fff;
+  padding: 4px;
+  border: 1px solid #d4d4d8;
+}
+
+.print-qr-on {
+  background: #111;
+}
+
+.print-qr-off {
+  background: #fff;
+}
+
+.print-parties {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.print-party {
+  flex: 1;
+  padding: 12px 14px;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.print-party-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111;
+  margin: 4px 0 2px;
+}
+
+.print-party-line {
+  font-size: 12px;
+  color: #3f3f46;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.print-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 16px;
+  font-size: 12px;
+}
+
+.print-table thead th {
+  text-align: left;
+  background: #f4f4f5;
+  border-bottom: 2px solid #111;
+  padding: 8px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #3f3f46;
+}
+
+.print-table tbody td {
+  padding: 9px 10px;
+  border-bottom: 1px solid #e4e4e7;
+  vertical-align: top;
+  color: #18181b;
+}
+
+.print-col-item { width: 42%; }
+.print-col-sku { width: 18%; color: #52525b; font-size: 11px; }
+.print-col-qty { width: 10%; text-align: center; }
+.print-col-price { width: 15%; text-align: right; }
+.print-col-total { width: 15%; text-align: right; font-weight: 600; }
+
+.print-item-name {
+  display: block;
+  font-weight: 600;
+}
+
+.print-item-variant {
+  display: block;
+  font-size: 11px;
+  color: #71717a;
+  margin-top: 2px;
+}
+
+.print-totals {
+  margin-left: auto;
+  width: 260px;
+  margin-bottom: 18px;
+}
+
+.print-totals-line {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #3f3f46;
+  padding: 3px 0;
+}
+
+.print-totals-grand {
+  border-top: 2px solid #111;
+  margin-top: 6px;
+  padding-top: 8px;
+  font-size: 15px;
+  font-weight: 800;
+  color: #111;
+}
+
+/* COD — boxed, prominent */
+.print-cod-box {
+  border: 3px solid #111;
+  border-radius: 10px;
+  padding: 14px 18px;
+  text-align: center;
+  margin: 8px 0 18px;
+  background: #fffbeb;
+}
+
+.print-cod-box-slip {
+  margin-left: auto;
+  margin-right: auto;
+  width: 320px;
+}
+
+.print-cod-box-label,
+.print-cod-box-sub {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #92400e;
+  margin: 0;
+}
+
+.print-cod-box-amount {
+  font-size: 26px;
+  font-weight: 900;
+  color: #111;
+  margin: 4px 0;
+  letter-spacing: -0.01em;
+}
+
+.print-cod-box-banner {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: #fff;
+  background: #111;
+  margin: -14px -18px 8px;
+  padding: 6px 0;
+  border-radius: 7px 7px 0 0;
+  text-transform: uppercase;
+}
+
+.print-prepaid-note,
+.print-prepaid-pill {
+  font-size: 12px;
+  color: #166534;
+  font-weight: 600;
+}
+
+.print-prepaid-pill {
+  display: inline-block;
+  padding: 4px 10px;
+  border: 1px solid #86efac;
+  background: #f0fdf4;
+  border-radius: 9999px;
+}
+
+.print-payment-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 14px;
+}
+
+.print-page-foot {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px dashed #d4d4d8;
+}
+
+.print-sign-line {
+  height: 1px;
+  background: #d4d4d8;
+  margin: 24px 0 8px;
+}
+
+.print-tracking-line {
+  font-size: 12px;
+  color: #3f3f46;
+  font-weight: 600;
+  margin-top: 6px;
+}
+
+.print-tracking-center {
+  text-align: center;
+}
+
+/* Label-specific layout */
+.print-label-meta-grid {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 6px 18px;
+  text-align: right;
+}
+
+.print-label-addresses {
+  display: grid;
+  grid-template-columns: 1fr auto 1.4fr;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.print-label-from,
+.print-label-to {
+  padding: 14px 16px;
+  border: 1px solid #e4e4e7;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.print-label-to {
+  border: 2px solid #111;
+  background: #fafafa;
+}
+
+.print-label-arrow {
+  font-size: 24px;
+  font-weight: 700;
+  color: #111;
+  text-align: center;
+}
+
+.print-label-to-name {
+  font-size: 18px;
+}
+
+.print-label-to-line {
+  font-size: 14px;
+}
+
+.print-label-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px dashed #d4d4d8;
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+/* ===== Print styles: only the .print-area prints, one page per .print-page ===== */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+
+  html, body {
+    background: #fff !important;
+  }
+
+  /* Hide everything by default, then reveal only the print area */
+  body * {
+    visibility: hidden;
+  }
+
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+
+  .print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    max-width: none;
+    padding: 0;
+    margin: 0;
+    gap: 0;
+  }
+
+  .print-doc-group {
+    gap: 0;
+  }
+
+  .print-page {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-height: auto !important;
+    padding: 0 0 8mm 0 !important;
+    page-break-after: always;
+    break-after: page;
+  }
+
+  .print-page:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+}
+

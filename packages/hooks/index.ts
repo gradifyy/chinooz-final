@@ -91,7 +91,7 @@ export {
   useBulkUpdateStatus,
   useBulkFulfillOrders,
   useMarkLabelPrinted,
-  useCancelOrder,
+  useSellerCancelOrder,
   useSellerReturnRequests,
   useApproveReturnRequest,
   useRejectReturnRequest,

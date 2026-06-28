@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useMemo } from 'react'
+import dynamic from 'next/dynamic'
 import { useParams, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
@@ -8,15 +9,22 @@ import {
   ArrowLeft,
   Clock,
   AlertTriangle,
+  Printer,
 } from 'lucide-react'
 import { Container, Screen } from '@chinooz/ui-web'
-import { useReducedMotion, OrderStatusTimeline } from '@chinooz/ui-web'
-import FulfillmentActionBar from '@/components/FulfillmentActionBar'
-import { useSellerOrderById } from '@chinooz/hooks'
+import { useReducedMotion, OrderStatusTimeline, SafeImage } from '@chinooz/ui-web'
+import { RefundStatusPill, RefundBreakdownTable } from '@/components/CancelReturnRefund'
+import { OrderDetailSkeleton } from '@/components/OrderDetailSkeleton'
+import { useSellerOrderById, useSellerReturnRequests } from '@chinooz/hooks'
 import { useSellerSessionStore } from '@chinooz/state'
 import { analytics } from '@chinooz/analytics'
 import { formatNPR } from '@chinooz/utils'
 import { duration, easing } from '@chinooz/theme'
+
+const FulfillmentActionBar = dynamic(() => import('@/components/FulfillmentActionBar'), {
+  ssr: false,
+  loading: () => null,
+})
 import type {
   SellerSubOrder,
   SellerOrderStatusKey,
@@ -41,16 +49,16 @@ const STATUS_META: Record<
 
 const STEP_KEYS = ['ordered', 'confirmed', 'packed', 'shipped', 'delivered'] as const
 
-function formatDateLong(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', {
+function formatDateLong(iso: string, lang?: string): string {
+  return new Date(iso).toLocaleDateString(lang === 'ne' ? 'ne-NP' : 'en-US', {
     month: 'long',
     day: 'numeric',
     year: 'numeric',
   })
 }
 
-function formatDateShort(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+function formatDateShort(iso: string, lang?: string): string {
+  return new Date(iso).toLocaleDateString(lang === 'ne' ? 'ne-NP' : 'en-US', { month: 'short', day: 'numeric' })
 }
 
 function maskPhone(phone: string): string {
@@ -167,10 +175,10 @@ function StatusPill({ statusKey, t }: { statusKey: SellerOrderStatusKey; t: (k: 
   )
 }
 
-function SlaIndicator({ order, t }: { order: SellerSubOrder; t: (k: string, opts?: Record<string, unknown>) => string }) {
+function SlaIndicator({ order, t, lang }: { order: SellerSubOrder; t: (k: string, opts?: Record<string, unknown>) => string; lang?: string }) {
   const sla = computeShipBy(order)
   if (!sla) return null
-  const dateStr = formatDateShort(sla.date.toISOString())
+  const dateStr = formatDateShort(sla.date.toISOString(), lang)
   const text = sla.isOverdue
     ? t('seller.orders.slaOverdue')
     : sla.isDueToday
@@ -214,14 +222,15 @@ function SummaryLine({ label, value, muted, suffix }: { label: string; value: nu
 }
 
 export default function SellerOrderDetailPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const lang = i18n.language
   const router = useRouter()
   const params = useParams()
   const isLoggedIn = useSellerSessionStore(s => s.isLoggedIn)
   const sellerId = useSellerSessionStore(s => s.sellerId)
 
   const id = typeof params?.id === 'string' ? params.id : Array.isArray(params?.id) ? params.id[0] : ''
-  const { data: order, isLoading, isError } = useSellerOrderById(sellerId ?? null, id || null)
+  const { data: order, isLoading, isError, refetch } = useSellerOrderById(sellerId ?? null, id || null)
 
   React.useEffect(() => {
     analytics.screen({ name: 'seller-order-detail' })
@@ -239,22 +248,7 @@ export default function SellerOrderDetailPage() {
   if (!isLoggedIn) return null
 
   if (isLoading) {
-    return (
-      <Screen>
-        <Container className="py-6 max-w-[800px]">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="h-10 w-10 rounded-full bg-border-light animate-pulse" />
-            <div className="h-6 w-48 rounded bg-border-light animate-pulse" />
-          </div>
-          <div className="space-y-4">
-            <div className="h-32 rounded-xl bg-border-light animate-pulse" />
-            <div className="h-24 rounded-xl bg-border-light animate-pulse" />
-            <div className="h-48 rounded-xl bg-border-light animate-pulse" />
-            <div className="h-32 rounded-xl bg-border-light animate-pulse" />
-          </div>
-        </Container>
-      </Screen>
-    )
+    return <OrderDetailSkeleton />
   }
 
   if (isError || !order) {
@@ -271,16 +265,35 @@ export default function SellerOrderDetailPage() {
             </button>
             <h1 className="text-xl font-bold text-text">{t('seller.orders.detail')}</h1>
           </div>
-          <div className="flex flex-col items-center justify-center py-20 px-8 text-center">
-            <span className="text-5xl mb-4">😕</span>
-            <h3 className="text-lg font-semibold text-text">{t('seller.orders.detailNotFound')}</h3>
-            <p className="text-sm text-text-muted mt-2">{t('seller.orders.detailNotFoundSub')}</p>
-            <button
-              onClick={() => router.push('/orders')}
-              className="mt-4 px-5 py-2.5 rounded-md border border-primary text-primary font-semibold text-sm hover:bg-primary-50 transition-colors"
-            >
-              {t('seller.orders.detailBack')}
-            </button>
+          <div
+            className="flex flex-col items-center justify-center py-20 px-8 text-center"
+            role="alert"
+            aria-label={isError ? t('seller.orders.detailErrorTitle') : t('seller.orders.notFoundTitle')}
+          >
+            <span className="text-5xl mb-4" aria-hidden="true">{isError ? '⚠️' : '😕'}</span>
+            <h3 className="text-lg font-semibold text-text">
+              {isError ? t('seller.orders.detailErrorTitle') : t('seller.orders.notFoundTitle')}
+            </h3>
+            <p className="text-sm text-text-muted mt-2 max-w-sm">
+              {isError ? t('seller.orders.detailErrorSubtitle') : t('seller.orders.notFoundSubtitle')}
+            </p>
+            {isError ? (
+              <button
+                onClick={() => refetch()}
+                className="mt-4 px-5 py-2.5 rounded-md border border-primary text-primary font-semibold text-sm hover:bg-primary-50 transition-colors"
+                aria-label={t('seller.orders.retryAria')}
+              >
+                {t('seller.orders.retry')}
+              </button>
+            ) : (
+              <button
+                onClick={() => router.push('/orders')}
+                className="mt-4 px-5 py-2.5 rounded-md border border-primary text-primary font-semibold text-sm hover:bg-primary-50 transition-colors"
+                aria-label={t('seller.orders.notFoundBack')}
+              >
+                {t('seller.orders.notFoundBack')}
+              </button>
+            )}
           </div>
         </Container>
       </Screen>
@@ -319,7 +332,7 @@ export default function SellerOrderDetailPage() {
                   {order.orderId}
                 </h2>
                 <p className="text-sm text-text-muted mt-0.5">
-                  {t('seller.orders.orderDate')}: {formatDateLong(order.createdAt)}
+                  {t('seller.orders.orderDate')}: {formatDateLong(order.createdAt, lang)}
                 </p>
               </div>
               <StatusPill statusKey={order.statusKey} t={t} />
@@ -327,7 +340,19 @@ export default function SellerOrderDetailPage() {
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
               <PaymentChip order={order} t={t} />
-              <SlaIndicator order={order} t={t} />
+              <SlaIndicator order={order} t={t} lang={lang} />
+              {order.labelPrinted && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2.5 py-0.5 text-[12px] font-semibold text-success"
+                  aria-label={t('seller.orders.labelPrintedChipAria')}
+                >
+                  <Printer size={12} aria-hidden="true" />
+                  {t('seller.orders.labelPrintedChip')}
+                  {order.labelPrintedAt && (
+                    <span className="text-success/70 font-normal">· {formatDateShort(order.labelPrintedAt, lang)}</span>
+                  )}
+                </span>
+              )}
             </div>
 
             {order.actionNeeded && (
@@ -339,7 +364,7 @@ export default function SellerOrderDetailPage() {
 
             {order.estimatedDelivery && order.statusKey !== 'completed' && order.statusKey !== 'cancelled_returned' && (
               <p className="text-sm text-primary font-medium">
-                {t('seller.orders.estimatedDelivery')}: {formatDateShort(order.estimatedDelivery)}
+                {t('seller.orders.estimatedDelivery')}: {formatDateShort(order.estimatedDelivery, lang)}
               </p>
             )}
           </div>
@@ -355,11 +380,10 @@ export default function SellerOrderDetailPage() {
                 const lineTotal = item.price * item.quantity
                 return (
                   <div key={item.id} className="flex items-center gap-3">
-                    <img
+                    <SafeImage
                       src={item.image}
                       alt=""
                       className="w-14 h-14 rounded-lg object-cover bg-shimmer shrink-0"
-                      loading="lazy"
                     />
                     <div className="flex-1 min-w-0 space-y-0.5">
                       <p className="text-base text-text truncate">{item.name.split('—')[0]?.trim() || item.name}</p>
@@ -403,6 +427,31 @@ export default function SellerOrderDetailPage() {
           </div>
         </SectionReveal>
 
+        {/* Refund section — only if refund status is not 'none' */}
+        {order.refundStatus && order.refundStatus !== 'none' && (
+          <SectionReveal delay={125}>
+            <div className="space-y-3 mb-6" aria-labelledby="refund-heading">
+              <div className="flex items-center justify-between">
+                <h3 id="refund-heading" className="text-[18px] font-semibold text-text">{t('seller.orders.sectionRefund')}</h3>
+                <RefundStatusPill status={order.refundStatus} t={t} size="md" />
+              </div>
+              <div className="h-px bg-border" />
+              <RefundBreakdownTable order={order} t={t} />
+              {order.refundProcessedAt && (
+                <p className="text-[12px] text-text-muted">
+                  {t('seller.orders.refundProcessedOn')}: {formatDateShort(order.refundProcessedAt, lang)}
+                </p>
+              )}
+              {order.cancelReason && (
+                <p className="text-[12px] text-text-muted">
+                  {t('seller.orders.cancelReasonLabel')}: {t(`seller.orders.cancelReason${order.cancelReason.charAt(0).toUpperCase()}${order.cancelReason.slice(1)}`)}
+                  {order.cancelReasonDetail && ` — ${order.cancelReasonDetail}`}
+                </p>
+              )}
+            </div>
+          </SectionReveal>
+        )}
+
         {/* Buyer & shipping */}
         <SectionReveal delay={150}>
           <div className="space-y-3 mb-6" aria-labelledby="buyer-heading">
@@ -431,7 +480,7 @@ export default function SellerOrderDetailPage() {
                 {order.estimatedDelivery && (
                   <div className="text-right">
                     <p className="text-[12px] font-semibold text-text-muted uppercase tracking-wide">{t('seller.orders.estimatedDelivery')}</p>
-                    <p className="text-sm text-text">{formatDateShort(order.estimatedDelivery)}</p>
+                    <p className="text-sm text-text">{formatDateShort(order.estimatedDelivery, lang)}</p>
                   </div>
                 )}
               </div>

@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useQuery, useInfiniteQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import * as api from '@chinooz/mock-data'
+import { orderService } from '@chinooz/mock-data'
 import type {
   SellerProductFilter,
   SellerInventoryFilter,
@@ -780,7 +781,7 @@ export function useBulkUpdateSellerReviews() {
 export function useSellerOrders(sellerId: string | null, status?: SellerOrderStatusKey) {
   return useQuery({
     queryKey: ['seller-orders', sellerId, status],
-    queryFn: () => api.getSellerOrders(sellerId as string, status),
+    queryFn: () => orderService.getOrders(sellerId as string, status),
     enabled: !!sellerId,
     staleTime: 1000 * 30,
   })
