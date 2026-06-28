@@ -15,6 +15,7 @@ import TrafficSection from './TrafficSection'
 import ProductsSection from './ProductsSection'
 import CustomersSection from './CustomersSection'
 import ExportPanel, { type SavedReport } from './ExportPanel'
+import { AnalyticsStateWrapper, type AnalyticsStatus } from './AnalyticsStates'
 import {
   getAnalytics,
   ANALYTICS_RANGES,
@@ -64,6 +65,9 @@ export default function AnalyticsScreen() {
   const [productId, setProductId] = useState<string | undefined>(undefined)
   const [savedReports, setSavedReports] = useState<SavedReport[]>([])
   const [exportOpen, setExportOpen] = useState(false)
+  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [isOffline, setIsOffline] = useState(false)
+  const [retryCount, setRetryCount] = useState(0)
 
   useEffect(() => {
     tracker.screen({ name: 'seller-analytics' })
@@ -72,6 +76,28 @@ export default function AnalyticsScreen() {
   useEffect(() => {
     if (!isLoggedIn) router.replace('/onboarding')
   }, [isLoggedIn, router])
+
+  // Offline detection
+  useEffect(() => {
+    const onOnline = () => setIsOffline(false)
+    const onOffline = () => setIsOffline(true)
+    setIsOffline(!navigator.onLine)
+    window.addEventListener('online', onOnline)
+    window.addEventListener('offline', onOffline)
+    return () => {
+      window.removeEventListener('online', onOnline)
+      window.removeEventListener('offline', onOffline)
+    }
+  }, [])
+
+  // Simulate loading → ready (mock, 400ms), error on retry 3
+  useEffect(() => {
+    setLoadState('loading')
+    const timer = setTimeout(() => {
+      setLoadState('ready')
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [section, rangeKey, retryCount])
 
   const range: AnalyticsRange = useMemo(() => {
     const meta = ANALYTICS_RANGES.find(r => r.key === rangeKey)
@@ -159,6 +185,23 @@ export default function AnalyticsScreen() {
   const handleDeleteReport = (id: string) => setSavedReports(r => r.filter(rp => rp.id !== id))
   const handleUpdateReport = (id: string, updates: Partial<SavedReport>) =>
     setSavedReports(r => r.map(rp => (rp.id === id ? { ...rp, ...updates } : rp)))
+
+  const handleRetry = () => setRetryCount(c => c + 1)
+
+  const hasActiveFilters = !!categoryId || !!productId
+  const partialData = rangeKey === 'today' || rangeKey === '90d'
+
+  const status: AnalyticsStatus = isOffline
+    ? 'offline'
+    : loadState === 'loading'
+      ? 'loading'
+      : loadState === 'error'
+        ? 'error'
+        : data.kpis.every(k => k.rawValue === 0)
+          ? hasActiveFilters
+            ? 'empty-no-results'
+            : 'empty-insufficient'
+          : 'ready'
 
   return (
     <Screen>
@@ -372,17 +415,28 @@ export default function AnalyticsScreen() {
               exit={{ opacity: 0 }}
               transition={{ duration: reduced ? 0 : 0.25, ease: 'easeOut' }}
             >
-              {section === 'sales' ? (
-                <SalesSection data={data} range={range} compare={compare} filter={filter} />
-              ) : section === 'traffic' ? (
-                <TrafficSection data={data} compare={compare} />
-              ) : section === 'products' ? (
-                <ProductsSection data={data} range={range} compare={compare} filter={filter} />
-              ) : section === 'customers' ? (
-                <CustomersSection data={data} compare={compare} />
-              ) : (
-                <SectionContent section={section} data={data} compare={compare} />
-              )}
+              <AnalyticsStateWrapper
+                status={status}
+                onRetry={handleRetry}
+                onClearFilters={() => {
+                  setCategoryId(undefined)
+                  setProductId(undefined)
+                }}
+                hasFilters={hasActiveFilters}
+                partialData={partialData && status === 'ready'}
+              >
+                {section === 'sales' ? (
+                  <SalesSection data={data} range={range} compare={compare} filter={filter} />
+                ) : section === 'traffic' ? (
+                  <TrafficSection data={data} compare={compare} />
+                ) : section === 'products' ? (
+                  <ProductsSection data={data} range={range} compare={compare} filter={filter} />
+                ) : section === 'customers' ? (
+                  <CustomersSection data={data} compare={compare} />
+                ) : (
+                  <SectionContent section={section} data={data} compare={compare} />
+                )}
+              </AnalyticsStateWrapper>
             </motion.div>
           </AnimatePresence>
 
