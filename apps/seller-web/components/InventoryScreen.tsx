@@ -15,8 +15,10 @@ import {
   Minus,
   AlertTriangle,
   History,
+  CheckCircle,
+  WifiOff,
 } from 'lucide-react'
-import { Container, Screen, SafeImage, Spinner, EmptyState, InventoryRow, BulkBar, BulkConfirmModal, CsvImportModal, StockHistorySheet, LowStockAlerts } from '@chinooz/ui-web'
+import { Container, Screen, SafeImage, Spinner, EmptyState, InventoryRow, BulkBar, BulkConfirmModal, CsvImportModal, StockHistorySheet, LowStockAlerts, InventorySkeleton, BulkResultModal } from '@chinooz/ui-web'
 import { useReducedMotion } from '@chinooz/ui-web'
 import { useSellerInventory, useSellerCategories, useUpdateStock, useBulkUpdateStock, useExportStockCsv, useImportStockCsv, useStockHistory, useLowStockAlerts, useUpdateThreshold, useSetRestockReminder } from '@chinooz/hooks'
 import { useSellerSessionStore } from '@chinooz/state'
@@ -535,6 +537,7 @@ export default function InventoryScreen() {
   const snackbarTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const [historyVariant, setHistoryVariant] = useState<SellerInventoryVariant | null>(null)
   const [showAlerts, setShowAlerts] = useState(false)
+  const [bulkResult, setBulkResult] = useState<{ failedRows: { sku: string; productName: string; error?: string }[]; total: number; updated: number } | null>(null)
 
   useEffect(() => { analytics.screen({ name: 'seller-inventory' }) }, [])
 
@@ -592,19 +595,24 @@ export default function InventoryScreen() {
 
   const handleBulkConfirm = (value: number | undefined, reason: StockEditReason) => {
     if (!bulkAction) return
+    const selectedIds = [...selected]
     bulkMutation.mutate(
-      { variantIds: [...selected], action: bulkAction, value, reason },
+      { variantIds: selectedIds, action: bulkAction, value, reason },
       {
         onSuccess: (data) => {
-          showSnackbar(
-            data.failed > 0
-              ? t('seller.inventory.bulkResultFailed', { count: data.failed, total: data.updated + data.failed })
-              : t('seller.inventory.bulkResult', { count: data.updated }),
-            data.failed > 0 ? 'error' : 'success',
-          )
+          if (data.failed > 0) {
+            const failedProducts = (invQ.data?.products ?? [])
+              .flatMap(p => p.variants.map(v => ({ variant: v, productName: p.name })))
+              .filter(({ variant }) => selectedIds.includes(variant.id))
+              .slice(0, data.failed)
+              .map(({ variant, productName }) => ({ sku: variant.sku, productName, error: 'Update failed' }))
+            setBulkResult({ failedRows: failedProducts, total: data.updated + data.failed, updated: data.updated })
+          } else {
+            showSnackbar(t('seller.inventory.bulkResult', { count: data.updated }), 'success')
+          }
           clearSelection()
         },
-        onError: () => showSnackbar(t('seller.inventory.bulkError'), 'error'),
+        onError: () => showSnackbar(t('seller.inventory.bulkAllFailed'), 'error'),
       },
     )
     setBulkAction(null)
@@ -747,25 +755,52 @@ export default function InventoryScreen() {
 
           {/* Body */}
           <div className="mt-4">
+            {/* Offline banner */}
+            <div className="md:hidden mb-3">
+              <OfflineBannerWeb />
+            </div>
+
             {isLoading && (
-              <div className="flex items-center justify-center py-16">
-                <Spinner size="md" />
-                <span className="ml-3 text-sm text-text-muted">{t('seller.inventory.loading')}</span>
-              </div>
+              <InventorySkeleton />
             )}
 
             {isError && !isLoading && (
               <EmptyState
-                icon={<RotateCw size={32} className="text-text-muted" />}
-                title={t('seller.inventory.error')}
+                icon={<WifiOff size={32} className="text-text-muted" />}
+                title={t('seller.inventory.loadError')}
+                subtitle={t('seller.inventory.loadErrorSub')}
                 action={{ label: t('seller.inventory.retry'), onPress: () => invQ.refetch() }}
               />
             )}
 
             {!isLoading && !isError && products.length === 0 && (
               <EmptyState
-                icon={<PackageSearch size={32} className="text-text-muted" />}
-                title={query ? t('seller.inventory.emptySearch', { query }) : t('seller.inventory.empty')}
+                icon={tab === 'out_of_stock'
+                  ? <CheckCircle size={32} className="text-success" />
+                  : tab === 'low_stock'
+                    ? <CheckCircle size={32} className="text-success" />
+                    : <PackageSearch size={32} className="text-text-muted" />}
+                title={
+                  query
+                    ? t('seller.inventory.emptySearch', { query })
+                    : tab === 'low_stock'
+                      ? t('seller.inventory.emptyLowStock')
+                      : tab === 'out_of_stock'
+                        ? t('seller.inventory.emptyOutStock')
+                        : tab === 'in_stock'
+                          ? t('seller.inventory.empty')
+                          : t('seller.inventory.emptyNoProducts')
+                }
+                subtitle={
+                  tab === 'low_stock'
+                    ? t('seller.inventory.emptyLowStockSub')
+                    : tab === 'out_of_stock'
+                      ? t('seller.inventory.emptyOutStockSub')
+                      : tab === 'all' && !query
+                        ? t('seller.inventory.emptyNoProductsSub')
+                        : undefined
+                }
+                action={tab === 'all' && !query ? { label: t('seller.inventory.addProduct'), onPress: () => {} } : undefined}
               />
             )}
 
@@ -917,6 +952,21 @@ export default function InventoryScreen() {
           isPending={importMutation.isPending}
         />
 
+        {/* Bulk partial-failure result modal */}
+        <BulkResultModal
+          open={bulkResult !== null}
+          failedRows={bulkResult?.failedRows ?? []}
+          total={bulkResult?.total ?? 0}
+          updated={bulkResult?.updated ?? 0}
+          onRetryFailed={() => {
+            if (bulkResult) {
+              setBulkAction('set')
+            }
+            setBulkResult(null)
+          }}
+          onDismiss={() => setBulkResult(null)}
+        />
+
         {/* Stock history sheet */}
         <StockHistorySheet
           open={historyVariant !== null}
@@ -955,6 +1005,28 @@ export default function InventoryScreen() {
         </AnimatePresence>
       </Container>
     </Screen>
+  )
+}
+
+function OfflineBannerWeb() {
+  const { t } = useTranslation()
+  const [isOffline, setIsOffline] = useState(false)
+  useEffect(() => {
+    const update = () => setIsOffline(!navigator.onLine)
+    update()
+    window.addEventListener('online', update)
+    window.addEventListener('offline', update)
+    return () => { window.removeEventListener('online', update); window.removeEventListener('offline', update) }
+  }, [])
+  if (!isOffline) return null
+  return (
+    <div role="status" className="flex items-center gap-2 rounded-lg bg-warning-light border border-warning px-3 py-2">
+      <WifiOff size={16} className="text-warning" />
+      <div>
+        <p className="text-sm font-semibold text-[#92400E]">{t('seller.inventory.offline')}</p>
+        <p className="text-xs text-[#92400E]/70">{t('seller.inventory.offlineSub')}</p>
+      </div>
+    </div>
   )
 }
 

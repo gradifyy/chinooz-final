@@ -20,9 +20,9 @@ import Animated, {
   withSpring,
   Easing,
 } from 'react-native-reanimated'
-import { ChevronDown, Search, SlidersHorizontal, X, ArrowUpDown, PackageSearch, RotateCw } from 'lucide-react-native'
+import { ChevronDown, Search, SlidersHorizontal, X, ArrowUpDown, PackageSearch, RotateCw, CheckCircle, WifiOff } from 'lucide-react-native'
 import { colors, radii, spacing, fontFamily } from '@chinooz/theme'
-import { SafeImage, BottomSheet, EmptyState, InventoryRow, BulkBar, BulkConfirmSheet, StockHistorySheet, LowStockAlerts, useReducedMotion } from '@chinooz/ui'
+import { SafeImage, BottomSheet, EmptyState, InventoryRow, BulkBar, BulkConfirmSheet, StockHistorySheet, LowStockAlerts, InventoryRowSkeletons, BulkResultSheet, useReducedMotion } from '@chinooz/ui'
 import { useSellerInventory, useSellerCategories, useUpdateStock, useBulkUpdateStock, useExportStockCsv, useImportStockCsv, useStockHistory, useLowStockAlerts, useUpdateThreshold, useSetRestockReminder } from '@chinooz/hooks'
 import { useSellerSessionStore } from '@chinooz/state'
 import { analytics } from '@chinooz/analytics'
@@ -295,6 +295,7 @@ export default function InventoryScreen() {
   const [snackbar, setSnackbar] = useState<{ msg: string; variant: 'success' | 'error' } | null>(null)
   const snackbarTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const [historyVariant, setHistoryVariant] = useState<SellerInventoryVariant | null>(null)
+  const [bulkResult, setBulkResult] = useState<{ failedRows: { sku: string; productName: string; error?: string }[]; total: number; updated: number } | null>(null)
 
   useEffect(() => { analytics.screen({ name: 'seller-inventory' }) }, [])
 
@@ -349,19 +350,24 @@ export default function InventoryScreen() {
 
   const handleBulkConfirm = (value: number | undefined, reason: StockEditReason) => {
     if (!bulkAction) return
+    const selectedIds = [...selected]
     bulkMutation.mutate(
-      { variantIds: [...selected], action: bulkAction, value, reason },
+      { variantIds: selectedIds, action: bulkAction, value, reason },
       {
         onSuccess: (data) => {
-          showSnackbar(
-            data.failed > 0
-              ? t('seller.inventory.bulkResultFailed', { count: data.failed, total: data.updated + data.failed })
-              : t('seller.inventory.bulkResult', { count: data.updated }),
-            data.failed > 0 ? 'error' : 'success',
-          )
+          if (data.failed > 0) {
+            const failedProducts = (invQ.data?.products ?? [])
+              .flatMap(p => p.variants.map(v => ({ variant: v, productName: p.name })))
+              .filter(({ variant }) => selectedIds.includes(variant.id))
+              .slice(0, data.failed)
+              .map(({ variant, productName }) => ({ sku: variant.sku, productName, error: 'Update failed' }))
+            setBulkResult({ failedRows: failedProducts, total: data.updated + data.failed, updated: data.updated })
+          } else {
+            showSnackbar(t('seller.inventory.bulkResult', { count: data.updated }), 'success')
+          }
           clearSelection()
         },
-        onError: () => showSnackbar(t('seller.inventory.bulkError'), 'error'),
+        onError: () => showSnackbar(t('seller.inventory.bulkAllFailed'), 'error'),
       },
     )
     setBulkAction(null)
@@ -520,24 +526,46 @@ export default function InventoryScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {isLoading && (
-          <View style={styles.stateWrap}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={styles.stateText}>{t('seller.inventory.loading')}</Text>
-          </View>
+          <InventoryRowSkeletons count={4} />
         )}
 
         {isError && !isLoading && (
           <EmptyState
-            icon={<RotateCw size={32} color={colors.textMuted} />}
-            title={t('seller.inventory.error')}
+            icon={<WifiOff size={32} color={colors.textMuted} />}
+            title={t('seller.inventory.loadError')}
+            subtitle={t('seller.inventory.loadErrorSub')}
             action={{ label: t('seller.inventory.retry'), onPress: () => invQ.refetch() }}
           />
         )}
 
         {!isLoading && !isError && products.length === 0 && (
           <EmptyState
-            icon={<PackageSearch size={32} color={colors.textMuted} />}
-            title={query ? t('seller.inventory.emptySearch', { query }) : t('seller.inventory.empty')}
+            icon={tab === 'out_of_stock'
+              ? <CheckCircle size={32} color={colors.success} />
+              : tab === 'low_stock'
+                ? <CheckCircle size={32} color={colors.success} />
+                : <PackageSearch size={32} color={colors.textMuted} />}
+            title={
+              query
+                ? t('seller.inventory.emptySearch', { query })
+                : tab === 'low_stock'
+                  ? t('seller.inventory.emptyLowStock')
+                  : tab === 'out_of_stock'
+                    ? t('seller.inventory.emptyOutStock')
+                    : tab === 'in_stock'
+                      ? t('seller.inventory.empty')
+                      : t('seller.inventory.emptyNoProducts')
+            }
+            subtitle={
+              tab === 'low_stock'
+                ? t('seller.inventory.emptyLowStockSub')
+                : tab === 'out_of_stock'
+                  ? t('seller.inventory.emptyOutStockSub')
+                  : tab === 'all' && !query
+                    ? t('seller.inventory.emptyNoProductsSub')
+                    : undefined
+            }
+            action={tab === 'all' && !query ? { label: t('seller.inventory.addProduct'), onPress: () => {} } : undefined}
           />
         )}
 
@@ -636,6 +664,18 @@ export default function InventoryScreen() {
         count={selected.size}
         onConfirm={handleBulkConfirm}
         onCancel={() => setBulkAction(null)}
+      />
+
+      {/* Bulk partial-failure result sheet */}
+      <BulkResultSheet
+        visible={bulkResult !== null}
+        failedRows={bulkResult?.failedRows ?? []}
+        total={bulkResult?.total ?? 0}
+        updated={bulkResult?.updated ?? 0}
+        onRetryFailed={() => {
+          setBulkResult(null)
+        }}
+        onDismiss={() => setBulkResult(null)}
       />
 
       {/* Stock history sheet */}
