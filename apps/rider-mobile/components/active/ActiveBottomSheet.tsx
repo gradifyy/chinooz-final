@@ -40,11 +40,12 @@ import { useA11y } from '../A11yProvider'
 import { DELIVERY_FLOW } from '@chinooz/state'
 import type { ActiveDelivery, DeliveryStatus } from '@chinooz/types'
 import HeadingToPickupStep from './HeadingToPickupStep'
+import AtPickupStep from './AtPickupStep'
 
 interface ActiveBottomSheetProps {
   delivery: ActiveDelivery
   onPrimary: () => void
-  onCancel: () => void
+  onCancel: (reason?: string) => void
 }
 
 const COLLAPSED_HEIGHT = 196
@@ -52,6 +53,9 @@ const EXPANDED_HEIGHT = 420
 // heading_to_pickup needs room for the nav band + pickup card + arrived button.
 const HEADING_COLLAPSED_HEIGHT = 460
 const HEADING_EXPANDED_HEIGHT = 620
+// at_pickup needs room for checklist + verify + photo + payment + issues + primary.
+const AT_PICKUP_COLLAPSED_HEIGHT = 640
+const AT_PICKUP_EXPANDED_HEIGHT = 820
 
 function isTerminal(s: DeliveryStatus): boolean {
   return s === 'delivered' || s === 'cancelled' || s === 'failed'
@@ -82,8 +86,17 @@ export default function ActiveBottomSheet({ delivery, onPrimary, onCancel }: Act
   const sheetHeight = useSharedValue(COLLAPSED_HEIGHT)
 
   const isHeadingToPickup = delivery.status === 'heading_to_pickup'
-  const collapsedH = isHeadingToPickup ? HEADING_COLLAPSED_HEIGHT : COLLAPSED_HEIGHT
-  const expandedH = isHeadingToPickup ? HEADING_EXPANDED_HEIGHT : EXPANDED_HEIGHT
+  const isAtPickup = delivery.status === 'at_pickup'
+  const collapsedH = isHeadingToPickup
+    ? HEADING_COLLAPSED_HEIGHT
+    : isAtPickup
+      ? AT_PICKUP_COLLAPSED_HEIGHT
+      : COLLAPSED_HEIGHT
+  const expandedH = isHeadingToPickup
+    ? HEADING_EXPANDED_HEIGHT
+    : isAtPickup
+      ? AT_PICKUP_EXPANDED_HEIGHT
+      : EXPANDED_HEIGHT
 
   useEffect(() => {
     const target = expanded ? expandedH : collapsedH
@@ -191,8 +204,18 @@ export default function ActiveBottomSheet({ delivery, onPrimary, onCancel }: Act
           <HeadingToPickupStep delivery={delivery} onArrived={onPrimary} />
         )}
 
-        {/* Default (non-heading) quick info + details + primary */}
-        {!isHeadingToPickup && !terminal && targetStop && (
+        {/* at_pickup: dedicated step with collection checklist, verify/photo,
+            COD note, issues flow, and guarded "Picked up" primary. */}
+        {isAtPickup && (
+          <AtPickupStep
+            delivery={delivery}
+            onPickedUp={onPrimary}
+            onCancel={onCancel}
+          />
+        )}
+
+        {/* Default (non-heading, non-at_pickup) quick info + details + primary */}
+        {!isHeadingToPickup && !isAtPickup && !terminal && targetStop && (
           <View style={styles.quickInfo}>
             <View style={styles.quickInfoLeft}>
               {showPickup ? <MapPin size={16} color={colors.primary} /> : <Navigation size={16} color={colors.primaryDark} />}
@@ -202,8 +225,8 @@ export default function ActiveBottomSheet({ delivery, onPrimary, onCancel }: Act
           </View>
         )}
 
-        {/* Expanded: full details (non-heading only) */}
-        {!isHeadingToPickup && expanded && (
+        {/* Expanded: full details (non-heading, non-at_pickup only) */}
+        {!isHeadingToPickup && !isAtPickup && expanded && (
           <View style={styles.details}>
             {targetStop && (
               <InfoRow
@@ -241,9 +264,8 @@ export default function ActiveBottomSheet({ delivery, onPrimary, onCancel }: Act
           </View>
         )}
 
-        {/* Terminal messaging */}
-        {/* Terminal messaging (non-heading only; heading never reaches here) */}
-        {!isHeadingToPickup && terminal && (
+        {/* Terminal messaging (non-heading, non-at_pickup; steps own their UI) */}
+        {!isHeadingToPickup && !isAtPickup && terminal && (
           <View style={styles.terminalMsg}>
             {statusKey === 'delivered' && <CheckCircle2 size={20} color={colors.success} />}
             {statusKey === 'cancelled' && <XCircle size={20} color={colors.error} />}
@@ -259,8 +281,9 @@ export default function ActiveBottomSheet({ delivery, onPrimary, onCancel }: Act
         )}
 
         {/* Primary action: full-width, min 56px, high-contrast plum.
-            Skipped for heading_to_pickup — the step owns its own Arrived primary. */}
-        {!isHeadingToPickup && (
+            Skipped for heading_to_pickup and at_pickup — those steps own
+            their own primary (Arrived / Picked up). */}
+        {!isHeadingToPickup && !isAtPickup && (
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel={primaryAria}
@@ -283,12 +306,13 @@ export default function ActiveBottomSheet({ delivery, onPrimary, onCancel }: Act
           </TouchableOpacity>
         )}
 
-        {/* Cancel (non-terminal, non-heading only) */}
-        {!isHeadingToPickup && !terminal && (
+        {/* Cancel (non-terminal, non-heading, non-at_pickup only — at_pickup
+            owns its own issues/cancel flow) */}
+        {!isHeadingToPickup && !isAtPickup && !terminal && (
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel={t('rider.active.cancelAria')}
-            onPress={onCancel}
+            onPress={() => onCancel()}
             style={[styles.cancelBtn, { minHeight: minTouchTarget }]}
           >
             <Text style={styles.cancelText}>{t('rider.active.cancel')}</Text>

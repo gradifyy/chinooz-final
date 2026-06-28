@@ -83,9 +83,9 @@ export default function ActiveDeliveryScreen() {
     router.replace('/jobs')
   }, [minimize, router])
 
-  const handleCancel = useCallback(() => {
+  const handleCancel = useCallback((reason?: string) => {
     setCancelOpen(false)
-    cancel()
+    cancel(reason)
   }, [cancel])
 
   const handleCancelPress = useCallback(() => {
@@ -155,7 +155,7 @@ export default function ActiveDeliveryScreen() {
               <TouchableOpacity
                 accessibilityRole="button"
                 accessibilityLabel={t('rider.active.cancelConfirmCancel')}
-                onPress={handleCancel}
+                onPress={() => handleCancel()}
                 style={styles.modalPrimary}
               >
                 <Text style={styles.modalPrimaryText}>{t('rider.active.cancelConfirmCancel')}</Text>
