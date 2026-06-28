@@ -789,7 +789,7 @@ function TimePicker({ label, ariaLabel, value, onValueChange }: TimePickerProps)
   }
 
   return (
-    <View style={styles.timePicker} accessibilityRole="group" accessibilityLabel={ariaLabel}>
+    <View style={styles.timePicker} accessibilityLabel={ariaLabel}>
       <Text style={styles.timePickerLabel}>{label}</Text>
       <View style={styles.timeStepperRow}>
         <StepperButton label="−" onPress={() => stepHour(-1)} ariaLabel={`${label} hour down`} />
