@@ -168,6 +168,11 @@ export interface Conversation {
   lastMessage: string
   lastMessageAt: string
   unreadCount: number
+  contextType?: 'order' | 'product' | 'general'
+  orderId?: string
+  orderRef?: string
+  productId?: string
+  productName?: string
 }
 
 export interface UserProfile {
@@ -206,4 +211,102 @@ export interface OrderInvoice {
   deliveryFee: number
   discount: number
   grandTotal: number
+}
+
+export type SellerOrderStatusKey =
+  | 'new'
+  | 'to_pack'
+  | 'to_ship'
+  | 'shipped'
+  | 'completed'
+  | 'cancelled_returned'
+  | 'action_needed'
+
+export type SellerPaymentType = 'cod' | 'prepaid'
+export type SellerShippingMethod = 'standard' | 'express' | 'sameday' | 'pickup'
+export type SellerOrderSortKey = 'newest' | 'oldest' | 'value'
+
+export interface SellerSubOrderItem {
+  id: string
+  productId: string
+  name: string
+  image: string
+  price: number
+  quantity: number
+  sku?: string
+}
+
+export interface SellerSubOrder {
+  subOrderId: string
+  orderId: string
+  sellerId: string
+  buyerName: string
+  buyerPhone: string
+  city: string
+  district: string
+  items: SellerSubOrderItem[]
+  itemCount: number
+  total: number
+  currency: 'NPR'
+  status: OrderStatus
+  statusKey: SellerOrderStatusKey
+  paymentType: SellerPaymentType
+  shippingMethod: SellerShippingMethod
+  createdAt: string
+  estimatedDelivery?: string
+  actionNeeded: boolean
+  actionReason?: string
+}
+
+export type SellerProductStatus = 'active' | 'draft' | 'out_of_stock' | 'archived'
+
+export interface SellerProduct {
+  id: string
+  name: string
+  sku: string
+  image: string
+  price: number
+  compareAtPrice?: number
+  currency: 'NPR'
+  categoryId: string
+  categoryName: string
+  stock: StockStatus
+  stockCount: number
+  status: SellerProductStatus
+  salesCount: number
+  viewsCount: number
+  rating: number
+  reviewCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SellerInventoryVariant {
+  id: string
+  productId: string
+  name: string
+  sku: string
+  price: number
+  compareAtPrice?: number
+  currency: 'NPR'
+  stockCount: number
+  stock: StockStatus
+  attributes: Record<string, string>
+  image: string
+  salesCount: number
+}
+
+export interface SellerInventoryProduct {
+  id: string
+  name: string
+  slug: string
+  image: string
+  categoryId: string
+  categoryName: string
+  currency: 'NPR'
+  aggregateStock: number
+  stock: StockStatus
+  variantCount: number
+  salesCount: number
+  variants: SellerInventoryVariant[]
 }

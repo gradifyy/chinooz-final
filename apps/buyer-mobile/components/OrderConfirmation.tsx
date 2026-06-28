@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react'
-import { View, Text, TouchableOpacity, Dimensions } from 'react-native'
+import { View, Text, TouchableOpacity, Dimensions, StyleSheet } from 'react-native'
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -390,15 +390,5 @@ const styles = {
     fontSize: 14,
     fontWeight: '600' as const,
     color: colors.primary,
-  },
-}
-
-const StyleSheet = {
-  absoluteFillObject: {
-    position: 'absolute' as const,
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
   },
 }

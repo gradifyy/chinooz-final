@@ -38,6 +38,17 @@ export {
   useReorder,
   useOrderInvoice,
   useReturnRequests,
+  useSellerProducts,
+  useSellerCategories,
+  useSellerInventory,
+  useSellerReviews,
+  useRespondToSellerReview,
+  useToggleSellerReviewFlag,
+  useSellerOrders,
+  useSellerConversations,
+  useSellerMessages,
+  useSendSellerMessage,
+  useMarkSellerConversationRead,
 } from './useProducts'
 
 export type { SuggestionItem } from './useProducts'

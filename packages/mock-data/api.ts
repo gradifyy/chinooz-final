@@ -13,6 +13,11 @@ import type {
   CancelReason,
   ReturnRequest,
   OrderInvoice,
+  SellerProduct,
+  SellerProductStatus,
+  SellerInventoryProduct,
+  SellerInventoryVariant,
+  StockStatus,
 } from '@chinooz/types'
 import {
   products,
@@ -26,6 +31,9 @@ import {
   messages,
   userProfile,
   sampleCartItems,
+  sellerProducts,
+  sellerConversations,
+  sellerMessages,
 } from './fixtures'
 
 function delay(ms: number): Promise<void> {
@@ -215,6 +223,48 @@ export async function markConversationRead(conversationId: string): Promise<void
 export async function getConversations(): Promise<Conversation[]> {
   await randomDelay(200, 500)
   return conversations
+}
+
+export async function getSellerConversations(_sellerId?: string): Promise<Conversation[]> {
+  await randomDelay(200, 500)
+  return sellerConversations
+}
+
+export async function getSellerMessages(conversationId: string): Promise<Message[]> {
+  await randomDelay(200, 400)
+  return sellerMessages.filter(m => m.conversationId === conversationId)
+}
+
+export async function sendSellerMessage(conversationId: string, body: string): Promise<Message> {
+  await randomDelay(200, 500)
+  const msg: Message = {
+    id: `smsg-${Date.now()}`,
+    conversationId,
+    senderId: 'seller-1',
+    senderName: 'You',
+    body,
+    createdAt: new Date().toISOString(),
+    read: false,
+    status: 'sent',
+  }
+  sellerMessages.push(msg)
+  const convo = sellerConversations.find(c => c.id === conversationId)
+  if (convo) {
+    convo.lastMessage = body
+    convo.lastMessageAt = msg.createdAt
+  }
+  return msg
+}
+
+export async function markSellerConversationRead(conversationId: string): Promise<void> {
+  await randomDelay(100, 200)
+  const convo = sellerConversations.find(c => c.id === conversationId)
+  if (convo) convo.unreadCount = 0
+  for (const m of sellerMessages) {
+    if (m.conversationId === conversationId && !m.read && m.senderId !== 'seller-1') {
+      m.read = true
+    }
+  }
 }
 
 export async function getMessages(conversationId: string): Promise<Message[]> {
@@ -490,4 +540,508 @@ export async function getReturnRequests(orderId?: string): Promise<ReturnRequest
   await randomDelay(150, 300)
   if (orderId) return returnRequests.filter(r => r.orderId === orderId)
   return returnRequests
+}
+
+// --- Seller Products ---
+
+export interface SellerProductFilter {
+  status?: SellerProductStatus | 'all'
+  search?: string
+  categoryId?: string
+  priceMin?: number
+  priceMax?: number
+  stockLevel?: StockStatus | 'all'
+  sort?: 'newest' | 'best_selling' | 'price_asc' | 'price_desc' | 'stock'
+}
+
+export interface SellerProductResult {
+  items: SellerProduct[]
+  total: number
+  counts: Record<SellerProductStatus | 'all', number>
+}
+
+export async function getSellerProducts(filter: SellerProductFilter = {}): Promise<SellerProductResult> {
+  await randomDelay(200, 500)
+  const status = filter.status ?? 'all'
+  let list = [...sellerProducts]
+
+  if (status !== 'all') {
+    list = list.filter(p => p.status === status)
+  }
+  if (filter.search) {
+    const q = filter.search.trim().toLowerCase()
+    list = list.filter(p => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q))
+  }
+  if (filter.categoryId) {
+    list = list.filter(p => p.categoryId === filter.categoryId)
+  }
+  if (filter.priceMin != null) {
+    list = list.filter(p => p.price >= filter.priceMin!)
+  }
+  if (filter.priceMax != null) {
+    list = list.filter(p => p.price <= filter.priceMax!)
+  }
+  if (filter.stockLevel && filter.stockLevel !== 'all') {
+    list = list.filter(p => p.stock === filter.stockLevel)
+  }
+
+  switch (filter.sort) {
+    case 'best_selling':
+      list.sort((a, b) => b.salesCount - a.salesCount)
+      break
+    case 'price_asc':
+      list.sort((a, b) => a.price - b.price)
+      break
+    case 'price_desc':
+      list.sort((a, b) => b.price - a.price)
+      break
+    case 'stock':
+      list.sort((a, b) => b.stockCount - a.stockCount)
+      break
+    case 'newest':
+    default:
+      list.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
+      break
+  }
+
+  const counts: Record<SellerProductStatus | 'all', number> = {
+    all: sellerProducts.length,
+    active: sellerProducts.filter(p => p.status === 'active').length,
+    draft: sellerProducts.filter(p => p.status === 'draft').length,
+    out_of_stock: sellerProducts.filter(p => p.status === 'out_of_stock').length,
+    archived: sellerProducts.filter(p => p.status === 'archived').length,
+  }
+
+  return { items: list, total: list.length, counts }
+}
+
+export async function getSellerCategories(): Promise<Pick<Category, 'id' | 'name' | 'slug'>[]> {
+  await randomDelay(100, 250)
+  const seen = new Map<string, Pick<Category, 'id' | 'name' | 'slug'>>()
+  for (const p of sellerProducts) {
+    if (!seen.has(p.categoryId)) {
+      const cat = categories.find(c => c.id === p.categoryId)
+      seen.set(p.categoryId, {
+        id: p.categoryId,
+        name: cat?.name ?? p.categoryName,
+        slug: cat?.slug ?? p.categoryId,
+      })
+    }
+  }
+  return [...seen.values()]
+}
+
+// --- Seller Inventory (variant-level) ---
+
+export const LOW_STOCK_THRESHOLD = 10
+
+export function stockStatusFor(count: number): StockStatus {
+  if (count <= 0) return 'out_of_stock'
+  if (count < LOW_STOCK_THRESHOLD) return 'low_stock'
+  return 'in_stock'
+}
+
+function hashSeed(s: string): number {
+  let h = 2166136261
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return Math.abs(h)
+}
+
+function mulberry32(seed: number) {
+  let a = seed >>> 0
+  return () => {
+    a |= 0
+    a = (a + 0x6d2b79f5) | 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+const VARIANT_DESCRIPTORS: { label: string; attrs: Record<string, string> }[] = [
+  { label: 'Standard', attrs: { variant: 'Standard' } },
+  { label: 'Plus', attrs: { variant: 'Plus' } },
+  { label: 'Pro', attrs: { variant: 'Pro' } },
+]
+
+function buildInventory(): SellerInventoryProduct[] {
+  return sellerProducts.map(p => {
+    const rng = mulberry32(hashSeed(p.sku))
+    const variantCount = 1 + Math.floor(rng() * 3) // 1..3
+    const descs = VARIANT_DESCRIPTORS.slice(0, variantCount)
+    const splits: number[] = []
+    let remaining = p.stockCount
+    for (let i = 0; i < variantCount; i++) {
+      if (i === variantCount - 1) {
+        splits.push(remaining)
+      } else {
+        const portion = Math.floor(remaining * (0.25 + rng() * 0.5))
+        splits.push(portion)
+        remaining = Math.max(0, remaining - portion)
+      }
+    }
+    const variants: SellerInventoryVariant[] = descs.map((d, i) => {
+      const count = splits[i] ?? 0
+      const suffix = variantCount > 1 ? `-${d.label.toUpperCase()}` : ''
+      return {
+        id: `${p.id}-v${i + 1}`,
+        productId: p.id,
+        name: variantCount > 1 ? `${p.name} — ${d.label}` : p.name,
+        sku: `${p.sku}${suffix}`,
+        price: p.price,
+        compareAtPrice: p.compareAtPrice,
+        currency: p.currency,
+        stockCount: count,
+        stock: stockStatusFor(count),
+        attributes: d.attrs,
+        image: p.image,
+        salesCount: Math.round((p.salesCount / variantCount) * (0.6 + rng() * 0.8)),
+      }
+    })
+    const aggregateStock = variants.reduce((s, v) => s + v.stockCount, 0)
+    const salesSum = variants.reduce((s, v) => s + v.salesCount, 0)
+    const stock: StockStatus =
+      variants.every(v => v.stock === 'out_of_stock')
+        ? 'out_of_stock'
+        : variants.some(v => v.stock === 'low_stock' || v.stock === 'out_of_stock')
+          ? 'low_stock'
+          : 'in_stock'
+    return {
+      id: p.id,
+      name: p.name,
+      slug: p.id,
+      image: p.image,
+      categoryId: p.categoryId,
+      categoryName: p.categoryName,
+      currency: p.currency,
+      aggregateStock,
+      stock,
+      variantCount: variants.length,
+      salesCount: salesSum,
+      variants,
+    }
+  })
+}
+
+const inventoryCache = buildInventory()
+
+export type InventoryStatus = StockStatus | 'all'
+export type InventorySort = 'stock_asc' | 'stock_desc' | 'name' | 'best_selling'
+
+export interface SellerInventoryFilter {
+  status?: InventoryStatus
+  search?: string
+  categoryId?: string
+  stockMin?: number
+  stockMax?: number
+  sort?: InventorySort
+}
+
+export interface SellerInventoryResult {
+  products: SellerInventoryProduct[]
+  counts: Record<InventoryStatus, number>
+  totalVariants: number
+}
+
+export async function getSellerInventory(
+  filter: SellerInventoryFilter = {},
+): Promise<SellerInventoryResult> {
+  await randomDelay(200, 500)
+
+  // Per-variant counts across the whole catalogue (for tab badges).
+  let allVariants = inventoryCache.flatMap(p => p.variants)
+  const counts: Record<InventoryStatus, number> = {
+    all: allVariants.length,
+    in_stock: allVariants.filter(v => v.stock === 'in_stock').length,
+    low_stock: allVariants.filter(v => v.stock === 'low_stock').length,
+    out_of_stock: allVariants.filter(v => v.stock === 'out_of_stock').length,
+  }
+
+  const q = filter.search?.trim().toLowerCase()
+  const status = filter.status ?? 'all'
+
+  let list = inventoryCache.map(p => {
+    let variants = p.variants
+    if (status !== 'all') variants = variants.filter(v => v.stock === status)
+    if (q) {
+      variants = variants.filter(
+        v => v.name.toLowerCase().includes(q!) || v.sku.toLowerCase().includes(q!),
+      )
+    }
+    if (filter.categoryId) {
+      if (p.categoryId !== filter.categoryId) variants = []
+    }
+    if (filter.stockMin != null) variants = variants.filter(v => v.stockCount >= filter.stockMin!)
+    if (filter.stockMax != null) variants = variants.filter(v => v.stockCount <= filter.stockMax!)
+    return { ...p, variants }
+  })
+
+  // Product-level search match: keep product (all its variants) when name matches.
+  if (q) {
+    list = list.map(p =>
+      p.name.toLowerCase().includes(q!) ? { ...p, variants: p.variants } : p,
+    )
+  }
+
+  list = list.filter(p => p.variants.length > 0)
+
+  switch (filter.sort) {
+    case 'stock_asc':
+      list.sort((a, b) => a.aggregateStock - b.aggregateStock)
+      break
+    case 'stock_desc':
+      list.sort((a, b) => b.aggregateStock - a.aggregateStock)
+      break
+    case 'name':
+      list.sort((a, b) => a.name.localeCompare(b.name))
+      break
+    case 'best_selling':
+      list.sort((a, b) => b.salesCount - a.salesCount)
+      break
+  }
+
+  const totalVariants = list.reduce((s, p) => s + p.variants.length, 0)
+  return { products: list, counts, totalVariants }
+}
+
+// --- Seller Reviews ---
+
+export interface SellerReview extends Review {
+  productName: string
+  productImage: string
+  response?: { text: string; at: string }
+  flagged?: boolean
+}
+
+export type SellerReviewStatus = 'all' | 'needs_response' | 'responded' | 'flagged'
+export type SellerReviewSort = 'newest' | 'oldest' | 'lowest' | 'highest'
+export type SellerReviewResponseFilter = 'all' | 'with' | 'without'
+
+export interface SellerReviewFilter {
+  status?: SellerReviewStatus
+  rating?: number | 'all'
+  hasResponse?: SellerReviewResponseFilter
+  hasPhotos?: boolean
+  productId?: string
+  sort?: SellerReviewSort
+}
+
+export interface SellerReviewDistribution {
+  5: number
+  4: number
+  3: number
+  2: number
+  1: number
+}
+
+export interface SellerReviewSummary {
+  average: number
+  total: number
+  distribution: SellerReviewDistribution
+  trendPct: number
+  previousAverage: number
+}
+
+export interface SellerReviewCounts {
+  all: number
+  needs_response: number
+  responded: number
+  flagged: number
+}
+
+export interface SellerReviewResult {
+  items: SellerReview[]
+  total: number
+  counts: SellerReviewCounts
+  summary: SellerReviewSummary
+}
+
+const REVIEW_BODIES: { rating: number; title?: string; body: string }[] = [
+  { rating: 5, title: 'Best purchase this year', body: 'Exceeded my expectations. Quality is top-notch and delivery was fast.' },
+  { rating: 5, title: 'Highly recommend', body: 'Authentic and well-made. Will buy again from this store.' },
+  { rating: 5, body: 'Loved it. Exactly as described. Five stars.' },
+  { rating: 4, title: 'Great value', body: 'Really good product. Minor packaging issue but the item itself is perfect.' },
+  { rating: 4, body: 'Works well and feels durable. A few scratches on arrival but nothing serious.' },
+  { rating: 3, title: 'It’s okay', body: 'Does the job but the finish could be better. Expected more at this price.' },
+  { rating: 3, body: 'Average. Nothing special but not bad either.' },
+  { rating: 2, title: 'Disappointing', body: 'Item arrived later than promised and the color was off.' },
+  { rating: 1, title: 'Not happy', body: 'Product stopped working after two days. Requesting a replacement.' },
+]
+
+const REVIEW_NAMES = [
+  'Suman Shrestha', 'Anita Gurung', 'Ram Bahadur Thapa', 'Priya Maharjan',
+  'Karma Lama', 'Deepa Tamang', 'Rajesh Shrestha', 'Sita Rai', 'Bishal Thapa',
+  'Anjali K.C.', 'Rohan Tamang', 'Kiran Rai', 'Maya Gurung', 'Niraj Limbu',
+  'Pooja Bhandari', 'Sandeep Koirala', 'Rita Shrestha', 'Aman Maharjan',
+]
+
+function seededReview(n: number): number {
+  const x = Math.sin(n) * 10000
+  return x - Math.floor(x)
+}
+
+function buildSellerReviews(): SellerReview[] {
+  const list: SellerReview[] = []
+  let seed = 1
+  const now = Date.now()
+  const day = 24 * 60 * 60 * 1000
+
+  // Seed a handful of "needs response" and "flagged" entries first so counts are stable.
+  const activeProducts = sellerProducts.filter(p => p.reviewCount > 0)
+
+  activeProducts.forEach((p, pi) => {
+    // Deterministic number of reviews per product (2–5), biased to higher ratings.
+    const count = 2 + Math.floor(seededReview(pi + 1) * 4)
+    for (let i = 0; i < count; i++) {
+      const s = seed++
+      const roll = seededReview(s + pi * 7)
+      // 60% 5-star, 22% 4-star, 10% 3-star, 5% 2-star, 3% 1-star
+      const rating =
+        roll < 0.6 ? 5 : roll < 0.82 ? 4 : roll < 0.92 ? 3 : roll < 0.97 ? 2 : 1
+      const template = REVIEW_BODIES.find(b => b.rating === rating) ?? REVIEW_BODIES[0]
+      const name = REVIEW_NAMES[(pi + i) % REVIEW_NAMES.length]
+      const ageDays = Math.floor(seededReview(s + 11) * 90)
+      const createdAt = new Date(now - ageDays * day).toISOString()
+      const hasPhotos = seededReview(s + 23) > 0.7
+      const photos = hasPhotos
+        ? [
+            `https://picsum.photos/seed/srev-${p.id}-${i}a/200/200`,
+            `https://picsum.photos/seed/srev-${p.id}-${i}b/200/200`,
+          ].slice(0, 1 + Math.floor(seededReview(s + 31) * 2))
+        : undefined
+      // Roughly 45% answered, 45% needs response, 10% flagged (flagged implies needs response).
+      const stateRoll = seededReview(s + 41)
+      const flagged = stateRoll > 0.9
+      const responded = !flagged && stateRoll < 0.45
+      const response = responded
+        ? {
+            text: 'Thank you for your review! We’re glad you’re happy with your purchase. 🙏',
+            at: new Date(now - (ageDays - 1) * day).toISOString(),
+          }
+        : undefined
+
+      list.push({
+        id: `srev-${p.id}-${i}`,
+        productId: p.id,
+        productName: p.name,
+        productImage: p.image,
+        userId: `su-${pi}-${i}`,
+        userName: name,
+        rating,
+        title: template.title,
+        body: template.body,
+        photos,
+        createdAt,
+        helpful: Math.floor(seededReview(s + 51) * 40),
+        response,
+        flagged,
+      })
+    }
+  })
+
+  return list
+}
+
+const sellerReviewsCache: SellerReview[] = buildSellerReviews()
+
+function summarize(list: SellerReview[]): SellerReviewSummary {
+  const total = list.length
+  const sum = list.reduce((acc, r) => acc + r.rating, 0)
+  const average = total > 0 ? Math.round((sum / total) * 10) / 10 : 0
+  const distribution: SellerReviewDistribution = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 }
+  list.forEach(r => {
+    distribution[ratingKey(r.rating)] += 1
+  })
+  // Deterministic "previous period" average derived from the current one.
+  const previousAverage = Math.round((average - 0.2) * 10) / 10
+  const trendPct =
+    previousAverage > 0
+      ? Math.round(((average - previousAverage) / previousAverage) * 1000) / 10
+      : 0
+  return { average, total, distribution, trendPct, previousAverage }
+}
+
+function ratingKey(r: number): 1 | 2 | 3 | 4 | 5 {
+  return Math.max(1, Math.min(5, Math.round(r))) as 1 | 2 | 3 | 4 | 5
+}
+
+function countByStatus(list: SellerReview[]): SellerReviewCounts {
+  return {
+    all: list.length,
+    needs_response: list.filter(r => !r.response && !r.flagged).length,
+    responded: list.filter(r => !!r.response).length,
+    flagged: list.filter(r => !!r.flagged).length,
+  }
+}
+
+export async function getSellerReviews(
+  filter: SellerReviewFilter = {},
+): Promise<SellerReviewResult> {
+  await randomDelay(200, 500)
+
+  const full = sellerReviewsCache
+  const counts = countByStatus(full)
+  const summary = summarize(full)
+
+  let list = [...full]
+
+  const status = filter.status ?? 'all'
+  if (status === 'needs_response') list = list.filter(r => !r.response && !r.flagged)
+  else if (status === 'responded') list = list.filter(r => !!r.response)
+  else if (status === 'flagged') list = list.filter(r => !!r.flagged)
+
+  if (filter.rating && filter.rating !== 'all') {
+    list = list.filter(r => r.rating === filter.rating)
+  }
+
+  const hasResponse = filter.hasResponse ?? 'all'
+  if (hasResponse === 'with') list = list.filter(r => !!r.response)
+  else if (hasResponse === 'without') list = list.filter(r => !r.response)
+
+  if (filter.hasPhotos) list = list.filter(r => !!r.photos && r.photos.length > 0)
+
+  if (filter.productId) list = list.filter(r => r.productId === filter.productId)
+
+  switch (filter.sort) {
+    case 'oldest':
+      list.sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt))
+      break
+    case 'lowest':
+      list.sort((a, b) => a.rating - b.rating || +new Date(a.createdAt) - +new Date(b.createdAt))
+      break
+    case 'highest':
+      list.sort((a, b) => b.rating - a.rating || +new Date(b.createdAt) - +new Date(a.createdAt))
+      break
+    case 'newest':
+    default:
+      list.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
+      break
+  }
+
+  return { items: list, total: list.length, counts, summary }
+}
+
+export async function respondToSellerReview(
+  reviewId: string,
+  text: string,
+): Promise<{ success: boolean; review?: SellerReview }> {
+  await randomDelay(300, 700)
+  const review = sellerReviewsCache.find(r => r.id === reviewId)
+  if (!review) return { success: false }
+  review.response = { text, at: new Date().toISOString() }
+  review.flagged = false
+  return { success: true, review }
+}
+
+export async function toggleSellerReviewFlag(
+  reviewId: string,
+): Promise<{ success: boolean; review?: SellerReview }> {
+  await randomDelay(150, 350)
+  const review = sellerReviewsCache.find(r => r.id === reviewId)
+  if (!review) return { success: false }
+  review.flagged = !review.flagged
+  return { success: true, review }
 }

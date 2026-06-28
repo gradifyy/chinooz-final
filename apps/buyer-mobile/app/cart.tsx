@@ -15,7 +15,7 @@ import { colors, spacing, radii } from '@chinooz/theme'
 import { formatNPR } from '@chinooz/utils'
 import { useCartStore, useUIStore } from '@chinooz/state'
 import { EmptyState } from '@chinooz/ui'
-import EmptyCart from '../../components/EmptyCart'
+import EmptyCart from '../components/EmptyCart'
 import type { CartItem } from '@chinooz/types'
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity)

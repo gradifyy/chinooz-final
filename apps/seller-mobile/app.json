@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "Chinooz Seller",
+    "slug": "chinooz-seller",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "chinooz-seller",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.chinooz.seller"
+    },
+    "android": {
+      "package": "com.chinooz.seller",
+      "adaptiveIcon": {
+        "backgroundColor": "#8A1B57"
+      }
+    },
+    "plugins": ["expo-router"],
+    "newArchEnabled": true,
+    "experiments": {
+      "autolinkingModuleResolution": true
+    }
+  }
+}

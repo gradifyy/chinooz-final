@@ -1,6 +1,11 @@
 import { useQuery, useInfiniteQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import * as api from '@chinooz/mock-data'
-import type { Product, Category, CancelReason } from '@chinooz/types'
+import type {
+  SellerProductFilter,
+  SellerInventoryFilter,
+  SellerReviewFilter,
+} from '@chinooz/mock-data'
+import type { Product, Category, CancelReason, SellerOrderStatusKey } from '@chinooz/types'
 
 const STALE_PRODUCTS = 1000 * 30
 
@@ -414,5 +419,107 @@ export function useReturnRequests(orderId?: string) {
   return useQuery({
     queryKey: ['returns', orderId],
     queryFn: () => api.getReturnRequests(orderId),
+  })
+}
+
+export function useSellerProducts(filter: SellerProductFilter) {
+  return useQuery({
+    queryKey: ['seller-products', filter],
+    queryFn: () => api.getSellerProducts(filter),
+    staleTime: 1000 * 30,
+  })
+}
+
+export function useSellerCategories() {
+  return useQuery({
+    queryKey: ['seller-categories'],
+    queryFn: () => api.getSellerCategories(),
+    staleTime: 1000 * 60,
+  })
+}
+
+export function useSellerInventory(filter: SellerInventoryFilter) {
+  return useQuery({
+    queryKey: ['seller-inventory', filter],
+    queryFn: () => api.getSellerInventory(filter),
+    staleTime: 1000 * 30,
+  })
+}
+
+export function useSellerReviews(filter: SellerReviewFilter) {
+  return useQuery({
+    queryKey: ['seller-reviews', filter],
+    queryFn: () => api.getSellerReviews(filter),
+    staleTime: 1000 * 30,
+  })
+}
+
+export function useRespondToSellerReview() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ reviewId, text }: { reviewId: string; text: string }) =>
+      api.respondToSellerReview(reviewId, text),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['seller-reviews'] })
+    },
+  })
+}
+
+export function useToggleSellerReviewFlag() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (reviewId: string) => api.toggleSellerReviewFlag(reviewId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['seller-reviews'] })
+    },
+  })
+}
+
+export function useSellerOrders(sellerId: string | null, status?: SellerOrderStatusKey) {
+  return useQuery({
+    queryKey: ['seller-orders', sellerId, status],
+    queryFn: () => api.getSellerOrders(sellerId as string, status),
+    enabled: !!sellerId,
+    staleTime: 1000 * 30,
+  })
+}
+
+export function useSellerConversations(sellerId?: string | null) {
+  return useQuery({
+    queryKey: ['seller-conversations', sellerId ?? 'me'],
+    queryFn: () => api.getSellerConversations(sellerId ?? undefined),
+    staleTime: 1000 * 30,
+  })
+}
+
+export function useSellerMessages(conversationId: string) {
+  return useQuery({
+    queryKey: ['seller-messages', conversationId],
+    queryFn: () => api.getSellerMessages(conversationId),
+    enabled: !!conversationId,
+    staleTime: 0,
+  })
+}
+
+export function useSendSellerMessage() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ conversationId, body }: { conversationId: string; body: string }) =>
+      api.sendSellerMessage(conversationId, body),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['seller-messages', variables.conversationId] })
+      queryClient.invalidateQueries({ queryKey: ['seller-conversations'] })
+    },
+  })
+}
+
+export function useMarkSellerConversationRead() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (conversationId: string) => api.markSellerConversationRead(conversationId),
+    onSuccess: (_data, conversationId) => {
+      queryClient.invalidateQueries({ queryKey: ['seller-messages', conversationId] })
+      queryClient.invalidateQueries({ queryKey: ['seller-conversations'] })
+    },
   })
 }
