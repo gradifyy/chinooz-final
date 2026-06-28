@@ -417,7 +417,7 @@ export function ReviewCardSkeleton({ testID }: { testID?: string }) {
   return (
     <View
       testID={testID}
-      aria-busy="true"
+      accessibilityState={{ busy: true }}
       accessibilityLabel="Loading review"
       style={styles.card}
     >

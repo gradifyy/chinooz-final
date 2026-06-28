@@ -19,6 +19,7 @@ import {
   Send,
   RefreshCw,
   Image as ImageIcon,
+  CheckCircle2,
   ChevronDown,
 } from 'lucide-react-native'
 import { colors, spacing, radii, fontFamily } from '@chinooz/theme'
