@@ -1,12 +1,12 @@
 import React, { useCallback } from 'react'
 import { View, Text, StyleSheet, Pressable, Linking, Platform } from 'react-native'
 import { useTranslation } from 'react-i18next'
-import { MapPin, Wifi, WifiOff, AlertTriangle } from 'lucide-react-native'
+import { MapPin, Wifi, WifiOff, AlertTriangle, MapPinOff } from 'lucide-react-native'
 import { colors, spacing, radii, fontFamily, fontSize } from '@chinooz/theme'
 import { useA11y } from './A11yProvider'
 import { useAppState } from './AppStateProvider'
 
-type GpsState = 'good' | 'weak' | 'off'
+type GpsState = 'good' | 'weak' | 'off' | 'denied'
 
 interface StatusIndicatorsProps {
   /** Mock GPS state. In production this would read from expo-location. */
@@ -32,6 +32,8 @@ export default function StatusIndicators({ gpsState = 'good' }: StatusIndicators
   const gpsOk = gpsState === 'good'
   const gpsWeak = gpsState === 'weak'
   const gpsOff = gpsState === 'off'
+  const gpsDenied = gpsState === 'denied'
+  const gpsBlocked = gpsOff || gpsDenied
 
   const handleTurnOnLocation = useCallback(() => {
     try {
@@ -43,11 +45,47 @@ export default function StatusIndicators({ gpsState = 'good' }: StatusIndicators
     } catch {}
   }, [])
 
+  const handleOpenSettings = useCallback(() => {
+    try {
+      if (Platform.OS === 'ios') {
+        Linking.openURL('app-settings:')
+      } else {
+        Linking.openURL('android.settings.APPLICATION_DETAILS_SETTINGS')
+      }
+    } catch {}
+  }, [])
+
   // Nothing to show — all good.
   if (gpsOk && isOnline) return null
 
   return (
     <View style={styles.container}>
+      {/* GPS denied — full explainer with enable steps */}
+      {gpsDenied && (
+        <View style={styles.deniedCard} accessibilityRole="alert">
+          <View style={styles.deniedIcon}>
+            <MapPinOff size={20} color={colors.error} />
+          </View>
+          <View style={styles.deniedBody}>
+            <Text style={styles.deniedTitle}>{t('rider.home.gpsDeniedTitle')}</Text>
+            <Text style={styles.deniedSub}>{t('rider.home.gpsDeniedBody')}</Text>
+            <View style={styles.deniedSteps}>
+              <Text style={styles.deniedStep}>{t('rider.home.gpsDeniedStep1')}</Text>
+              <Text style={styles.deniedStep}>{t('rider.home.gpsDeniedStep2')}</Text>
+              <Text style={styles.deniedStep}>{t('rider.home.gpsDeniedStep3')}</Text>
+            </View>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('rider.home.gpsDeniedActionAria')}
+            style={[styles.deniedAction, { minHeight: minTouchTarget }]}
+            onPress={handleOpenSettings}
+          >
+            <Text style={styles.deniedActionText}>{t('rider.home.gpsDeniedAction')}</Text>
+          </Pressable>
+        </View>
+      )}
+
       {/* GPS off nudge — the main blocker */}
       {gpsOff && (
         <View style={styles.nudgeCard} accessibilityRole="alert">
@@ -69,8 +107,8 @@ export default function StatusIndicators({ gpsState = 'good' }: StatusIndicators
         </View>
       )}
 
-      {/* Inline status chips (when not fully off) */}
-      {!gpsOff && (
+      {/* Inline status chips (when GPS is not blocked) */}
+      {!gpsBlocked && (
         <View style={styles.chipRow}>
           <StatusChip
             icon={<MapPin size={12} color={gpsWeak ? colors.warning : colors.success} />}
@@ -95,7 +133,7 @@ export default function StatusIndicators({ gpsState = 'good' }: StatusIndicators
       )}
 
       {/* Offline nudge (when no connection but GPS ok) */}
-      {!isOnline && !gpsOff && (
+      {!isOnline && !gpsBlocked && (
         <View style={styles.offlineNudge} accessibilityRole="text">
           <WifiOff size={14} color={colors.error} />
           <Text style={styles.offlineNudgeText}>{t('rider.home.connOfflineAria')}</Text>
@@ -214,5 +252,64 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.error,
     fontFamily: fontFamily.sans[0],
+  },
+  // GPS denied explainer
+  deniedCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing[3],
+    backgroundColor: colors.errorLight,
+    borderRadius: radii.lg,
+    padding: spacing[4],
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.2)',
+  },
+  deniedIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.full,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  deniedBody: {
+    flex: 1,
+  },
+  deniedTitle: {
+    fontSize: fontSize.sm[0],
+    fontWeight: '700',
+    color: colors.error,
+    fontFamily: fontFamily.sansSemiBold[0],
+  },
+  deniedSub: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: spacing[1],
+    fontFamily: fontFamily.sans[0],
+  },
+  deniedSteps: {
+    marginTop: spacing[2],
+    gap: spacing[1],
+  },
+  deniedStep: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontFamily: fontFamily.sans[0],
+  },
+  deniedAction: {
+    backgroundColor: colors.error,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing[3],
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing[2],
+    marginTop: spacing[1],
+  },
+  deniedActionText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.white,
+    fontFamily: fontFamily.sansBold[0],
   },
 })

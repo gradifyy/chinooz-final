@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native'
 import { useTranslation } from 'react-i18next'
 import { useRouter } from 'expo-router'
@@ -89,6 +89,27 @@ export default function RiderHomeScreen() {
   // read from a notifications store and expo-location respectively.
   const unreadNotifications = 2
   const gpsState: 'good' | 'weak' | 'off' = 'good'
+  const { connectivity } = useAppState()
+
+  // Toggle pending/error state. In production, setOnlineStatus would be async
+  // and could fail. Here we simulate the UI states.
+  const [togglePending, setTogglePending] = useState(false)
+  const [toggleError, setToggleError] = useState(false)
+
+  const handleToggle = useCallback((next: OnlineStatus) => {
+    if (togglePending) return
+    setTogglePending(true)
+    setToggleError(false)
+    setTimeout(() => {
+      setOnlineStatus(next)
+      setTogglePending(false)
+    }, 400)
+  }, [togglePending, setOnlineStatus])
+
+  const handleRetryToggle = useCallback(() => {
+    setToggleError(false)
+    setOnlineStatus('online')
+  }, [setOnlineStatus])
 
   // Reuse the shared no-op analytics wrapper (not a fork).
   useEffect(() => {
@@ -124,8 +145,6 @@ export default function RiderHomeScreen() {
   const samplePayoutPaisa = nprToPaisa(125.5)
   const samplePayoutLabel = formatNPRFromPaisa(samplePayoutPaisa)
   const sampleRevenueLabel = formatNPR(0)
-
-  const handleToggle = (next: OnlineStatus) => setOnlineStatus(next)
 
   const handleResumeActive = () => {
     resumeActive()
@@ -243,12 +262,49 @@ export default function RiderHomeScreen() {
         />
       </View>
 
+      {/* Toggle pending indicator */}
+      {togglePending && (
+        <View style={styles.togglePending} accessibilityRole="status" accessibilityLabel={t('rider.home.togglePendingAria')}>
+          <View style={styles.pendingDot} />
+          <Text style={styles.togglePendingText}>{t('rider.home.togglePending')}</Text>
+        </View>
+      )}
+
+      {/* Toggle error — calm retry */}
+      {toggleError && !togglePending && (
+        <View style={styles.toggleErrorCard} accessibilityRole="alert">
+          <View style={styles.toggleErrorBody}>
+            <Text style={styles.toggleErrorTitle}>{t('rider.home.toggleErrorTitle')}</Text>
+            <Text style={styles.toggleErrorSub}>{t('rider.home.toggleErrorBody')}</Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('rider.home.toggleErrorRetryAria')}
+            style={[styles.toggleRetryBtn, { minHeight: minTouchTarget }]}
+            onPress={handleRetryToggle}
+          >
+            <Text style={styles.toggleRetryText}>{t('rider.home.toggleErrorRetry')}</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('rider.home.toggleErrorDismissAria')}
+            style={styles.toggleDismissBtn}
+            onPress={() => setToggleError(false)}
+            hitSlop={8}
+          >
+            <Text style={styles.toggleDismissText}>×</Text>
+          </Pressable>
+        </View>
+      )}
+
       {/* Listening line — calms when offline */}
       <Text
         style={[styles.listening, status !== 'online' && styles.listeningOff]}
         accessibilityLiveRegion="polite"
       >
-        {status === 'online' ? t('rider.home.listening') : t('rider.home.offlineSubtitle')}
+        {togglePending
+          ? t('rider.home.togglePending')
+          : status === 'online' ? t('rider.home.listening') : t('rider.home.offlineSubtitle')}
       </Text>
 
       {/* Quick controls: break/pause, go-offline, job filter */}
@@ -272,6 +328,26 @@ export default function RiderHomeScreen() {
           onlineHint={t('rider.home.mapOnlineHint')}
         />
       </View>
+
+      {/* Offline cached snapshot banner */}
+      {status !== 'online' && connectivity === 'offline' && (
+        <View style={styles.cachedBanner} accessibilityRole="status" accessibilityLabel={t('rider.home.offlineCachedAria')}>
+          <View style={styles.cachedDot} />
+          <View style={styles.cachedBody}>
+            <Text style={styles.cachedTitle}>{t('rider.home.offlineCachedTitle')}</Text>
+            <Text style={styles.cachedSub}>{t('rider.home.offlineCachedBody')}</Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('rider.home.toggleOn')}
+            accessibilityHint={a11yHint(t('rider.home.toggleHintOnline'))}
+            style={[styles.cachedAction, { minHeight: minTouchTarget }]}
+            onPress={() => handleToggle('online')}
+          >
+            <Text style={styles.cachedActionText}>{t('rider.home.toggleOn')}</Text>
+          </Pressable>
+        </View>
+      )}
 
       {/* Snapshot slot */}
       <View style={styles.section}>
@@ -498,6 +574,124 @@ const styles = StyleSheet.create({
   },
   section: {
     marginTop: spacing[2],
+  },
+  // Toggle pending
+  togglePending: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    paddingVertical: spacing[1.5],
+  },
+  pendingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: radii.full,
+    backgroundColor: colors.primary,
+  },
+  togglePendingText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.primary,
+    fontFamily: fontFamily.sansSemiBold[0],
+  },
+  // Toggle error
+  toggleErrorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    backgroundColor: colors.errorLight,
+    borderRadius: radii.lg,
+    padding: spacing[3],
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.2)',
+  },
+  toggleErrorBody: {
+    flex: 1,
+  },
+  toggleErrorTitle: {
+    fontSize: fontSize.sm[0],
+    fontWeight: '700',
+    color: colors.error,
+    fontFamily: fontFamily.sansSemiBold[0],
+  },
+  toggleErrorSub: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 1,
+    fontFamily: fontFamily.sans[0],
+  },
+  toggleRetryBtn: {
+    backgroundColor: colors.error,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing[3],
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing[2],
+  },
+  toggleRetryText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.white,
+    fontFamily: fontFamily.sansBold[0],
+  },
+  toggleDismissBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: radii.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toggleDismissText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.textTertiary,
+  },
+  // Offline cached banner
+  cachedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    backgroundColor: colors.warningLight,
+    borderRadius: radii.lg,
+    padding: spacing[3],
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.2)',
+  },
+  cachedDot: {
+    width: 10,
+    height: 10,
+    borderRadius: radii.full,
+    backgroundColor: colors.warning,
+  },
+  cachedBody: {
+    flex: 1,
+  },
+  cachedTitle: {
+    fontSize: fontSize.sm[0],
+    fontWeight: '700',
+    color: colors.warning,
+    fontFamily: fontFamily.sansSemiBold[0],
+  },
+  cachedSub: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 1,
+    fontFamily: fontFamily.sans[0],
+  },
+  cachedAction: {
+    backgroundColor: colors.success,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing[3],
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing[2],
+  },
+  cachedActionText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.white,
+    fontFamily: fontFamily.sansBold[0],
   },
   smokeCard: {
     backgroundColor: colors.surface,
