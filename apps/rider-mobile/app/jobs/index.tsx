@@ -16,6 +16,7 @@ import { Circle, Radio, Flame, ChevronRight } from 'lucide-react-native'
 import { colors, spacing, radii, fontFamily, fontSize } from '@chinooz/theme'
 import { SegmentedControl } from '@chinooz/ui'
 import { useOnlineStatusStore, useActiveDeliveryStore, hasActiveDelivery, type ActiveDelivery } from '@chinooz/state'
+import { useAvailableJobs } from '@chinooz/hooks'
 import { jobRequestToActivePayload } from '@chinooz/rs3'
 import { analytics } from '@chinooz/analytics'
 import { useA11y } from '../../components/A11yProvider'
@@ -24,7 +25,6 @@ import ActiveTab from '../../components/jobs/ActiveTab'
 import HistoryTab from '../../components/jobs/HistoryTab'
 import OfflinePrompt from '../../components/jobs/OfflinePrompt'
 import ResumeBanner from '../../components/active/ResumeBanner'
-import { AVAILABLE_REQUESTS } from '../../components/jobs/fixtures'
 import type { JobsTabKey, JobRequest } from '../../components/jobs/types'
 import type { TripLedgerEntry } from '@chinooz/mock-data'
 
@@ -51,8 +51,9 @@ export default function JobsScreen() {
     analytics.screen({ name: 'rider-jobs' })
   }, [])
 
-  // Available count is only meaningful when online.
-  const availableCount = isOnline ? AVAILABLE_REQUESTS.length : 0
+  // Available count from the query (realtime-fresh, 15s staleTime).
+  const { data: availableJobs } = useAvailableJobs()
+  const availableCount = isOnline ? (availableJobs?.length ?? 0) : 0
   const activeCount = activeDelivery ? 1 : 0
 
   const segments = useMemo(

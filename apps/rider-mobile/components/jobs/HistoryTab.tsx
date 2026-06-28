@@ -342,6 +342,10 @@ export default function HistoryTab({ onView }: HistoryTabProps) {
         contentContainerStyle={styles.flatListContent}
         showsVerticalScrollIndicator={false}
         scrollEnabled={false}
+        initialNumToRender={8}
+        maxToRenderPerBatch={8}
+        windowSize={10}
+        removeClippedSubviews={true}
         testID="jobs-history-flatlist"
       />
     </View>

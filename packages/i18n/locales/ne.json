@@ -3939,7 +3939,12 @@
       "mapErrorTitle": "नक्सा लोड भएन",
       "mapErrorBody": "पुनः प्रयास गर्नुहोस् वा नक्सा बिना जारी राख्नुहोस्।",
       "mapErrorRetry": "पुनः प्रयास",
-      "mapErrorRetryAria": "नक्सा लोड गर्न पुनः प्रयास गर्नुहोस्"
+      "mapErrorRetryAria": "नक्सा लोड गर्न पुनः प्रयास गर्नुहोस्",
+      "smokePayoutLabel": "नमुना भुक्तानी (पैसा {{paisa}})",
+      "smokeRevenueLabel": "आजको आम्दानी: {{amount}}",
+      "reducedMotionNote": "कम गति",
+      "mapZoneItem": "{{name}} · {{demand}}% · {{requests}} खुला · {{eta}}मिनेट",
+      "mapZoneItemShort": "{{name}} · {{demand}}% · {{requests}} खुला"
     },
     "jobs": {
       "title": "जब",

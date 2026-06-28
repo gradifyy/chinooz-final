@@ -16,7 +16,7 @@ import { useTranslation } from 'react-i18next'
 import * as Haptics from 'expo-haptics'
 import { WifiOff, Lock, Landmark } from 'lucide-react-native'
 import { colors, spacing, radii, fontFamily, fontSize, duration } from '@chinooz/theme'
-import { useReducedMotion } from '@chinooz/ui'
+import { useReducedMotion, EmptyState } from '@chinooz/ui'
 import { useAvailableJobs } from '@chinooz/hooks'
 import { useCodLimitStatus } from '@chinooz/state'
 import { RIDER_LOCATION, getDemandZones, type DemandZone } from '@chinooz/mock-data'
@@ -84,6 +84,13 @@ export default function AvailableTab({
   const [view, setView] = useState<AvailableView>('list')
   const [filters, setFilters] = useState<AvailableFilters>(DEFAULT_FILTERS)
   const [refreshing, setRefreshing] = useState(false)
+
+  // Debounce filter changes (200ms) so rapid cycling doesn't thrash re-renders.
+  const [debouncedFilters, setDebouncedFilters] = useState(filters)
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedFilters(filters), 200)
+    return () => clearTimeout(id)
+  }, [filters])
 
   // Zones for the zone filter (demand zones double as job zones).
   const zones = useMemo<{ id: string; name: string }[]>(() => {
@@ -157,16 +164,16 @@ export default function AvailableTab({
   // Apply filters + sort.
   const filtered = useMemo(() => {
     let list = liveJobs
-    if (filters.maxDistanceKm !== null) {
-      list = list.filter(j => j.pickupDistanceKm <= filters.maxDistanceKm!)
+    if (debouncedFilters.maxDistanceKm !== null) {
+      list = list.filter(j => j.pickupDistanceKm <= debouncedFilters.maxDistanceKm!)
     }
-    if (filters.minPayout !== null) {
-      list = list.filter(j => j.payout >= filters.minPayout!)
+    if (debouncedFilters.minPayout !== null) {
+      list = list.filter(j => j.payout >= debouncedFilters.minPayout!)
     }
-    if (filters.payment === 'cod') list = list.filter(isCodJob)
-    if (filters.payment === 'prepaid') list = list.filter(j => !isCodJob(j))
-    if (filters.zoneId !== null) {
-      const zone = zones.find(z => z.id === filters.zoneId)
+    if (debouncedFilters.payment === 'cod') list = list.filter(isCodJob)
+    if (debouncedFilters.payment === 'prepaid') list = list.filter(j => !isCodJob(j))
+    if (debouncedFilters.zoneId !== null) {
+      const zone = zones.find(z => z.id === debouncedFilters.zoneId)
       if (zone) {
         list = list.filter(j => j.zone === zone.name || j.dropoffLabel === zone.name)
       }
@@ -176,7 +183,7 @@ export default function AvailableTab({
         ? a.pickupDistanceKm - b.pickupDistanceKm
         : b.payout - a.payout,
     )
-  }, [liveJobs, filters, sort, zones])
+  }, [liveJobs, debouncedFilters, sort, zones])
 
   const tick = () => {
     try { if (!reduced) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light) } catch {}
@@ -360,6 +367,10 @@ export default function AvailableTab({
           contentContainerStyle={styles.flatListContent}
           showsVerticalScrollIndicator={false}
           scrollEnabled={false}
+          initialNumToRender={6}
+          maxToRenderPerBatch={6}
+          windowSize={10}
+          removeClippedSubviews={true}
           testID="jobs-available-flatlist"
         />
         </Animated.View>
