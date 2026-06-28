@@ -473,9 +473,9 @@ function DetailPane({
       <p className="mt-4 text-sm leading-relaxed text-text-secondary">{t(row.descKey)}</p>
 
       <div className="mt-5 flex flex-wrap gap-3">
-        {row.id === 'store-profile' ? (
+        {(row.id === 'store-profile' || row.id === 'kyc') ? (
           <Link
-            href="/settings/storefront"
+            href={row.id === 'store-profile' ? '/settings/storefront' : '/settings/business'}
             className="inline-flex min-touch items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark transition-colors"
           >
             {t('seller.settings.manage')}
@@ -496,7 +496,7 @@ function DetailPane({
         </button>
       </div>
 
-      {row.id !== 'store-profile' && (
+      {row.id !== 'store-profile' && row.id !== 'kyc' && (
         <p className="mt-4 rounded-lg bg-background px-3 py-2.5 text-xs text-text-muted">
           {t('seller.settings.comingSoon')}
         </p>

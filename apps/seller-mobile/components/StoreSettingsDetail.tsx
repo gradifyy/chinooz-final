@@ -90,13 +90,13 @@ export default function StoreSettingsDetail() {
           </View>
           <Text style={styles.detailDesc}>{t(row.descKey)}</Text>
 
-          {row.id === 'store-profile' ? (
+          {row.id === 'store-profile' || row.id === 'kyc' ? (
             <TouchableOpacity
               style={styles.manageBtn}
               accessibilityRole="button"
               accessibilityLabel={t('seller.settings.manage')}
               activeOpacity={0.85}
-              onPress={() => router.push('/settings/storefront')}
+              onPress={() => router.push(row.id === 'store-profile' ? '/settings/storefront' : '/settings/business')}
             >
               <Text style={styles.manageBtnText}>{t('seller.settings.manage')}</Text>
             </TouchableOpacity>
@@ -106,7 +106,7 @@ export default function StoreSettingsDetail() {
             </TouchableOpacity>
           )}
 
-          {row.id !== 'store-profile' && (
+          {row.id !== 'store-profile' && row.id !== 'kyc' && (
             <View style={styles.comingSoon}>
               <Text style={styles.comingSoonText}>{t('seller.settings.comingSoon')}</Text>
             </View>
