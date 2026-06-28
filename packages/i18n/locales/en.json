@@ -3479,7 +3479,22 @@
       "activityStatusPending": "Pending",
       "activityStatusPositive": "Positive",
       "activityStatusNeutral": "Neutral",
-      "activityAria": "{{title}}, {{subtitle}}, {{status}}, {{at}}"
+      "activityAria": "{{title}}, {{subtitle}}, {{status}}, {{at}}",
+      "loadingDashboard": "Loading dashboard…",
+      "firstRunTitle": "No sales yet",
+      "firstRunSubtitle": "Add your first product to start selling on Chinooz.",
+      "firstRunCta": "Add your first product",
+      "firstRunCtaAria": "Add your first product to start selling",
+      "errorTitle": "Couldn't load dashboard",
+      "errorSubtitle": "Something went wrong. Please try again.",
+      "errorRetry": "Retry",
+      "errorRetryAria": "Retry loading dashboard",
+      "offlineBanner": "You're offline. Showing cached data.",
+      "offlineBannerAria": "You are offline. Showing cached dashboard data.",
+      "skeletonKpis": "Loading metrics",
+      "skeletonChart": "Loading chart",
+      "skeletonAlerts": "Loading alerts",
+      "skeletonActivity": "Loading activity"
     },
     "messages": {
       "tab": "Messages",

@@ -29,6 +29,7 @@ import { useAppActiveCallback } from './AppStateProvider'
 import { useActiveDeliveryStore, hasActiveDelivery } from '@chinooz/state'
 import { useAvailableJobs, useAcceptJob, useDeclineJob } from '@chinooz/hooks'
 import { formatNPR } from '@chinooz/utils'
+import { analytics } from '@chinooz/analytics'
 import type { RiderJob } from '@chinooz/types'
 
 /** Countdown seconds before auto-decline. */
@@ -106,6 +107,8 @@ export default function RequestSlot({ status, title }: RequestSlotProps) {
         }
       } catch {}
 
+      analytics.track('rider_job_offer_arrived', { jobId: offeredJob.id, payout: offeredJob.payout })
+
       const itemCount = getJobItemCount(offeredJob)
       const codStr = offeredJob.isCod
         ? t('rider.home.requestCod', { amount: offeredJob.codAmount.toLocaleString('en-IN') })
@@ -165,6 +168,7 @@ export default function RequestSlot({ status, title }: RequestSlotProps) {
     try {
       AccessibilityInfo.announceForAccessibility(t('rider.home.requestAutoDeclineAria'))
     } catch {}
+    analytics.track('rider_job_auto_declined', { jobId: offeredJobIdRef.current })
     // Actually decline via the mock API (removes from pool).
     if (offeredJobIdRef.current) {
       declineMutation.mutate({

@@ -237,11 +237,11 @@ export function useAcceptJob() {
       // Rollback on failure.
       if (ctx?.prevJobs) qc.setQueryData(KEYS.jobs(), ctx.prevJobs)
     },
-    onSuccess: data => {
+    onSuccess: (data, vars) => {
       if (data.activeDelivery) {
         qc.setQueryData(KEYS.active, data.activeDelivery)
       }
-      analytics.track('rider_job_accepted', { jobId: data.id })
+      analytics.track('rider_job_accepted', { jobId: vars.jobId })
       qc.invalidateQueries({ queryKey: ['rider', 'jobs'] })
     },
   })

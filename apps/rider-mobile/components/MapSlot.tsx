@@ -292,7 +292,7 @@ export default function MapSlot({ status, title, offlineHint, onlineHint }: MapS
                 })}
                 numberOfLines={1}
               >
-                {zone.name} · {zone.demand}% · {zone.openRequests} open
+                {t('rider.home.mapZoneItemShort', { name: zone.name, demand: zone.demand, requests: zone.openRequests })}
               </Text>
             </View>
           ))
@@ -325,6 +325,7 @@ function FallbackList({
   seeHotspotsAria: string
   minTouchTarget: number
 }) {
+  const { t } = useTranslation()
   return (
     <View>
       <Text style={styles.fallbackTitle}>{title}</Text>
@@ -338,7 +339,7 @@ function FallbackList({
               accessibilityLabel={ariaItem(zone)}
               numberOfLines={1}
             >
-              {zone.name} · {zone.demand}% · {zone.openRequests} open · {zone.avgPickupEtaMin}min
+              {t('rider.home.mapZoneItem', { name: zone.name, demand: zone.demand, requests: zone.openRequests, eta: zone.avgPickupEtaMin })}
             </Text>
           </View>
         ))

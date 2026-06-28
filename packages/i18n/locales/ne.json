@@ -3413,7 +3413,22 @@
       "activityStatusPending": "पending",
       "activityStatusPositive": "सकारात्मक",
       "activityStatusNeutral": "तटस्थ",
-      "activityAria": "{{title}}, {{subtitle}}, {{status}}, {{at}}"
+      "activityAria": "{{title}}, {{subtitle}}, {{status}}, {{at}}",
+      "loadingDashboard": "ड्यासबोर्ड लोड हुँदै…",
+      "firstRunTitle": "अहिलेसम्म बिक्री छैन",
+      "firstRunSubtitle": "चिनुजमा बिक्री सुरु गर्न आफ्नो पहिलो उत्पादन थप्नुहोस्।",
+      "firstRunCta": "आफ्नो पहिलो उत्पादन थप्नुहोस्",
+      "firstRunCtaAria": "बिक्री सुरु गर्न आफ्नो पहिलो उत्पादन थप्नुहोस्",
+      "errorTitle": "ड्यासबोर्ड लोड हुन सकेन",
+      "errorSubtitle": "केही गडबड भयो। कृपया फेरि प्रयास गर्नुहोस्।",
+      "errorRetry": "फेरि प्रयास गर्नुहोस्",
+      "errorRetryAria": "ड्यासबोर्ड फेरि लोड गर्नुहोस्",
+      "offlineBanner": "तपाईं अफलाइन हुनुहुन्छ। क्यास गरिएको डाटा देखाइँदै।",
+      "offlineBannerAria": "तपाईं अफलाइन हुनुहुन्छ। क्यास गरिएको ड्यासबोर्ड डाटा देखाइँदै।",
+      "skeletonKpis": "मेट्रिक्स लोड हुँदै",
+      "skeletonChart": "चार्ट लोड हुँदै",
+      "skeletonAlerts": "सचेत जानकारी लोड हुँदै",
+      "skeletonActivity": "गतिविधि लोड हुँदै"
     },
     "messages": {
       "tab": "सन्देश",

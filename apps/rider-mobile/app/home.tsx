@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo } from 'react'
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native'
 import { useTranslation } from 'react-i18next'
 import { useRouter } from 'expo-router'
@@ -41,6 +41,7 @@ import ResumeBanner from '../components/active/ResumeBanner'
 import QuickControls from '../components/QuickControls'
 import StatusIndicators from '../components/StatusIndicators'
 import IncentiveNudge from '../components/IncentiveNudge'
+import { useSetOnlineStatus } from '@chinooz/hooks'
 
 /**
  * Rider Home — smoke-test screen.
@@ -70,7 +71,6 @@ export default function RiderHomeScreen() {
   const { isForeground } = useAppState()
 
   const status = useOnlineStatusStore(s => s.status)
-  const setOnlineStatus = useOnlineStatusStore(s => s.setOnlineStatus)
   const activeDelivery = useActiveDeliveryStore(s => s.activeDelivery)
   const resumeActive = useActiveDeliveryStore(s => s.resume)
   const tickOnline = useOnlineStatusStore(s => s.tickOnline)
@@ -99,25 +99,22 @@ export default function RiderHomeScreen() {
   const gpsState: 'good' | 'weak' | 'off' = 'good'
   const { connectivity } = useAppState()
 
-  // Toggle pending/error state. In production, setOnlineStatus would be async
-  // and could fail. Here we simulate the UI states.
-  const [togglePending, setTogglePending] = useState(false)
-  const [toggleError, setToggleError] = useState(false)
+  // Toggle via the API mutation (optimistic store update + rollback + analytics).
+  const toggleMutation = useSetOnlineStatus()
 
   const handleToggle = useCallback((next: OnlineStatus) => {
-    if (togglePending) return
-    setTogglePending(true)
-    setToggleError(false)
-    setTimeout(() => {
-      setOnlineStatus(next)
-      setTogglePending(false)
-    }, 400)
-  }, [togglePending, setOnlineStatus])
+    if (toggleMutation.isPending) return
+    toggleMutation.mutate(next, {
+      onError: () => {
+        // Error state is surfaced via toggleMutation.isError in the UI.
+      },
+    })
+  }, [toggleMutation])
 
   const handleRetryToggle = useCallback(() => {
-    setToggleError(false)
-    setOnlineStatus('online')
-  }, [setOnlineStatus])
+    toggleMutation.reset()
+    toggleMutation.mutate('online')
+  }, [toggleMutation])
 
   // Reuse the shared no-op analytics wrapper (not a fork).
   useEffect(() => {
@@ -178,6 +175,7 @@ export default function RiderHomeScreen() {
   const sampleRevenueLabel = formatNPR(0)
 
   const handleResumeActive = () => {
+    analytics.track('rider_resume_active_tapped')
     resumeActive()
     router.push('/active')
   }
@@ -242,7 +240,7 @@ export default function RiderHomeScreen() {
               : t('rider.home.notifEntryAriaZero')
           }
           style={[styles.bellBtn, { minHeight: minTouchTarget, minWidth: minTouchTarget }]}
-          onPress={() => router.push('/notifications')}
+          onPress={() => { analytics.track('rider_notifications_tapped'); router.push('/notifications') }}
           hitSlop={8}
         >
           <Bell size={20} color={colors.textSecondary} />
@@ -263,7 +261,7 @@ export default function RiderHomeScreen() {
         <SegmentedControl
           segments={languageSegments}
           activeKey={locale}
-          onChange={key => setLocale(key as Locale)}
+          onChange={key => { analytics.track('rider_language_changed', { locale: key }); setLocale(key as Locale) }}
           testID="rider-language-toggle"
         />
       </View>
@@ -294,7 +292,7 @@ export default function RiderHomeScreen() {
       </View>
 
       {/* Toggle pending indicator */}
-      {togglePending && (
+      {toggleMutation.isPending && (
         <View style={styles.togglePending} accessibilityRole="text" accessibilityLabel={t('rider.home.togglePendingAria')}>
           <View style={styles.pendingDot} />
           <Text style={styles.togglePendingText}>{t('rider.home.togglePending')}</Text>
@@ -302,7 +300,7 @@ export default function RiderHomeScreen() {
       )}
 
       {/* Toggle error — calm retry */}
-      {toggleError && !togglePending && (
+      {toggleMutation.isError && !toggleMutation.isPending && (
         <View style={styles.toggleErrorCard} accessibilityRole="alert">
           <View style={styles.toggleErrorBody}>
             <Text style={styles.toggleErrorTitle}>{t('rider.home.toggleErrorTitle')}</Text>
@@ -320,7 +318,7 @@ export default function RiderHomeScreen() {
             accessibilityRole="button"
             accessibilityLabel={t('rider.home.toggleErrorDismissAria')}
             style={styles.toggleDismissBtn}
-            onPress={() => setToggleError(false)}
+            onPress={() => toggleMutation.reset()}
             hitSlop={8}
           >
             <Text style={styles.toggleDismissText}>×</Text>
@@ -333,11 +331,11 @@ export default function RiderHomeScreen() {
         style={[
           styles.listening,
           status !== 'online' && styles.listeningOff,
-          status === 'online' && !togglePending ? listeningStyle : undefined,
+          status === 'online' && !toggleMutation.isPending ? listeningStyle : undefined,
         ]}
         accessibilityLiveRegion="polite"
       >
-        {togglePending
+        {toggleMutation.isPending
           ? t('rider.home.togglePending')
           : status === 'online' ? t('rider.home.listening') : t('rider.home.offlineSubtitle')}
       </Animated.Text>
@@ -401,7 +399,7 @@ export default function RiderHomeScreen() {
         })}
         accessibilityHint={a11yHint(t('rider.incentives.subtitle'))}
         style={[styles.incentiveEntry, { minHeight: minTouchTarget }]}
-        onPress={() => router.push('/incentives')}
+        onPress={() => { analytics.track('rider_incentives_entry_tapped'); router.push('/incentives') }}
       >
         <View style={styles.incentiveEntryIcon}>
           <Target size={20} color={colors.gold} />
@@ -414,7 +412,7 @@ export default function RiderHomeScreen() {
         </View>
         {incentiveThisWeek !== null ? (
           <Text style={styles.incentiveEntryAmount}>
-            NPR {incentiveThisWeek.toLocaleString('en-IN')}
+            {formatNPR(incentiveThisWeek ?? 0)}
           </Text>
         ) : null}
         <ChevronRight size={20} color={colors.textTertiary} />
@@ -434,7 +432,7 @@ export default function RiderHomeScreen() {
               : t('rider.wallet.homeEntrySub'),
         )}
         style={[styles.walletEntry, { minHeight: minTouchTarget }]}
-        onPress={() => router.push('/wallet')}
+        onPress={() => { analytics.track('rider_wallet_entry_tapped'); router.push('/wallet') }}
       >
         <View style={styles.walletEntryIcon}>
           <Wallet size={20} color={colors.primary} />
@@ -464,7 +462,7 @@ export default function RiderHomeScreen() {
           </View>
         )}
         <Text style={styles.walletEntryAmount}>
-          NPR {cashInHand.toLocaleString('en-IN')}
+          {formatNPR(cashInHand)}
         </Text>
         <ChevronRight size={20} color={colors.textTertiary} />
       </Pressable>
@@ -478,9 +476,9 @@ export default function RiderHomeScreen() {
           samplePayoutLabel,
         )}
       >
-        <Text style={styles.smokeLabel}>Smoke-test payout (paisa {samplePayoutPaisa})</Text>
+        <Text style={styles.smokeLabel}>{t('rider.home.smokePayoutLabel', { paisa: samplePayoutPaisa })}</Text>
         <Text style={styles.smokeValue}>{samplePayoutLabel}</Text>
-        <Text style={styles.smokeSub}>Today revenue: {sampleRevenueLabel}</Text>
+        <Text style={styles.smokeSub}>{t('rider.home.smokeRevenueLabel', { amount: sampleRevenueLabel })}</Text>
       </View>
 
       {/* Offline hint — 48dp tap target to go online */}
@@ -490,7 +488,7 @@ export default function RiderHomeScreen() {
           accessibilityLabel={t('rider.home.toggleOn')}
           accessibilityHint={a11yHint(t('rider.home.toggleHintOnline'))}
           style={[styles.onlineCta, { minHeight: minTouchTarget }]}
-          onPress={() => setOnlineStatus('online')}
+          onPress={() => handleToggle('online')}
         >
           <Text style={styles.onlineCtaText}>{t('rider.home.toggleOn')}</Text>
         </Pressable>
@@ -499,7 +497,7 @@ export default function RiderHomeScreen() {
       {/* Battery-conscious footer */}
       <Text style={styles.footerNote}>
         {isForeground ? t('rider.home.listening') : t('rider.home.toggleOff')}
-        {reducedMotion ? ' · reduced motion' : ''}
+        {reducedMotion ? ` · ${t('rider.home.reducedMotionNote')}` : ''}
       </Text>
     </ScrollView>
   )
