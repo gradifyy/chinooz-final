@@ -41,9 +41,8 @@ import {
   NoCommentsEmpty,
   ReportFailState,
 } from './PerformanceStates'
+import { useRiderRatings, useReportRiderRating } from '@chinooz/hooks'
 import {
-  getRiderRatings,
-  reportRiderRating,
   RIDER_RATING_TAGS,
   type RiderRatingsResult,
   type RiderRatingRow,
@@ -71,19 +70,19 @@ function pct(count: number, total: number): number {
   return total > 0 ? Math.round((count / total) * 100) : 0
 }
 
-function timeAgo(iso: string): string {
+function timeAgo(iso: string, t: (key: string, opts?: Record<string, unknown>) => string): string {
   const diff = Date.now() - +new Date(iso)
   const day = 24 * 60 * 60 * 1000
   if (diff < 0) return ''
   if (diff < day) {
     const hrs = Math.floor(diff / (60 * 60 * 1000))
-    if (hrs < 1) return 'just now'
-    return `${hrs}h ago`
+    if (hrs < 1) return t('rider.ratings.timeJustNow')
+    return t('rider.ratings.timeHoursAgo', { count: hrs })
   }
   const days = Math.floor(diff / day)
-  if (days < 7) return `${days}d ago`
-  if (days < 30) return `${Math.floor(days / 7)}w ago`
-  return `${Math.floor(days / 30)}mo ago`
+  if (days < 7) return t('rider.ratings.timeDaysAgo', { count: days })
+  if (days < 30) return t('rider.ratings.timeWeeksAgo', { count: Math.floor(days / 7) })
+  return t('rider.ratings.timeMonthsAgo', { count: Math.floor(days / 30) })
 }
 
 function tagTone(id: RiderRatingTag): RiderRatingTagTone {
@@ -104,21 +103,25 @@ export default function RatingsFeedbackScreen() {
   const insets = useSafeAreaInsets()
   const reduced = useReducedMotion()
   const { minTouchTarget } = useA11y()
-
-  const [data, setData] = useState<RiderRatingsResult | null>(null)
-  const [cachedData, setCachedData] = useState<RiderRatingsResult | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState(false)
   const { connectivity } = useAppState()
   const isOffline = connectivity === 'offline'
 
   const [starsFilter, setStarsFilter] = useState<number | 'all'>('all')
   const [tagFilter, setTagFilter] = useState<RiderRatingTag | 'all'>('all')
 
+  // TanStack Query — 120s staleTime per RS3 convention.
+  const ratingsQuery = useRiderRatings(starsFilter, tagFilter)
+  const data = ratingsQuery.data ?? null
+  const cachedData = data
+  const loading = ratingsQuery.isLoading
+  const refreshing = ratingsQuery.isRefetching
+  const error = ratingsQuery.isError
+
+  // Report mutation — optimistic + rollback (RS3 pattern).
+  const reportMutation = useReportRiderRating()
+
   // Report flow state.
   const [reportTarget, setReportTarget] = useState<RiderRatingRow | null>(null)
-  const [reportSending, setReportSending] = useState(false)
   const [reportedIds, setReportedIds] = useState<Set<string>>(new Set())
   const [reportToast, setReportToast] = useState(false)
   const [reportFail, setReportFail] = useState(false)
@@ -129,29 +132,6 @@ export default function RatingsFeedbackScreen() {
   useEffect(() => {
     analytics.screen({ name: 'rider-ratings' })
   }, [])
-
-  const load = useCallback(
-    async (isRefresh = false) => {
-      if (isRefresh) setRefreshing(true)
-      else setLoading(true)
-      setError(false)
-      try {
-        const result = await getRiderRatings({ stars: starsFilter, tag: tagFilter })
-        setData(result)
-        setCachedData(result)
-      } catch {
-        setError(true)
-      } finally {
-        setLoading(false)
-        setRefreshing(false)
-      }
-    },
-    [starsFilter, tagFilter],
-  )
-
-  useEffect(() => {
-    load()
-  }, [load])
 
   // Animate distribution bars on data change.
   useEffect(() => {
@@ -169,7 +149,7 @@ export default function RatingsFeedbackScreen() {
     ).start()
   }, [data, loading, reduced])
 
-  const onRefresh = useCallback(() => load(true), [load])
+  const onRefresh = useCallback(() => ratingsQuery.refetch(), [ratingsQuery])
 
   const goBack = useCallback(() => {
     try {
@@ -212,25 +192,23 @@ export default function RatingsFeedbackScreen() {
 
   const closeReport = useCallback(() => {
     setReportTarget(null)
-    setReportSending(false)
     setReportFail(false)
   }, [])
 
   const confirmReport = useCallback(async () => {
     if (!reportTarget) return
-    setReportSending(true)
     setReportFail(false)
     try {
-      await reportRiderRating(reportTarget.id)
+      const opRef = `report-${reportTarget.id}-${Date.now()}`
+      await reportMutation.mutateAsync({ ratingId: reportTarget.id, opRef })
       setReportedIds(prev => new Set(prev).add(reportTarget.id))
       setReportToast(true)
       setTimeout(() => setReportToast(false), 2400)
       closeReport()
     } catch {
-      setReportSending(false)
       setReportFail(true)
     }
-  }, [reportTarget, closeReport])
+  }, [reportTarget, closeReport, reportMutation])
 
   const starChips: { key: number | 'all'; label: string }[] = [
     { key: 'all', label: t('rider.ratings.filterStarsAll') },
@@ -554,7 +532,7 @@ export default function RatingsFeedbackScreen() {
       {/* Report confirm dialog — with failure state (preserves input) */}
       <ReportDialog
         visible={!!reportTarget}
-        sending={reportSending}
+        sending={reportMutation.isPending}
         failed={reportFail}
         title={t('rider.ratings.reportConfirmTitle')}
         msg={t('rider.ratings.reportConfirmMsg')}
@@ -677,7 +655,7 @@ function HighlightsSection({
 }
 
 /** Feedback row — anonymized buyer, stars, optional comment, tags, report. */
-function FeedbackRow({
+const FeedbackRow = React.memo(function FeedbackRow({
   row,
   t,
   reported,
@@ -713,7 +691,7 @@ function FeedbackRow({
               {row.buyerLabel}
             </Text>
             <Text style={styles.zoneLabel} numberOfLines={1}>
-              {row.zone} · {timeAgo(row.date)}
+              {row.zone} · {timeAgo(row.date, t)}
             </Text>
           </View>
         </View>
@@ -778,7 +756,7 @@ function FeedbackRow({
       </View>
     </View>
   )
-}
+})
 
 /** Filter chip — accessibilityRole + selected state. */
 function FilterChip({

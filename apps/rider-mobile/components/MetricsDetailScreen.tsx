@@ -39,8 +39,8 @@ import {
   OfflineState,
 } from './PerformanceStates'
 import { CountUp } from './CountUp'
+import { useRiderMetricDetail } from '@chinooz/hooks'
 import {
-  getRiderMetricDetail,
   RIDER_PERFORMANCE_PERIODS,
   bandForRate,
   bandForRating,
@@ -140,41 +140,21 @@ export default function MetricsDetailScreen() {
     : 'acceptance'
 
   const [periodKey, setPeriodKey] = useState<RiderPerformancePeriodKey>('week')
-  const [detail, setDetail] = useState<RiderMetricDetail | null>(null)
-  const [cachedDetail, setCachedDetail] = useState<RiderMetricDetail | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState(false)
   const { connectivity } = useAppState()
   const isOffline = connectivity === 'offline'
+
+  // TanStack Query — 120s staleTime per RS3 convention.
+  const periodRange = RIDER_PERFORMANCE_PERIODS.find(r => r.key === periodKey)!
+  const metricQuery = useRiderMetricDetail(metricId, periodRange)
+  const detail = metricQuery.data ?? null
+  const cachedDetail = detail
+  const loading = metricQuery.isLoading
+  const refreshing = metricQuery.isRefetching
+  const error = metricQuery.isError
 
   useEffect(() => {
     analytics.screen({ name: 'rider-metrics-detail', props: { metric: metricId } })
   }, [metricId])
-
-  const load = useCallback(
-    async (key: RiderPerformancePeriodKey, isRefresh = false) => {
-      if (isRefresh) setRefreshing(true)
-      else setLoading(true)
-      setError(false)
-      try {
-        const range = RIDER_PERFORMANCE_PERIODS.find(r => r.key === key)!
-        const d = await getRiderMetricDetail(metricId, range)
-        setDetail(d)
-        setCachedDetail(d)
-      } catch {
-        setError(true)
-      } finally {
-        setLoading(false)
-        setRefreshing(false)
-      }
-    },
-    [metricId],
-  )
-
-  useEffect(() => {
-    load(periodKey)
-  }, [load, periodKey])
 
   const onChangePeriod = useCallback(
     (next: RiderPerformancePeriodKey) => {
@@ -188,8 +168,8 @@ export default function MetricsDetailScreen() {
   )
 
   const onRefresh = useCallback(() => {
-    load(periodKey, true)
-  }, [load, periodKey])
+    metricQuery.refetch()
+  }, [metricQuery])
 
   const goBack = useCallback(() => {
     try {

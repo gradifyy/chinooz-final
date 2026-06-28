@@ -39,8 +39,8 @@ import { useReducedMotion } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
 import { useA11y } from './A11yProvider'
 import { TierUpCelebration } from './TierUpCelebration'
+import { useRiderTierDetail } from '@chinooz/hooks'
 import {
-  getRiderTierDetail,
   RIDER_TIER_ACCENTS,
   type RiderTierDetail,
   type RiderTierCriterion,
@@ -113,10 +113,12 @@ export default function TierStandingScreen() {
   const reduced = useReducedMotion()
   const { minTouchTarget } = useA11y()
 
-  const [data, setData] = useState<RiderTierDetail | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState(false)
+  // TanStack Query — 120s staleTime per RS3 convention.
+  const tierQuery = useRiderTierDetail()
+  const data = tierQuery.data ?? null
+  const loading = tierQuery.isLoading
+  const refreshing = tierQuery.isRefetching
+  const error = tierQuery.isError
 
   // Progress bar animation (Reanimated — 60fps on UI thread).
   const progressAnim = useSharedValue(0)
@@ -124,25 +126,6 @@ export default function TierStandingScreen() {
   useEffect(() => {
     analytics.screen({ name: 'rider-tier' })
   }, [])
-
-  const load = useCallback(async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true)
-    else setLoading(true)
-    setError(false)
-    try {
-      const result = await getRiderTierDetail()
-      setData(result)
-    } catch {
-      setError(true)
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    load()
-  }, [load])
 
   // Animate the progress bar when data loads.
   useEffect(() => {
@@ -163,7 +146,7 @@ export default function TierStandingScreen() {
     )
   }, [data, loading, reduced, progressAnim])
 
-  const onRefresh = useCallback(() => load(true), [load])
+  const onRefresh = useCallback(() => tierQuery.refetch(), [tierQuery])
 
   const goBack = useCallback(() => {
     try {

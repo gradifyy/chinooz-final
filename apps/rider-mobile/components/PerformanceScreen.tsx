@@ -44,8 +44,8 @@ import {
 } from './PerformanceStates'
 import { CountUp } from './CountUp'
 import { TierUpCelebration } from './TierUpCelebration'
+import { useRiderPerformance } from '@chinooz/hooks'
 import {
-  getRiderPerformance,
   RIDER_PERFORMANCE_PERIODS,
   type RiderPerformanceOverview,
   type RiderPerformanceMetric,
@@ -106,13 +106,17 @@ export default function PerformanceScreen() {
   const { minTouchTarget } = useA11y()
 
   const [periodKey, setPeriodKey] = useState<RiderPerformancePeriodKey>('week')
-  const [overview, setOverview] = useState<RiderPerformanceOverview | null>(null)
-  const [cachedOverview, setCachedOverview] = useState<RiderPerformanceOverview | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState(false)
   const { connectivity } = useAppState()
   const isOffline = connectivity === 'offline'
+
+  // TanStack Query — 120s staleTime per RS3 convention.
+  const periodRange = RIDER_PERFORMANCE_PERIODS.find(r => r.key === periodKey)!
+  const performanceQuery = useRiderPerformance(periodRange)
+  const overview = performanceQuery.data ?? null
+  const cachedOverview = overview
+  const loading = performanceQuery.isLoading
+  const refreshing = performanceQuery.isRefetching
+  const error = performanceQuery.isError
 
   // Threshold-change detection: compare previous vs current metric statuses.
   const prevStatusesRef = useRef<Record<string, RiderMetricStatus> | null>(null)
@@ -125,51 +129,28 @@ export default function PerformanceScreen() {
     analytics.screen({ name: 'rider-performance' })
   }, [])
 
-  const load = useCallback(
-    async (key: RiderPerformancePeriodKey, isRefresh = false) => {
-      if (isRefresh) {
-        setRefreshing(true)
-      } else {
-        setLoading(true)
-      }
-      setError(false)
-      try {
-        const range = RIDER_PERFORMANCE_PERIODS.find(r => r.key === key)!
-        const ov = await getRiderPerformance(range)
-        // Threshold-change detection: compare statuses vs previous load.
-        const prev = prevStatusesRef.current
-        if (prev) {
-          for (const m of ov.metrics) {
-            const old = prev[m.id]
-            if (old && old !== m.status) {
-              setThresholdChange({
-                metric: t(m.labelKey),
-                status: t(statusWordKey(m.status)),
-              })
-              break
-            }
-          }
-        }
-        const statuses: Record<string, RiderMetricStatus> = {}
-        ov.metrics.forEach(m => {
-          statuses[m.id] = m.status
-        })
-        prevStatusesRef.current = statuses
-        setOverview(ov)
-        setCachedOverview(ov)
-      } catch {
-        setError(true)
-      } finally {
-        setLoading(false)
-        setRefreshing(false)
-      }
-    },
-    [],
-  )
-
+  // Detect threshold changes when data arrives.
   useEffect(() => {
-    load(periodKey)
-  }, [load, periodKey])
+    if (!overview) return
+    const prev = prevStatusesRef.current
+    if (prev) {
+      for (const m of overview.metrics) {
+        const old = prev[m.id]
+        if (old && old !== m.status) {
+          setThresholdChange({
+            metric: t(m.labelKey),
+            status: t(statusWordKey(m.status)),
+          })
+          break
+        }
+      }
+    }
+    const statuses: Record<string, RiderMetricStatus> = {}
+    overview.metrics.forEach(m => {
+      statuses[m.id] = m.status
+    })
+    prevStatusesRef.current = statuses
+  }, [overview, t])
 
   // Dismiss threshold-change note after a few seconds.
   useEffect(() => {
@@ -190,8 +171,8 @@ export default function PerformanceScreen() {
   )
 
   const onRefresh = useCallback(() => {
-    load(periodKey, true)
-  }, [load, periodKey])
+    performanceQuery.refetch()
+  }, [performanceQuery])
 
   const goBack = useCallback(() => {
     try {
