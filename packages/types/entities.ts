@@ -307,6 +307,14 @@ export interface SellerInventoryVariant {
   attributes: Record<string, string>
   image: string
   salesCount: number
+  /** Low-stock threshold (units). Defaults to platform constant when absent. */
+  lowStockThreshold?: number
+  /** Committed/reserved units (not available to sell). */
+  committed?: number
+  /** Incoming replenishment units. */
+  incoming?: number
+  /** Parent product name (for row display). */
+  productName?: string
 }
 
 export interface SellerInventoryProduct {

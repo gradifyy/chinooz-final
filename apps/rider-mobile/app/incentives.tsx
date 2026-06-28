@@ -96,7 +96,7 @@ export default function IncentivesHubScreen() {
   const handleQuestPress = (quest: RiderQuest) => {
     // RI3 quest detail is a future route; push by id.
     try {
-      AccessibilityInfo.announceForScreenReader(
+      AccessibilityInfo.announceForAccessibility(
         t('rider.incentives.activeQuestCtaAria', { title: quest.title }),
       )
     } catch {}
@@ -105,7 +105,7 @@ export default function IncentivesHubScreen() {
 
   const openStreaks = () => {
     try {
-      AccessibilityInfo.announceForScreenReader(
+      AccessibilityInfo.announceForAccessibility(
         t('rider.incentives.entryStreaksAria', { count: data?.streak.current ?? 0, tier: data?.streak.tier ?? '' }),
       )
     } catch {}
@@ -114,7 +114,7 @@ export default function IncentivesHubScreen() {
 
   const openSurgeMap = () => {
     try {
-      AccessibilityInfo.announceForScreenReader(t('rider.incentives.entrySurgeMapAria'))
+      AccessibilityInfo.announceForAccessibility(t('rider.incentives.entrySurgeMapAria'))
     } catch {}
     router.push('/surge-map' as never)
   }

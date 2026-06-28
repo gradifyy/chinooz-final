@@ -356,6 +356,205 @@ export async function getRiderEarningsLedger(): Promise<RiderLedgerRow[]> {
   return withBalance
 }
 
+/**
+ * RE3 — Trip-earnings ledger.
+ *
+ * A chronological list of completed trips grouped by day with daily totals.
+ * Each trip carries route (pickup→drop-off area), distance, timestamp, net
+ * earning, and any incentive/bonus line items. Incentive lines are surfaced
+ * both inline (as a gold-accent marker) and as separate ledger entries so
+ * the rider can see exactly what made up a trip's payout.
+ */
+
+export type TripLedgerKind = 'trip' | 'incentive' | 'tip' | 'adjustment'
+
+export interface TripLedgerLine {
+  id: string
+  kind: TripLedgerKind
+  /** Human label, e.g. "Base pay" or "Peak-hour bonus". */
+  label: string
+  /** Signed NPR amount (positive = credit, negative = debit). */
+  amount: number
+}
+
+export interface TripLedgerEntry {
+  id: string
+  /** Job/order ref, e.g. "CHZ-2048". */
+  orderRef: string
+  /** ISO date (yyyy-mm-dd). */
+  date: string
+  /** ISO timestamp of completion. */
+  completedAt: string
+  /** Pickup area label, e.g. "Thamel". */
+  pickupArea: string
+  /** Drop-off area label, e.g. "Patan". */
+  dropoffArea: string
+  /** Trip distance in km (pickup→dropoff). */
+  distanceKm: number
+  /** Net earning for the trip (NPR), sum of lines. */
+  netEarning: number
+  /** Whether the trip had a COD collection. */
+  isCod: boolean
+  /** COD amount collected (NPR), 0 if prepaid. */
+  codAmount: number
+  /** Breakdown lines (base, distance, incentive, tip, fee, etc.). */
+  lines: TripLedgerLine[]
+  /** True if any line is an incentive/bonus. */
+  hasIncentive: boolean
+}
+
+export interface TripLedgerDay {
+  /** ISO date (yyyy-mm-dd). */
+  date: string
+  /** Human label, e.g. "Today" or "Fri, Jun 27". */
+  label: string
+  /** Entries for this day, newest first. */
+  entries: TripLedgerEntry[]
+  /** Sum of net earnings across the day's trips (NPR). */
+  dailyTotal: number
+  /** Trip count for the day. */
+  tripCount: number
+  /** Incentive/bonus total for the day (NPR). */
+  incentiveTotal: number
+}
+
+export interface TripLedger {
+  days: TripLedgerDay[]
+  /** Grand total across all days (NPR). */
+  grandTotal: number
+  /** Total trip count. */
+  totalTrips: number
+}
+
+function dayLabel(date: string): string {
+  const d = new Date(date + 'T00:00:00')
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const diff = Math.round((today.getTime() - d.getTime()) / (1000 * 60 * 60 * 24))
+  if (diff === 0) return 'Today'
+  if (diff === 1) return 'Yesterday'
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+}
+
+const TRIP_FIXTURES: Omit<TripLedgerEntry, 'netEarning' | 'hasIncentive'>[] = [
+  {
+    id: 'trip-1', orderRef: 'CHZ-2048', date: '2025-06-28',
+    completedAt: '2025-06-28T18:42:00',
+    pickupArea: 'Thamel', dropoffArea: 'Patan', distanceKm: 5.2,
+    isCod: true, codAmount: 1299,
+    lines: [
+      { id: 't1l1', kind: 'trip', label: 'Base pay', amount: 120 },
+      { id: 't1l2', kind: 'trip', label: 'Distance pay', amount: 45 },
+      { id: 't1l3', kind: 'incentive', label: 'Peak-hour bonus', amount: 30 },
+      { id: 't1l4', kind: 'tip', label: 'Customer tip', amount: 20 },
+      { id: 't1l5', kind: 'adjustment', label: 'Platform fee', amount: -18 },
+    ],
+  },
+  {
+    id: 'trip-2', orderRef: 'CHZ-2046', date: '2025-06-28',
+    completedAt: '2025-06-28T15:10:00',
+    pickupArea: 'Baluwatar', dropoffArea: 'Naxal', distanceKm: 2.8,
+    isCod: false, codAmount: 0,
+    lines: [
+      { id: 't2l1', kind: 'trip', label: 'Base pay', amount: 90 },
+      { id: 't2l2', kind: 'trip', label: 'Distance pay', amount: 30 },
+      { id: 't2l3', kind: 'adjustment', label: 'Platform fee', amount: -12 },
+    ],
+  },
+  {
+    id: 'trip-3', orderRef: 'CHZ-2044', date: '2025-06-28',
+    completedAt: '2025-06-28T11:25:00',
+    pickupArea: 'Baneshwor', dropoffArea: 'Koteshwor', distanceKm: 3.1,
+    isCod: true, codAmount: 450,
+    lines: [
+      { id: 't3l1', kind: 'trip', label: 'Base pay', amount: 100 },
+      { id: 't3l2', kind: 'trip', label: 'Distance pay', amount: 35 },
+      { id: 't3l3', kind: 'incentive', label: '3-trip streak bonus', amount: 50 },
+      { id: 't3l4', kind: 'adjustment', label: 'Platform fee', amount: -14 },
+    ],
+  },
+  {
+    id: 'trip-4', orderRef: 'CHZ-2041', date: '2025-06-27',
+    completedAt: '2025-06-27T19:05:00',
+    pickupArea: 'Kirtipur', dropoffArea: 'Kalanki', distanceKm: 4.4,
+    isCod: false, codAmount: 0,
+    lines: [
+      { id: 't4l1', kind: 'trip', label: 'Base pay', amount: 110 },
+      { id: 't4l2', kind: 'trip', label: 'Distance pay', amount: 55 },
+      { id: 't4l3', kind: 'tip', label: 'Customer tip', amount: 15 },
+      { id: 't4l4', kind: 'adjustment', label: 'Platform fee', amount: -16 },
+    ],
+  },
+  {
+    id: 'trip-5', orderRef: 'CHZ-2039', date: '2025-06-27',
+    completedAt: '2025-06-27T13:48:00',
+    pickupArea: 'Boudha', dropoffArea: 'Jorpati', distanceKm: 2.0,
+    isCod: true, codAmount: 2150,
+    lines: [
+      { id: 't5l1', kind: 'trip', label: 'Base pay', amount: 80 },
+      { id: 't5l2', kind: 'trip', label: 'Distance pay', amount: 25 },
+      { id: 't5l3', kind: 'incentive', label: 'Surge zone bonus', amount: 40 },
+      { id: 't5l4', kind: 'adjustment', label: 'Platform fee', amount: -10 },
+    ],
+  },
+  {
+    id: 'trip-6', orderRef: 'CHZ-2036', date: '2025-06-26',
+    completedAt: '2025-06-26T17:30:00',
+    pickupArea: 'Chabahil', dropoffArea: 'Gausala', distanceKm: 1.6,
+    isCod: false, codAmount: 0,
+    lines: [
+      { id: 't6l1', kind: 'trip', label: 'Base pay', amount: 75 },
+      { id: 't6l2', kind: 'trip', label: 'Distance pay', amount: 20 },
+      { id: 't6l3', kind: 'adjustment', label: 'Platform fee', amount: -9 },
+    ],
+  },
+]
+
+function buildTripLedger(): TripLedger {
+  const withNet: TripLedgerEntry[] = TRIP_FIXTURES.map(t => {
+    const netEarning = t.lines.reduce((s, l) => s + l.amount, 0)
+    const hasIncentive = t.lines.some(l => l.kind === 'incentive')
+    return { ...t, netEarning, hasIncentive } as TripLedgerEntry
+  })
+  // Group by day, newest first.
+  const byDay = new Map<string, TripLedgerEntry[]>()
+  for (const e of withNet) {
+    if (!byDay.has(e.date)) byDay.set(e.date, [])
+    byDay.get(e.date)!.push(e)
+  }
+  const days: TripLedgerDay[] = Array.from(byDay.entries())
+    .sort((a, b) => (a[0] < b[0] ? 1 : -1))
+    .map(([date, entries]) => {
+      entries.sort((a, b) => (a.completedAt < b.completedAt ? 1 : -1))
+      const dailyTotal = entries.reduce((s, e) => s + e.netEarning, 0)
+      const tripCount = entries.length
+      const incentiveTotal = entries.reduce(
+        (s, e) => s + e.lines.filter(l => l.kind === 'incentive').reduce((ls, l) => ls + l.amount, 0),
+        0,
+      )
+      return { date, label: dayLabel(date), entries, dailyTotal, tripCount, incentiveTotal }
+    })
+  const grandTotal = days.reduce((s, d) => s + d.dailyTotal, 0)
+  const totalTrips = days.reduce((s, d) => s + d.tripCount, 0)
+  return { days, grandTotal, totalTrips }
+}
+
+export async function getRiderTripLedger(): Promise<TripLedger> {
+  await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 260))
+  return buildTripLedger()
+}
+
+export async function getRiderTripDetail(tripId: string): Promise<TripLedgerEntry | null> {
+  await new Promise(resolve => setTimeout(resolve, 160 + Math.random() * 200))
+  const ledger = buildTripLedger()
+  for (const day of ledger.days) {
+    const found = day.entries.find(e => e.id === tripId)
+    if (found) return found
+  }
+  void tripId
+  return null
+}
+
 export async function getRiderCashWallet(): Promise<RiderCashWallet> {
   await new Promise(resolve => setTimeout(resolve, 140 + Math.random() * 180))
   return {

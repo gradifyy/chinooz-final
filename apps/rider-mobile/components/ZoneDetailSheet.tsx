@@ -1,23 +1,36 @@
 import React, { useMemo } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
-import { Zap, Clock, TrendingUp, Package, ChevronRight } from 'lucide-react-native'
+import {
+  Zap,
+  Clock,
+  TrendingUp,
+  Package,
+  ChevronRight,
+  Navigation,
+  MapPin,
+  Info,
+  Sun,
+} from 'lucide-react-native'
 import { colors, radii, spacing, fontFamily, fontSize } from '@chinooz/theme'
 import {
   type DemandZone,
   type SurgeZone,
   type GeoPoint,
+  type DemandLevel,
+  distanceKm,
   getZoneRecommendations,
 } from '@chinooz/mock-data'
 
 /**
- * RD2 — Zone detail sheet content.
+ * RD2 — Zone detail sheet content (decision-ready).
  * RD3 — Recommendations slot.
  *
- * This is the content that slots into the bottom sheet on the hotspots
- * screen. It renders the selected zone's demand/requests/ETA/earnings +
- * surge status (RD2), then a short ranked list of recommended zones (RD3).
+ * Slots into the bottom sheet on the hotspots screen. Renders the selected
+ * zone's name/area, demand level (labeled, not color-only), active orders +
+ * est. wait, distance from the rider, surge/bonus (RI5 tie-in), a short
+ * why-hint + best-time note, and one-thumb Navigate + go-online actions.
  *
- * The sheet chrome itself is provided by the parent (HotspotsScreen) so this
+ * The sheet chrome is provided by the parent (HotspotsScreen) so this
  * component stays focused on content.
  */
 
@@ -26,30 +39,66 @@ interface ZoneDetailSheetProps {
   surge?: SurgeZone
   allZones: DemandZone[]
   riderLocation?: GeoPoint
+  /** Whether the rider is already online (controls go-online CTA state). */
+  isOnline?: boolean
+  /** CTA to open maps directions to the zone (maps handoff). */
+  onNavigate?: (zone: DemandZone) => void
+  /** CTA to go online (sets rider status to online). */
+  onGoOnline?: (zone: DemandZone) => void
   /** CTA to view jobs in this zone (navigates to Jobs/Available). */
   onSeeJobs?: (zone: DemandZone) => void
   onRecommendationPress?: (zone: DemandZone) => void
   /** i18n helpers (kept explicit so the sheet is locale-aware). */
   labels: {
+    area: string
     demand: string
     demandValue: (d: number) => string
-    requests: string
-    requestsValue: (n: number) => string
-    eta: string
-    etaValue: (e: number) => string
+    activeOrders: string
+    activeOrdersValue: (n: number) => string
+    estWait: string
+    estWaitValue: (e: number) => string
+    distance: string
+    distanceValue: (km: number) => string
     earnings: string
     earningsValue: (m: number) => string
     surge: string
     surgeValue: (m: number, minutes: number) => string
     surgeNone: string
+    whyHint: string
+    bestTime: string
+    bestTimeValue: (time: string) => string
+    navigate: string
+    navigateAria: (name: string) => string
+    goOnline: string
+    goOnlineAria: (name: string) => string
+    goOnlineDone: (name: string) => string
     recommendTitle: string
     recommendSub: string
-    recommendRow: (name: string, reason: string) => string
     recommendRowAria: (name: string, reason: string) => string
     seeJobs: string
     seeJobsAria: (name: string) => string
-    levelLabel: (level: DemandZone['level']) => string
+    levelLabel: (level: DemandLevel) => string
+    ariaSummary: (p: {
+      name: string
+      area: string
+      demand: number
+      level: string
+      distance: string
+      orders: string
+      eta: string
+      surge: string
+      whyHint: string
+      bestTime: string
+    }) => string
   }
+}
+
+/** Demand level accent color (labeled, not color-only). */
+const LEVEL_ACCENT: Record<DemandLevel, string> = {
+  low: colors.textTertiary,
+  medium: colors.gold,
+  high: colors.primaryLight,
+  very_high: colors.primary,
 }
 
 export default function ZoneDetailSheet({
@@ -57,6 +106,9 @@ export default function ZoneDetailSheet({
   surge,
   allZones,
   riderLocation,
+  isOnline = false,
+  onNavigate,
+  onGoOnline,
   onSeeJobs,
   onRecommendationPress,
   labels,
@@ -66,73 +118,157 @@ export default function ZoneDetailSheet({
     [allZones, riderLocation],
   )
 
+  const distKm = useMemo(
+    () => (riderLocation ? distanceKm(riderLocation, zone.center) : 0),
+    [riderLocation, zone.center],
+  )
+
   const surgeMinutesLeft = surge
     ? Math.max(0, Math.round((surge.endsAt - Date.now()) / 60_000))
     : 0
 
+  const levelText = labels.levelLabel(zone.level)
+  const accent = LEVEL_ACCENT[zone.level]
+
   return (
     <View style={styles.body}>
-      {/* Zone header */}
+      {/* Zone header: name + area + demand level (labeled) */}
       <View style={styles.zoneHeader}>
-        <View>
+        <View style={styles.zoneTitleWrap}>
           <Text style={styles.zoneName}>{zone.name}</Text>
-          <Text style={styles.zoneLevel}>{labels.levelLabel(zone.level)}</Text>
-        </View>
-        {surge ? (
-          <View style={styles.surgePill} testID="zone-surge-pill">
-            <Zap size={13} color={colors.gold} />
-            <Text style={styles.surgePillText}>
-              {labels.surgeValue(surge.multiplier, surgeMinutesLeft)}
-            </Text>
+          <View style={styles.zoneMeta}>
+            <MapPin size={12} color={colors.textTertiary} />
+            <Text style={styles.zoneArea}>{labels.area}</Text>
           </View>
-        ) : null}
+        </View>
+        <View style={[styles.levelPill, { borderColor: accent }]}>
+          <View style={[styles.levelDot, { backgroundColor: accent }]} />
+          <Text style={[styles.levelText, { color: accent }]}>{levelText}</Text>
+        </View>
       </View>
 
-      {/* RD2 — metrics grid */}
+      {/* Focus row: demand + distance (the decision focus) */}
+      <View style={styles.focusRow}>
+        <View style={styles.focusCell}>
+          <View style={styles.focusIcon}>
+            <TrendingUp size={18} color={colors.primary} />
+          </View>
+          <View>
+            <Text style={styles.focusLabel}>{labels.demand}</Text>
+            <Text style={styles.focusValue}>{labels.demandValue(zone.demand)}</Text>
+          </View>
+        </View>
+        <View style={styles.focusDivider} />
+        <View style={styles.focusCell}>
+          <View style={styles.focusIcon}>
+            <Navigation size={18} color={colors.info} />
+          </View>
+          <View>
+            <Text style={styles.focusLabel}>{labels.distance}</Text>
+            <Text style={styles.focusValue}>{labels.distanceValue(distKm)}</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Secondary metrics: active orders + est. wait + earnings boost */}
       <View style={styles.metrics}>
         <Metric
-          icon={<TrendingUp size={16} color={colors.primary} />}
-          label={labels.demand}
-          value={labels.demandValue(zone.demand)}
+          icon={<Package size={15} color={colors.info} />}
+          label={labels.activeOrders}
+          value={labels.activeOrdersValue(zone.openRequests)}
         />
         <Metric
-          icon={<Package size={16} color={colors.info} />}
-          label={labels.requests}
-          value={labels.requestsValue(zone.openRequests)}
+          icon={<Clock size={15} color={colors.textMuted} />}
+          label={labels.estWait}
+          value={labels.estWaitValue(zone.avgPickupEtaMin)}
         />
         <Metric
-          icon={<Clock size={16} color={colors.textMuted} />}
-          label={labels.eta}
-          value={labels.etaValue(zone.avgPickupEtaMin)}
-        />
-        <Metric
-          icon={<Zap size={16} color={colors.gold} />}
+          icon={<Zap size={15} color={colors.gold} />}
           label={labels.earnings}
           value={labels.earningsValue(zone.earningsBoost)}
         />
       </View>
 
-      {/* Surge row (only if not shown as a pill) */}
-      {!surge ? (
-        <Text style={styles.surgeNone}>{labels.surgeNone}</Text>
-      ) : null}
+      {/* Surge tie-in (RI5) */}
+      <View style={[styles.surgeRow, surge ? styles.surgeRowActive : null]}>
+        <View style={styles.surgeRowLeft}>
+          <Zap
+            size={15}
+            color={surge ? colors.gold : colors.textTertiary}
+            fill={surge ? colors.gold : 'transparent'}
+          />
+          <Text style={[styles.surgeRowLabel, surge ? styles.surgeRowLabelActive : null]}>
+            {surge ? labels.surgeValue(surge.multiplier, surgeMinutesLeft) : labels.surgeNone}
+          </Text>
+        </View>
+      </View>
+
+      {/* Why-hint + best-time note */}
+      <View style={styles.hints}>
+        <View style={styles.hintRow}>
+          <Info size={14} color={colors.textMuted} />
+          <View style={styles.hintBody}>
+            <Text style={styles.hintLabel}>{labels.whyHint}</Text>
+            <Text style={styles.hintText}>{zone.whyHint}</Text>
+          </View>
+        </View>
+        <View style={styles.hintRow}>
+          <Sun size={14} color={colors.gold} />
+          <View style={styles.hintBody}>
+            <Text style={styles.hintLabel}>{labels.bestTime}</Text>
+            <Text style={styles.hintText}>{labels.bestTimeValue(zone.bestTime)}</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* One-thumb actions: Navigate + go-online */}
+      <View style={styles.actions}>
+        {onNavigate ? (
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={labels.navigateAria(zone.name)}
+            onPress={() => onNavigate(zone)}
+            style={styles.navigateBtn}
+          >
+            <Navigation size={18} color={colors.white} />
+            <Text style={styles.navigateText}>{labels.navigate}</Text>
+          </TouchableOpacity>
+        ) : null}
+        {onGoOnline ? (
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={labels.goOnlineAria(zone.name)}
+            onPress={() => onGoOnline(zone)}
+            style={[
+              styles.goOnlineBtn,
+              isOnline && styles.goOnlineBtnDone,
+            ]}
+            disabled={isOnline}
+          >
+            <Zap size={18} color={isOnline ? colors.success : colors.primary} />
+            <Text style={[styles.goOnlineText, isOnline && styles.goOnlineTextDone]}>
+              {isOnline ? labels.goOnlineDone(zone.name) : labels.goOnline}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
 
       {/* RD3 — recommendations */}
       <View style={styles.recommend}>
         <Text style={styles.recommendTitle}>{labels.recommendTitle}</Text>
         <Text style={styles.recommendSub}>{labels.recommendSub}</Text>
-        {recommendations.map(({ zone: rec, reason }) => (
+        {recommendations.map(({ zone: rec }) => (
           <TouchableOpacity
             key={rec.id}
             accessibilityRole="button"
-            accessibilityLabel={labels.recommendRowAria(rec.name, reason)}
+            accessibilityLabel={labels.recommendRowAria(rec.name, rec.whyHint)}
             onPress={() => onRecommendationPress?.(rec)}
             style={styles.recommendRow}
           >
-            <View style={styles.recommendDot} />
+            <View style={[styles.recommendDot, { backgroundColor: LEVEL_ACCENT[rec.level] }]} />
             <View style={styles.recommendBody}>
               <Text style={styles.recommendName}>{rec.name}</Text>
-              <Text style={styles.recommendReason}>{reason}</Text>
+              <Text style={styles.recommendReason}>{rec.whyHint}</Text>
             </View>
             <ChevronRight size={18} color={colors.textTertiary} />
           </TouchableOpacity>
@@ -148,6 +284,7 @@ export default function ZoneDetailSheet({
           style={styles.seeJobsBtn}
         >
           <Text style={styles.seeJobsText}>{labels.seeJobs}</Text>
+          <ChevronRight size={18} color={colors.primary} />
         </TouchableOpacity>
       ) : null}
     </View>
@@ -165,8 +302,10 @@ function Metric({
 }) {
   return (
     <View style={styles.metric}>
-      <View style={styles.metricIcon}>{icon}</View>
-      <Text style={styles.metricLabel}>{label}</Text>
+      <View style={styles.metricIconRow}>
+        {icon}
+        <Text style={styles.metricLabel}>{label}</Text>
+      </View>
       <Text style={styles.metricValue}>{value}</Text>
     </View>
   )
@@ -176,63 +315,95 @@ const styles = StyleSheet.create({
   body: {
     paddingHorizontal: spacing[4],
     paddingBottom: spacing[2],
-    gap: spacing[4],
+    gap: spacing[3.5],
   },
+  // Zone header
   zoneHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     gap: spacing[3],
   },
+  zoneTitleWrap: { flex: 1, gap: 4 },
   zoneName: {
     fontSize: fontSize.xl[0],
     fontFamily: fontFamily.sansBold[0],
     fontWeight: '700',
     color: colors.text,
   },
-  zoneLevel: {
+  zoneMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing[1] },
+  zoneArea: {
     fontSize: fontSize.sm[0],
     color: colors.textMuted,
-    marginTop: 2,
-    textTransform: 'capitalize',
+    fontFamily: fontFamily.sans[0],
   },
-  surgePill: {
+  levelPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing[1],
-    backgroundColor: colors.warningLight,
+    gap: spacing[1.5],
     paddingHorizontal: spacing[2.5],
     paddingVertical: spacing[1.5],
     borderRadius: radii.full,
+    borderWidth: 1.5,
+    backgroundColor: colors.surface,
   },
-  surgePillText: {
+  levelDot: { width: 8, height: 8, borderRadius: radii.full },
+  levelText: {
     fontSize: fontSize.sm[0],
     fontFamily: fontFamily.sansSemiBold[0],
     fontWeight: '700',
-    color: colors.gold,
+    textTransform: 'capitalize',
   },
-  metrics: {
+  // Focus row: demand + distance
+  focusRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    backgroundColor: colors.primary50,
+    borderRadius: radii.lg,
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[3],
     gap: spacing[2],
   },
-  metric: {
-    flexBasis: '47%',
-    flexGrow: 1,
-    backgroundColor: colors.background,
-    borderRadius: radii.lg,
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[3],
-    gap: spacing[1],
+  focusCell: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2.5],
   },
-  metricIcon: {
-    width: 28,
-    height: 28,
+  focusIcon: {
+    width: 36,
+    height: 36,
     borderRadius: radii.full,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  focusLabel: {
+    fontSize: fontSize.sm[0],
+    color: colors.textMuted,
+    fontFamily: fontFamily.sans[0],
+  },
+  focusValue: {
+    fontSize: fontSize.lg[0],
+    fontFamily: fontFamily.sansBold[0],
+    fontWeight: '700',
+    color: colors.text,
+  },
+  focusDivider: { width: 1, height: 32, backgroundColor: colors.borderLight },
+  // Secondary metrics
+  metrics: {
+    flexDirection: 'row',
+    gap: spacing[2],
+  },
+  metric: {
+    flex: 1,
+    backgroundColor: colors.background,
+    borderRadius: radii.lg,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2.5],
+    gap: spacing[1],
+  },
+  metricIconRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[1.5] },
   metricLabel: {
     fontSize: fontSize.sm[0],
     color: colors.textMuted,
@@ -244,24 +415,107 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.text,
   },
-  surgeNone: {
-    fontSize: fontSize.sm[0],
+  // Surge row
+  surgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2.5],
+    borderRadius: radii.lg,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  surgeRowActive: {
+    backgroundColor: colors.warningLight,
+    borderColor: colors.gold,
+  },
+  surgeRowLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+  surgeRowLabel: {
+    fontSize: fontSize.base[0],
     color: colors.textTertiary,
     fontFamily: fontFamily.sans[0],
   },
-  recommend: {
+  surgeRowLabelActive: {
+    color: colors.gold,
+    fontFamily: fontFamily.sansSemiBold[0],
+    fontWeight: '700',
+  },
+  // Why-hint + best-time
+  hints: { gap: spacing[2] },
+  hintRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: spacing[2],
   },
+  hintBody: { flex: 1, gap: 2 },
+  hintLabel: {
+    fontSize: fontSize.sm[0],
+    color: colors.textMuted,
+    fontFamily: fontFamily.sansSemiBold[0],
+    fontWeight: '600',
+  },
+  hintText: {
+    fontSize: fontSize.base[0],
+    color: colors.text,
+    fontFamily: fontFamily.sans[0],
+  },
+  // Actions
+  actions: {
+    flexDirection: 'row',
+    gap: spacing[2],
+  },
+  navigateBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    backgroundColor: colors.primary,
+    borderRadius: radii.lg,
+    paddingVertical: spacing[3],
+    minHeight: 52,
+  },
+  navigateText: {
+    color: colors.white,
+    fontSize: fontSize.md[0],
+    fontFamily: fontFamily.sansBold[0],
+    fontWeight: '700',
+  },
+  goOnlineBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    backgroundColor: colors.primary50,
+    borderRadius: radii.lg,
+    paddingVertical: spacing[3],
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    minHeight: 52,
+  },
+  goOnlineBtnDone: {
+    backgroundColor: colors.successLight,
+    borderColor: colors.success,
+  },
+  goOnlineText: {
+    color: colors.primary,
+    fontSize: fontSize.md[0],
+    fontFamily: fontFamily.sansBold[0],
+    fontWeight: '700',
+  },
+  goOnlineTextDone: { color: colors.success },
+  // Recommendations
+  recommend: { gap: spacing[2] },
   recommendTitle: {
     fontSize: fontSize.md[0],
     fontFamily: fontFamily.sansSemiBold[0],
     fontWeight: '600',
     color: colors.text,
   },
-  recommendSub: {
-    fontSize: fontSize.sm[0],
-    color: colors.textMuted,
-  },
+  recommendSub: { fontSize: fontSize.sm[0], color: colors.textMuted },
   recommendRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -274,38 +528,32 @@ const styles = StyleSheet.create({
     borderColor: colors.borderLight,
     minHeight: 48,
   },
-  recommendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: radii.full,
-    backgroundColor: colors.primary,
-  },
-  recommendBody: {
-    flex: 1,
-    gap: 2,
-  },
+  recommendDot: { width: 8, height: 8, borderRadius: radii.full },
+  recommendBody: { flex: 1, gap: 2 },
   recommendName: {
     fontSize: fontSize.base[0],
     fontFamily: fontFamily.sansSemiBold[0],
     fontWeight: '600',
     color: colors.text,
   },
-  recommendReason: {
-    fontSize: fontSize.sm[0],
-    color: colors.textMuted,
-  },
+  recommendReason: { fontSize: fontSize.sm[0], color: colors.textMuted },
+  // See jobs
   seeJobsBtn: {
-    backgroundColor: colors.primary,
-    borderRadius: radii.lg,
-    paddingVertical: spacing[3],
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing[1],
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    paddingVertical: spacing[3],
+    borderWidth: 1,
+    borderColor: colors.border,
     minHeight: 48,
   },
   seeJobsText: {
-    color: colors.white,
-    fontSize: fontSize.md[0],
-    fontFamily: fontFamily.sansBold[0],
-    fontWeight: '700',
+    color: colors.primary,
+    fontSize: fontSize.base[0],
+    fontFamily: fontFamily.sansSemiBold[0],
+    fontWeight: '600',
   },
 })

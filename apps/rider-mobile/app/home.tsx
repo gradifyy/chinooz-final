@@ -11,6 +11,8 @@ import {
   useRiderSessionStore,
   useUIStore,
   useRiderIncentivesStore,
+  useActiveDeliveryStore,
+  hasActiveDelivery,
   type OnlineStatus,
   type Locale,
 } from '@chinooz/state'
@@ -25,6 +27,7 @@ import OnlineToggle from '../components/OnlineToggle'
 import MapSlot from '../components/MapSlot'
 import RequestSlot from '../components/RequestSlot'
 import SnapshotSlot from '../components/SnapshotSlot'
+import ResumeBanner from '../components/active/ResumeBanner'
 
 /**
  * Rider Home — smoke-test screen.
@@ -55,6 +58,8 @@ export default function RiderHomeScreen() {
 
   const status = useOnlineStatusStore(s => s.status)
   const setOnlineStatus = useOnlineStatusStore(s => s.setOnlineStatus)
+  const activeDelivery = useActiveDeliveryStore(s => s.activeDelivery)
+  const resumeActive = useActiveDeliveryStore(s => s.resume)
   const tickOnline = useOnlineStatusStore(s => s.tickOnline)
   const onlineSecondsToday = useOnlineStatusStore(s => s.onlineSecondsToday)
 
@@ -113,6 +118,11 @@ export default function RiderHomeScreen() {
   const sampleRevenueLabel = formatNPR(0)
 
   const handleToggle = (next: OnlineStatus) => setOnlineStatus(next)
+
+  const handleResumeActive = () => {
+    resumeActive()
+    router.push('/active')
+  }
 
   const languageSegments = [
     { key: 'en', label: t('rider.welcome.languageEnglish') },
@@ -181,6 +191,15 @@ export default function RiderHomeScreen() {
           testID="rider-language-toggle"
         />
       </View>
+
+      {/* Resume banner: minimized active delivery stays reachable from Home. */}
+      {activeDelivery?.minimized && hasActiveDelivery(activeDelivery) && (
+        <ResumeBanner
+          delivery={activeDelivery}
+          onResume={handleResumeActive}
+          onDismiss={handleResumeActive}
+        />
+      )}
 
       {/* Online toggle — 48dp tap target, screen-reader switch */}
       <View style={styles.toggleRow}>

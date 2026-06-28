@@ -41,6 +41,10 @@ export interface DemandZone {
   avgPickupEtaMin: number
   /** Estimated earnings boost vs. baseline (1 = no boost). */
   earningsBoost: number
+  /** Short "why" hint explaining the demand driver (e.g. "dinner peak"). */
+  whyHint: string
+  /** Best-time-of-day note for the zone (e.g. "5pm-8pm peak"). */
+  bestTime: string
 }
 
 export interface SurgeZone {
@@ -85,6 +89,8 @@ const ZONE_SEED: Array<{
   openRequests: number
   avgPickupEtaMin: number
   earningsBoost: number
+  whyHint: string
+  bestTime: string
 }> = [
   {
     id: 'zone-thamel',
@@ -100,6 +106,8 @@ const ZONE_SEED: Array<{
     openRequests: 18,
     avgPickupEtaMin: 4,
     earningsBoost: 1.35,
+    whyHint: 'Tourist rush — restaurants and hotels ordering in.',
+    bestTime: '5pm-9pm dinner peak',
   },
   {
     id: 'zone-new-baneshwor',
@@ -115,6 +123,8 @@ const ZONE_SEED: Array<{
     openRequests: 14,
     avgPickupEtaMin: 3,
     earningsBoost: 1.3,
+    whyHint: 'Office crowd — lunch and evening deliveries.',
+    bestTime: '12pm-2pm, 6pm-8pm',
   },
   {
     id: 'zone-lalitpur',
@@ -130,6 +140,8 @@ const ZONE_SEED: Array<{
     openRequests: 9,
     avgPickupEtaMin: 7,
     earningsBoost: 1.15,
+    whyHint: 'Residential — steady grocery and food orders.',
+    bestTime: '6pm-9pm evening',
   },
   {
     id: 'zone-koteshwor',
@@ -145,6 +157,8 @@ const ZONE_SEED: Array<{
     openRequests: 11,
     avgPickupEtaMin: 5,
     earningsBoost: 1.25,
+    whyHint: 'Junction traffic — quick pickups from nearby shops.',
+    bestTime: '5pm-8pm peak',
   },
   {
     id: 'zone-bhaktapur',
@@ -160,6 +174,8 @@ const ZONE_SEED: Array<{
     openRequests: 4,
     avgPickupEtaMin: 12,
     earningsBoost: 1.05,
+    whyHint: 'Heritage area — weekend tourists and cafes.',
+    bestTime: 'Sat-Sun afternoon',
   },
   {
     id: 'zone-boudha',
@@ -175,6 +191,8 @@ const ZONE_SEED: Array<{
     openRequests: 7,
     avgPickupEtaMin: 6,
     earningsBoost: 1.1,
+    whyHint: 'Monastery area — visitor and local food orders.',
+    bestTime: '6pm-9pm evening',
   },
   {
     id: 'zone-kirtipur',
@@ -190,6 +208,8 @@ const ZONE_SEED: Array<{
     openRequests: 2,
     avgPickupEtaMin: 15,
     earningsBoost: 1.0,
+    whyHint: 'Quiet hill town — low but steady orders.',
+    bestTime: 'Midday steady',
   },
   {
     id: 'zone-chabahil',
@@ -205,6 +225,8 @@ const ZONE_SEED: Array<{
     openRequests: 6,
     avgPickupEtaMin: 6,
     earningsBoost: 1.08,
+    whyHint: 'Temple area — local shops and pharma orders.',
+    bestTime: 'Morning + evening',
   },
   {
     id: 'zone-maharajgunj',
@@ -220,6 +242,8 @@ const ZONE_SEED: Array<{
     openRequests: 5,
     avgPickupEtaMin: 8,
     earningsBoost: 1.07,
+    whyHint: 'Hospital and college area — food + pharma.',
+    bestTime: '11am-2pm lunch',
   },
   {
     id: 'zone-kalanki',
@@ -235,6 +259,8 @@ const ZONE_SEED: Array<{
     openRequests: 3,
     avgPickupEtaMin: 11,
     earningsBoost: 1.04,
+    whyHint: 'Highway entry — warehouse and bulk orders.',
+    bestTime: 'Morning deliveries',
   },
 ]
 
@@ -243,6 +269,19 @@ function levelFor(demand: number): DemandLevel {
   if (demand >= 60) return 'high'
   if (demand >= 40) return 'medium'
   return 'low'
+}
+
+/** Haversine distance in km between two lat/lng points. */
+export function distanceKm(a: GeoPoint, b: GeoPoint): number {
+  const R = 6371
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180
+  const lat1 = (a.lat * Math.PI) / 180
+  const lat2 = (b.lat * Math.PI) / 180
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2
+  return Math.round(2 * R * Math.asin(Math.sqrt(h)) * 10) / 10
 }
 
 /**
@@ -262,6 +301,8 @@ export function getDemandZones(_opts: { now?: number } = {}): DemandZone[] {
     openRequests: z.openRequests,
     avgPickupEtaMin: z.avgPickupEtaMin,
     earningsBoost: z.earningsBoost,
+    whyHint: z.whyHint,
+    bestTime: z.bestTime,
   })).sort((a, b) => b.demand - a.demand)
 }
 

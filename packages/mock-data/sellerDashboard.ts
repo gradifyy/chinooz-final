@@ -170,3 +170,46 @@ export function getSellerDashboardMetrics(range: SellerDateRange): SellerDashboa
     activity: ACTIVITY,
   }
 }
+
+export interface SellerReplyTemplate {
+  id: string
+  label: string
+  body: string
+}
+
+export const SELLER_REPLY_TEMPLATES: SellerReplyTemplate[] = [
+  { id: 't1', label: 'Order confirmed', body: 'Thanks for your order! It has been confirmed and will ship within 24 hours.' },
+  { id: 't2', label: 'Shipping update', body: 'Your order has been dispatched. You will receive a tracking link shortly.' },
+  { id: 't3', label: 'Out of stock', body: 'Sorry, this item is currently out of stock. It will be back in 3–5 days.' },
+  { id: 't4', label: 'Return approved', body: 'Your return request has been approved. The refund will be processed in 1–2 business days.' },
+  { id: 't5', label: 'Bulk discount', body: 'Yes! We offer a 10% discount on orders of 20 or more units. Let me know the quantity you need.' },
+  { id: 't6', label: 'Thanks for review', body: 'Thank you so much for the kind review! We really appreciate your support.' },
+]
+
+export interface SellerQuickReply {
+  id: string
+  label: string
+  body: string
+}
+
+export const SELLER_QUICK_REPLIES: SellerQuickReply[] = [
+  { id: 'q1', label: '👋 Hi there!', body: 'Hi there! How can I help you today?' },
+  { id: 'q2', label: '📦 Order status', body: 'Your order is on the way and should arrive within 1–2 days.' },
+  { id: 'q3', label: '✅ In stock', body: 'Yes, this is in stock and ready to ship!' },
+  { id: 'q4', label: '🙏 Thank you', body: 'Thank you for shopping with us! Please reach out anytime.' },
+]
+
+const CANNED_BUYER_REPLIES = [
+  'Okay, thank you so much!',
+  'Got it. When will it arrive?',
+  'That works for me, thanks!',
+  'Perfect, I appreciate the quick reply.',
+  'Sounds good. I will place the order now.',
+  'Can you share the tracking number once it ships?',
+  'Thanks! I will leave a review once I receive it.',
+  'Great, please send me the invoice as well.',
+]
+
+export function mockBuyerReply(_sellerText: string): string {
+  return CANNED_BUYER_REPLIES[Math.floor(Math.random() * CANNED_BUYER_REPLIES.length)]
+}

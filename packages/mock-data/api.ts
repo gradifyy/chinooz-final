@@ -18,6 +18,8 @@ import type {
   SellerInventoryProduct,
   SellerInventoryVariant,
   StockStatus,
+  SellerReview,
+  SellerReviewResponse,
 } from '@chinooz/types'
 import {
   products,
@@ -809,12 +811,7 @@ export async function getSellerInventory(
 
 // --- Seller Reviews ---
 
-export interface SellerReview extends Review {
-  productName: string
-  productImage: string
-  response?: { text: string; at: string }
-  flagged?: boolean
-}
+export type { SellerReview, SellerReviewResponse } from '@chinooz/types'
 
 export type SellerReviewStatus = 'all' | 'needs_response' | 'responded' | 'flagged'
 export type SellerReviewSort = 'newest' | 'oldest' | 'lowest' | 'highest'
@@ -916,12 +913,14 @@ function buildSellerReviews(): SellerReview[] {
       const stateRoll = seededReview(s + 41)
       const flagged = stateRoll > 0.9
       const responded = !flagged && stateRoll < 0.45
-      const response = responded
+      const response: SellerReviewResponse | undefined = responded
         ? {
             text: 'Thank you for your review! We’re glad you’re happy with your purchase. 🙏',
             at: new Date(now - (ageDays - 1) * day).toISOString(),
           }
         : undefined
+      // 90% of reviews are verified purchases.
+      const verifiedPurchase = seededReview(s + 61) < 0.9
 
       list.push({
         id: `srev-${p.id}-${i}`,
@@ -938,6 +937,7 @@ function buildSellerReviews(): SellerReview[] {
         helpful: Math.floor(seededReview(s + 51) * 40),
         response,
         flagged,
+        verifiedPurchase,
       })
     }
   })

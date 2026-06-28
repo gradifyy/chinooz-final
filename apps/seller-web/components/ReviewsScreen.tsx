@@ -11,18 +11,17 @@ import {
   ChevronDown,
   Star,
   MessageSquare,
-  Flag,
   Send,
   RefreshCw,
   Image as ImageIcon,
-  CheckCircle2,
-  AlertTriangle,
+  X,
 } from 'lucide-react'
 import {
   Screen,
   Container,
   EmptyState,
-  SafeImage,
+  ReviewCard,
+  ReviewCardSkeleton,
   useReducedMotion,
 } from '@chinooz/ui-web'
 import {
@@ -39,7 +38,6 @@ import type {
   SellerReviewStatus,
   SellerReviewResponseFilter,
 } from '@chinooz/mock-data'
-import type { SellerReview } from '@chinooz/mock-data'
 
 type RatingFilter = number | 'all'
 
@@ -63,7 +61,12 @@ export default function ReviewsScreen() {
   const [sort, setSort] = useState<SellerReviewSort>('newest')
   const [sortOpen, setSortOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [composing, setComposing] = useState(false)
+  const [composeReviewId, setComposeReviewId] = useState<string | null>(null)
+  const [composeDraft, setComposeDraft] = useState('')
   const sortRef = useRef<HTMLDivElement>(null)
+
+  const respondingTo = composeReviewId
 
   useEffect(() => {
     analytics.screen({ name: 'seller-reviews' })
@@ -161,6 +164,26 @@ export default function ReviewsScreen() {
     setHasPhotos(false)
     setProductId(undefined)
     setStatus('all')
+  }
+
+  const openCompose = (reviewId: string) => {
+    setComposeReviewId(reviewId)
+    setComposeDraft('')
+    setComposing(true)
+  }
+
+  const closeCompose = () => {
+    setComposing(false)
+    setComposeReviewId(null)
+    setComposeDraft('')
+  }
+
+  const submitResponse = () => {
+    if (!composeReviewId || !composeDraft.trim()) return
+    respond.mutate(
+      { reviewId: composeReviewId, text: composeDraft.trim() },
+      { onSuccess: closeCompose },
+    )
   }
 
   return (
@@ -448,7 +471,11 @@ export default function ReviewsScreen() {
           {/* List slot (SV2) */}
           <div className="flex flex-col gap-3">
             {isLoading ? (
-              <ReviewsSkeleton />
+              <div className="flex flex-col gap-3">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <ReviewCardSkeleton key={i} />
+                ))}
+              </div>
             ) : items.length === 0 ? (
               <EmptyState
                 icon={<MessageSquare size={40} className="text-text-tertiary" aria-hidden="true" />}
@@ -463,21 +490,37 @@ export default function ReviewsScreen() {
             ) : (
               <AnimatePresence mode="popLayout">
                 {items.map((review, i) => (
-                  <ReviewCard
+                  <motion.div
                     key={review.id}
-                    review={review}
-                    index={i}
-                    reduced={reduced}
-                    responding={respond.isPending}
-                    onRespond={(text) => respond.mutate({ reviewId: review.id, text })}
-                    onFlag={() => toggleFlag.mutate(review.id)}
-                  />
+                    layout
+                    initial={reduced ? false : { opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={reduced ? { opacity: 0 } : { opacity: 0, y: -8 }}
+                    transition={reduced ? { duration: 0 } : { duration: 0.2, delay: Math.min(i * 0.03, 0.2) }}
+                  >
+                    <ReviewCard
+                      review={review}
+                      responding={respondingTo === review.id}
+                      onRespond={() => openCompose(review.id)}
+                      onFlag={() => toggleFlag.mutate(review.id)}
+                      onContactBuyer={() => router.push('/messages')}
+                    />
+                  </motion.div>
                 ))}
               </AnimatePresence>
             )}
           </div>
         </div>
       </Container>
+
+      {/* Compose response modal */}
+      <ComposeModal
+        visible={composing}
+        onClose={closeCompose}
+        onSubmit={submitResponse}
+        pending={respond.isPending}
+        reduced={reduced}
+      />
     </Screen>
   )
 }
@@ -508,247 +551,85 @@ function FilterChip({
   )
 }
 
-function timeAgo(iso: string): string {
-  const diff = Date.now() - +new Date(iso)
-  const day = 24 * 60 * 60 * 1000
-  if (diff < day) return 'today'
-  const days = Math.floor(diff / day)
-  if (days < 30) return `${days}d ago`
-  const months = Math.floor(days / 30)
-  return `${months}mo ago`
-}
-
-function ReviewCard({
-  review,
-  index,
+function ComposeModal({
+  visible,
+  onClose,
+  onSubmit,
+  pending,
   reduced,
-  responding,
-  onRespond,
-  onFlag,
 }: {
-  review: SellerReview
-  index: number
+  visible: boolean
+  onClose: () => void
+  onSubmit: () => void
+  pending: boolean
   reduced: boolean
-  responding: boolean
-  onRespond: (text: string) => void
-  onFlag: () => void
 }) {
   const { t } = useTranslation()
-  const [composing, setComposing] = useState(false)
   const [draft, setDraft] = useState('')
 
-  const needsResponse = !review.response && !review.flagged
-
-  const send = () => {
-    const text = draft.trim()
-    if (!text) return
-    onRespond(text)
-    setDraft('')
-    setComposing(false)
-  }
+  useEffect(() => {
+    if (!visible) setDraft('')
+  }, [visible])
 
   return (
-    <motion.article
-      layout
-      initial={reduced ? false : { opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={reduced ? { opacity: 0 } : { opacity: 0, y: -8 }}
-      transition={reduced ? { duration: 0 } : { duration: 0.2, delay: Math.min(index * 0.03, 0.2) }}
-      className={`rounded-lg border bg-surface p-4 md:p-5 transition-colors ${
-        needsResponse
-          ? 'border-warning/40 border-l-[3px] border-l-warning'
-          : review.flagged
-            ? 'border-error/30 border-l-[3px] border-l-error'
-            : 'border-border-light'
-      }`}
-    >
-      <div className="flex items-start gap-3">
-        <div
-          className="w-10 h-10 rounded-full bg-primary-50 flex items-center justify-center shrink-0"
-          aria-hidden="true"
-        >
-          <span className="text-[14px] font-semibold text-primary">
-            {review.userName.charAt(0).toUpperCase()}
-          </span>
-        </div>
-
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2 flex-wrap">
-            <div className="min-w-0">
-              <p className="text-[14px] font-semibold text-text truncate">{review.userName}</p>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="inline-flex items-center gap-[1px]" aria-label={`${review.rating} stars`}>
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <Star
-                      key={i}
-                      size={13}
-                      className={i < review.rating ? 'text-gold fill-gold' : 'text-border'}
-                      aria-hidden="true"
-                    />
-                  ))}
-                </span>
-                <span className="text-[12px] text-text-muted">· {timeAgo(review.createdAt)}</span>
-              </div>
+    <AnimatePresence>
+      {visible && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: reduced ? 0 : 0.2 }}
+            className="fixed inset-0 bg-black/40"
+            onClick={onClose}
+          />
+          <motion.div
+            initial={reduced ? false : { opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={reduced ? undefined : { opacity: 0, scale: 0.95 }}
+            transition={{ duration: reduced ? 0 : 0.2 }}
+            className="relative bg-background rounded-2xl p-5 w-full max-w-[480px] shadow-xl"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-[18px] font-semibold text-text">{t('seller.reviews.respond')}</h2>
+              <button onClick={onClose} className="text-text-muted p-1 hover:text-text" aria-label={t('seller.reviews.back')}>
+                <X size={18} aria-hidden="true" />
+              </button>
             </div>
-
-            <div className="flex items-center gap-2">
-              {review.flagged ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-error/15 text-error px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide">
-                  <Flag size={11} aria-hidden="true" />
-                  {t('seller.reviews.statusFlagged')}
-                </span>
-              ) : review.response ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-success/15 text-success px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide">
-                  <CheckCircle2 size={11} aria-hidden="true" />
-                  {t('seller.reviews.statusResponded')}
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 rounded-full bg-warning/15 text-[#92400E] px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide">
-                  <AlertTriangle size={11} aria-hidden="true" />
-                  {t('seller.reviews.statusNeedsResponse')}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Product context */}
-          <div className="flex items-center gap-2 mt-2">
-            <SafeImage
-              src={review.productImage}
-              alt={review.productName}
-              className="w-6 h-6 rounded-md object-cover bg-border-light shrink-0"
+            <textarea
+              value={draft}
+              onChange={e => setDraft(e.target.value)}
+              placeholder={t('seller.reviews.responsePlaceholder')}
+              rows={4}
+              className="w-full resize-none rounded-md border border-border bg-surface px-3 py-2 text-[14px] text-text outline-none focus:border-primary transition-colors"
+              aria-label={t('seller.reviews.responsePlaceholder')}
             />
-            <span className="text-[12px] text-text-secondary truncate">{review.productName}</span>
-          </div>
-
-          {review.title && (
-            <p className="text-[14px] font-semibold text-text mt-2">{review.title}</p>
-          )}
-          <p className="text-[14px] text-text-secondary mt-1 leading-5">{review.body}</p>
-
-          {review.photos && review.photos.length > 0 && (
-            <div className="flex items-center gap-2 mt-2" aria-label={t('seller.reviews.photosAria', { count: review.photos.length })}>
-              {review.photos.map((src, i) => (
-                <SafeImage
-                  key={i}
-                  src={src}
-                  alt={`Photo ${i + 1}`}
-                  className="w-14 h-14 rounded-md object-cover bg-border-light shrink-0"
-                />
-              ))}
-            </div>
-          )}
-
-          {/* Existing response */}
-          {review.response && (
-            <div className="mt-3 rounded-md bg-background border border-border-light p-3">
-              <p className="text-[12px] font-semibold text-primary mb-0.5">
-                {t('seller.reviews.statusResponded')}
-              </p>
-              <p className="text-[13px] text-text-secondary leading-5">{review.response.text}</p>
-            </div>
-          )}
-
-          {/* Actions */}
-          <div className="flex items-center gap-2 mt-3 flex-wrap">
-            {!review.response && (
+            <div className="flex items-center justify-end gap-2 mt-3">
               <button
                 type="button"
-                onClick={() => setComposing(v => !v)}
-                aria-label={t('seller.reviews.respondAria', { name: review.userName })}
-                className="inline-flex items-center gap-1.5 rounded-full bg-primary text-white px-3 h-8 text-[13px] font-semibold hover:bg-primary-dark transition-colors"
+                onClick={onClose}
+                className="h-9 px-3 rounded-md text-[13px] font-semibold text-text-muted hover:text-text transition-colors"
               >
-                <MessageSquare size={14} aria-hidden="true" />
-                {t('seller.reviews.respond')}
+                {t('seller.reviews.back')}
               </button>
-            )}
-            <button
-              type="button"
-              onClick={onFlag}
-              aria-label={t('seller.reviews.flagAria', { name: review.userName })}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 h-8 text-[13px] font-semibold border transition-colors ${
-                review.flagged
-                  ? 'bg-error/10 text-error border-error/30'
-                  : 'bg-surface text-text-muted border-border hover:text-text hover:border-text-tertiary'
-              }`}
-            >
-              <Flag size={14} aria-hidden="true" />
-              {review.flagged ? t('seller.reviews.unflag') : t('seller.reviews.flag')}
-            </button>
-            {review.helpful > 0 && (
-              <span className="text-[12px] text-text-tertiary ml-auto">
-                {t('seller.reviews.helpful', { count: review.helpful })}
-              </span>
-            )}
-          </div>
-
-          {/* Compose response */}
-          <AnimatePresence>
-            {composing && !review.response && (
-              <motion.div
-                initial={reduced ? false : { opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={reduced ? { opacity: 0 } : { opacity: 0, height: 0 }}
-                transition={reduced ? { duration: 0 } : { duration: 0.2 }}
-                className="overflow-hidden"
+              <button
+                type="button"
+                onClick={() => {
+                  if (draft.trim()) {
+                    onSubmit()
+                    setDraft('')
+                  }
+                }}
+                disabled={!draft.trim() || pending}
+                className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-primary text-white text-[13px] font-semibold disabled:opacity-50 hover:bg-primary-dark transition-colors"
               >
-                <div className="mt-3 rounded-md border border-border bg-background p-3">
-                  <textarea
-                    value={draft}
-                    onChange={e => setDraft(e.target.value)}
-                    placeholder={t('seller.reviews.responsePlaceholder')}
-                    rows={3}
-                    className="w-full resize-none rounded-md border border-border bg-surface px-3 py-2 text-[14px] text-text outline-none focus:border-primary transition-colors"
-                    aria-label={t('seller.reviews.responsePlaceholder')}
-                  />
-                  <div className="flex items-center justify-end gap-2 mt-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setComposing(false)
-                        setDraft('')
-                      }}
-                      className="h-8 px-3 rounded-md text-[13px] font-semibold text-text-muted hover:text-text transition-colors"
-                    >
-                      {t('seller.reviews.back')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={send}
-                      disabled={!draft.trim() || responding}
-                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-primary text-white text-[13px] font-semibold disabled:opacity-50 hover:bg-primary-dark transition-colors"
-                    >
-                      <Send size={14} aria-hidden="true" />
-                      {responding ? t('seller.reviews.responding') : t('seller.reviews.responseSend')}
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                <Send size={14} aria-hidden="true" />
+                {pending ? t('seller.reviews.responding') : t('seller.reviews.responseSend')}
+              </button>
+            </div>
+          </motion.div>
         </div>
-      </div>
-    </motion.article>
-  )
-}
-
-function ReviewsSkeleton() {
-  return (
-    <div className="flex flex-col gap-3">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <div
-          key={i}
-          className="rounded-lg border border-border-light bg-surface p-4 md:p-5 flex gap-3"
-        >
-          <div className="w-10 h-10 rounded-full bg-shimmer animate-pulse shrink-0" />
-          <div className="flex-1 space-y-2">
-            <div className="h-3 w-1/4 rounded bg-shimmer animate-pulse" />
-            <div className="h-2.5 w-1/3 rounded bg-shimmer animate-pulse" />
-            <div className="h-3 w-3/4 rounded bg-shimmer animate-pulse mt-3" />
-            <div className="h-2.5 w-1/2 rounded bg-shimmer animate-pulse" />
-          </div>
-        </div>
-      ))}
-    </div>
+      )}
+    </AnimatePresence>
   )
 }

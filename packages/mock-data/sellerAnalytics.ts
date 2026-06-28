@@ -9,6 +9,8 @@ export interface AnalyticsRange {
   custom?: { start: string; end: string }
 }
 
+export type AnalyticsChartGranularity = 'day' | 'week' | 'month'
+
 export interface AnalyticsKpi {
   key: string
   label: string
@@ -32,6 +34,22 @@ export interface AnalyticsBreakdownRow {
   value: number
   share: number
   deltaPct: number
+  color?: string
+}
+
+export interface AnalyticsBreakdownGroup {
+  id: string
+  title: string
+  total: number
+  rows: AnalyticsBreakdownRow[]
+}
+
+export interface AnalyticsInsight {
+  id: string
+  title: string
+  body: string
+  tone: 'best' | 'worst' | 'info'
+  period: string
 }
 
 export interface AnalyticsProductRow {
@@ -66,6 +84,8 @@ export interface AnalyticsSectionData {
   kpis: AnalyticsKpi[]
   chart: AnalyticsChartPoint[]
   breakdown: AnalyticsBreakdownRow[]
+  breakdowns?: AnalyticsBreakdownGroup[]
+  insights?: AnalyticsInsight[]
   products?: AnalyticsProductRow[]
   customers?: AnalyticsCustomerRow[]
 }
@@ -80,10 +100,10 @@ export const ANALYTICS_RANGES: { key: AnalyticsRangeKey; label: string; days: nu
 ]
 
 const SALES_KPIS = [
-  { key: 'revenue', label: 'Revenue', base: 18450, hint: 'Gross sales' },
-  { key: 'orders', label: 'Orders', base: 64, hint: 'Confirmed orders' },
-  { key: 'aov', label: 'Avg. order value', base: 288, hint: 'Revenue / orders' },
-  { key: 'refunds', label: 'Refunds', base: 2, hint: 'Refunded orders' },
+  { key: 'netRevenue', label: 'Net revenue', base: 18450, hint: 'After refunds', money: true },
+  { key: 'orders', label: 'Orders', base: 64, hint: 'Confirmed orders', money: false },
+  { key: 'units', label: 'Units sold', base: 128, hint: 'Items sold', money: false },
+  { key: 'aov', label: 'Avg. order value', base: 288, hint: 'Revenue / orders', money: true },
 ] as const
 
 const TRAFFIC_KPIS = [
@@ -120,6 +140,27 @@ const TRAFFIC_BREAKDOWN = [
   { id: 'social', label: 'Social' },
   { id: 'referral', label: 'Referral' },
 ]
+
+const SALES_CATEGORY_BREAKDOWN = [
+  { id: 'electronics', label: 'Electronics' },
+  { id: 'handicrafts', label: 'Handicrafts' },
+  { id: 'fashion', label: 'Fashion' },
+  { id: 'groceries', label: 'Groceries' },
+]
+
+const SALES_PAYMENT_BREAKDOWN = [
+  { id: 'prepaid', label: 'Prepaid' },
+  { id: 'cod', label: 'Cash on delivery' },
+]
+
+const SALES_STATUS_BREAKDOWN = [
+  { id: 'confirmed', label: 'Confirmed' },
+  { id: 'fulfilled', label: 'Fulfilled' },
+  { id: 'refunded', label: 'Refunded' },
+  { id: 'cancelled', label: 'Cancelled' },
+]
+
+const BREAKDOWN_PALETTE = ['#8A1B57', '#B23C7E', '#E0A93B', '#6B7280', '#2563EB', '#16A34A']
 
 const PRODUCT_ROWS = [
   { id: 'p1', name: 'Samsung Galaxy A55', category: 'Electronics', base: 4200 },
@@ -190,7 +231,7 @@ export function getAnalytics(
     const raw = k.base * scale * (0.82 + seeded(i, seedBase) * 0.34)
     const prevRaw = k.base * scale * (0.7 + seeded(i + 7, seedBase) * 0.4)
     const deltaPct = Math.round((seeded(i + 1, seedBase) - 0.42) * 44)
-    const isMoney = k.key === 'revenue' || k.key === 'aov' || k.key === 'ltv'
+    const isMoney = 'money' in k ? k.money : k.key === 'revenue' || k.key === 'aov' || k.key === 'ltv'
     const isPct = k.key === 'bounce'
     const value = isMoney ? fmtMoney(raw) : isPct ? fmtPct(Math.round(raw)) : fmtNum(raw)
     const previousValue = compare
@@ -236,8 +277,59 @@ export function getAnalytics(
     const value = Math.round(100 * scale * (0.4 + seeded(i + 3, seedBase) * 0.9))
     const share = Math.round((100 / totalShare) * (0.6 + seeded(i + 5, seedBase) * 0.8))
     const deltaPct = Math.round((seeded(i + 9, seedBase) - 0.4) * 40)
-    return { id: b.id, label: b.label, value, share, deltaPct }
+    return { id: b.id, label: b.label, value, share, deltaPct, color: BREAKDOWN_PALETTE[i % BREAKDOWN_PALETTE.length] }
   })
+
+  let breakdowns: AnalyticsBreakdownGroup[] | undefined
+  let insights: AnalyticsInsight[] | undefined
+
+  if (section === 'sales') {
+    const mkGroup = (
+      id: string,
+      title: string,
+      defs: { id: string; label: string }[],
+      moneyValue: boolean,
+    ): AnalyticsBreakdownGroup => {
+      const rows: AnalyticsBreakdownRow[] = defs.map((b, i) => {
+        const value = Math.round((moneyValue ? 4200 : 40) * scale * (0.4 + seeded(i + 30 + id.length, seedBase) * 1.2))
+        const share = Math.round((100 / defs.length) * (0.6 + seeded(i + 40 + id.length, seedBase) * 0.8))
+        const deltaPct = Math.round((seeded(i + 50 + id.length, seedBase) - 0.4) * 40)
+        return {
+          id: b.id,
+          label: b.label,
+          value,
+          share,
+          deltaPct,
+          color: BREAKDOWN_PALETTE[i % BREAKDOWN_PALETTE.length],
+        }
+      })
+      const total = rows.reduce((s, r) => s + r.value, 0)
+      return { id, title, total, rows }
+    }
+
+    breakdowns = [
+      mkGroup('category', 'Sales by category', SALES_CATEGORY_BREAKDOWN, true),
+      mkGroup('payment', 'Sales by payment type', SALES_PAYMENT_BREAKDOWN, true),
+      mkGroup('status', 'Sales by status', SALES_STATUS_BREAKDOWN, false),
+    ]
+
+    insights = [
+      {
+        id: 'best-period',
+        title: 'Best period',
+        body: `Revenue peaked in the most recent ${days <= 1 ? 'hours' : days <= 7 ? 'days' : 'weeks'} — NPR ${fmtMoney(4200 * scale)} (gross), up 12% vs the previous period.`,
+        tone: 'best',
+        period: range.label,
+      },
+      {
+        id: 'worst-period',
+        title: 'Slowest period',
+        body: `Midweek dipped to NPR ${fmtMoney(1800 * scale)} (net) — 8% below the range average. Consider a midweek promotion.`,
+        tone: 'worst',
+        period: range.label,
+      },
+    ]
+  }
 
   let products: AnalyticsProductRow[] | undefined
   let customers: AnalyticsCustomerRow[] | undefined
@@ -276,5 +368,42 @@ export function getAnalytics(
     })
   }
 
-  return { section, range, compare, kpis, chart, breakdown, products, customers }
+  return { section, range, compare, kpis, chart, breakdown, breakdowns, insights, products, customers }
+}
+
+export interface SalesTrendOptions {
+  granularity?: AnalyticsChartGranularity
+  grossNet?: 'gross' | 'net'
+}
+
+export function getSalesTrend(
+  range: AnalyticsRange,
+  opts: SalesTrendOptions & { compare?: boolean; filter?: AnalyticsFilter } = {},
+): { points: AnalyticsChartPoint[]; granularity: AnalyticsChartGranularity; grossNet: 'gross' | 'net' } {
+  const granularity = opts.granularity ?? 'day'
+  const grossNet = opts.grossNet ?? 'net'
+  const compare = opts.compare ?? false
+  const filter = opts.filter
+  const days = range.days
+  const scale = scaleFor(days)
+  const seedBase = days + granularity.length + grossNet.length + (filter?.categoryId?.length ?? 0)
+
+  const granularityLabels: Record<AnalyticsChartGranularity, string[]> = {
+    day: days <= 1 ? ['12a', '4a', '8a', '12p', '4p', '8p'] : days <= 7 ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] : Array.from({ length: Math.min(days, 14) }, (_, i) => `D${i + 1}`),
+    week: ['W1', 'W2', 'W3', 'W4', 'W5', 'W6'],
+    month: ['M1', 'M2', 'M3'],
+  }
+  const labels = granularityLabels[granularity]
+  const netFactor = grossNet === 'net' ? 0.88 : 1
+  const base = 2200
+
+  const points: AnalyticsChartPoint[] = labels.map((label, i) => {
+    const current = Math.round(base * scale * netFactor * (0.45 + seeded(i + 10, seedBase) * 0.95))
+    const previous = compare
+      ? Math.round(base * scale * netFactor * (0.4 + seeded(i + 20, seedBase + 1) * 0.85))
+      : undefined
+    return { label, current, previous }
+  })
+
+  return { points, granularity, grossNet }
 }

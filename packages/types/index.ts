@@ -38,6 +38,7 @@ export type {
   ShipmentTimeline,
   InboxTab,
   SegmentedControlProps,
+  InventoryRowProps,
 } from './components'
 
 export type {

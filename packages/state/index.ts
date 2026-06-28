@@ -18,6 +18,7 @@ export type {
   GoLiveStatus,
   SellerStore,
   SellerProfile,
+  StoreDraft,
 } from './seller-session'
 export { useSellerMessagesStore } from './seller-messages'
 export { useOnlineStatusStore } from './rider-online'

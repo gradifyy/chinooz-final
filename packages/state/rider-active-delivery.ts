@@ -5,6 +5,7 @@ import type {
   DeliveryLeg,
   DeliveryStatus,
   GeoPoint,
+  RiderJob,
   RouteStop,
 } from '@chinooz/types'
 import { RS3_TRIP_SIMULATOR, type TripSimState } from '@chinooz/rs3'
@@ -40,7 +41,7 @@ interface ActiveDeliveryState {
   sim: TripSimState | null
 
   /** Accept a job and begin the delivery (entry point from Jobs/Home). */
-  acceptJob: (job: Rs3ActiveDelivery) => void
+  acceptJob: (job: RiderJob) => void
   /** Replace the active delivery wholesale (legacy RJ5 setter). */
   setActiveDelivery: (delivery: ActiveDelivery | null) => void
   /** Advance to the next status in the state machine. */
@@ -113,7 +114,17 @@ export const useActiveDeliveryStore = create<ActiveDeliveryState>()(
       acceptJob: job => {
         const now = Date.now()
         const delivery: ActiveDelivery = {
-          ...job,
+          jobId: job.id,
+          orderRef: job.orderRef,
+          customerName: job.customerName,
+          pickup: job.pickup,
+          dropoff: job.dropoff,
+          legToPickup: job.legToPickup,
+          legToDropoff: job.legToDropoff,
+          payout: job.payout,
+          isCod: job.isCod,
+          codAmount: job.codAmount,
+          currency: job.currency,
           status: 'assigned',
           legProgress: 0,
           currentPoint: job.legToPickup.points[0],

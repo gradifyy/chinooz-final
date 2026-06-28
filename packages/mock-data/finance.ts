@@ -129,3 +129,187 @@ export function formatNPR(value: number): string {
 export function formatNPRAmount(value: number): string {
   return value.toLocaleString('en-US')
 }
+
+// --- Transactions ledger ---
+
+export type TransactionType = 'sale' | 'refund' | 'fee' | 'payout' | 'adjustment'
+export type TransactionDirection = 'credit' | 'debit'
+
+export interface Transaction {
+  id: string
+  type: TransactionType
+  direction: TransactionDirection
+  orderId: string | null
+  date: string
+  description: string
+  gross: number
+  fees: number
+  net: number
+  runningBalance: number
+}
+
+export interface TransactionFilters {
+  type: TransactionType | 'all'
+  dateRange: 'all' | '7d' | '30d' | 'custom'
+  dateFrom?: string
+  dateTo?: string
+  orderId?: string
+  sort: 'date_desc' | 'date_asc' | 'net_desc' | 'net_asc'
+}
+
+export interface TransactionDetail extends Transaction {
+  breakdown: { label: string; amount: number; direction: TransactionDirection }[]
+}
+
+const TX_TYPES: TransactionType[] = ['sale', 'refund', 'fee', 'payout', 'adjustment']
+
+function txDirection(type: TransactionType): TransactionDirection {
+  return type === 'sale' || type === 'adjustment' ? 'credit' : 'debit'
+}
+
+function txDescription(type: TransactionType, orderId: string | null): string {
+  switch (type) {
+    case 'sale':
+      return `Order ${orderId} — sale settlement`
+    case 'refund':
+      return `Order ${orderId} — buyer refund`
+    case 'fee':
+      return `Order ${orderId} — platform commission`
+    case 'payout':
+      return `Payout to Khalti •••• 4321`
+    case 'adjustment':
+      return `Manual adjustment — rounding correction`
+  }
+}
+
+function buildTransactions(): Transaction[] {
+  const list: Transaction[] = []
+  let balance = 0
+  const now = new Date()
+  for (let i = 0; i < 48; i++) {
+    const typeIdx = Math.floor(seeded(i, 99) * TX_TYPES.length)
+    const type = TX_TYPES[typeIdx]
+    const hasOrder = type !== 'payout'
+    const orderId = hasOrder ? `ORD-${2051 - i}` : null
+    const d = new Date(now)
+    d.setDate(d.getDate() - Math.floor(i / 3))
+    d.setHours(8 + Math.floor(seeded(i + 5, 99) * 12))
+    const date = d.toISOString()
+    const gross =
+      type === 'sale'
+        ? Math.round((800 + seeded(i + 10, 99) * 40000) / 10) * 10
+        : type === 'refund'
+          ? Math.round((300 + seeded(i + 20, 99) * 5000) / 10) * 10
+          : type === 'fee'
+            ? Math.round((50 + seeded(i + 30, 99) * 2000) / 10) * 10
+            : type === 'payout'
+              ? Math.round((5000 + seeded(i + 40, 99) * 15000) / 100) * 100
+              : Math.round((10 + seeded(i + 50, 99) * 200) / 10) * 10
+    const fees = type === 'sale' ? Math.round(gross * FEE_RATE) : type === 'fee' ? gross : 0
+    const net = type === 'sale' ? gross - fees : type === 'refund' ? -gross : type === 'fee' ? -fees : type === 'payout' ? -gross : gross
+    balance += net
+    list.push({
+      id: `tx-${i}`,
+      type,
+      direction: txDirection(type),
+      orderId,
+      date,
+      description: txDescription(type, orderId),
+      gross,
+      fees,
+      net,
+      runningBalance: balance,
+    })
+  }
+  return list.reverse()
+}
+
+const ALL_TRANSACTIONS: Transaction[] = buildTransactions()
+
+function filterTransactions(filters: TransactionFilters): Transaction[] {
+  let list = [...ALL_TRANSACTIONS]
+  if (filters.type !== 'all') {
+    list = list.filter(t => t.type === filters.type)
+  }
+  if (filters.orderId) {
+    const q = filters.orderId.toLowerCase().trim()
+    list = list.filter(t => t.orderId?.toLowerCase().includes(q))
+  }
+  const now = Date.now()
+  if (filters.dateRange === '7d') {
+    list = list.filter(t => now - new Date(t.date).getTime() <= 7 * 86400000)
+  } else if (filters.dateRange === '30d') {
+    list = list.filter(t => now - new Date(t.date).getTime() <= 30 * 86400000)
+  } else if (filters.dateRange === 'custom') {
+    if (filters.dateFrom) list = list.filter(t => t.date >= filters.dateFrom!)
+    if (filters.dateTo) list = list.filter(t => t.date <= filters.dateTo! + 'T23:59:59')
+  }
+  switch (filters.sort) {
+    case 'date_asc':
+      list.sort((a, b) => a.date.localeCompare(b.date))
+      break
+    case 'net_desc':
+      list.sort((a, b) => b.net - a.net)
+      break
+    case 'net_asc':
+      list.sort((a, b) => a.net - b.net)
+      break
+    case 'date_desc':
+    default:
+      list.sort((a, b) => b.date.localeCompare(a.date))
+      break
+  }
+  return list
+}
+
+export async function getTransactions(
+  filters: TransactionFilters,
+): Promise<{ items: Transaction[]; total: number }> {
+  await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 300))
+  const items = filterTransactions(filters)
+  return { items, total: items.length }
+}
+
+export async function getTransactionById(id: string): Promise<TransactionDetail | null> {
+  await new Promise(resolve => setTimeout(resolve, 150 + Math.random() * 200))
+  const tx = ALL_TRANSACTIONS.find(t => t.id === id)
+  if (!tx) return null
+  const breakdown: TransactionDetail['breakdown'] = []
+  if (tx.type === 'sale') {
+    breakdown.push({ label: 'Gross sale', amount: tx.gross, direction: 'credit' })
+    breakdown.push({ label: 'Platform fee (4%)', amount: tx.fees, direction: 'debit' })
+    breakdown.push({ label: 'Net credit', amount: tx.net, direction: 'credit' })
+  } else if (tx.type === 'refund') {
+    breakdown.push({ label: 'Refund to buyer', amount: tx.gross, direction: 'debit' })
+    breakdown.push({ label: 'Fee reversal', amount: tx.fees, direction: 'credit' })
+    breakdown.push({ label: 'Net debit', amount: tx.net, direction: 'debit' })
+  } else if (tx.type === 'fee') {
+    breakdown.push({ label: 'Commission', amount: tx.gross, direction: 'debit' })
+    breakdown.push({ label: 'Net debit', amount: tx.net, direction: 'debit' })
+  } else if (tx.type === 'payout') {
+    breakdown.push({ label: 'Payout to Khalti', amount: tx.gross, direction: 'debit' })
+    breakdown.push({ label: 'Net debit', amount: tx.net, direction: 'debit' })
+  } else {
+    breakdown.push({ label: 'Adjustment', amount: tx.gross, direction: 'credit' })
+    breakdown.push({ label: 'Net credit', amount: tx.net, direction: 'credit' })
+  }
+  return { ...tx, breakdown }
+}
+
+export function exportTransactionsCSV(items: Transaction[]): string {
+  const header = 'id,type,direction,order_id,date,gross,fees,net,running_balance'
+  const rows = items.map(t =>
+    [
+      t.id,
+      t.type,
+      t.direction,
+      t.orderId ?? '',
+      t.date,
+      t.gross,
+      t.fees,
+      t.net,
+      t.runningBalance,
+    ].join(','),
+  )
+  return [header, ...rows].join('\n')
+}

@@ -10,6 +10,7 @@ import { Container, Screen, useReducedMotion } from '@chinooz/ui-web'
 import { useSellerCategories, useSellerProducts } from '@chinooz/hooks'
 import { useSellerSessionStore } from '@chinooz/state'
 import { analytics as tracker } from '@chinooz/analytics'
+import SalesSection from './SalesSection'
 import {
   getAnalytics,
   ANALYTICS_RANGES,
@@ -328,7 +329,11 @@ export default function AnalyticsScreen() {
               exit={{ opacity: 0 }}
               transition={{ duration: reduced ? 0 : 0.25, ease: 'easeOut' }}
             >
-              <SectionContent section={section} data={data} compare={compare} />
+              {section === 'sales' ? (
+                <SalesSection data={data} range={range} compare={compare} filter={filter} />
+              ) : (
+                <SectionContent section={section} data={data} compare={compare} />
+              )}
             </motion.div>
           </AnimatePresence>
         </div>

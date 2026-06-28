@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import type { Product, StockStatus, Order, OrderStatus } from './entities'
+import type { Product, StockStatus, Order, OrderStatus, SellerInventoryVariant } from './entities'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'destructive'
 export type ButtonSize = 'sm' | 'md' | 'lg'
@@ -234,6 +234,23 @@ export interface OrderStatusTimelineProps extends BaseProps {
   isCod?: boolean
   trackingNumber?: string
   onCopyTracking?: (trackingNumber: string) => void
+}
+
+export interface InventoryRowProps extends BaseProps {
+  variant: SellerInventoryVariant
+  /** Low-stock threshold; falls back to 10 when omitted. */
+  lowStockThreshold?: number
+  /** Commit a new stock value (debounced / on blur / on enter). */
+  onStockChange?: (stockCount: number) => void
+  /** Selection checkbox (bulk actions). */
+  selected?: boolean
+  onToggleSelect?: (id: string) => void
+  /** Show optional web-only columns (committed, incoming, sold). */
+  showOptionalColumns?: boolean
+  /** Render the skeleton shimmer state. */
+  loading?: boolean
+  /** Layout: dense data-table row (web) vs compact card (mobile). */
+  layout?: 'table' | 'compact'
 }
 
 export type { OrderStatus }

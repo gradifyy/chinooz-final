@@ -250,3 +250,88 @@ export function getRiderSettingsSections(): RiderSettingsSection[] {
 }
 
 export const RIDER_APP_VERSION = '1.0.0'
+
+/**
+ * RP2 — Rider personal profile edit.
+ *
+ * Surfaces:
+ * - getRiderPersonalProfile():  editable identity fields + lock flags.
+ * - updateRiderPersonalProfile():  mock persist; resolves after a short delay.
+ * - requestRiderPhoneOtp():  send a code to a new number (mock).
+ * - verifyRiderPhoneOtp():  validate the code (mock, dev code 123456).
+ *
+ * "Locked" fields require re-verification when changed (phone, zone). The
+ * UI marks them clearly and gates the save behind an OTP step.
+ */
+
+export interface RiderEmergencyContact {
+  name: string
+  phone: string
+  relation: string
+}
+
+export interface RiderPersonalProfile {
+  name: string
+  phone: string
+  email: string
+  city: string
+  zone: string
+  avatarUri: string | null
+  emergency: RiderEmergencyContact
+}
+
+export interface RiderPersonalProfileUpdate
+  extends Omit<RiderPersonalProfile, 'phone'> {
+  /** New phone — only set when the rider is changing it. */
+  phone?: string
+}
+
+export async function getRiderPersonalProfile(): Promise<RiderPersonalProfile> {
+  await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 200))
+  return {
+    name: 'Sujan Tamang',
+    phone: '9841234567',
+    email: 'sujan.tamang@example.com',
+    city: 'Lalitpur',
+    zone: 'Patan — Lalitpur',
+    avatarUri: 'https://picsum.photos/seed/rider-sujan/200/200',
+    emergency: {
+      name: 'Anita Tamang',
+      phone: '9812345678',
+      relation: 'Spouse',
+    },
+  }
+}
+
+export async function updateRiderPersonalProfile(
+  data: RiderPersonalProfileUpdate,
+): Promise<{ success: boolean }> {
+  await new Promise(resolve => setTimeout(resolve, 420 + Math.random() * 280))
+  // Always succeeds in mock. A real API would persist + re-run KYC for
+  // locked fields (phone/zone). The UI treats this as the success path.
+  void data
+  return { success: true }
+}
+
+export async function requestRiderPhoneOtp(
+  phone: string,
+): Promise<{ success: boolean; message: string; alreadySent?: boolean }> {
+  await new Promise(resolve => setTimeout(resolve, 300 + Math.random() * 200))
+  void phone
+  return { success: true, message: 'Code sent' }
+}
+
+export async function verifyRiderPhoneOtp(
+  phone: string,
+  code: string,
+): Promise<{ success: boolean; error?: string }> {
+  await new Promise(resolve => setTimeout(resolve, 320 + Math.random() * 220))
+  void phone
+  // Dev: 123456 always passes. Any other 6-digit code fails.
+  if (code === '123456') return { success: true }
+  return { success: false, error: 'Invalid code. Try again.' }
+}
+
+export const RIDER_OTP_DEV_CODE = '123456'
+export const RIDER_OTP_LENGTH = 6
+export const RIDER_OTP_RESEND_SECONDS = 30

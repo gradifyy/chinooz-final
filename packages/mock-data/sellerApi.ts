@@ -354,3 +354,21 @@ export async function exportReport(
     requestedAt: new Date().toISOString(),
   }
 }
+
+// --- Handle availability check (mock) ---
+
+const TAKEN_HANDLES = new Set([
+  'chinooz-store',
+  'electronics',
+  'fashion',
+  'himalayan-crafts',
+  'kathmandu-grocery',
+  'test-store',
+])
+
+export async function checkHandleAvailability(handle: string): Promise<boolean> {
+  await delay(300 + Math.random() * 200)
+  if (!handle || handle.length < 3) return false
+  return !TAKEN_HANDLES.has(handle.toLowerCase())
+}
+

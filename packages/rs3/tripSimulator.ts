@@ -45,8 +45,6 @@ export const RS3_TRIP_SIMULATOR = {
 
   /** Build a state resumed at a specific progress (e.g. after a state change). */
   resume(leg: DeliveryLeg, progress: number): TripSimState {
-    const total = legDistanceMeters(leg) || 1
-    const eta = leg.etaSeconds || Math.round(total / RS3_DRIVER_SPEED_MPS)
     const at = interpolateLeg(leg, progress)
     const remainingSeconds = Math.round(at.remainingMeters / RS3_DRIVER_SPEED_MPS)
     return {

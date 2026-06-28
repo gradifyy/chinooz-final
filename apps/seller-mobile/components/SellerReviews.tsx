@@ -16,12 +16,9 @@ import {
   ArrowLeft,
   Star,
   MessageSquare,
-  Flag,
   Send,
   RefreshCw,
   Image as ImageIcon,
-  CheckCircle2,
-  AlertTriangle,
   ChevronDown,
 } from 'lucide-react-native'
 import { colors, spacing, radii, fontFamily } from '@chinooz/theme'
@@ -38,10 +35,9 @@ import type {
   SellerReviewSort,
   SellerReviewStatus,
   SellerReviewResponseFilter,
-  SellerReview,
 } from '@chinooz/mock-data'
+import { ReviewCard, ReviewCardSkeleton } from '@chinooz/ui'
 import BottomSheet from '@chinooz/ui/BottomSheet'
-import SafeImage from '@chinooz/ui/SafeImage'
 import EmptyState from '@chinooz/ui/EmptyState'
 
 type RatingFilter = number | 'all'
@@ -49,16 +45,6 @@ const STARS = [5, 4, 3, 2, 1] as const
 
 function pct(count: number, total: number): number {
   return total > 0 ? Math.round((count / total) * 100) : 0
-}
-
-function timeAgo(iso: string): string {
-  const diff = Date.now() - +new Date(iso)
-  const day = 24 * 60 * 60 * 1000
-  if (diff < day) return 'today'
-  const days = Math.floor(diff / day)
-  if (days < 30) return `${days}d ago`
-  const months = Math.floor(days / 30)
-  return `${months}mo ago`
 }
 
 export default function SellerReviews() {
@@ -75,6 +61,9 @@ export default function SellerReviews() {
   const [sortSheet, setSortSheet] = useState(false)
   const [productSheet, setProductSheet] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [composeOpen, setComposeOpen] = useState(false)
+  const [composeReviewId, setComposeReviewId] = useState<string | null>(null)
+  const [composeDraft, setComposeDraft] = useState('')
   const barAnims = useRef<Animated.Value[]>(STARS.map(() => new Animated.Value(0)))
 
   useEffect(() => {
@@ -160,6 +149,26 @@ export default function SellerReviews() {
     setHasPhotos(false)
     setProductId(undefined)
     setStatus('all')
+  }
+
+  const openCompose = (reviewId: string) => {
+    setComposeReviewId(reviewId)
+    setComposeDraft('')
+    setComposeOpen(true)
+  }
+
+  const closeCompose = () => {
+    setComposeOpen(false)
+    setComposeReviewId(null)
+    setComposeDraft('')
+  }
+
+  const submitResponse = () => {
+    if (!composeReviewId || !composeDraft.trim()) return
+    respond.mutate(
+      { reviewId: composeReviewId, text: composeDraft.trim() },
+      { onSuccess: closeCompose },
+    )
   }
 
   const onRefresh = useCallback(() => {
@@ -420,7 +429,11 @@ export default function SellerReviews() {
         {/* List slot (SV2) */}
         <View style={styles.list}>
           {isLoading ? (
-            <ReviewsSkeleton />
+            <View style={styles.skeletonWrap}>
+              {Array.from({ length: 5 }).map((_, i) => (
+                <ReviewCardSkeleton key={i} />
+              ))}
+            </View>
           ) : items.length === 0 ? (
             <EmptyState
               icon={<MessageSquare size={40} color={colors.textTertiary} />}
@@ -437,9 +450,10 @@ export default function SellerReviews() {
               <ReviewCard
                 key={review.id}
                 review={review}
-                responding={respond.isPending}
-                onRespond={(text) => respond.mutate({ reviewId: review.id, text })}
+                responding={composeReviewId === review.id && respond.isPending}
+                onRespond={() => openCompose(review.id)}
                 onFlag={() => toggleFlag.mutate(review.id)}
+                onContactBuyer={() => router.push('/messages')}
               />
             ))
           )}
@@ -511,6 +525,34 @@ export default function SellerReviews() {
           })}
         </ScrollView>
       </BottomSheet>
+
+      {/* Compose response sheet */}
+      <BottomSheet visible={composeOpen} onClose={closeCompose} title={t('seller.reviews.respond')}>
+        <TextInput
+          value={composeDraft}
+          onChangeText={setComposeDraft}
+          placeholder={t('seller.reviews.responsePlaceholder')}
+          placeholderTextColor={colors.textTertiary}
+          multiline
+          style={composeStyles.input}
+          accessibilityLabel={t('seller.reviews.responsePlaceholder')}
+        />
+        <View style={composeStyles.actions}>
+          <TouchableOpacity onPress={closeCompose} style={composeStyles.cancelBtn}>
+            <Text style={composeStyles.cancelText}>{t('seller.reviews.back')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={submitResponse}
+            disabled={!composeDraft.trim() || respond.isPending}
+            style={[composeStyles.sendBtn, (!composeDraft.trim() || respond.isPending) && composeStyles.sendBtnDisabled]}
+          >
+            <Send size={14} color={colors.white} />
+            <Text style={composeStyles.sendText}>
+              {respond.isPending ? t('seller.reviews.responding') : t('seller.reviews.responseSend')}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </BottomSheet>
     </View>
   )
 }
@@ -540,204 +582,44 @@ function FilterChip({
   )
 }
 
-function ReviewCard({
-  review,
-  responding,
-  onRespond,
-  onFlag,
-}: {
-  review: SellerReview
-  responding: boolean
-  onRespond: (text: string) => void
-  onFlag: () => void
-}) {
-  const { t } = useTranslation()
-  const [composing, setComposing] = useState(false)
-  const [draft, setDraft] = useState('')
-  const needsResponse = !review.response && !review.flagged
-
-  const send = () => {
-    const text = draft.trim()
-    if (!text) return
-    onRespond(text)
-    setDraft('')
-    setComposing(false)
-  }
-
-  const cardStyle = needsResponse
-    ? [styles.card, styles.cardNeedsResponse]
-    : review.flagged
-      ? [styles.card, styles.cardFlagged]
-      : styles.card
-
-  return (
-    <View style={cardStyle}>
-      <View style={styles.cardHead}>
-        <View style={styles.avatar} accessibilityLabel={review.userName}>
-          <Text style={styles.avatarText}>{review.userName.charAt(0).toUpperCase()}</Text>
-        </View>
-        <View style={styles.cardHeadBody}>
-          <Text style={styles.cardName} numberOfLines={1}>{review.userName}</Text>
-          <View style={styles.cardStarsRow}>
-            {[1, 2, 3, 4, 5].map(s => (
-              <Star
-                key={s}
-                size={13}
-                color={s <= review.rating ? colors.gold : colors.border}
-                fill={s <= review.rating ? colors.gold : 'none'}
-              />
-            ))}
-            <Text style={styles.cardTime}>· {timeAgo(review.createdAt)}</Text>
-          </View>
-        </View>
-        <StatusPill
-          label={
-            review.flagged
-              ? t('seller.reviews.statusFlagged')
-              : review.response
-                ? t('seller.reviews.statusResponded')
-                : t('seller.reviews.statusNeedsResponse')
-          }
-          tone={review.flagged ? 'error' : review.response ? 'success' : 'warning'}
-          icon={
-            review.flagged ? <Flag size={11} color={colors.error} /> : review.response ? <CheckCircle2 size={11} color={colors.success} /> : <AlertTriangle size={11} color="#92400E" />
-          }
-        />
-      </View>
-
-      {/* Product context */}
-      <View style={styles.productRow}>
-        <SafeImage source={review.productImage} style={styles.productThumb} accessibilityLabel={review.productName} />
-        <Text style={styles.productName} numberOfLines={1}>{review.productName}</Text>
-      </View>
-
-      {review.title ? <Text style={styles.cardTitle}>{review.title}</Text> : null}
-      <Text style={styles.cardBody}>{review.body}</Text>
-
-      {review.photos && review.photos.length > 0 && (
-        <View style={styles.photosRow} accessibilityLabel={t('seller.reviews.photosAria', { count: review.photos.length })}>
-          {review.photos.map((src, i) => (
-            <SafeImage key={i} source={src} style={styles.photo} accessibilityLabel={`Photo ${i + 1}`} />
-          ))}
-        </View>
-      )}
-
-      {review.response && (
-        <View style={styles.responseBox}>
-          <Text style={styles.responseLabel}>{t('seller.reviews.statusResponded')}</Text>
-          <Text style={styles.responseText}>{review.response.text}</Text>
-        </View>
-      )}
-
-      {/* Actions */}
-      <View style={styles.actionsRow}>
-        {!review.response && (
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel={t('seller.reviews.respondAria', { name: review.userName })}
-            onPress={() => setComposing(v => !v)}
-            style={styles.respondBtn}
-            activeOpacity={0.8}
-          >
-            <MessageSquare size={14} color={colors.white} />
-            <Text style={styles.respondBtnText}>{t('seller.reviews.respond')}</Text>
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel={t('seller.reviews.flagAria', { name: review.userName })}
-          onPress={onFlag}
-          style={[styles.flagBtn, review.flagged && styles.flagBtnActive]}
-          activeOpacity={0.8}
-        >
-          <Flag size={14} color={review.flagged ? colors.error : colors.textMuted} />
-          <Text style={[styles.flagBtnText, review.flagged && styles.flagBtnTextActive]}>
-            {review.flagged ? t('seller.reviews.unflag') : t('seller.reviews.flag')}
-          </Text>
-        </TouchableOpacity>
-        {review.helpful > 0 && (
-          <Text style={styles.helpfulText}>
-            {t('seller.reviews.helpful', { count: review.helpful })}
-          </Text>
-        )}
-      </View>
-
-      {/* Compose */}
-      {composing && !review.response && (
-        <View style={styles.composeBox}>
-          <TextInput
-            value={draft}
-            onChangeText={setDraft}
-            placeholder={t('seller.reviews.responsePlaceholder')}
-            placeholderTextColor={colors.textTertiary}
-            multiline
-            style={styles.composeInput}
-            accessibilityLabel={t('seller.reviews.responsePlaceholder')}
-          />
-          <View style={styles.composeActions}>
-            <TouchableOpacity
-              onPress={() => {
-                setComposing(false)
-                setDraft('')
-              }}
-              style={styles.composeCancel}
-            >
-              <Text style={styles.composeCancelText}>{t('seller.reviews.back')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={send}
-              disabled={!draft.trim() || responding}
-              style={[styles.composeSend, (!draft.trim() || responding) && styles.composeSendDisabled]}
-            >
-              <Send size={14} color={colors.white} />
-              <Text style={styles.composeSendText}>
-                {responding ? t('seller.reviews.responding') : t('seller.reviews.responseSend')}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-    </View>
-  )
-}
-
-function StatusPill({
-  label,
-  tone,
-  icon,
-}: {
-  label: string
-  tone: 'success' | 'warning' | 'error'
-  icon: React.ReactNode
-}) {
-  const bg =
-    tone === 'success' ? colors.successLight : tone === 'warning' ? colors.warningLight : colors.errorLight
-  const color = tone === 'success' ? colors.success : tone === 'warning' ? '#92400E' : colors.error
-  return (
-    <View style={[styles.statusPill, { backgroundColor: bg }]}>
-      {icon}
-      <Text style={[styles.statusPillText, { color }]}>{label}</Text>
-    </View>
-  )
-}
-
-function ReviewsSkeleton() {
-  return (
-    <View style={styles.skeletonWrap}>
-      {Array.from({ length: 5 }).map((_, i) => (
-        <View key={i} style={styles.skeletonCard}>
-          <View style={styles.skeletonAvatar} />
-          <View style={styles.skeletonBody}>
-            <View style={styles.skeletonLineW30} />
-            <View style={styles.skeletonLineW50} />
-            <View style={[styles.skeletonLineW30, { marginTop: 12 }]} />
-            <View style={styles.skeletonLineW60} />
-          </View>
-        </View>
-      ))}
-    </View>
-  )
-}
+const composeStyles = StyleSheet.create({
+  input: {
+    minHeight: 80,
+    fontSize: 15,
+    color: colors.text,
+    textAlignVertical: 'top',
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[2],
+    backgroundColor: colors.background,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: spacing[3],
+  },
+  actions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing[2],
+    paddingHorizontal: spacing[4],
+  },
+  cancelBtn: {
+    paddingHorizontal: spacing[3],
+    height: 36,
+    justifyContent: 'center',
+  },
+  cancelText: { fontSize: 14, fontWeight: '600', color: colors.textMuted },
+  sendBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
+    backgroundColor: colors.primary,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing[4],
+    height: 36,
+  },
+  sendBtnDisabled: { opacity: 0.5 },
+  sendText: { fontSize: 14, fontWeight: '600', color: colors.white },
+})
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },

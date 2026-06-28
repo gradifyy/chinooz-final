@@ -15,7 +15,8 @@
   "dependencies": {
     "@chinooz/theme": "workspace:*",
     "@chinooz/types": "workspace:*",
-    "@chinooz/utils": "workspace:*"
+    "@chinooz/utils": "workspace:*",
+    "lucide-react-native": "^1.21.0"
   },
   "devDependencies": {
     "@types/react": "~19.1.10",
