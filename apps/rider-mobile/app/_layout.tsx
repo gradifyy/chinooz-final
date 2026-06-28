@@ -28,10 +28,13 @@ export default function RootLayout() {
                       <Stack.Screen name="privacy" options={{ animation: 'slide_from_right' }} />
                       <Stack.Screen name="rider-agreement" options={{ animation: 'slide_from_right' }} />
                       <Stack.Screen name="jobs" options={{ animation: 'fade' }} />
+                      <Stack.Screen name="active" options={{ animation: 'slide_from_bottom' }} />
                       <Stack.Screen name="hotspots" options={{ animation: 'slide_from_right' }} />
                       <Stack.Screen name="wallet" options={{ animation: 'slide_from_right' }} />
                       <Stack.Screen name="incentives" options={{ animation: 'slide_from_right' }} />
                       <Stack.Screen name="earnings" options={{ animation: 'slide_from_right' }} />
+                      <Stack.Screen name="earnings-chart" options={{ animation: 'slide_from_right' }} />
+                      <Stack.Screen name="ledger" options={{ animation: 'slide_from_right' }} />
                       <Stack.Screen name="profile" options={{ animation: 'slide_from_right' }} />
                     </Stack>
                   </SafeAreaProvider>

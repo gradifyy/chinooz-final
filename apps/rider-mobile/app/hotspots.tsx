@@ -70,7 +70,6 @@ export default function HotspotsScreen() {
 
   const [zones, setZones] = useState<DemandZone[]>([])
   const [surgeZones, setSurgeZones] = useState<SurgeZone[]>([])
-  const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [showSurge, setShowSurge] = useState(false)
   const [zoom, setZoom] = useState(1)
@@ -95,7 +94,6 @@ export default function HotspotsScreen() {
   useEffect(() => {
     // Lightweight: one fetch on mount. No polling.
     load()
-    setLoading(false)
   }, [load])
 
   // Pause nothing extra on background — there's no polling here, but we keep

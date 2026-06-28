@@ -209,7 +209,7 @@ export default function DemandHeatmap({
                 textAnchor="middle"
                 stroke={isHot ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.85)'}
                 strokeWidth={isHot ? 0 : 2.5}
-                paintOrder="stroke"
+                strokeLinejoin="round"
               >
                 {zone.name}
               </SvgText>

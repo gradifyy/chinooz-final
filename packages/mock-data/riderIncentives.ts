@@ -86,7 +86,16 @@ export async function getIncentives(): Promise<RiderIncentives> {
   return INCENTIVES
 }
 
-const INCENTIVES: RiderIncentives = {
+/**
+ * Synchronous access to the surge slice (RI5). Shared by the demand heatmap
+ * (RD1) so the surge overlay and the Incentives hub report the same value
+ * without the heatmap needing to await the async getter.
+ */
+export function getIncentiveSurge(): RiderSurge {
+  return INCENTIVES.surge
+}
+
+export const INCENTIVES: RiderIncentives = {
   streak: {
     current: 6,
     best: 14,

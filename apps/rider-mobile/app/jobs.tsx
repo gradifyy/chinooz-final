@@ -15,15 +15,17 @@ import * as Haptics from 'expo-haptics'
 import { Circle, Radio, Flame, ChevronRight } from 'lucide-react-native'
 import { colors, spacing, radii, fontFamily, fontSize } from '@chinooz/theme'
 import { SegmentedControl } from '@chinooz/ui'
-import { useOnlineStatusStore, useActiveDeliveryStore } from '@chinooz/state'
+import { useOnlineStatusStore, useActiveDeliveryStore, hasActiveDelivery } from '@chinooz/state'
+import { jobRequestToActivePayload } from '@chinooz/rs3'
 import { analytics } from '@chinooz/analytics'
 import { useA11y } from '../components/A11yProvider'
 import AvailableTab from '../components/jobs/AvailableTab'
 import ActiveTab from '../components/jobs/ActiveTab'
 import HistoryTab from '../components/jobs/HistoryTab'
 import OfflinePrompt from '../components/jobs/OfflinePrompt'
+import ResumeBanner from '../components/active/ResumeBanner'
 import { AVAILABLE_REQUESTS, HISTORY_ENTRIES } from '../components/jobs/fixtures'
-import type { JobsTabKey } from '../components/jobs/types'
+import type { JobsTabKey, JobRequest } from '../components/jobs/types'
 
 const REFRESH_MS = 900
 
@@ -36,6 +38,8 @@ export default function JobsScreen() {
   const status = useOnlineStatusStore(s => s.status)
   const setOnlineStatus = useOnlineStatusStore(s => s.setOnlineStatus)
   const activeDelivery = useActiveDeliveryStore(s => s.activeDelivery)
+  const acceptJob = useActiveDeliveryStore(s => s.acceptJob)
+  const resume = useActiveDeliveryStore(s => s.resume)
 
   const [tab, setTab] = useState<JobsTabKey>('available')
   const [refreshing, setRefreshing] = useState(false)
@@ -98,6 +102,27 @@ export default function JobsScreen() {
   const handleTabChange = useCallback((key: string) => {
     setTab(key as JobsTabKey)
   }, [])
+
+  // Accept a job: convert the Jobs-shell request into an RS3 active-delivery
+  // payload, store it as the single source of truth, and launch the Active
+  // Delivery route.
+  const handleAccept = useCallback((job: JobRequest) => {
+    try {
+      if (!reducedMotion) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+    } catch {}
+    const payload = jobRequestToActivePayload(job)
+    acceptJob(payload)
+    analytics.track({ name: 'rider_accept_job', properties: { jobId: job.id, orderRef: job.orderRef } })
+    router.push('/active')
+  }, [reducedMotion, acceptJob, router])
+
+  const handleResume = useCallback(() => {
+    try {
+      if (!reducedMotion) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    } catch {}
+    resume()
+    router.push('/active')
+  }, [reducedMotion, resume, router])
 
   const handleOpenHotspots = useCallback(() => {
     try {
@@ -178,11 +203,22 @@ export default function JobsScreen() {
           <OfflinePrompt onGoOnline={handleGoOnline} />
         )}
 
+        {/* Resume banner: minimized active delivery stays reachable from Jobs. */}
+        {activeDelivery?.minimized && hasActiveDelivery(activeDelivery) && (
+          <ResumeBanner
+            delivery={activeDelivery}
+            onResume={handleResume}
+            onDismiss={handleResume}
+            style={styles.resumeBanner}
+          />
+        )}
+
         {tab === 'available' && (
           <AvailableTab
             requests={AVAILABLE_REQUESTS}
             isOnline={isOnline}
             onGoOnline={handleGoOnline}
+            onAccept={handleAccept}
           />
         )}
         {tab === 'active' && <ActiveTab />}
@@ -248,4 +284,7 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   hotspotsSub: { fontSize: fontSize.sm[0], color: colors.textMuted },
+  resumeBanner: {
+    marginHorizontal: spacing[4],
+  },
 })
