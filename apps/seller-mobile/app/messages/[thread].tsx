@@ -20,7 +20,7 @@ import {
   useMarkSellerConversationRead,
 } from '@chinooz/hooks'
 import { SELLER_REPLY_TEMPLATES, SELLER_QUICK_REPLIES, mockBuyerReply } from '@chinooz/mock-data'
-import { colors, spacing, radii, fontSize, fontFamily, duration, easing } from '@chinooz/theme'
+import { colors, spacing, radii, fontSize, fontFamily, duration } from '@chinooz/theme'
 import type { Conversation, Message } from '@chinooz/types'
 import Animated, {
   useSharedValue,

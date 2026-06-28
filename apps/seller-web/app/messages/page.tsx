@@ -10,6 +10,7 @@ import {
   useSendSellerMessage,
   useMarkSellerConversationRead,
 } from '@chinooz/hooks'
+import { SELLER_REPLY_TEMPLATES, SELLER_QUICK_REPLIES, mockBuyerReply } from '@chinooz/mock-data'
 import { useSellerSessionStore, useSellerMessagesStore } from '@chinooz/state'
 import type { Conversation, Message } from '@chinooz/types'
 
@@ -287,7 +288,8 @@ function FilterChip({
   )
 }
 
-function contextText(c: Conversation, t: (k: string, o?: any) => string): string | null {
+function contextText(c?: Conversation, t?: (k: string, o?: any) => string): string | null {
+  if (!c || !t) return null
   if (c.contextType === 'order' && c.orderRef) return t('seller.messages.contextOrder', { ref: c.orderRef })
   if (c.contextType === 'product' && c.productName) return `${t('seller.messages.contextProduct')} · ${c.productName}`
   if (c.contextType === 'general') return t('seller.messages.contextGeneral')
@@ -306,25 +308,39 @@ function ThreadView({
   isDesktop: boolean
 }) {
   const { t } = useTranslation()
+  const router = useRouter()
   const { data: serverMessages, isLoading } = useSellerMessages(conversationId)
   const sendMutation = useSendSellerMessage()
   const markRead = useMarkSellerConversationRead()
   const convo = conversations.find(c => c.id === conversationId)
   const [input, setInput] = useState('')
   const [localMessages, setLocalMessages] = useState<Message[]>([])
+  const [typing, setTyping] = useState(false)
+  const [showTemplates, setShowTemplates] = useState(false)
+  const [loadEarlier, setLoadEarlier] = useState(true)
+  const [loadingEarlier, setLoadingEarlier] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const reduced = useReducedMotion()
+  const replyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => { if (serverMessages) setLocalMessages(serverMessages) }, [serverMessages])
   useEffect(() => { if (conversationId) markRead.mutate(conversationId) }, [conversationId, markRead])
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-  }, [localMessages])
+  }, [localMessages, typing])
+  useEffect(() => () => { if (replyTimer.current) clearTimeout(replyTimer.current) }, [])
 
   const grouped = useMemo(() => groupByDay(localMessages, t), [localMessages, t])
 
-  const handleSend = useCallback(() => {
-    const trimmed = input.trim()
+  const scrollToBottom = useCallback(() => {
+    requestAnimationFrame(() => {
+      if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    })
+  }, [])
+
+  const handleSend = useCallback((text?: string) => {
+    const trimmed = (text ?? input).trim()
     if (!trimmed) return
     const optimistic: Message = {
       id: `smsg-opt-${Date.now()}`,
@@ -338,10 +354,45 @@ function ThreadView({
     }
     setLocalMessages(prev => [...prev, optimistic])
     setInput('')
+    setShowTemplates(false)
+    if (textareaRef.current) textareaRef.current.style.height = '40px'
+    scrollToBottom()
     sendMutation.mutate({ conversationId, body: trimmed })
-  }, [input, conversationId, sendMutation])
 
-  const contextLabel = contextText(convo ?? ({} as Conversation), t)
+    const delay = 1200 + Math.random() * 1200
+    setTyping(true)
+    if (replyTimer.current) clearTimeout(replyTimer.current)
+    replyTimer.current = setTimeout(() => {
+      setTyping(false)
+      const reply: Message = {
+        id: `smsg-reply-${Date.now()}`,
+        conversationId,
+        senderId: 'buyer-1',
+        senderName: convo?.participantName ?? 'Buyer',
+        body: mockBuyerReply(trimmed),
+        createdAt: new Date().toISOString(),
+        read: false,
+        status: 'delivered',
+      }
+      setLocalMessages(prev => [...prev, reply])
+      scrollToBottom()
+    }, delay)
+  }, [input, conversationId, sendMutation, convo, scrollToBottom])
+
+  const handleLoadEarlier = useCallback(() => {
+    setLoadingEarlier(true)
+    setTimeout(() => { setLoadEarlier(false); setLoadingEarlier(false) }, 1200)
+  }, [])
+
+  const handleTextareaInput = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value)
+    const el = e.target
+    el.style.height = '40px'
+    el.style.height = Math.min(120, el.scrollHeight) + 'px'
+  }, [])
+
+  const contextLabel = contextText(convo, t)
+  const contextHref = convo?.contextType === 'order' ? '/orders' : convo?.contextType === 'product' ? '/products' : null
 
   if (isLoading) {
     return (
@@ -356,7 +407,7 @@ function ThreadView({
   }
 
   return (
-    <>
+    <div className="flex flex-col flex-1 min-h-0">
       <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
         {!isDesktop && (
           <button
@@ -370,60 +421,160 @@ function ThreadView({
         <Avatar source={convo?.participantAvatar} name={convo?.participantName ?? ''} size="md" />
         <div className="flex-1 min-w-0">
           <p className="text-base font-semibold text-text truncate">{convo?.participantName ?? conversationId}</p>
-          {contextLabel && <p className="text-xs text-text-muted truncate">{contextLabel}</p>}
+          {contextLabel && (
+            <button
+              onClick={() => { if (contextHref) router.push(contextHref) }}
+              disabled={!contextHref}
+              className="text-xs text-primary font-medium hover:underline disabled:text-text-muted disabled:no-underline truncate text-left"
+              aria-label={t('seller.messages.threadContextAria', { context: contextLabel })}
+            >
+              {contextLabel}{contextHref ? ' \u{203A}' : ''}
+            </button>
+          )}
         </div>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 flex flex-col gap-2 min-h-0">
+        {loadEarlier && (
+          <div className="flex justify-center mb-2">
+            <button
+              onClick={handleLoadEarlier}
+              disabled={loadingEarlier}
+              className="text-sm font-medium text-primary hover:underline disabled:text-text-muted"
+              aria-label={t('seller.messages.threadLoadEarlier')}
+            >
+              {loadingEarlier ? '…' : t('seller.messages.threadLoadEarlier')}
+            </button>
+          </div>
+        )}
         {grouped.map(item => {
           if (item.type === 'separator') {
             return (
               <div key={item.id} className="flex items-center gap-2 my-2">
                 <div className="flex-1 h-px bg-border-light" />
-                <span className="text-xs text-text-muted font-medium">{item.label}</span>
+                <span className="text-xs text-text-muted font-medium bg-background px-2 py-0.5 rounded-full">{item.label}</span>
                 <div className="flex-1 h-px bg-border-light" />
               </div>
             )
           }
           const isMine = item.senderId === 'seller-1'
           const time = new Date(item.createdAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true })
+          const tick = item.status === 'read' ? t('seller.messages.threadTickRead') : item.status === 'delivered' ? t('seller.messages.threadTickDelivered') : item.status === 'sent' ? t('seller.messages.threadTickSent') : null
+          const ariaParts = [item.senderName, item.body, time]
+          if (tick) ariaParts.push(tick)
           return (
-            <div key={item.id} className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} ${reduced ? '' : 'animate-[fadeIn_150ms_ease-out]'}`}>
+            <div
+              key={item.id}
+              className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} ${reduced ? '' : 'animate-[fadeIn_200ms_ease-out]'}`}
+              aria-label={ariaParts.join('. ')}
+            >
               <div
-                className={`max-w-[78%] px-3 py-2 rounded-lg text-sm ${isMine ? 'bg-primary text-white' : 'bg-background text-text border border-border-light'}`}
+                className={`max-w-[78%] px-3 py-2 text-sm leading-5 ${isMine ? 'bg-primary text-white rounded-2xl rounded-br-sm' : 'bg-background text-text border border-border-light rounded-2xl rounded-bl-sm'}`}
               >
                 {item.body}
               </div>
-              <span className="text-[10px] text-text-tertiary mt-1">{time}</span>
+              <div className={`flex items-center gap-1 mt-1 ${isMine ? 'flex-row-reverse' : ''}`}>
+                <span className="text-[10px] text-text-tertiary">{time}</span>
+                {isMine && item.status && (
+                  <span className={`text-[10px] ${item.status === 'read' ? 'text-primary' : 'text-text-tertiary'}`} aria-hidden="true">
+                    {item.status === 'read' ? '\u{2713}\u{2713}' : '\u{2713}'}
+                  </span>
+                )}
+              </div>
             </div>
           )
         })}
-        {localMessages.length === 0 && (
+        {typing && (
+          <div className="flex items-start" aria-live="polite" aria-label={t('seller.messages.threadTypingGeneric')}>
+            <div className="flex items-center gap-1 bg-background border border-border-light rounded-2xl rounded-bl-sm px-3 py-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-text-muted animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-text-muted animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-text-muted animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
+          </div>
+        )}
+        {localMessages.length === 0 && !typing && (
           <div className="m-auto text-sm text-text-muted text-center px-6">
             {t('seller.messages.emptySubtitle')}
           </div>
         )}
       </div>
 
+      {showTemplates && (
+        <div className="border-t border-border-light bg-surface px-4 py-3 max-h-72 overflow-y-auto" role="dialog" aria-label={t('seller.messages.threadTemplates')}>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-semibold text-text">{t('seller.messages.threadTemplates')}</span>
+            <button
+              onClick={() => setShowTemplates(false)}
+              className="text-text-muted hover:text-text"
+              aria-label={t('common.close')}
+            >
+              {'\u{2715}'}
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2 mb-2">
+            {SELLER_QUICK_REPLIES.map(q => (
+              <button
+                key={q.id}
+                onClick={() => handleSend(q.body)}
+                className="rounded-full px-3 py-1.5 text-sm font-medium text-primary bg-primary-50 hover:bg-primary-50/70 transition-colors"
+                aria-label={q.label}
+              >
+                {q.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-col">
+            {SELLER_REPLY_TEMPLATES.map(tpl => (
+              <button
+                key={tpl.id}
+                onClick={() => handleSend(tpl.body)}
+                className="text-left py-2 border-b border-border-light last:border-0 hover:bg-background transition-colors"
+                aria-label={tpl.label}
+              >
+                <p className="text-sm font-semibold text-text">{tpl.label}</p>
+                <p className="text-xs text-text-muted mt-0.5 line-clamp-2">{tpl.body}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="flex items-end gap-2 p-3 border-t border-border-light bg-surface">
-        <input
-          className="flex-1 h-10 rounded-lg bg-background px-3 text-sm text-text outline-none border border-border-light focus:border-primary"
+        <button
+          className="h-9 w-9 flex items-center justify-center rounded-md text-text-muted hover:bg-background transition-colors shrink-0"
+          aria-label={t('seller.messages.threadAttachAria')}
+        >
+          <span aria-hidden="true">{'\u{1F4CE}'}</span>
+        </button>
+        <button
+          onClick={() => setShowTemplates(v => !v)}
+          className={`h-9 w-9 flex items-center justify-center rounded-md transition-colors shrink-0 ${showTemplates ? 'text-primary bg-primary-50' : 'text-primary hover:bg-primary-50'}`}
+          aria-label={t('seller.messages.threadTemplatesAria')}
+          aria-expanded={showTemplates}
+        >
+          <span aria-hidden="true">{'\u{270D}'}</span>
+        </button>
+        <textarea
+          ref={textareaRef}
+          className="flex-1 min-h-[40px] max-h-[120px] resize-none rounded-2xl bg-background px-3 py-2 text-sm text-text outline-none border border-border-light focus:border-primary"
           placeholder={t('seller.messages.threadTypeMessage')}
           value={input}
-          onChange={e => setInput(e.target.value)}
+          onChange={handleTextareaInput}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
+          rows={1}
           aria-label={t('seller.messages.threadTypeMessage')}
         />
         <button
-          onClick={handleSend}
+          onClick={() => handleSend()}
           disabled={!input.trim()}
-          className="h-10 w-10 rounded-full bg-primary text-white flex items-center justify-center disabled:opacity-50 hover:bg-primary-dark transition-colors"
+          className="h-10 w-10 rounded-full bg-primary text-white flex items-center justify-center disabled:opacity-50 hover:bg-primary-dark active:scale-95 transition-all shrink-0"
           aria-label={t('seller.messages.threadSend')}
         >
           <span aria-hidden="true">{'\u{27A4}'}</span>
         </button>
       </div>
-    </>
+    </div>
   )
 }
 
