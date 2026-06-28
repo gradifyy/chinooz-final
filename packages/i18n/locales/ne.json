@@ -1585,6 +1585,26 @@
       "valueLabel": "मान",
       "scheduleLabel": "तालिका",
       "perfStats": "प्रदर्शन"
+    },
+    "orders": {
+      "actionAccept": "स्वीकार",
+      "actionPack": "प्याक",
+      "actionShip": "पठाउने",
+      "actionPrintLabel": "लेबल प्रिन्ट",
+      "actionView": "हेर्नुहोस्",
+      "actionAcceptAria": "अर्डर {{id}} स्वीकार",
+      "actionPackAria": "अर्डर {{id}} प्याक",
+      "actionShipAria": "अर्डर {{id}} पठाउने",
+      "actionPrintLabelAria": "अर्डर {{id}} को लेबल प्रिन्ट",
+      "actionViewAria": "अर्डर {{id}} हेर्नुहोस्",
+      "slaShipBy": "{{date}} सम्म पठाउनुहोस्",
+      "slaOverdue": "ढिलो — अहिले पठाउनुहोस्",
+      "slaDueToday": "आज पठाउनुहोस्",
+      "paid": "भुक्तानी भयो",
+      "unpaid": "भुक्तानी बाँकी",
+      "selectOrder": "अर्डर {{id}} छान्नुहोस्",
+      "rowAria": "अर्डर {{id}}, खरिदकर्ता {{buyer}}, {{total}}, {{status}}",
+      "nextAction": "अरियो कार्य"
     }
   },
   "rider": {

@@ -202,6 +202,22 @@ export interface Message {
   richTracking?: RichTrackingPayload
 }
 
+export interface SellerMessageTemplate {
+  id: string
+  label: string
+  body: string
+  /** Placeholders like {order_id}, {tracking}, {buyer_name} */
+  hasPlaceholders?: boolean
+  isBuiltIn?: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SellerAwayMessage {
+  enabled: boolean
+  body: string
+}
+
 export interface Conversation {
   id: string
   participantName: string
