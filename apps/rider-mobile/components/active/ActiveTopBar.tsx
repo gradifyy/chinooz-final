@@ -1,10 +1,12 @@
 import React, { useCallback } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
-import { Minus, X } from 'lucide-react-native'
+import { useRouter } from 'expo-router'
+import { Minus, X, Siren } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
 import * as Haptics from 'expo-haptics'
 import { colors, spacing, radii, fontFamily, fontSize } from '@chinooz/theme'
+import { analytics } from '@chinooz/analytics'
 import { useA11y } from '../A11yProvider'
 import type { ActiveDelivery, DeliveryStatus } from '@chinooz/types'
 
@@ -40,6 +42,7 @@ function formatDistance(meters: number): string {
  */
 export default function ActiveTopBar({ delivery, onMinimize, onCancel }: ActiveTopBarProps) {
   const { t } = useTranslation()
+  const router = useRouter()
   const insets = useSafeAreaInsets()
   const { reducedMotion, minTouchTarget } = useA11y()
   const terminal = isTerminal(delivery.status)
@@ -51,6 +54,13 @@ export default function ActiveTopBar({ delivery, onMinimize, onCancel }: ActiveT
     try { if (!reducedMotion) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light) } catch {}
     onMinimize()
   }, [reducedMotion, terminal, onMinimize])
+
+  // One-tap safety entry — always reachable in-trip, even under stress.
+  const handleSafety = useCallback(() => {
+    try { if (!reducedMotion) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium) } catch {}
+    analytics.track({ event: 'rider_active_safety_tapped', screen: 'rider-active-delivery' })
+    router.push('/support')
+  }, [reducedMotion, router])
 
   const etaText = terminal
     ? delivery.status === 'delivered'
@@ -86,8 +96,17 @@ export default function ActiveTopBar({ delivery, onMinimize, onCancel }: ActiveT
           </Text>
         </View>
 
-        {/* Right: ETA + distance */}
+        {/* Right: one-tap SOS + ETA/distance */}
         <View style={styles.metaWrap}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={t('rider.active.topbarSafetyAria')}
+            onPress={handleSafety}
+            style={[styles.safetyBtn, { minWidth: minTouchTarget, minHeight: minTouchTarget }]}
+            hitSlop={8}
+          >
+            <Siren size={20} color={colors.error} />
+          </TouchableOpacity>
           {etaText ? (
             <Text style={styles.eta} numberOfLines={1}>{etaText}</Text>
           ) : null}
@@ -131,6 +150,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: radii.full,
     backgroundColor: colors.background,
+  },
+  safetyBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radii.full,
+    backgroundColor: colors.errorLight,
+    borderWidth: 1,
+    borderColor: colors.error,
+    marginBottom: 2,
   },
   statusWrap: {
     flex: 1,
