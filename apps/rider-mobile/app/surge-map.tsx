@@ -37,6 +37,7 @@ import {
   OfflineBanner,
   NoSurgeState,
 } from '../components/IncentiveStates'
+import { SurgePulse, ListEnter } from '../components/IncentiveMotion'
 import type { DemandZone, DemandLevel } from '@chinooz/mock-data'
 
 /**
@@ -228,6 +229,7 @@ export default function SurgeMapScreen() {
 
         {/* Surge status banner */}
         {detail.surgeLive ? (
+          <SurgePulse reduced={reducedMotion}>
           <View
             style={styles.statusBannerLive}
             accessibilityRole="summary"
@@ -252,6 +254,7 @@ export default function SurgeMapScreen() {
               </Text>
             </View>
           </View>
+          </SurgePulse>
         ) : (
           <View
             style={styles.statusBannerIdle}
@@ -315,6 +318,7 @@ export default function SurgeMapScreen() {
 
         {/* Fallback text list of active surge zones (not color-only) */}
         {activeZonesWithInfo.length > 0 ? (
+          <ListEnter index={1}>
           <View style={styles.section}>
             <Text
               style={styles.sectionHeading}
@@ -356,6 +360,7 @@ export default function SurgeMapScreen() {
               ))}
             </View>
           </View>
+          </ListEnter>
         ) : (
           <View style={styles.noZonesCard}>
             <CircleAlert size={20} color={colors.textTertiary} />
@@ -367,6 +372,7 @@ export default function SurgeMapScreen() {
         )}
 
         {/* Peak windows — current + upcoming with countdown */}
+        <ListEnter index={2}>
         <View style={styles.section}>
           <Text
             style={styles.sectionHeading}
@@ -377,13 +383,14 @@ export default function SurgeMapScreen() {
           </Text>
           {detail.peakWindows.length > 0 ? (
             <View style={styles.peaksList}>
-              {detail.peakWindows.map(pw => (
+              {detail.peakWindows.map((pw, i) => (
+                <ListEnter key={pw.id} index={i}>
                 <PeakWindowCard
-                  key={pw.id}
                   window={pw}
                   t={t}
                   fmtCountdown={fmtCountdown}
                 />
+                </ListEnter>
               ))}
             </View>
           ) : (
@@ -393,6 +400,7 @@ export default function SurgeMapScreen() {
             </View>
           )}
         </View>
+        </ListEnter>
 
         {/* Go-online tie-in */}
         <TouchableOpacity

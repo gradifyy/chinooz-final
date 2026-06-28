@@ -207,7 +207,7 @@ export default function QuestsListScreen() {
         ? t('rider.incentives.questListEmptyAvailableSub')
         : t('rider.incentives.questListEmptyCompletedSub')
       return (
-        <View style={styles.emptyWrap} accessibilityRole="status" accessibilityLiveRegion="polite" accessible>
+        <View style={styles.emptyWrap} accessibilityLiveRegion="polite" accessible>
           <Target size={32} color={colors.textTertiary} />
           <Text style={styles.emptyTitle}>{emptyTitle}</Text>
           <Text style={styles.emptySub}>{emptySub}</Text>

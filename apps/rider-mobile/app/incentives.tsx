@@ -12,7 +12,6 @@ import { useFocusEffect, useRouter } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import Svg, { Circle } from 'react-native-svg'
 import {
   ChevronLeft,
   ChevronRight,
@@ -34,6 +33,7 @@ import {
   NewRiderState,
   NoActiveQuestsState,
 } from '../components/IncentiveStates'
+import { AnimatedMissionRing, ListEnter } from '../components/IncentiveMotion'
 import { useAppState } from '../components/AppStateProvider'
 
 const RING_SIZE = 88
@@ -305,7 +305,7 @@ export default function IncentivesHubScreen() {
                 pct: Math.round(missionPct * 100),
               })}
             >
-              <MissionRing pct={missionPct} />
+              <AnimatedMissionRing pct={missionPct} size={RING_SIZE} stroke={RING_STROKE} />
               <View style={styles.missionRingCenter} pointerEvents="none">
                 <Text style={styles.missionRingPct}>
                   {t('rider.incentives.missionRingPct', { pct: Math.round(missionPct * 100) })}
@@ -356,35 +356,38 @@ export default function IncentivesHubScreen() {
 
         {/* Prominent active-quest progress card */}
         {prominentQuest ? (
-          <View style={styles.prominentWrap}>
-            <Text
-              style={styles.sectionHeading}
-              accessibilityRole="header"
-              accessibilityLabel={t('rider.incentives.activeQuestTitle')}
-            >
-              {t('rider.incentives.activeQuestTitle')}
-            </Text>
-            <QuestCard
-              quest={{ ...prominentQuest, description: prominentQuest.description }}
-              labels={{ ...questCardLabels, kind: kindLabel(prominentQuest.kind) }}
-              onPress={handleQuestPress}
-              onClaim={handleQuestClaim}
-              prominent
-            />
-          </View>
+          <ListEnter index={0}>
+            <View style={styles.prominentWrap}>
+              <Text
+                style={styles.sectionHeading}
+                accessibilityRole="header"
+                accessibilityLabel={t('rider.incentives.activeQuestTitle')}
+              >
+                {t('rider.incentives.activeQuestTitle')}
+              </Text>
+              <QuestCard
+                quest={{ ...prominentQuest, description: prominentQuest.description }}
+                labels={{ ...questCardLabels, kind: kindLabel(prominentQuest.kind) }}
+                onPress={handleQuestPress}
+                onClaim={handleQuestClaim}
+                prominent
+              />
+            </View>
+          </ListEnter>
         ) : null}
 
         {/* Active quests section (remaining active quests, if more than one) */}
         {activeQuests.length > 1 ? (
           <Section title={t('rider.incentives.sectionActive')} ariaLabel={t('rider.incentives.sectionActiveAria')}>
-            {activeQuests.slice(1).map(q => (
-              <QuestCard
-                key={q.id}
-                quest={q}
+            {activeQuests.slice(1).map((q, i) => (
+              <ListEnter key={q.id} index={i + 1}>
+                <QuestCard
+                  quest={q}
                 labels={{ ...questCardLabels, kind: kindLabel(q.kind) }}
                 onPress={handleQuestPress}
-              onClaim={handleQuestClaim}
+                onClaim={handleQuestClaim}
               />
+              </ListEnter>
             ))}
           </Section>
         ) : null}
@@ -494,37 +497,6 @@ export default function IncentivesHubScreen() {
         </Section>
       </ScrollView>
     </View>
-  )
-}
-
-/* ---------- Mission ring (SVG) ---------- */
-
-function MissionRing({ pct }: { pct: number }) {
-  const offset = RING_CIRC * (1 - pct)
-  return (
-    <Svg width={RING_SIZE} height={RING_SIZE} accessibilityElementsHidden importantForAccessibility="no">
-      <Circle
-        cx={RING_SIZE / 2}
-        cy={RING_SIZE / 2}
-        r={RING_RADIUS}
-        stroke={colors.borderLight}
-        strokeWidth={RING_STROKE}
-        fill="none"
-      />
-      <Circle
-        cx={RING_SIZE / 2}
-        cy={RING_SIZE / 2}
-        r={RING_RADIUS}
-        stroke={colors.gold}
-        strokeWidth={RING_STROKE}
-        strokeLinecap="round"
-        fill="none"
-        strokeDasharray={RING_CIRC}
-        strokeDashoffset={offset}
-        rotation={-90}
-        origin={`${RING_SIZE / 2}, ${RING_SIZE / 2}`}
-      />
-    </Svg>
   )
 }
 

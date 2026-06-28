@@ -54,6 +54,7 @@ import {
   ProgressRaceState,
   OfflineClaimBlockedState,
 } from '../../components/IncentiveStates'
+import { AnimatedProgressFill, ClaimCelebration } from '../../components/IncentiveMotion'
 import { useAppState } from '../../components/AppStateProvider'
 
 const AnimatedPressable = Animated.createAnimatedComponent(TouchableOpacity)
@@ -368,17 +369,11 @@ export default function QuestDetailScreen() {
               accessibilityLabel={progressAria}
               accessibilityValue={{ min: 0, max: quest.goal, now: liveProgress, text: progressText }}
             >
-              <View style={styles.progressTrack} accessibilityElementsHidden importantForAccessibility="no">
-                <Animated.View
-                  style={[
-                    styles.progressFill,
-                    {
-                      width: `${pct * 100}%`,
-                      backgroundColor: isCompleted ? colors.success : colors.gold,
-                    },
-                  ]}
-                />
-              </View>
+              <AnimatedProgressFill
+                pct={pct}
+                color={isCompleted ? colors.success : colors.gold}
+                reduced={reduced}
+              />
               <View style={styles.progressMeta}>
                 <Text style={styles.progressText}>{progressText}</Text>
                 <Text style={[styles.progressPct, isCompleted && { color: colors.success }]}>
@@ -445,6 +440,13 @@ export default function QuestDetailScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* Claim celebration overlay (confetti-lite + success pop, reduced-motion: static badge only) */}
+      <ClaimCelebration
+        visible={claimState === 'claimed'}
+        reduced={reduced}
+        onDone={() => {}}
+      />
 
       {/* Sticky action bar: Join or Claim */}
       <View style={[styles.actionBar, { paddingBottom: insets.bottom + spacing[3] }]}>

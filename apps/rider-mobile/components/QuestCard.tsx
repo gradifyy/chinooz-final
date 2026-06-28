@@ -31,6 +31,7 @@ import {
 import { colors, spacing, radii, fontFamily, fontSize, shadow } from '@chinooz/theme'
 import { useReducedMotion } from '@chinooz/ui'
 import type { RiderQuest, QuestStatus } from '@chinooz/mock-data'
+import { AnimatedProgressFill, ConfettiLite } from './IncentiveMotion'
 
 /**
  * QuestCard — RI2 quest card.
@@ -256,6 +257,9 @@ export default function QuestCard({
       accessibilityHint={labels.viewDetailAria?.(quest.title)}
       style={[styles.card, prominent && styles.cardProminent, cardAnimStyle]}
     >
+      {/* Confetti-lite on claim success (reduced-motion: none) */}
+      <ConfettiLite visible={claimed} reduced={reduced} />
+
       {/* Top row: kind chip + status pill */}
       <View style={styles.topRow}>
         <View style={styles.kindRow}>
@@ -292,17 +296,11 @@ export default function QuestCard({
           accessibilityLabel={progressAria}
           accessibilityValue={{ min: 0, max: quest.goal, now: quest.progress, text: progressText }}
         >
-          <View style={styles.progressTrack} accessibilityElementsHidden importantForAccessibility="no">
-            <Animated.View
-              style={[
-                styles.progressFill,
-                {
-                  width: `${pct * 100}%`,
-                  backgroundColor: isCompleted ? colors.success : colors.gold,
-                },
-              ]}
-            />
-          </View>
+          <AnimatedProgressFill
+            pct={pct}
+            color={isCompleted ? colors.success : colors.gold}
+            reduced={reduced}
+          />
           <View style={styles.progressMeta}>
             <Text style={styles.progressText}>{progressText}</Text>
             <Text style={[styles.progressPct, isCompleted && { color: colors.success }]}>

@@ -46,6 +46,7 @@ import {
   ErrorState,
   OfflineBanner,
 } from '../components/IncentiveStates'
+import { StreakFlame, ListEnter } from '../components/IncentiveMotion'
 import { useAppState } from '../components/AppStateProvider'
 
 const AnimatedPressable = Animated.createAnimatedComponent(TouchableOpacity)
@@ -189,9 +190,12 @@ export default function StreaksScreen() {
         ) : null}
 
         {/* Streak tracker */}
-        <StreakTracker data={data} t={t} />
+        <ListEnter index={0}>
+          <StreakTracker data={data} t={t} reduced={reduced} />
+        </ListEnter>
 
         {/* Tier ladder */}
+        <ListEnter index={1}>
         <View style={styles.section}>
           <Text style={styles.sectionHeading} accessibilityRole="header">
             {t('rider.streaks.tierLadderTitle')}
@@ -245,9 +249,11 @@ export default function StreaksScreen() {
             </View>
           )}
         </View>
+        </ListEnter>
 
         {/* Current tier perks */}
         {data.currentPerks.length > 0 ? (
+          <ListEnter index={2}>
           <View style={styles.section}>
             <Text
               style={styles.sectionHeading}
@@ -275,9 +281,11 @@ export default function StreaksScreen() {
               ))}
             </View>
           </View>
+          </ListEnter>
         ) : null}
 
         {/* Milestones / badges */}
+        <ListEnter index={3}>
         <View style={styles.section}>
           <Text
             style={styles.sectionHeading}
@@ -292,6 +300,7 @@ export default function StreaksScreen() {
             ))}
           </View>
         </View>
+        </ListEnter>
 
         {/* Performance tie — how tier is calculated */}
         <TouchableOpacity
@@ -384,7 +393,9 @@ function NudgeCard({
       accessibilityLabel={ariaLabel}
     >
       <View style={styles.nudgeBody}>
-        <Flame size={18} color={colors.warning} />
+        <StreakFlame size={18} reduced={reduced}>
+          <Flame size={18} color={colors.warning} />
+        </StreakFlame>
         <View style={styles.nudgeText}>
           <Text style={styles.nudgeTitle}>{nudgeTitleText}</Text>
           <Text style={styles.nudgeMessage}>{message}</Text>
@@ -409,9 +420,11 @@ function NudgeCard({
 function StreakTracker({
   data,
   t,
+  reduced,
 }: {
   data: NonNullable<ReturnType<typeof getRiderStreaks> extends Promise<infer T> ? T : never>
   t: (k: string, opts?: Record<string, unknown>) => string
+  reduced?: boolean
 }) {
   const streakAria = t('rider.streaks.streakTrackerAria', {
     count: data.currentStreak,
@@ -427,7 +440,9 @@ function StreakTracker({
     <View style={styles.streakCard} accessibilityRole="summary" accessibilityLabel={streakAria}>
       <View style={styles.streakHeader}>
         <View style={styles.streakHeaderLeft}>
-          <Flame size={24} color={colors.warning} />
+          <StreakFlame size={24} reduced={reduced}>
+            <Flame size={24} color={colors.warning} />
+          </StreakFlame>
           <View>
             <Text style={styles.streakTitle}>{t('rider.streaks.streakTrackerTitle')}</Text>
             <Text style={styles.streakCount}>
