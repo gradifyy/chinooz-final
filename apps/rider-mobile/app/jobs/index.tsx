@@ -24,8 +24,9 @@ import ActiveTab from '../../components/jobs/ActiveTab'
 import HistoryTab from '../../components/jobs/HistoryTab'
 import OfflinePrompt from '../../components/jobs/OfflinePrompt'
 import ResumeBanner from '../../components/active/ResumeBanner'
-import { AVAILABLE_REQUESTS, HISTORY_ENTRIES } from '../../components/jobs/fixtures'
-import type { JobsTabKey, JobRequest, JobHistoryEntry } from '../../components/jobs/types'
+import { AVAILABLE_REQUESTS } from '../../components/jobs/fixtures'
+import type { JobsTabKey, JobRequest } from '../../components/jobs/types'
+import type { TripLedgerEntry } from '@chinooz/mock-data'
 
 const REFRESH_MS = 900
 
@@ -160,8 +161,8 @@ export default function JobsScreen() {
     router.push('/active')
   }, [reducedMotion, resume, router])
 
-  // Open the job detail (RJ4) surface for a history entry (receipt view).
-  const handleViewHistory = useCallback((entry: JobHistoryEntry) => {
+  // Open the trip receipt (RJ5) surface for a history entry.
+  const handleViewHistory = useCallback((entry: TripLedgerEntry) => {
     try {
       if (!reducedMotion) Haptics.selectionAsync()
     } catch {}
@@ -263,7 +264,7 @@ export default function JobsScreen() {
         {tab === 'active' && (
           <ActiveTab onResume={handleResumeActive} onView={handleResumeActive} />
         )}
-        {tab === 'history' && <HistoryTab entries={HISTORY_ENTRIES} onView={handleViewHistory} />}
+        {tab === 'history' && <HistoryTab onView={handleViewHistory} />}
       </ScrollView>
     </View>
   )

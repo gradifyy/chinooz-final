@@ -329,6 +329,57 @@ export default function RiderTripDetailScreen() {
               </View>
             </View>
 
+            {/* Rating + timestamps */}
+            <View style={styles.sectionHead}>
+              <Text style={styles.sectionTitle}>
+                {t('rider.earnings.ledger.detail.sectionTrip', { defaultValue: 'Trip details' })}
+              </Text>
+            </View>
+            <View style={styles.breakdownCard}>
+              <View style={styles.ratingRow}>
+                <View style={styles.ratingLeft}>
+                  <View style={[styles.paymentIcon, { backgroundColor: colors.warningLight }]}>
+                    <Star size={14} color={colors.gold} fill={colors.gold} />
+                  </View>
+                  <Text style={styles.ratingLabel}>
+                    {t('rider.earnings.ledger.detail.rating', { defaultValue: 'Buyer rating' })}
+                  </Text>
+                </View>
+                {trip.rating > 0 ? (
+                  <View style={styles.ratingStars} accessibilityLabel={`${trip.rating} out of 5 stars`}>
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <Star
+                        key={i}
+                        size={14}
+                        color={i < trip.rating ? colors.gold : colors.border}
+                        fill={i < trip.rating ? colors.gold : 'transparent' as never}
+                      />
+                    ))}
+                    <Text style={styles.ratingValue}>{trip.rating}.0</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.ratingUnrated}>
+                    {t('rider.earnings.ledger.detail.notRated', { defaultValue: 'Not rated' })}
+                  </Text>
+                )}
+              </View>
+              <View style={styles.timestampRow}>
+                <Clock size={13} color={colors.textMuted} />
+                <Text style={styles.timestampLabel}>{t('rider.earnings.ledger.detail.completedAt', { defaultValue: 'Completed' })}</Text>
+                <Text style={styles.timestampValue}>{tripClock(trip.completedAt)}</Text>
+              </View>
+              <View style={styles.timestampRow}>
+                <Receipt size={13} color={colors.textMuted} />
+                <Text style={styles.timestampLabel}>{t('rider.earnings.ledger.detail.orderRef', { defaultValue: 'Order ref' })}</Text>
+                <Text style={styles.timestampValue}>{trip.orderRef}</Text>
+              </View>
+              <View style={styles.timestampRow}>
+                <Navigation size={13} color={colors.textMuted} />
+                <Text style={styles.timestampLabel}>{t('rider.earnings.ledger.detail.distance', { defaultValue: 'Distance' })}</Text>
+                <Text style={styles.timestampValue}>{trip.distanceKm} km</Text>
+              </View>
+            </View>
+
             <View style={{ height: spacing[4] }} />
           </View>
         )}
@@ -550,4 +601,15 @@ const styles = StyleSheet.create({
   errorSubtitle: { fontSize: 14, color: colors.textMuted, textAlign: 'center', fontFamily: fontFamily.sans[0] },
   retryBtn: { marginTop: spacing[3], paddingHorizontal: spacing[5], paddingVertical: spacing[3], borderRadius: radii.lg, backgroundColor: colors.primary },
   retryText: { fontSize: 14, fontWeight: '700', color: colors.white, fontFamily: fontFamily.sansBold[0] },
+
+  // Rating + timestamps
+  ratingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing[2.5], borderBottomWidth: 1, borderBottomColor: colors.borderLight },
+  ratingLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing[2.5] },
+  ratingLabel: { fontSize: 14, color: colors.text, fontFamily: fontFamily.sans[0] },
+  ratingStars: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  ratingValue: { fontSize: 14, fontWeight: '700', color: colors.gold, fontVariant: ['tabular-nums'], fontFamily: fontFamily.sansBold[0], marginLeft: spacing[1.5] },
+  ratingUnrated: { fontSize: 14, color: colors.textTertiary, fontFamily: fontFamily.sans[0], fontStyle: 'italic' },
+  timestampRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[2.5], paddingVertical: spacing[2.5], borderBottomWidth: 1, borderBottomColor: colors.borderLight },
+  timestampLabel: { flex: 1, fontSize: 14, color: colors.text, fontFamily: fontFamily.sans[0] },
+  timestampValue: { fontSize: 14, fontWeight: '600', color: colors.textSecondary, fontVariant: ['tabular-nums'], fontFamily: fontFamily.sansSemiBold[0] },
 })

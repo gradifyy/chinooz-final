@@ -5478,7 +5478,41 @@
       "questDetailClaimResultAria": "Reward of NPR {{amount}} has been recorded toward your earnings.",
       "questDetailAlreadyClaimed": "Reward already claimed",
       "questDetailOptInBadge": "Opt-in",
-      "questDetailOptInBadgeAria": "This quest requires opting in"
+      "questDetailOptInBadgeAria": "This quest requires opting in",
+      "states": {
+        "offlineTitle": "You're offline",
+        "offlineBody": "Showing your last known incentive progress. You can browse quests and streaks. Claiming will resume when you're back online.",
+        "offlineAria": "Offline. Showing cached incentive progress. Claiming is paused until reconnected.",
+        "offlineClaimBlocked": "Can't claim while offline",
+        "offlineClaimBlockedAria": "You are offline. Claiming rewards requires a connection. Your progress is saved — try again when reconnected.",
+        "claimFailTitle": "Claim didn't go through",
+        "claimFailBody": "We couldn't complete the claim. Your progress is safe and no reward was lost. Please try again.",
+        "claimFailAria": "Claim failed. Progress preserved. No reward was lost or double-counted. Please try again.",
+        "claimFailRetry": "Try again",
+        "claimFailRetryAria": "Retry claiming the quest reward",
+        "claimAlreadyDone": "Already claimed",
+        "claimAlreadyDoneAria": "This quest reward has already been claimed and added to your earnings.",
+        "expiredMidViewTitle": "This quest has expired",
+        "expiredMidViewBody": "The time window ended while you were viewing it. Your completed deliveries still count toward your streak — just not this quest's reward.",
+        "expiredMidViewAria": "Quest expired while viewing. Completed deliveries count toward your streak but not this quest reward.",
+        "progressRaceTitle": "Quest already completed",
+        "progressRaceBody": "This quest was completed in another session. The reward is ready to claim here.",
+        "progressRaceAria": "Quest completed elsewhere. Reward is ready to claim.",
+        "newRiderTitle": "Welcome to incentives!",
+        "newRiderBody": "Complete quests, keep your streak alive, and earn bonuses during peak hours. Go online to start your first delivery and unlock rewards.",
+        "newRiderAria": "Welcome to incentives. Complete quests, keep streaks, and earn peak bonuses. Go online to start.",
+        "newRiderCta": "Go online",
+        "newRiderCtaAria": "Go online to start earning incentives",
+        "noSurgeTitle": "No surge right now",
+        "noSurgeBody": "Surge activates during peak hours when demand is high. Check back during lunch (11am-2pm) or dinner (5pm-9pm).",
+        "noSurgeAria": "No surge active. Next peak: {{time}}. Surge activates during lunch and dinner hours.",
+        "noActiveQuestsTitle": "No active quests right now",
+        "noActiveQuestsBody": "New quests appear throughout the week. Go online to earn and keep your streak going — you're doing great!",
+        "noActiveQuestsAria": "No active quests. New quests appear through the week. Go online to keep your streak.",
+        "noActiveQuestsCta": "See available quests",
+        "noActiveQuestsCtaAria": "View available quests you can join",
+        "retryAria": "Retry loading incentives"
+      }
     },
     "profile": {
       "title": "Profile",
@@ -7029,7 +7063,12 @@
       "linkPerformanceAria": "Open Performance to see how your tier is calculated from ratings and metrics",
       "sectionStreak": "Streak",
       "sectionTier": "Tier",
-      "sectionMilestones": "Milestones"
+      "sectionMilestones": "Milestones",
+      "states": {
+        "offlineTitle": "You're offline",
+        "offlineBody": "Showing your last known streak and tier. Progress will sync when you're back online.",
+        "offlineAria": "Offline. Showing cached streak and tier data. Will sync when reconnected."
+      }
     },
     "goOnline": {
       "title": "Go online checklist",
@@ -7128,7 +7167,15 @@
       "sectionMap": "Surge map",
       "sectionPeaks": "Peak windows",
       "sectionZones": "Active zones",
-      "sectionRules": "How it works"
+      "sectionRules": "How it works",
+      "states": {
+        "offlineTitle": "You're offline",
+        "offlineBody": "Showing the last known surge status. Live multipliers and countdowns will update when you reconnect.",
+        "offlineAria": "Offline. Showing cached surge status. Live updates will resume when reconnected.",
+        "noSurgeTitle": "No surge right now",
+        "noSurgeBody": "Surge activates during peak hours when demand is high. Check back during lunch (11am-2pm) or dinner (5pm-9pm).",
+        "noSurgeAria": "No surge active. Next peak: {{time}}. Surge activates during lunch and dinner hours."
+      }
     }
   }
 }
