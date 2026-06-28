@@ -401,6 +401,8 @@ export interface TripLedgerEntry {
   lines: TripLedgerLine[]
   /** True if any line is an incentive/bonus. */
   hasIncentive: boolean
+  /** Buyer rating given for this trip (1–5 stars, 0 = not rated). */
+  rating: number
 }
 
 export interface TripLedgerDay {
@@ -441,7 +443,7 @@ const TRIP_FIXTURES: Omit<TripLedgerEntry, 'netEarning' | 'hasIncentive'>[] = [
     id: 'trip-1', orderRef: 'CHZ-2048', date: '2025-06-28',
     completedAt: '2025-06-28T18:42:00',
     pickupArea: 'Thamel', dropoffArea: 'Patan', distanceKm: 5.2,
-    isCod: true, codAmount: 1299,
+    isCod: true, codAmount: 1299, rating: 5,
     lines: [
       { id: 't1l1', kind: 'trip', label: 'Base pay', amount: 120 },
       { id: 't1l2', kind: 'trip', label: 'Distance pay', amount: 45 },
@@ -454,7 +456,7 @@ const TRIP_FIXTURES: Omit<TripLedgerEntry, 'netEarning' | 'hasIncentive'>[] = [
     id: 'trip-2', orderRef: 'CHZ-2046', date: '2025-06-28',
     completedAt: '2025-06-28T15:10:00',
     pickupArea: 'Baluwatar', dropoffArea: 'Naxal', distanceKm: 2.8,
-    isCod: false, codAmount: 0,
+    isCod: false, codAmount: 0, rating: 0, rating: 4, rating: 4,
     lines: [
       { id: 't2l1', kind: 'trip', label: 'Base pay', amount: 90 },
       { id: 't2l2', kind: 'trip', label: 'Distance pay', amount: 30 },
@@ -465,7 +467,7 @@ const TRIP_FIXTURES: Omit<TripLedgerEntry, 'netEarning' | 'hasIncentive'>[] = [
     id: 'trip-3', orderRef: 'CHZ-2044', date: '2025-06-28',
     completedAt: '2025-06-28T11:25:00',
     pickupArea: 'Baneshwor', dropoffArea: 'Koteshwor', distanceKm: 3.1,
-    isCod: true, codAmount: 450,
+    isCod: true, codAmount: 450, rating: 5,
     lines: [
       { id: 't3l1', kind: 'trip', label: 'Base pay', amount: 100 },
       { id: 't3l2', kind: 'trip', label: 'Distance pay', amount: 35 },
@@ -489,7 +491,7 @@ const TRIP_FIXTURES: Omit<TripLedgerEntry, 'netEarning' | 'hasIncentive'>[] = [
     id: 'trip-5', orderRef: 'CHZ-2039', date: '2025-06-27',
     completedAt: '2025-06-27T13:48:00',
     pickupArea: 'Boudha', dropoffArea: 'Jorpati', distanceKm: 2.0,
-    isCod: true, codAmount: 2150,
+    isCod: true, codAmount: 2150, rating: 3,
     lines: [
       { id: 't5l1', kind: 'trip', label: 'Base pay', amount: 80 },
       { id: 't5l2', kind: 'trip', label: 'Distance pay', amount: 25 },
@@ -616,6 +618,10 @@ export interface CODDepositEntry {
   /** Where the deposit was settled, e.g. hub name or bank reference. */
   reference: string
   status: 'settled' | 'pending' | 'failed'
+  /** Deposit method used (RW5 - for history grouping + receipt). */
+  method: DepositMethodKind
+  /** ISO timestamp when the deposit was verified (settled only). */
+  verifiedAt?: string
 }
 
 export interface CODWalletStatus {
@@ -753,15 +759,19 @@ const COD_WALLET_DEFAULT: CODWalletSnapshot = {
       id: 'dep-1',
       amount: 2000,
       depositedAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-      reference: 'HUB-KTM-04 · midday',
+      reference: 'CHZ-DEP-K4M2-X8',
       status: 'settled',
+      method: 'office',
+      verifiedAt: new Date(Date.now() - 4.5 * 60 * 60 * 1000).toISOString(),
     },
     {
       id: 'dep-2',
       amount: 4500,
       depositedAt: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString(),
-      reference: 'HUB-KTM-04 · yesterday',
+      reference: 'CHZ-DEP-J9P3-Q2',
       status: 'settled',
+      method: 'agent',
+      verifiedAt: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString(),
     },
   ],
 }
@@ -1240,9 +1250,6 @@ export interface RiderWithdrawalDetail extends RiderWithdrawal {
   breakdown: { label: string; amount: number; direction: 'credit' | 'debit' }[]
 }
 
-/** Minimum withdrawable amount (NPR). */
-export const MIN_WITHDRAWAL = 500
-
 /** Fee for instant withdrawal (NPR, flat). 0 for weekly auto-payout. */
 export const INSTANT_FEE = 25
 
@@ -1419,7 +1426,7 @@ export async function getRiderWithdrawalById(id: string): Promise<RiderWithdrawa
   } else {
     timeline.push({ key: 'requested', label: 'Requested', status: 'completed', timestamp: wd.requestedAt })
     timeline.push({ key: 'processing', label: 'Processing', status: 'completed', timestamp: wd.requestedAt })
-    timeline.push({ key: 'failed', label: 'Failed', status: 'current', timestamp: wd.completedAt, note: wd.failureReason ?? 'Withdrawal failed' })
+    timeline.push({ key: 'failed', label: 'Failed', status: 'current', timestamp: wd.completedAt ?? undefined, note: wd.failureReason ?? 'Withdrawal failed' })
   }
   const breakdown: RiderWithdrawalDetail['breakdown'] = [
     { label: 'Withdrawal amount', amount: wd.amount, direction: 'credit' },
