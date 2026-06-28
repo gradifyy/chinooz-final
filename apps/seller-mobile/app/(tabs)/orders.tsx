@@ -21,6 +21,7 @@ import { useA11y } from '../components/A11yProvider'
 import { useSellerSessionStore } from '@chinooz/state'
 import { useSellerOrders } from '@chinooz/hooks'
 import { SellerOrderCard, SellerOrderCardSkeleton } from '@chinooz/ui'
+import MobileBulkActionBar from '../../components/MobileBulkActionBar'
 import { analytics } from '@chinooz/analytics'
 import { formatNPR } from '@chinooz/utils'
 import type {
@@ -207,6 +208,11 @@ export default function SellerOrdersScreen() {
     })
   }, [])
 
+  const selectedOrders = useMemo(
+    () => allOrders.filter(o => selectedIds.has(o.subOrderId)),
+    [allOrders, selectedIds],
+  )
+
   const switchTab = useCallback(
     (key: TabKey) => {
       if (key === activeTab) return
@@ -370,8 +376,17 @@ export default function SellerOrdersScreen() {
               >
                 <X size={16} color={colors.textMuted} />
               </TouchableOpacity>
-            )}
-          </View>
+      )}
+
+      {selectedOrders.length > 0 && (
+        <MobileBulkActionBar
+          selectedOrders={selectedOrders}
+          onClear={() => setSelectedIds(new Set())}
+          onRefetch={refetch}
+          t={t}
+        />
+      )}
+    </View>
 
           <TouchableOpacity
             onPress={() => setFilterSheetOpen(true)}

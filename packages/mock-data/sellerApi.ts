@@ -249,6 +249,29 @@ export async function partialShipOrder(
   }
 }
 
+export async function bulkUpdateStatus(
+  subOrderIds: string[],
+  newStatusKey: SellerOrderStatusKey,
+): Promise<{ results: { subOrderId: string; success: boolean; statusKey: SellerOrderStatusKey }[]; succeeded: number; failed: number }> {
+  await randomDelay(500, 1000)
+  maybeError()
+  const results = subOrderIds.map(id => ({ subOrderId: id, success: true, statusKey: newStatusKey }))
+  return { results, succeeded: results.length, failed: 0 }
+}
+
+export async function bulkFulfillOrders(
+  shipments: { subOrderId: string; trackingNumber: string; carrier: string }[],
+): Promise<{ results: { subOrderId: string; success: boolean; trackingNumber: string }[]; succeeded: number; failed: number }> {
+  await randomDelay(600, 1200)
+  maybeError()
+  const results = shipments.map(s => ({
+    subOrderId: s.subOrderId,
+    success: true,
+    trackingNumber: s.trackingNumber || `TRK-${Math.floor(Math.random() * 1000000)}`,
+  }))
+  return { results, succeeded: results.length, failed: 0 }
+}
+
 // --- Promotions ---
 
 export async function getPromotionsApi(

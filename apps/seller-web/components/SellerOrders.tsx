@@ -18,7 +18,7 @@ import {
 import { Container, Screen } from '@chinooz/ui-web'
 import { useReducedMotion, SellerOrderRow, SellerOrderRowSkeleton } from '@chinooz/ui-web'
 import { useSellerOrders } from '@chinooz/hooks'
-import BulkActionBar from '@/components/BulkActionBar'
+import OrdersBulkBar from '@/components/OrdersBulkBar'
 import { useSellerSessionStore } from '@chinooz/state'
 import { analytics } from '@chinooz/analytics'
 import { formatNPR } from '@chinooz/utils'
@@ -741,7 +741,7 @@ export default function SellerOrders() {
 
       {/* Bulk action bar */}
       {selectedOrders.length > 0 && (
-        <BulkActionBar
+        <OrdersBulkBar
           selectedOrders={selectedOrders}
           onClear={() => setSelectedIds(new Set())}
           onRefetch={refetch}
