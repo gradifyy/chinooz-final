@@ -2,7 +2,7 @@ import React, { useEffect, useMemo } from 'react'
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native'
 import { useTranslation } from 'react-i18next'
 import { useRouter } from 'expo-router'
-import { Target, ChevronRight } from 'lucide-react-native'
+import { Target, ChevronRight, Wallet } from 'lucide-react-native'
 import { colors, spacing, radii, fontFamily, fontSize } from '@chinooz/theme'
 import { SegmentedControl } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
@@ -12,6 +12,7 @@ import {
   useUIStore,
   useRiderIncentivesStore,
   useActiveDeliveryStore,
+  useCODWalletStore,
   hasActiveDelivery,
   type OnlineStatus,
   type Locale,
@@ -74,6 +75,11 @@ export default function RiderHomeScreen() {
   // row shows a live figure seeded by the Incentives hub (RI2). Reachable
   // from Home, not a bottom tab.
   const incentiveThisWeek = useRiderIncentivesStore(s => s.thisWeekNpr)
+
+  // Cash & COD Wallet — cash-in-hand read from the shared codWalletStatus
+  // store so the entry row shows the live figure (RW2 reachability). Pushed
+  // route, not a bottom tab.
+  const cashInHand = useCODWalletStore(s => s.cashInHand)
 
   // Reuse the shared no-op analytics wrapper (not a fork).
   useEffect(() => {
@@ -280,6 +286,31 @@ export default function RiderHomeScreen() {
         <ChevronRight size={20} color={colors.textTertiary} />
       </Pressable>
 
+      {/* Cash & COD Wallet entry — reachable from Home (Earnings/Profile host
+          later). Pushed route, not a bottom tab. Reads the shared
+          codWalletStatus store so the cash-in-hand figure is live (RW2). */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={t('rider.wallet.homeEntryAria')}
+        accessibilityHint={a11yHint(t('rider.wallet.homeEntrySub'))}
+        style={[styles.walletEntry, { minHeight: minTouchTarget }]}
+        onPress={() => router.push('/wallet')}
+      >
+        <View style={styles.walletEntryIcon}>
+          <Wallet size={20} color={colors.primary} />
+        </View>
+        <View style={styles.walletEntryBody}>
+          <Text style={styles.walletEntryTitle}>{t('rider.wallet.title')}</Text>
+          <Text style={styles.walletEntrySub} numberOfLines={1}>
+            {t('rider.wallet.homeEntrySub')}
+          </Text>
+        </View>
+        <Text style={styles.walletEntryAmount}>
+          NPR {cashInHand.toLocaleString('en-IN')}
+        </Text>
+        <ChevronRight size={20} color={colors.textTertiary} />
+      </Pressable>
+
       {/* Smoke-test: reuse shared integer-paisa money helpers */}
       <View
         style={styles.smokeCard}
@@ -441,6 +472,47 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm[0],
     fontWeight: '700',
     color: colors.gold,
+    fontVariant: ['tabular-nums'],
+    fontFamily: fontFamily.sansBold[0],
+  },
+  walletEntry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+  },
+  walletEntryIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: radii.full,
+    backgroundColor: colors.primary50,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  walletEntryBody: {
+    flex: 1,
+  },
+  walletEntryTitle: {
+    fontSize: fontSize.base[0],
+    fontWeight: '600',
+    color: colors.text,
+    fontFamily: fontFamily.sansSemiBold[0],
+  },
+  walletEntrySub: {
+    fontSize: fontSize.sm[0],
+    color: colors.textMuted,
+    marginTop: 2,
+    fontFamily: fontFamily.sans[0],
+  },
+  walletEntryAmount: {
+    fontSize: fontSize.sm[0],
+    fontWeight: '700',
+    color: colors.primary,
     fontVariant: ['tabular-nums'],
     fontFamily: fontFamily.sansBold[0],
   },
