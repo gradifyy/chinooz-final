@@ -15,7 +15,9 @@ export const metadata: Metadata = {
     'online shopping',
     'Nepali app',
   ],
-  canonical: `${siteUrl}/showcase`,
+  alternates: {
+    canonical: `${siteUrl}/showcase`,
+  },
   openGraph: {
     type: 'website',
     locale: 'en_US',
