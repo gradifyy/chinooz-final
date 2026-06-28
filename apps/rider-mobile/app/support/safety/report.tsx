@@ -29,9 +29,9 @@ import {
 import { colors, spacing, radii, fontSize, fontFamily } from '@chinooz/theme'
 import { analytics } from '@chinooz/analytics'
 import { useActiveDeliveryStore, hasActiveDelivery } from '@chinooz/state'
+import { useReportSafetyIncident } from '@chinooz/hooks'
 import {
   RIDER_SAFETY_INCIDENT_TYPES,
-  reportSafetyIncident,
   type RiderSafetyIncidentType,
   type RiderSafetyIncidentAttachment,
   type RiderSafetyIncidentContext,
@@ -58,10 +58,11 @@ export default function ReportIncidentScreen() {
   const [description, setDescription] = useState('')
   const [attachments, setAttachments] = useState<RiderSafetyIncidentAttachment[]>([])
   const [context, setContext] = useState<RiderSafetyIncidentContext>({})
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [validationError, setValidationError] = useState(false)
   const [submitError, setSubmitError] = useState(false)
   const [submitted, setSubmitted] = useState<{ id: string } | null>(null)
+  const reportMutation = useReportSafetyIncident()
+  const isSubmitting = reportMutation.isPending
   const MAX_DESC = 500
 
   // Pre-fill context from active delivery.

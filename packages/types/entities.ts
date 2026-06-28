@@ -422,6 +422,26 @@ export interface CsvStockRow {
   lowStockThreshold?: number
 }
 
+export interface StockAlert {
+  variantId: string
+  productId: string
+  productName: string
+  variantName: string
+  sku: string
+  image: string
+  stockCount: number
+  lowStockThreshold: number
+  status: StockStatus
+}
+
+export interface StockAlertSummary {
+  low: StockAlert[]
+  out: StockAlert[]
+  lowCount: number
+  outCount: number
+  total: number
+}
+
 // ---- RS3 map / trip simulator + rider delivery ----
 
 // ---- Seller domain: store, payouts, transactions, staff, notifications, stats ----

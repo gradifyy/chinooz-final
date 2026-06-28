@@ -608,7 +608,7 @@ function RatingHero({
   )
 }
 
-function MetricTile({
+const MetricTile = React.memo(function MetricTile({
   metric,
   t,
   onPress,
@@ -695,7 +695,7 @@ function MetricTile({
       </TouchableOpacity>
     </Animated.View>
   )
-}
+})
 
 function StatusPill({
   status,

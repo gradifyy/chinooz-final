@@ -32,7 +32,7 @@ interface RequestSlotProps {
   placeholder: string
 }
 
-type Phase = 'listening' | 'offered' | 'accepting' | 'declining' | 'expired' | 'taken'
+type Phase = 'listening' | 'offered' | 'accepting' | 'declining' | 'expired' | 'taken' | 'accept_error'
 
 /**
  * RH4 — Incoming job-request overlay.
@@ -192,23 +192,13 @@ export default function RequestSlot({ status, title }: RequestSlotProps) {
             router.push('/active')
           } else {
             // Already taken or error.
-            setPhase('taken')
-            phaseRef.current = 'taken'
-            setTimeout(() => {
-              setPhase('listening')
-              phaseRef.current = 'listening'
-              offeredJobIdRef.current = null
-            }, 2500)
+            setPhase('accept_error')
+            phaseRef.current = 'accept_error'
           }
         },
         onError: () => {
-          setPhase('taken')
-          phaseRef.current = 'taken'
-          setTimeout(() => {
-            setPhase('listening')
-            phaseRef.current = 'listening'
-            offeredJobIdRef.current = null
-          }, 2500)
+          setPhase('accept_error')
+          phaseRef.current = 'accept_error'
         },
       },
     )

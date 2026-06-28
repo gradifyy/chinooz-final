@@ -17,10 +17,12 @@ import {
   Receipt,
   History,
   AlertTriangle,
+  Inbox,
 } from 'lucide-react-native'
 import { colors, spacing, radii, fontFamily, fontSize } from '@chinooz/theme'
 import { useA11y } from './A11yProvider'
-import { useCODWalletStore } from '@chinooz/state'
+import { useAppState } from './AppStateProvider'
+import { useCODWalletStore, useCodLimitStatus } from '@chinooz/state'
 import { analytics } from '@chinooz/analytics'
 import {
   getCODWallet,
@@ -28,6 +30,13 @@ import {
   type CODWalletSnapshot,
 } from '@chinooz/mock-data'
 import CODLimitMeter from './CODLimitMeter'
+import {
+  WalletSkeleton,
+  WalletErrorState,
+  OfflineBanner,
+  AtLimitBanner,
+  DisputeBanner,
+} from './WalletStates'
 
 /**
  * RW2 — Cash & COD Wallet overview.

@@ -24,6 +24,8 @@ import type {
   BulkStockOperation,
   BulkStockResult,
   CsvStockRow,
+  StockAlert,
+  StockAlertSummary,
   SellerReview,
   SellerReviewResponse,
   ReviewFlagReason,
@@ -420,6 +422,77 @@ export async function lookupRiderAccount(
     return { state: 'pending', riderId: 'rider-pending' }
   }
   return { state: 'new' }
+}
+
+// --- Rider onboarding submission / approval mock ---
+
+export type RiderSubmissionState = 'pending' | 'approved' | 'rejected'
+
+export interface RiderVerificationItem {
+  key: string
+  labelKey: string
+  status: 'pending' | 'verified' | 'rejected'
+  rejectionReasonKey?: string
+}
+
+export interface RiderApprovalResult {
+  state: RiderSubmissionState
+  items: RiderVerificationItem[]
+  estimatedTimeHours: number
+  rejectionReasonKey?: string
+}
+
+export async function submitRiderOnboarding(
+  _data: Record<string, unknown>,
+): Promise<{ success: boolean; submissionId: string }> {
+  await randomDelay(500, 1000)
+  void _data
+  return { success: true, submissionId: 'sub-' + Date.now() }
+}
+
+export async function checkRiderApproval(
+  _riderId: string,
+): Promise<RiderApprovalResult> {
+  await randomDelay(300, 600)
+  void _riderId
+  return {
+    state: 'pending',
+    estimatedTimeHours: 24,
+    items: [
+      { key: 'identity', labelKey: 'rider.pending.itemIdentity', status: 'verified' },
+      { key: 'license', labelKey: 'rider.pending.itemLicense', status: 'pending' },
+      { key: 'vehicle', labelKey: 'rider.pending.itemVehicle', status: 'pending' },
+      { key: 'selfie', labelKey: 'rider.pending.itemSelfie', status: 'verified' },
+    ],
+  }
+}
+
+export interface GoOnlineCheckItem {
+  key: string
+  labelKey: string
+  completed: boolean
+  actionRoute?: string
+}
+
+export interface GoOnlineChecklist {
+  allComplete: boolean
+  items: GoOnlineCheckItem[]
+}
+
+export async function getGoOnlineChecklist(
+  _riderId: string,
+): Promise<GoOnlineChecklist> {
+  await randomDelay(200, 400)
+  void _riderId
+  return {
+    allComplete: false,
+    items: [
+      { key: 'profile', labelKey: 'rider.goOnline.itemProfile', completed: true },
+      { key: 'docs', labelKey: 'rider.goOnline.itemDocs', completed: true },
+      { key: 'payout', labelKey: 'rider.goOnline.itemPayout', completed: false, actionRoute: '/payout-methods' },
+      { key: 'vehicle', labelKey: 'rider.goOnline.itemVehicle', completed: true },
+    ],
+  }
 }
 
 // --- Shipping Config ---
@@ -1311,3 +1384,81 @@ export async function importStockCsv(rows: CsvStockRow[]): Promise<BulkStockResu
   }
   return { success: true, updated, failed }
 }
+
+// --- Low-stock alerts + threshold editing + restock reminders (SI5) ---
+
+export async function getLowStockAlerts(): Promise<StockAlertSummary> {
+  await randomDelay(150, 350)
+  const low: StockAlert[] = []
+  const out: StockAlert[] = []
+  for (const p of inventoryCache) {
+    for (const v of p.variants) {
+      const threshold = v.lowStockThreshold ?? LOW_STOCK_THRESHOLD
+      const alert: StockAlert = {
+        variantId: v.id,
+        productId: p.id,
+        productName: p.name,
+        variantName: v.name,
+        sku: v.sku,
+        image: v.image,
+        stockCount: v.stockCount,
+        lowStockThreshold: threshold,
+        status: v.stock,
+      }
+      if (v.stock === 'out_of_stock') out.push(alert)
+      else if (v.stock === 'low_stock') low.push(alert)
+    }
+  }
+  return { low, out, lowCount: low.length, outCount: out.length, total: low.length + out.length }
+}
+
+export async function updateThreshold(
+  variantId: string,
+  threshold: number,
+): Promise<{ success: boolean; variant?: SellerInventoryVariant }> {
+  await randomDelay(150, 350)
+  const variant = findVariantInCache(variantId)
+  if (!variant) return { success: false }
+  variant.lowStockThreshold = Math.max(0, threshold)
+  variant.stock = stockStatusFor(variant.stockCount)
+  recalcProductAggregates(variant.productId)
+  return { success: true, variant }
+}
+
+export async function setRestockReminder(
+  variantId: string,
+  enabled: boolean,
+): Promise<{ success: boolean; variant?: SellerInventoryVariant }> {
+  await randomDelay(100, 250)
+  const variant = findVariantInCache(variantId)
+  if (!variant) return { success: false }
+  variant.restockReminder = enabled
+  return { success: true, variant }
+}
+
+// Seed some initial stock history for demo realism
+function seedStockHistory(): void {
+  if (stockHistoryStore.length > 0) return
+  const reasons: StockEditReason[] = ['restock', 'correction', 'damage', 'loss']
+  for (const p of inventoryCache.slice(0, 6)) {
+    for (const v of p.variants.slice(0, 2)) {
+      for (let i = 0; i < 3; i++) {
+        const delta = Math.floor(Math.random() * 40) - 10
+        const prev = v.stockCount - delta
+        stockHistoryStore.push({
+          id: `she-seed-${v.id}-${i}`,
+          variantId: v.id,
+          sku: v.sku,
+          previousStock: Math.max(0, prev),
+          newStock: v.stockCount,
+          delta,
+          mode: delta > 0 ? 'set' : 'adjust',
+          reason: reasons[Math.floor(Math.random() * reasons.length)],
+          createdAt: new Date(Date.now() - (i + 1) * 86400000 * (Math.floor(Math.random() * 5) + 1)).toISOString(),
+        })
+      }
+    }
+  }
+  stockHistoryStore.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
+}
+seedStockHistory()

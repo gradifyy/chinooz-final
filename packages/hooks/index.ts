@@ -146,4 +146,6 @@ export {
   useSubmitSeller,
 } from './useSellerOnboarding'
 
+export { useAnalytics, useSalesTrend, useProductDetail } from './useAnalytics'
+
 export type { SuggestionItem } from './useProducts'

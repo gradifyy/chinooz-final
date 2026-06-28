@@ -28,13 +28,15 @@ import {
   getRiderEarningsChart,
   getRiderEarningsBreakdown,
   getRiderEarningsLedger,
+  getRiderTripLedger,
+  getRiderTripDetail,
   getRiderPersonalProfile,
   updateRiderPersonalProfile,
   requestRiderPhoneOtp,
   verifyRiderPhoneOtp,
   getCODWalletSync,
 } from '@chinooz/mock-data'
-import type { RiderPerformanceRange, RiderEarningsRange } from '@chinooz/mock-data'
+import type { RiderPerformanceRange, RiderEarningsRange, GeoPoint } from '@chinooz/mock-data'
 import type {
   RiderJob,
   ActiveDelivery,
@@ -72,6 +74,8 @@ const KEYS = {
   incentives: ['rider', 'incentives'] as const,
   demand: ['rider', 'demand-zones'] as const,
   surge: ['rider', 'surge-zones'] as const,
+  forecast: ['rider', 'demand-forecast'] as const,
+  zoneDetail: (zoneId: string) => ['rider', 'zone-detail', zoneId] as const,
   performance: (period: RiderPerformanceRange) =>
     ['rider', 'performance', period.key] as const,
   performanceDetail: (period: RiderPerformanceRange) =>
@@ -447,6 +451,31 @@ export function useSurgeZones() {
   return useQuery({
     queryKey: KEYS.surge,
     queryFn: () => riderApi.getSurgeZonesApi(),
+    staleTime: STALE_DEMAND,
+  })
+}
+
+/**
+ * Demand forecast / peak timeline. Shares the same staleTime (30s) as
+ * demand/surge. The refetchInterval (30s) sits behind the RS3 realtime
+ * boundary: the AppStateProvider pauses TanStack Query refetches when the
+ * app is backgrounded or offline.
+ */
+export function useDemandForecast() {
+  return useQuery({
+    queryKey: KEYS.forecast,
+    queryFn: () => riderApi.getDemandForecastApi(),
+    staleTime: STALE_DEMAND,
+    refetchInterval: STALE_DEMAND,
+  })
+}
+
+/** Zone detail: a single zone + surge + recommendations. */
+export function useZoneDetail(zoneId: string | null, riderLocation: GeoPoint) {
+  return useQuery({
+    queryKey: KEYS.zoneDetail(zoneId ?? ''),
+    queryFn: () => riderApi.getZoneDetailApi(zoneId!, riderLocation),
+    enabled: !!zoneId,
     staleTime: STALE_DEMAND,
   })
 }

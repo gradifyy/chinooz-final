@@ -182,6 +182,12 @@ const styles = StyleSheet.create({
     minWidth: 64,
     gap: 1,
   },
+  actionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
+    marginBottom: 2,
+  },
   eta: {
     fontSize: fontSize.sm[0],
     fontFamily: fontFamily.sansSemiBold[0],

@@ -137,22 +137,22 @@ export default function ReviewsScreen() {
   const trendDown = trendPct < 0
 
   const sortOptions: { key: SellerReviewSort; label: string }[] = [
-    { key: 'newest', label: t('sellerReviews.sortNewest') },
-    { key: 'oldest', label: t('sellerReviews.sortOldest') },
-    { key: 'lowest', label: t('sellerReviews.sortLowest') },
-    { key: 'highest', label: t('sellerReviews.sortHighest') },
+    { key: 'newest', label: t('seller.reviews.sortNewest') },
+    { key: 'oldest', label: t('seller.reviews.sortOldest') },
+    { key: 'lowest', label: t('seller.reviews.sortLowest') },
+    { key: 'highest', label: t('seller.reviews.sortHighest') },
   ]
   const activeSortLabel = sortOptions.find(s => s.key === sort)?.label ?? sortOptions[0].label
 
   const tabs: { key: SellerReviewStatus; label: string; count: number; warning?: boolean }[] = [
-    { key: 'all', label: t('sellerReviews.tabAll'), count: counts?.all ?? 0 },
-    { key: 'needs_response', label: t('sellerReviews.tabNeedsResponse'), count: counts?.needs_response ?? 0, warning: true },
-    { key: 'responded', label: t('sellerReviews.tabResponded'), count: counts?.responded ?? 0 },
-    { key: 'flagged', label: t('sellerReviews.tabFlagged'), count: counts?.flagged ?? 0 },
+    { key: 'all', label: t('seller.reviews.tabAll'), count: counts?.all ?? 0 },
+    { key: 'needs_response', label: t('seller.reviews.tabNeedsResponse'), count: counts?.needs_response ?? 0, warning: true },
+    { key: 'responded', label: t('seller.reviews.tabResponded'), count: counts?.responded ?? 0 },
+    { key: 'flagged', label: t('seller.reviews.tabFlagged'), count: counts?.flagged ?? 0 },
   ]
 
   const ratingChips: { key: RatingFilter; label: string }[] = [
-    { key: 'all', label: t('sellerReviews.filterRatingAll') },
+    { key: 'all', label: t('seller.reviews.filterRatingAll') },
     { key: 5, label: '5 ★' },
     { key: 4, label: '4 ★' },
     { key: 3, label: '3 ★' },
@@ -161,9 +161,9 @@ export default function ReviewsScreen() {
   ]
 
   const responseChips: { key: SellerReviewResponseFilter; label: string }[] = [
-    { key: 'all', label: t('sellerReviews.filterResponseAll') },
-    { key: 'with', label: t('sellerReviews.filterResponseWith') },
-    { key: 'without', label: t('sellerReviews.filterResponseWithout') },
+    { key: 'all', label: t('seller.reviews.filterResponseAll') },
+    { key: 'with', label: t('seller.reviews.filterResponseWith') },
+    { key: 'without', label: t('seller.reviews.filterResponseWithout') },
   ]
 
   const hasActiveFilters =
@@ -229,7 +229,7 @@ export default function ReviewsScreen() {
           }
         },
         onError: () => {
-          setComposeError(t('sellerReviews.responseError'))
+          setComposeError(t('seller.reviews.responseError'))
         },
       },
     )
@@ -259,20 +259,20 @@ export default function ReviewsScreen() {
             <Link
               href="/dashboard"
               className="inline-flex items-center justify-center rounded-md text-text-muted hover:text-text hover:bg-background transition-colors min-touch"
-              aria-label={t('sellerReviews.back')}
+              aria-label={t('seller.reviews.back')}
             >
               <ArrowLeft size={20} aria-hidden="true" />
             </Link>
             <div className="flex-1 min-w-0">
               <h1 className="text-lg font-bold text-text leading-tight truncate">
-                {t('sellerReviews.title')}
+                {t('seller.reviews.title')}
               </h1>
-              <p className="text-[12px] text-text-muted truncate">{t('sellerReviews.subtitle')}</p>
+              <p className="text-[12px] text-text-muted truncate">{t('seller.reviews.subtitle')}</p>
             </div>
             <button
               type="button"
               onClick={() => refetch()}
-              aria-label={t('sellerReviews.refreshAria')}
+              aria-label={t('seller.reviews.refreshAria')}
               className="inline-flex items-center justify-center rounded-md text-text-muted hover:text-text hover:bg-background transition-colors min-touch"
             >
               <RefreshCw
@@ -289,7 +289,7 @@ export default function ReviewsScreen() {
         <div className="py-6 flex flex-col gap-5">
           {/* Summary card (e1) */}
           <section
-            aria-label={t('sellerReviews.summaryAria', { average: average.toFixed(1), total: totalReviews })}
+            aria-label={t('seller.reviews.summaryAria', { average: average.toFixed(1), total: totalReviews })}
             className="rounded-lg border border-border-light bg-surface p-5 md:p-6 shadow-sm"
           >
             <div className="flex flex-col md:flex-row md:items-start gap-6">
@@ -314,7 +314,7 @@ export default function ReviewsScreen() {
                       ))}
                   </div>
                   <span className="text-[12px] font-normal text-text-muted tabular-nums">
-                    {totalReviews.toLocaleString()} {t('sellerReviews.totalReviews')}
+                    {totalReviews.toLocaleString()} {t('seller.reviews.totalReviews')}
                   </span>
                 </div>
               </div>
@@ -323,7 +323,7 @@ export default function ReviewsScreen() {
               <div
                 className="flex-1 flex flex-col gap-1.5"
                 role="img"
-                aria-label={t('sellerReviews.distributionAria')}
+                aria-label={t('seller.reviews.distributionAria')}
               >
                 {STARS.map(stars => {
                   const count = distribution[stars]
@@ -332,7 +332,7 @@ export default function ReviewsScreen() {
                     <div
                       key={stars}
                       className="flex items-center gap-3"
-                      aria-label={t('sellerReviews.rowAria', { stars, count, pct: p })}
+                      aria-label={t('seller.reviews.rowAria', { stars, count, pct: p })}
                     >
                       <span className="w-6 text-[13px] font-semibold text-text-secondary tabular-nums text-right">
                         {stars}
@@ -367,7 +367,7 @@ export default function ReviewsScreen() {
                   {trendUp ? `↑ ${trendPct}%` : trendDown ? `↓ ${Math.abs(trendPct)}%` : '—'}
                 </span>
                 <span className="text-[12px] font-normal text-text-muted">
-                  {t('sellerReviews.trend')}
+                  {t('seller.reviews.trend')}
                 </span>
               </div>
             </div>
@@ -377,7 +377,7 @@ export default function ReviewsScreen() {
           <div className="flex flex-col gap-3">
             <div className="flex items-start gap-2 flex-wrap">
               {/* Rating chips */}
-              <span className="sr-only">{t('sellerReviews.filterRating')}</span>
+              <span className="sr-only">{t('seller.reviews.filterRating')}</span>
               {ratingChips.map(c => (
                 <FilterChip
                   key={String(c.key)}
@@ -390,7 +390,7 @@ export default function ReviewsScreen() {
               <span className="w-px h-6 bg-border-light mx-1 self-center" aria-hidden="true" />
 
               {/* Response chips */}
-              <span className="sr-only">{t('sellerReviews.filterResponse')}</span>
+              <span className="sr-only">{t('seller.reviews.filterResponse')}</span>
               {responseChips.map(c => (
                 <FilterChip
                   key={c.key}
@@ -404,7 +404,7 @@ export default function ReviewsScreen() {
 
               {/* Photos chip */}
               <FilterChip
-                label={t('sellerReviews.filterPhotos')}
+                label={t('seller.reviews.filterPhotos')}
                 pressed={hasPhotos}
                 onClick={() => setHasPhotos(v => !v)}
                 icon={<ImageIcon size={14} aria-hidden="true" />}
@@ -412,12 +412,12 @@ export default function ReviewsScreen() {
 
               {/* Product select */}
               <select
-                aria-label={t('sellerReviews.filterProduct')}
+                aria-label={t('seller.reviews.filterProduct')}
                 value={productId ?? ''}
                 onChange={e => setProductId(e.target.value || undefined)}
                 className="h-9 rounded-full border border-border bg-background px-3 text-[13px] font-medium text-text outline-none focus:border-primary transition-colors min-h-[36px]"
               >
-                <option value="">{t('sellerReviews.filterProductAll')}</option>
+                <option value="">{t('seller.reviews.filterProductAll')}</option>
                 {productOptions.map(p => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
@@ -438,7 +438,7 @@ export default function ReviewsScreen() {
                 <button
                   type="button"
                   onClick={() => setSortOpen(o => !o)}
-                  aria-label={t('sellerReviews.sortAria')}
+                  aria-label={t('seller.reviews.sortAria')}
                   aria-haspopup="listbox"
                   aria-expanded={sortOpen}
                   className="h-9 px-3 rounded-full border border-border bg-background text-[13px] font-medium text-text flex items-center gap-1.5 hover:border-text-tertiary transition-colors"
@@ -486,7 +486,7 @@ export default function ReviewsScreen() {
           {/* Status tabs (segment control) */}
           <div
             role="tablist"
-            aria-label={t('sellerReviews.title')}
+            aria-label={t('seller.reviews.title')}
             className="flex items-center gap-1 p-1 bg-surface rounded-full h-10 w-full md:w-auto md:inline-flex overflow-x-auto scrollbar-none border border-border-light"
           >
             {tabs.map(tab => {
@@ -529,7 +529,7 @@ export default function ReviewsScreen() {
 
           {/* Result count */}
           <p className="text-[13px] text-text-muted -mt-1">
-            {t('sellerReviews.count', { count: data?.total ?? 0 })}
+            {t('seller.reviews.count', { count: data?.total ?? 0 })}
           </p>
 
           {/* List slot (SV2) */}
@@ -543,8 +543,8 @@ export default function ReviewsScreen() {
             ) : items.length === 0 ? (
               <EmptyState
                 icon={<MessageSquare size={40} className="text-text-tertiary" aria-hidden="true" />}
-                title={hasActiveFilters ? t('sellerReviews.noFilteredTitle') : t('sellerReviews.noReviewsTitle')}
-                subtitle={hasActiveFilters ? t('sellerReviews.noFilteredSubtitle') : t('sellerReviews.noReviewsSubtitle')}
+                title={hasActiveFilters ? t('seller.reviews.noFilteredTitle') : t('seller.reviews.noReviewsTitle')}
+                subtitle={hasActiveFilters ? t('seller.reviews.noFilteredSubtitle') : t('seller.reviews.noReviewsSubtitle')}
                 action={
                   hasActiveFilters
                     ? { label: t('seller.products.clearAll'), onPress: clearAll }
@@ -687,8 +687,8 @@ function RespondComposer({
   }))
 
   const submitLabel = mode === 'edit'
-    ? (pending ? t('sellerReviews.responseEditing') : t('sellerReviews.responseEdit'))
-    : (pending ? t('sellerReviews.responding') : t('sellerReviews.responseSend'))
+    ? (pending ? t('seller.reviews.responseEditing') : t('seller.reviews.responseEdit'))
+    : (pending ? t('seller.reviews.responding') : t('seller.reviews.responseSend'))
 
   return (
     <AnimatePresence>
@@ -712,9 +712,9 @@ function RespondComposer({
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-[18px] font-semibold text-text">
-                {mode === 'edit' ? t('reviewCard.editResponse') : t('sellerReviews.respond')}
+                {mode === 'edit' ? t('reviewCard.editResponse') : t('seller.reviews.respond')}
               </h2>
-              <button onClick={onClose} className="text-text-muted p-1 hover:text-text" aria-label={t('sellerReviews.back')}>
+              <button onClick={onClose} className="text-text-muted p-1 hover:text-text" aria-label={t('seller.reviews.back')}>
                 <X size={18} aria-hidden="true" />
               </button>
             </div>
@@ -723,20 +723,20 @@ function RespondComposer({
             {isLowRating && (
               <div className="mb-3 rounded-md bg-warning/10 px-3 py-2 flex items-start gap-2">
                 <AlertTriangle size={15} className="text-warning shrink-0 mt-0.5" aria-hidden="true" />
-                <p className="text-[12px] text-[#92400E] leading-4">{t('sellerReviews.responseToneHint')}</p>
+                <p className="text-[12px] text-[#92400E] leading-4">{t('seller.reviews.responseToneHint')}</p>
               </div>
             )}
 
             {/* Templates */}
             <div className="mb-3">
-              <p className="text-[12px] font-semibold text-text-muted mb-1.5">{t('sellerReviews.responseTemplates')}</p>
+              <p className="text-[12px] font-semibold text-text-muted mb-1.5">{t('seller.reviews.responseTemplates')}</p>
               <div className="flex flex-wrap gap-1.5">
                 {templates.map(tpl => (
                   <button
                     key={tpl.id}
                     type="button"
                     onClick={() => onDraftChange(tpl.body)}
-                    aria-label={`${t('sellerReviews.responseTemplatesAria')}: ${tpl.label}`}
+                    aria-label={`${t('seller.reviews.responseTemplatesAria')}: ${tpl.label}`}
                     className="rounded-full border border-border bg-background px-2.5 py-1 text-[12px] font-medium text-text hover:border-primary hover:text-primary transition-colors"
                   >
                     {tpl.label}
@@ -749,17 +749,17 @@ function RespondComposer({
             <textarea
               value={draft}
               onChange={e => onDraftChange(e.target.value.slice(0, MAX))}
-              placeholder={t('sellerReviews.responsePlaceholder')}
+              placeholder={t('seller.reviews.responsePlaceholder')}
               rows={4}
               className="w-full resize-none rounded-md border border-border bg-surface px-3 py-2 text-[14px] text-text outline-none focus:border-primary transition-colors"
-              aria-label={t('sellerReviews.responsePlaceholder')}
+              aria-label={t('seller.reviews.responsePlaceholder')}
               aria-describedby="char-count"
             />
 
             {/* Character counter */}
             <div id="char-count" className="mt-1 text-right" role="status" aria-live="polite">
               <span className={`text-[12px] ${charCount > MAX * 0.9 ? 'text-warning' : 'text-text-muted'}`}>
-                {t('sellerReviews.responseCounter', { count: charCount, max: MAX })}
+                {t('seller.reviews.responseCounter', { count: charCount, max: MAX })}
               </span>
             </div>
 
@@ -781,7 +781,7 @@ function RespondComposer({
                 >
                   <CheckCircle2 size={20} className="text-success" aria-hidden="true" />
                   <span className="text-[14px] font-semibold text-success">
-                    {mode === 'edit' ? t('sellerReviews.responseUpdated') : t('sellerReviews.responsePosted')}
+                    {mode === 'edit' ? t('seller.reviews.responseUpdated') : t('seller.reviews.responsePosted')}
                   </span>
                 </motion.div>
               )}
@@ -794,7 +794,7 @@ function RespondComposer({
                 onClick={onClose}
                 className="h-9 px-3 rounded-md text-[13px] font-semibold text-text-muted hover:text-text transition-colors"
               >
-                {t('sellerReviews.back')}
+                {t('seller.reviews.back')}
               </button>
               <button
                 type="button"
@@ -804,7 +804,7 @@ function RespondComposer({
               >
                 {success ? <CheckCircle2 size={14} aria-hidden="true" /> : <Send size={14} aria-hidden="true" />}
                 {success
-                  ? (mode === 'edit' ? t('sellerReviews.responseUpdated') : t('sellerReviews.responsePosted'))
+                  ? (mode === 'edit' ? t('seller.reviews.responseUpdated') : t('seller.reviews.responsePosted'))
                   : submitLabel}
               </button>
             </div>
@@ -860,16 +860,16 @@ function DeleteConfirm({
               <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-error/10">
                 <Trash2 size={20} className="text-error" aria-hidden="true" />
               </span>
-              <h2 className="text-[18px] font-semibold text-text">{t('sellerReviews.responseDeleteConfirmTitle')}</h2>
+              <h2 className="text-[18px] font-semibold text-text">{t('seller.reviews.responseDeleteConfirmTitle')}</h2>
             </div>
-            <p className="text-[14px] text-text-muted leading-5 mb-5">{t('sellerReviews.responseDeleteConfirm')}</p>
+            <p className="text-[14px] text-text-muted leading-5 mb-5">{t('seller.reviews.responseDeleteConfirm')}</p>
             <div className="flex items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={onCancel}
                 className="h-9 px-4 rounded-md text-[13px] font-semibold text-text-muted hover:text-text transition-colors"
               >
-                {t('sellerReviews.responseDeleteConfirmCancel')}
+                {t('seller.reviews.responseDeleteConfirmCancel')}
               </button>
               <button
                 type="button"
@@ -878,7 +878,7 @@ function DeleteConfirm({
                 className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-error text-white text-[13px] font-semibold disabled:opacity-50 hover:bg-error/90 transition-colors active:scale-[0.98]"
               >
                 <Trash2 size={14} aria-hidden="true" />
-                {t('sellerReviews.responseDeleteConfirmAction')}
+                {t('seller.reviews.responseDeleteConfirmAction')}
               </button>
             </div>
           </motion.div>

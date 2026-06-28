@@ -456,7 +456,7 @@ const TRIP_FIXTURES: Omit<TripLedgerEntry, 'netEarning' | 'hasIncentive'>[] = [
     id: 'trip-2', orderRef: 'CHZ-2046', date: '2025-06-28',
     completedAt: '2025-06-28T15:10:00',
     pickupArea: 'Baluwatar', dropoffArea: 'Naxal', distanceKm: 2.8,
-    isCod: false, codAmount: 0, rating: 0, rating: 4, rating: 4,
+    isCod: false, codAmount: 0, rating: 4,
     lines: [
       { id: 't2l1', kind: 'trip', label: 'Base pay', amount: 90 },
       { id: 't2l2', kind: 'trip', label: 'Distance pay', amount: 30 },
@@ -479,7 +479,7 @@ const TRIP_FIXTURES: Omit<TripLedgerEntry, 'netEarning' | 'hasIncentive'>[] = [
     id: 'trip-4', orderRef: 'CHZ-2041', date: '2025-06-27',
     completedAt: '2025-06-27T19:05:00',
     pickupArea: 'Kirtipur', dropoffArea: 'Kalanki', distanceKm: 4.4,
-    isCod: false, codAmount: 0,
+    isCod: false, codAmount: 0, rating: 4,
     lines: [
       { id: 't4l1', kind: 'trip', label: 'Base pay', amount: 110 },
       { id: 't4l2', kind: 'trip', label: 'Distance pay', amount: 55 },
@@ -503,7 +503,7 @@ const TRIP_FIXTURES: Omit<TripLedgerEntry, 'netEarning' | 'hasIncentive'>[] = [
     id: 'trip-6', orderRef: 'CHZ-2036', date: '2025-06-26',
     completedAt: '2025-06-26T17:30:00',
     pickupArea: 'Chabahil', dropoffArea: 'Gausala', distanceKm: 1.6,
-    isCod: false, codAmount: 0,
+    isCod: false, codAmount: 0, rating: 0,
     lines: [
       { id: 't6l1', kind: 'trip', label: 'Base pay', amount: 75 },
       { id: 't6l2', kind: 'trip', label: 'Distance pay', amount: 20 },

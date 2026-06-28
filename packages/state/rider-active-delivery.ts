@@ -52,6 +52,10 @@ interface ActiveDeliveryState {
   cancel: (reason?: string) => void
   /** Mark the delivery as failed. */
   fail: (reason?: string) => void
+  /** Pause the delivery (issue reported, pending dispatch). */
+  pause: (reason: string) => void
+  /** Escalate to support (keeps state, logs the escalation). */
+  escalate: (reason: string) => void
   /** Minimize to a resume banner on Home/Jobs. */
   minimize: () => void
   /** Resume from the minimized banner into the Active route. */

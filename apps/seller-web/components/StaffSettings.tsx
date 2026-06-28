@@ -1,10 +1,10 @@
 'use client'
 
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useTranslation } from 'react-i18next'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, Plus, Check, X, ShieldCheck, UserCog, User, Pencil, Trash2, Send } from 'lucide-react'
+import { ChevronLeft, Plus, Check, X, ShieldCheck, Pencil, Trash2, Send } from 'lucide-react'
 import { Container, Screen } from '@chinooz/ui-web'
 import { analytics } from '@chinooz/analytics'
 import {

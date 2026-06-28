@@ -19,6 +19,7 @@ import {
 import { Container, Screen } from '@chinooz/ui-web'
 import { useSellerSessionStore } from '@chinooz/state'
 import { analytics } from '@chinooz/analytics'
+import { SettingsEmptyState } from './SettingsStates'
 import {
   SELLER_BUSINESS_DETAILS,
   SELLER_BUSINESS_TYPES,
@@ -317,6 +318,14 @@ export default function BusinessSettings() {
               </FormSection>
 
               <FormSection title={t('seller.settings.business.sectionDocuments')}>
+                {docs.length === 0 ? (
+                  <SettingsEmptyState
+                    title={t('seller.settings.states.emptyDocsTitle')}
+                    subtitle={t('seller.settings.states.emptyDocsSubtitle')}
+                    ctaLabel={t('seller.settings.states.emptyDocsCta')}
+                    onCta={() => setResubmitDoc({ id: 'doc-new', kind: 'citizenship', labelKey: 'seller.settings.business.docs.citizenship', status: 'missing' })}
+                  />
+                ) : (
                 <div className="space-y-3">
                   {docs.map(doc => (
                     <DocumentCard
@@ -327,6 +336,7 @@ export default function BusinessSettings() {
                     />
                   ))}
                 </div>
+                )}
               </FormSection>
 
               <FormSection title={t('seller.settings.business.goLiveTitle')}>

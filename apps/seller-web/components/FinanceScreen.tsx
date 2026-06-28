@@ -18,6 +18,7 @@ import {
 } from '@chinooz/mock-data'
 import EarningsChart from '@/components/EarningsChart'
 import WithdrawSheet from '@/components/WithdrawSheet'
+import { HeroSkeleton, CardsSkeleton, KycRequiredBanner, FinanceErrorState } from '@/components/FinanceStates'
 
 function useCountUp(target: number, enabled: boolean, durationMs = 900): number {
   const [value, setValue] = useState(0)
@@ -57,6 +58,9 @@ export default function FinanceScreen() {
   const [rangeKey, setRangeKey] = useState<FinanceRangeKey>('30d')
   const [summary, setSummary] = useState<FinanceSummary | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+  const kycStatus = useSellerSessionStore(s => s.kycStatus)
+  const isKycVerified = kycStatus === 'verified'
   const [withdrawOpen, setWithdrawOpen] = useState(false)
   const [availBalance, setAvailBalance] = useState(0)
   const [pendingBalanceState, setPendingBalanceState] = useState(0)
@@ -78,6 +82,10 @@ export default function FinanceScreen() {
     getFinanceSummary(range).then(data => {
       if (!active) return
       setSummary(data)
+      setLoading(false)
+    }).catch(() => {
+      if (!active) return
+      setError(true)
       setLoading(false)
     })
     return () => {
@@ -149,7 +157,29 @@ export default function FinanceScreen() {
           <h1 className="text-2xl font-bold text-text">{t('seller.finance.title')}</h1>
           <p className="text-text-muted mb-6">{t('seller.finance.subtitle')}</p>
 
+          {!isKycVerified && !loading && !error && (
+            <KycRequiredBanner
+              title={t('seller.finance.states.kycRequiredTitle')}
+              subtitle={t('seller.finance.states.kycRequiredSubtitle')}
+              ctaLabel={t('seller.finance.states.kycRequiredCta')}
+              ctaAriaLabel={t('seller.finance.states.kycRequiredCtaAria')}
+              onCta={() => (window.location.href = '/setup-business')}
+            />
+          )}
+
+          {error ? (
+            <FinanceErrorState
+              onRetry={() => setRangeKey(k => k)}
+              retryLabel={t('seller.finance.states.errorRetry')}
+              retryAriaLabel={t('seller.finance.states.errorRetryAria')}
+              message={t('seller.finance.states.errorLoadTitle')}
+            />
+          ) : (
+          <div>
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+            {loading ? (
+              <HeroSkeleton />
+            ) : (
             <section
               aria-label={heroAria}
               className="md:col-span-4 relative overflow-hidden rounded-lg bg-surface border border-border-light shadow-md p-5 flex flex-col"

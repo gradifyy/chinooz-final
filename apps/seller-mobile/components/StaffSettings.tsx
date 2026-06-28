@@ -15,11 +15,8 @@ import { useRouter } from 'expo-router'
 import {
   ChevronLeft,
   Plus,
-  Check,
   X,
   ShieldCheck,
-  UserCog,
-  User,
   Pencil,
   Trash2,
   Send,

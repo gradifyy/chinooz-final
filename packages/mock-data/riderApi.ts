@@ -34,7 +34,17 @@ import {
 } from './riderEarnings'
 import { getCODWallet, type CODWalletSnapshot } from './riderEarnings'
 import { getIncentives, type RiderIncentives } from './riderIncentives'
-import { getDemandZones, getSurgeZones, type DemandZone, type SurgeZone } from './riderDemand'
+import {
+  getDemandZones,
+  getSurgeZones,
+  getDemandForecast,
+  getRiderRecommendations,
+  type DemandZone,
+  type SurgeZone,
+  type DemandForecast,
+  type RiderRecommendation,
+  type GeoPoint,
+} from './riderDemand'
 
 // ---------------------------------------------------------------------------
 // Latency + error simulation knobs
@@ -446,4 +456,34 @@ export async function getSurgeZonesApi(): Promise<SurgeZone[]> {
 /** Get rider profile (re-exported for the unified API surface). */
 export async function getRiderProfileApi(): Promise<RiderProfileHub> {
   return getRiderProfile()
+}
+
+/** Get the hourly demand forecast / peak timeline. */
+export async function getDemandForecastApi(): Promise<DemandForecast> {
+  await randomDelay(200, 400)
+  maybeThrow()
+  return getDemandForecast()
+}
+
+/** Get zone detail (a single zone + its surge + recommendations). */
+export async function getZoneDetailApi(
+  zoneId: string,
+  riderLocation: GeoPoint,
+): Promise<{
+  zone: DemandZone | null
+  surge: SurgeZone | null
+  recommendations: RiderRecommendation[]
+}> {
+  await randomDelay(150, 300)
+  maybeThrow(0.03)
+  const allZones = getDemandZones()
+  const zone = allZones.find(z => z.id === zoneId) ?? null
+  const surge = getSurgeZones().find(s => s.zoneId === zoneId) ?? null
+  const recommendations = getRiderRecommendations(
+    allZones,
+    getSurgeZones(),
+    riderLocation,
+    { limit: 3 },
+  )
+  return { zone, surge, recommendations }
 }

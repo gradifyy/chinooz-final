@@ -66,6 +66,16 @@ export default function RiderEarningsChartScreen() {
   const [error, setError] = useState(false)
   const [compare, setCompare] = useState(false)
 
+  // Chart morph: fade the chart area when range switches.
+  const chartMorph = useSharedValue(1)
+  const chartMorphStyle = useAnimatedStyle(() => ({ opacity: chartMorph.value }))
+
+  useEffect(() => {
+    if (reduced) return
+    chartMorph.value = 0
+    chartMorph.value = withTiming(1, { duration: duration.normal, easing: Easing.bezier(...easing.easeOut) })
+  }, [rangeKey, reduced])
+
   useEffect(() => {
     analytics.screen({ name: 'rider-earnings-chart' })
   }, [])
@@ -228,7 +238,7 @@ export default function RiderEarningsChartScreen() {
               accessible
               accessibilityLabel={chartAria}
             >
-              <View style={styles.chartArea}>
+              <Animated.View style={[styles.chartArea, chartMorphStyle]}>
                 {points.map((p, i) => (
                   <Bar
                     key={p.label + i}
@@ -245,7 +255,7 @@ export default function RiderEarningsChartScreen() {
                     })}
                   />
                 ))}
-              </View>
+              </Animated.View>
 
               {/* Legend */}
               <View style={styles.legendRow}>

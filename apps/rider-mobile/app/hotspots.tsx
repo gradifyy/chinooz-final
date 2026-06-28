@@ -10,7 +10,15 @@ import {
   AccessibilityInfo,
   Linking,
   Platform,
+  type ViewStyle,
 } from 'react-native'
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  Easing,
+  ReduceMotion,
+} from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
@@ -24,20 +32,17 @@ import {
   Flame,
   ListOrdered,
 } from 'lucide-react-native'
-import { colors, radii, spacing, fontFamily, fontSize, shadow } from '@chinooz/theme'
+import { colors, radii, spacing, fontFamily, fontSize, shadow, duration, easing } from '@chinooz/theme'
 import { BottomSheet } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
+import { useDemandZones, useSurgeZones, useDemandForecast } from '@chinooz/hooks'
 import {
-  getDemandZones,
-  getSurgeZones,
   getRiderRecommendations,
-  getDemandForecast,
   isInHotspot,
+  isQuietDemand,
   RIDER_LOCATION,
   type DemandZone,
-  type SurgeZone,
   type DemandLevel,
-  type DemandForecast,
 } from '@chinooz/mock-data'
 import { useOnlineStatusStore } from '@chinooz/state'
 import { useA11y } from '../components/A11yProvider'
@@ -46,6 +51,15 @@ import DemandHeatmap from '../components/DemandHeatmap'
 import ZoneDetailSheet from '../components/ZoneDetailSheet'
 import RecommendationsStrip from '../components/RecommendationsStrip'
 import DemandForecastChart from '../components/DemandForecastChart'
+import { HotspotsSkeleton, type SkeletonLabels } from '../components/HotspotsSkeletons'
+import {
+  QuietDemandState,
+  NoDataState,
+  DataErrorState,
+  OfflineState,
+  StaleIndicator,
+  type StateLabels,
+} from '../components/HotspotsStates'
 
 /**
  * RD1 — Demand / Hotspots heatmap.
@@ -75,17 +89,26 @@ export default function HotspotsScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { reducedMotion } = useA11y()
-  const { isForeground } = useAppState()
+  const { isForeground, connectivity } = useAppState()
 
-  const [zones, setZones] = useState<DemandZone[]>([])
-  const [surgeZones, setSurgeZones] = useState<SurgeZone[]>([])
+  // One source of truth: TanStack Query hooks share the same cache keys
+  // with Home's MapSlot (RH3) + the surge map (RI5). staleTime 30s per RS3.
+  // The refetchInterval on forecast sits behind the AppStateProvider's
+  // focusManager/onlineManager gates (paused when backgrounded/offline).
+  const demandQuery = useDemandZones()
+  const surgeQuery = useSurgeZones()
+  const forecastQuery = useDemandForecast()
+
+  const zones = demandQuery.data ?? []
+  const surgeZones = surgeQuery.data ?? []
+  const forecast = forecastQuery.data ?? null
+
   const [refreshing, setRefreshing] = useState(false)
   const [showSurge, setShowSurge] = useState(false)
   const [zoom, setZoom] = useState(1)
   const [selectedZone, setSelectedZone] = useState<DemandZone | null>(null)
   const [sheetVisible, setSheetVisible] = useState(false)
   const [recNonce, setRecNonce] = useState(0)
-  const [forecast, setForecast] = useState<DemandForecast | null>(null)
 
   const status = useOnlineStatusStore(s => s.status)
   const setOnlineStatus = useOnlineStatusStore(s => s.setOnlineStatus)
@@ -99,32 +122,16 @@ export default function HotspotsScreen() {
     analytics.screen({ name: 'rider-hotspots' })
   }, [])
 
-  const load = useCallback(() => {
-    const z = getDemandZones({ now: Date.now() })
-    const s = getSurgeZones({ now: Date.now() })
-    const f = getDemandForecast({ now: Date.now() })
-    setZones(z)
-    setSurgeZones(s)
-    setForecast(f)
-  }, [])
-
-  useEffect(() => {
-    // Lightweight: one fetch on mount. No polling.
-    load()
-  }, [load])
-
-  // Pause nothing extra on background — there's no polling here, but we keep
-  // the hook read so the screen stays consistent with the app-wide policy.
+  // Pause when backgrounded — the AppStateProvider's focusManager already
+  // pauses TanStack Query refetches. We keep the hook read for consistency.
   void isForeground
 
   const onRefresh = useCallback(() => {
     setRefreshing(true)
     AccessibilityInfo.announceForAccessibility(t('rider.hotspots.loading'))
-    load()
-    setTimeout(() => {
-      setRefreshing(false)
-    }, 500)
-  }, [load, t])
+    Promise.all([demandQuery.refetch(), surgeQuery.refetch(), forecastQuery.refetch()])
+      .finally(() => setRefreshing(false))
+  }, [demandQuery, surgeQuery, forecastQuery, t])
 
   const handleZonePress = useCallback(
     (zone: DemandZone) => {
@@ -133,6 +140,7 @@ export default function HotspotsScreen() {
       } catch {}
       setSelectedZone(zone)
       setSheetVisible(true)
+      analytics.track({ name: 'rider_hotspot_zone_select', properties: { zoneId: zone.id } })
     },
     [reducedMotion],
   )
@@ -141,12 +149,24 @@ export default function HotspotsScreen() {
     setSheetVisible(false)
   }, [])
 
+  // Recenter flash: brief opacity pulse on the map to confirm the action.
+  const recenterFlash = useSharedValue(1)
+  const recenterStyle = useAnimatedStyle(() => ({ opacity: recenterFlash.value }))
+
   const handleRecenter = useCallback(() => {
     try {
       if (!reducedMotion) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     } catch {}
     setZoom(1)
     AccessibilityInfo.announceForAccessibility(t('rider.hotspots.recenter'))
+    if (!reducedMotion) {
+      recenterFlash.value = 0.6
+      recenterFlash.value = withTiming(1, {
+        duration: duration.fast,
+        easing: Easing.bezier(...easing.easeOut),
+        reduceMotion: ReduceMotion.Never,
+      })
+    }
   }, [reducedMotion, t])
 
   const handleZoomIn = useCallback(() => {
@@ -243,10 +263,11 @@ export default function HotspotsScreen() {
   )
 
   const handleRefreshRecs = useCallback(() => {
-    load()
+    demandQuery.refetch()
+    surgeQuery.refetch()
     setRecNonce(n => n + 1)
     AccessibilityInfo.announceForAccessibility(t('rider.hotspots.recRefreshed'))
-  }, [load, t])
+  }, [demandQuery, surgeQuery, t])
 
   // Heat legend items (labeled, not color-only).
   const legendItems: { level: DemandLevel; labelKey: string; fill: string }[] = [

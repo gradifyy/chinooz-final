@@ -506,8 +506,8 @@ function PerksGrid({
   )
 }
 
-/** Single perk card with staggered fade+slide entrance. */
-function PerkCard({
+/** Single perk card with staggered fade+slide entrance. Memoized for grid performance. */
+const PerkCard = React.memo(function PerkCard({
   perk,
   idx,
   t,
@@ -553,7 +553,7 @@ function PerkCard({
       </Text>
     </Animated.View>
   )
-}
+})
 
 /** Standing card — good / at-risk, supportive tone, icon + word (not color-only). */
 function StandingCard({

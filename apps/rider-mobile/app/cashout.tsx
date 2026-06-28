@@ -36,7 +36,7 @@ import {
   Banknote,
   ChevronRight,
 } from 'lucide-react-native'
-import { colors, radii, spacing, fontFamily, fontSize, shadow } from '@chinooz/theme'
+import { colors, radii, spacing, fontFamily, fontSize, shadow, duration, easing } from '@chinooz/theme'
 import { useReducedMotion } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
 import { useRiderEarningsStore } from '@chinooz/state'
@@ -580,14 +580,26 @@ function ResultState({ t, router, insets, phase, amount, net, fee, methodLabel, 
 }) {
   const scale = useSharedValue(reduced ? 1 : 0.8)
   const opacity = useSharedValue(reduced ? 1 : 0)
+  // Celebration ring: expands outward on paid state.
+  const ringScale = useSharedValue(reduced ? 0 : 0)
+  const ringOpacity = useSharedValue(reduced ? 0 : 0)
 
   useEffect(() => {
     if (reduced) return
     scale.value = withSpring(1, { damping: 16, stiffness: 300, mass: 0.8 })
-    opacity.value = withTiming(1, { duration: 300, easing: Easing.out(Easing.ease) })
+    opacity.value = withTiming(1, { duration: duration.normal, easing: Easing.bezier(...easing.easeOut) })
+    // Celebration burst on paid.
+    if (isPaid) {
+      ringScale.value = withSpring(1.8, { damping: 12, stiffness: 120, mass: 1 })
+      ringOpacity.value = withTiming(0, { duration: duration.slower, easing: Easing.bezier(...easing.easeOut) })
+    }
   }, [])
 
   const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }], opacity: opacity.value }))
+  const ringStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: ringScale.value }],
+    opacity: ringOpacity.value,
+  ))
 
   const isPending = phase === 'pending'
   const isPaid = phase === 'paid'

@@ -39,6 +39,17 @@ import {
 } from '@chinooz/theme'
 import { analytics } from '@chinooz/analytics'
 import { useA11y } from './A11yProvider'
+import { useAppState } from './AppStateProvider'
+import {
+  VehicleDocsSkeleton,
+  LoadErrorState,
+  SaveFailState,
+  UploadFailState,
+  OfflineProfileBanner,
+  DocExpiredBanner,
+  DocRejectedBanner,
+  VerificationPendingLock,
+} from './ProfileStates'
 import {
   getRiderVehicle,
   updateRiderVehicle,
@@ -129,6 +140,11 @@ export default function VehicleDocumentsScreen() {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
   const [savedMsg, setSavedMsg] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState(false)
+  const [saveFail, setSaveFail] = useState(false)
+  const [uploadFailId, setUploadFailId] = useState<string | null>(null)
+  const { connectivity } = useAppState()
+  const isOffline = connectivity === 'offline'
 
   const [docs, setDocs] = useState<RiderDocument[]>([])
   const [resubmittingId, setResubmittingId] = useState<string | null>(null)
@@ -141,18 +157,24 @@ export default function VehicleDocumentsScreen() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [v, d] = await Promise.all([getRiderVehicle(), getRiderDocuments()])
-    const f: VehicleForm = {
-      type: v.type,
-      plate: v.plate,
-      model: v.model,
-      color: v.color,
+    setLoadError(false)
+    try {
+      const [v, d] = await Promise.all([getRiderVehicle(), getRiderDocuments()])
+      const f: VehicleForm = {
+        type: v.type,
+        plate: v.plate,
+        model: v.model,
+        color: v.color,
+      }
+      setVehicle(v)
+      setForm(f)
+      setInitial(f)
+      setDocs(d)
+    } catch {
+      setLoadError(true)
+    } finally {
+      setLoading(false)
     }
-    setVehicle(v)
-    setForm(f)
-    setInitial(f)
-    setDocs(d)
-    setLoading(false)
   }, [])
 
   useFocusEffect(
@@ -514,6 +536,45 @@ export default function VehicleDocumentsScreen() {
           </View>
         )}
 
+        {/* Offline banner — edits queued */}
+        {isOffline && (
+          <OfflineProfileBanner
+            cachedDate={new Date().toISOString().slice(0, 10)}
+            queuedEdits={isDirty}
+            title={t('rider.profile.offlineTitle')}
+            bodyTemplate={t('rider.profile.offlineBody')}
+            queuedNote={t('rider.profile.offlineQueued')}
+            ariaLabel={t('rider.profile.offlineAria')}
+            retry={t('rider.profile.offlineRetry')}
+            retryAria={t('rider.profile.offlineRetryAria')}
+            onRetry={handleSaveVehicle}
+          />
+        )}
+
+        {/* Save failure — preserves edits */}
+        {saveFail && (
+          <SaveFailState
+            title={t('rider.profile.errorSaveTitle')}
+            body={t('rider.profile.errorSaveBody')}
+            preservedNote={t('rider.profile.errorSavePreserved')}
+            retry={t('rider.profile.errorSaveRetry')}
+            retryAria={t('rider.profile.errorSaveRetryAria')}
+            onRetry={handleSaveVehicle}
+            cancelLabel={t('rider.profile.errorSaveCancel')}
+            cancelAria={t('rider.profile.errorSaveCancelAria')}
+            onCancel={() => setSaveFail(false)}
+          />
+        )}
+
+        {/* Verification-pending lock — limits vehicle changes */}
+        {vehicle.verificationLinked && reverifyNeeded && (
+          <VerificationPendingLock
+            title={t('rider.profile.verificationLockTitle')}
+            body={t('rider.profile.verificationLockBody')}
+            ariaLabel={t('rider.profile.verificationLockAria')}
+          />
+        )}
+
         {/* ---------- Expiry reminders ---------- */}
         {reminders.length > 0 && (
           <View style={styles.remindersWrap}>
@@ -685,6 +746,45 @@ export default function VehicleDocumentsScreen() {
                     </Pressable>
                   ) : null}
                 </View>
+
+                {/* Upload failure — preserves form, offers retry */}
+                {uploadFailId === doc.id && (
+                  <UploadFailState
+                    title={t('rider.profile.errorUploadTitle')}
+                    body={t('rider.profile.errorUploadBody')}
+                    retry={t('rider.profile.errorUploadRetry')}
+                    retryAria={t('rider.profile.errorUploadRetryAria')}
+                    onRetry={() => {
+                      setUploadFailId(null)
+                      handleResubmit(doc)
+                    }}
+                    onCancel={() => setUploadFailId(null)}
+                    cancelLabel={t('rider.profile.errorUploadCancel')}
+                    cancelAria={t('rider.profile.errorUploadCancelAria')}
+                  />
+                )}
+
+                {/* Document expired/rejected edge banners */}
+                {doc.status === 'expired' && (
+                  <DocExpiredBanner
+                    title={t('rider.profile.docExpiredTitle')}
+                    body={t('rider.profile.docExpiredBody')}
+                    ariaLabel={t('rider.profile.docExpiredAria')}
+                    actionLabel={t('rider.profile.docExpiredAction')}
+                    actionAria={t('rider.profile.docExpiredActionAria')}
+                    onAction={() => handleResubmit(doc)}
+                  />
+                )}
+                {doc.status === 'rejected' && !doc.rejectionReasonKey && (
+                  <DocRejectedBanner
+                    title={t('rider.profile.docRejectedTitle')}
+                    body={t('rider.profile.docRejectedBody')}
+                    ariaLabel={t('rider.profile.docRejectedAria')}
+                    actionLabel={t('rider.profile.docRejectedAction')}
+                    actionAria={t('rider.profile.docRejectedActionAria')}
+                    onAction={() => handleResubmit(doc)}
+                  />
+                )}
               </View>
             )
           })}

@@ -18,6 +18,7 @@ import {
 import { Container, Screen } from '@chinooz/ui-web'
 import { useReducedMotion, SellerOrderRow, SellerOrderRowSkeleton } from '@chinooz/ui-web'
 import { useSellerOrders } from '@chinooz/hooks'
+import BulkActionBar from '@/components/BulkActionBar'
 import { useSellerSessionStore } from '@chinooz/state'
 import { analytics } from '@chinooz/analytics'
 import { formatNPR } from '@chinooz/utils'
@@ -458,6 +459,13 @@ export default function SellerOrders() {
     return n
   }, [filters])
 
+  const selectedOrders = useMemo(
+    () => allOrders.filter(o => selectedIds.has(o.subOrderId)),
+    [allOrders, selectedIds],
+  )
+
+  const allVisibleSelected = visibleOrders.length > 0 && visibleOrders.every(o => selectedIds.has(o.subOrderId))
+
   const removeFilter = useCallback((field: keyof FilterState) => {
     setFilters(prev => {
       const next = { ...prev }
@@ -730,6 +738,16 @@ export default function SellerOrders() {
           </>
         )}
       </Container>
+
+      {/* Bulk action bar */}
+      {selectedOrders.length > 0 && (
+        <BulkActionBar
+          selectedOrders={selectedOrders}
+          onClear={() => setSelectedIds(new Set())}
+          onRefetch={refetch}
+          t={t}
+        />
+      )}
     </Screen>
   )
 }

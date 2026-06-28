@@ -65,6 +65,8 @@ export default function SosScreen() {
   const [phase, setPhase] = useState<SosPhase>('idle')
   const [secondsLeft, setSecondsLeft] = useState(Math.ceil(HOLD_MS / 1000))
   const [trustedContacts] = useState<{ name: string; phone: string }[]>([])
+  const sosMutation = useTriggerSOS()
+  const shareMutation = useShareTripStatus()
 
   const holdElapsed = useRef(0)
   const holdInterval = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -92,23 +94,26 @@ export default function SosScreen() {
       if (!reducedMotion) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
     } catch {}
     try { AccessibilityInfo.announceForAccessibility(t('rider.support.sos.activeAria')) } catch {}
-    analytics.track({ event: 'rider_sos_activated', screen: 'rider-support-sos', properties: { hasActiveTrip: !!activeDelivery, orderRef: activeDelivery?.orderRef ?? null } })
-    // Try mock SOS — on failure, fall back to direct phone dialer.
-    try {
-      const { triggerSOS } = await import('@chinooz/mock-data')
-      await triggerSOS({
-        orderRef: activeDelivery?.orderRef,
-        pickup: activeDelivery?.pickupLabel,
-        dropoff: activeDelivery?.dropoffLabel,
-        trustedContacts,
-      })
-      setPhase('active')
-    } catch {
+    // SOS shares the RA7 boundary — reads trip context from the active
+    // delivery store (one source of truth). Analytics fire after, never blocking.
+    const opRef = `sos-${Date.now().toString(36)}`
+    const { result, fallback } = await sosMutation.mutateAsync({
+      orderRef: activeDelivery?.orderRef,
+      pickup: activeDelivery?.pickupLabel,
+      dropoff: activeDelivery?.dropoffLabel,
+      trustedContacts,
+      opRef,
+    })
+    // Analytics fire after the mutation — never gate a safety action on analytics.
+    analytics.track({ event: 'rider_sos_activated', screen: 'rider-support-sos', properties: { hasActiveTrip: !!activeDelivery, orderRef: activeDelivery?.orderRef ?? null, fallback } })
+    if (fallback) {
       // Network failure — safety must NEVER hard-fail. Fall back to phone dialer.
       setPhase('fallback')
       try { AccessibilityInfo.announceForAccessibility(t('rider.support.states.sosFallbackAria')) } catch {}
+    } else if (result) {
+      setPhase('active')
     }
-  }, [activeDelivery, reducedMotion, t, trustedContacts])
+  }, [activeDelivery, reducedMotion, t, trustedContacts, sosMutation])
 
   const cancelCountdown = useCallback(() => {
     if (holdInterval.current) {

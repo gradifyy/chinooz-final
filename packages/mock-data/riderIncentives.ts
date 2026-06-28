@@ -61,6 +61,121 @@ export interface RiderStreak {
   /** Streaks/tiers (RI4) href. */
   tiersHref: string
 }
+/**
+ * RI4 — Streak day cell for the visual streak tracker.
+ */
+export interface RiderStreakDay {
+  /** Day index (0 = oldest in the visible window). */
+  index: number
+  /** Day label, e.g. "Mon", "Tue". */
+  label: string
+  /** Whether the rider completed >=1 delivery on this day. */
+  completed: boolean
+  /** Whether this is today (the current streak day). */
+  isToday: boolean
+}
+
+/**
+ * RI4 — Tier ladder rung (Bronze -> Silver -> Gold -> Platinum).
+ */
+export interface RiderTierRung {
+  tier: string
+  /** i18n key for the tier label. */
+  labelKey: string
+  /** Accent key — maps to a theme color in the component. */
+  accent: 'bronze' | 'silver' | 'gold' | 'platinum'
+  /** Minimum total deliveries to reach this tier. */
+  minDeliveries: number
+  /** NPR weekly earnings boost at this tier. */
+  earningsBoostPct: number
+  /** Whether this is the rider's current tier. */
+  isCurrent: boolean
+  /** Whether this tier has been reached (current or past). */
+  isReached: boolean
+}
+
+/**
+ * RI4 — Tier perk (higher incentives, priority jobs, lower COD friction).
+ */
+export interface RiderTierPerkDetail {
+  id: string
+  /** i18n key for the perk label. */
+  labelKey: string
+  /** i18n key for the perk description. */
+  descKey: string
+  /** lucide icon name. */
+  icon: string
+}
+
+/**
+ * RI4 — Milestone / badge (tasteful, not childish).
+ */
+export interface RiderMilestone {
+  id: string
+  /** i18n key for the milestone label. */
+  labelKey: string
+  /** i18n key for the milestone description. */
+  descKey: string
+  /** lucide icon name. */
+  icon: string
+  /** Whether this milestone has been earned. */
+  earned: boolean
+  /** ISO date earned (yyyy-mm-dd), if earned. */
+  earnedAt?: string
+  /** Progress toward this milestone (0..1), if not yet earned. */
+  progress?: number
+}
+
+/**
+ * RI4 — Gentle "don't break your streak" nudge (never coercive/unsafe).
+ */
+export interface RiderStreakNudge {
+  /** i18n key for the nudge message (gentle, supportive). */
+  messageKey: string
+  /** NPR reward for keeping the streak alive today. */
+  keepRewardNpr: number
+  /** Whether the nudge has been dismissed by the rider. */
+  dismissed: boolean
+}
+
+/**
+ * RI4 — Full streaks + tiers payload for the streaks screen.
+ */
+export interface RiderStreaksDetail {
+  /** Current consecutive-day streak. */
+  currentStreak: number
+  /** Best (longest) streak ever. */
+  bestStreak: number
+  /** NPR reward for completing the current streak cycle. */
+  streakRewardNpr: number
+  /** Days in the current streak cycle (e.g. 7 for a 7-day streak bonus). */
+  streakCycleDays: number
+  /** Visual day tracker (last N days, oldest first). */
+  days: RiderStreakDay[]
+  /** Gentle keep-streak nudge. */
+  nudge: RiderStreakNudge
+  /** Tier ladder (Bronze -> Platinum). */
+  tierLadder: RiderTierRung[]
+  /** Current tier label key. */
+  currentTierLabelKey: string
+  /** Progress to next tier (0..1). 1 at top tier. */
+  progressToNext: number
+  /** i18n key for the progress caption, e.g. "{{count}} deliveries to Gold". */
+  progressCaptionKey: string
+  /** Next tier label key, or null at top. */
+  nextTierLabelKey: string | null
+  /** Perks for the current tier. */
+  currentPerks: RiderTierPerkDetail[]
+  /** Milestones / badges. */
+  milestones: RiderMilestone[]
+  /** Link to Performance (RP) for tier qualification details. */
+  performanceHref: string
+  /** i18n key for the Performance link label. */
+  performanceLabelKey: string
+  /** i18n key for the Performance link aria. */
+  performanceAriaKey: string
+}
+
 
 export interface RiderSurge {
   /** Whether a surge multiplier is currently live in the rider's zone. */
@@ -350,4 +465,60 @@ export async function joinQuest(id: string): Promise<RiderQuest | null> {
   INCENTIVES.availableQuests.splice(idx, 1)
   INCENTIVES.activeQuests.push(joined)
   return joined
+}
+
+/**
+ * RI4 — full streaks + tiers payload for the streaks screen.
+ */
+export async function getRiderStreaks(): Promise<RiderStreaksDetail> {
+  await delay(200 + Math.random() * 240)
+  return RIDER_STREAKS_DETAIL
+}
+
+const RIDER_STREAKS_DETAIL: RiderStreaksDetail = {
+  currentStreak: 6,
+  bestStreak: 14,
+  streakRewardNpr: 500,
+  streakCycleDays: 7,
+  days: [
+    { index: 0, label: 'Sun', completed: true, isToday: false },
+    { index: 1, label: 'Mon', completed: true, isToday: false },
+    { index: 2, label: 'Tue', completed: true, isToday: false },
+    { index: 3, label: 'Wed', completed: true, isToday: false },
+    { index: 4, label: 'Thu', completed: true, isToday: false },
+    { index: 5, label: 'Fri', completed: true, isToday: false },
+    { index: 6, label: 'Sat', completed: false, isToday: true },
+  ],
+  nudge: {
+    messageKey: 'rider.streaks.nudgeMessage',
+    keepRewardNpr: 500,
+    dismissed: false,
+  },
+  tierLadder: [
+    { tier: 'bronze', labelKey: 'rider.profile.tierBronze', accent: 'bronze', minDeliveries: 0, earningsBoostPct: 0, isCurrent: false, isReached: true },
+    { tier: 'silver', labelKey: 'rider.profile.tierSilver', accent: 'silver', minDeliveries: 500, earningsBoostPct: 5, isCurrent: false, isReached: true },
+    { tier: 'gold', labelKey: 'rider.profile.tierGold', accent: 'gold', minDeliveries: 1500, earningsBoostPct: 10, isCurrent: true, isReached: true },
+    { tier: 'platinum', labelKey: 'rider.profile.tierPlatinum', accent: 'platinum', minDeliveries: 3000, earningsBoostPct: 15, isCurrent: false, isReached: false },
+  ],
+  currentTierLabelKey: 'rider.profile.tierGold',
+  progressToNext: 0.68,
+  progressCaptionKey: 'rider.tier.progressCaption',
+  nextTierLabelKey: 'rider.profile.tierPlatinum',
+  currentPerks: [
+    { id: 'priority-jobs', labelKey: 'rider.tier.perkPriorityJobs', descKey: 'rider.tier.perkPriorityJobsDesc', icon: 'zap' },
+    { id: 'surge-bonus', labelKey: 'rider.tier.perkSurgeBonus', descKey: 'rider.tier.perkSurgeBonusDesc', icon: 'trending-up' },
+    { id: 'support-fast', labelKey: 'rider.tier.perkSupportFast', descKey: 'rider.tier.perkSupportFastDesc', icon: 'headphones' },
+    { id: 'earnings-boost', labelKey: 'rider.tier.perkEarningsBoost', descKey: 'rider.tier.perkEarningsBoostDesc', icon: 'banknote' },
+  ],
+  milestones: [
+    { id: 'ms-first-100', labelKey: 'rider.streaks.milestoneFirst100', descKey: 'rider.streaks.milestoneFirst100Desc', icon: 'package', earned: true, earnedAt: '2024-04-10' },
+    { id: 'ms-7day-streak', labelKey: 'rider.streaks.milestone7Day', descKey: 'rider.streaks.milestone7DayDesc', icon: 'flame', earned: true, earnedAt: '2024-05-22' },
+    { id: 'ms-1000-deliveries', labelKey: 'rider.streaks.milestone1000', descKey: 'rider.streaks.milestone1000Desc', icon: 'truck', earned: true, earnedAt: '2024-08-15' },
+    { id: 'ms-30day-streak', labelKey: 'rider.streaks.milestone30Day', descKey: 'rider.streaks.milestone30DayDesc', icon: 'award', earned: false, progress: 0.2 },
+    { id: 'ms-gold-tier', labelKey: 'rider.streaks.milestoneGold', descKey: 'rider.streaks.milestoneGoldDesc', icon: 'crown', earned: true, earnedAt: '2024-09-01' },
+    { id: 'ms-5000-deliveries', labelKey: 'rider.streaks.milestone5000', descKey: 'rider.streaks.milestone5000Desc', icon: 'trophy', earned: false, progress: 0.26 },
+  ],
+  performanceHref: '/profile/performance',
+  performanceLabelKey: 'rider.streaks.linkPerformance',
+  performanceAriaKey: 'rider.streaks.linkPerformanceAria',
 }
