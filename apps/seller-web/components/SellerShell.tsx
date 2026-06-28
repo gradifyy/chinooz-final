@@ -143,7 +143,7 @@ export function SellerShell({ children }: { children: React.ReactNode }) {
           {/* Add product button */}
           <div className="px-3 pt-3 pb-2">
             <Link
-              href="/products"
+              href="/products/new"
               className="flex items-center justify-center gap-2 h-10 rounded-md bg-primary text-white font-semibold text-sm hover:bg-primary-dark transition-colors"
               style={{ width: collapsed ? 40 : '100%' }}
               aria-label={t('seller.nav.addAria')}

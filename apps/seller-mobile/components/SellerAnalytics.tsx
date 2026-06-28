@@ -14,6 +14,7 @@ import { ArrowLeft, TrendingUp, TrendingDown, Minus, X } from 'lucide-react-nati
 import { colors, spacing, radii, fontSize } from '@chinooz/theme'
 import { useA11y } from './A11yProvider'
 import { useSellerCategories, useSellerProducts } from '@chinooz/hooks'
+import SalesSection from './SalesSection'
 import {
   getAnalytics,
   ANALYTICS_RANGES,
@@ -291,7 +292,11 @@ export default function SellerAnalytics() {
         )}
 
         <Animated.View style={{ opacity: fadeAnim }}>
-          <SectionContent section={section} data={data} compare={compare} />
+          {section === 'sales' ? (
+            <SalesSection data={data} range={range} compare={compare} filter={filter} />
+          ) : (
+            <SectionContent section={section} data={data} compare={compare} />
+          )}
         </Animated.View>
 
         <View style={{ height: spacing[8] }} />

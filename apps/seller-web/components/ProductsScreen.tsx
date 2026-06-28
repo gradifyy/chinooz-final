@@ -140,6 +140,12 @@ export default function ProductsScreen() {
 
   const onAdd = () => {
     analytics.track({ event: 'seller_add_product_tapped', screen: 'seller-products' })
+    router.push('/products/new')
+  }
+
+  const handleEdit = (p: SellerProduct) => {
+    analytics.track({ event: 'seller_product_edit_tapped', screen: 'seller-products', properties: { productId: p.id } })
+    router.push(`/products/${p.id}/edit`)
   }
 
   const handleSelectChange = (id: string, sel: boolean) => {
@@ -151,9 +157,6 @@ export default function ProductsScreen() {
     })
   }
 
-  const handleEdit = (p: SellerProduct) => {
-    analytics.track({ event: 'seller_product_edit_tapped', screen: 'seller-products', properties: { productId: p.id } })
-  }
   const handleDuplicate = (p: SellerProduct) => {
     analytics.track({ event: 'seller_product_duplicate_tapped', screen: 'seller-products', properties: { productId: p.id } })
   }

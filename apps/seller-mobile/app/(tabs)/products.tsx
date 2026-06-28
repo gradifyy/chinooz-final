@@ -169,6 +169,12 @@ export default function ProductsScreen() {
   const onAdd = () => {
     try { if (!reducedMotion) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light) } catch {}
     analytics.track({ name: 'seller_add_product_tapped' })
+    router.push('/products/new')
+  }
+
+  const handleEdit = (p: SellerProduct) => {
+    analytics.track({ name: 'seller_product_edit_tapped', properties: { productId: p.id } })
+    router.push(`/products/${p.id}/edit`)
   }
 
   const handleSelectChange = (id: string, sel: boolean) => {
@@ -178,9 +184,6 @@ export default function ProductsScreen() {
       else next.delete(id)
       return next
     })
-  }
-  const handleEdit = (p: SellerProduct) => {
-    analytics.track({ name: 'seller_product_edit_tapped', properties: { productId: p.id } })
   }
   const handleDuplicate = (p: SellerProduct) => {
     analytics.track({ name: 'seller_product_duplicate_tapped', properties: { productId: p.id } })

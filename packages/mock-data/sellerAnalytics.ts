@@ -99,26 +99,28 @@ export const ANALYTICS_RANGES: { key: AnalyticsRangeKey; label: string; days: nu
   { key: 'custom', label: 'Custom', days: 30 },
 ]
 
-const SALES_KPIS = [
+type KpiDef = { key: string; label: string; base: number; hint: string; money?: boolean }
+
+const SALES_KPIS: KpiDef[] = [
   { key: 'netRevenue', label: 'Net revenue', base: 18450, hint: 'After refunds', money: true },
   { key: 'orders', label: 'Orders', base: 64, hint: 'Confirmed orders', money: false },
   { key: 'units', label: 'Units sold', base: 128, hint: 'Items sold', money: false },
   { key: 'aov', label: 'Avg. order value', base: 288, hint: 'Revenue / orders', money: true },
-] as const
+]
 
-const TRAFFIC_KPIS = [
+const TRAFFIC_KPIS: KpiDef[] = [
   { key: 'views', label: 'Store views', base: 3120, hint: 'Unique visitors' },
   { key: 'visitors', label: 'Unique visitors', base: 2180, hint: 'Distinct sessions' },
   { key: 'bounce', label: 'Bounce rate', base: 42, hint: 'Left after one page' },
   { key: 'session', label: 'Avg. session', base: 184, hint: 'Seconds / session' },
-] as const
+]
 
-const CUSTOMER_KPIS = [
+const CUSTOMER_KPIS: KpiDef[] = [
   { key: 'new', label: 'New customers', base: 38, hint: 'First-time buyers' },
   { key: 'returning', label: 'Returning', base: 26, hint: 'Repeat buyers' },
   { key: 'total', label: 'Total customers', base: 64, hint: 'In this range' },
-  { key: 'ltv', label: 'Avg. LTV', base: 412, hint: 'Lifetime value' },
-] as const
+  { key: 'ltv', label: 'Avg. LTV', base: 412, hint: 'Lifetime value', money: true },
+]
 
 const CHART_LABELS: Record<number, string[]> = {
   1: ['12a', '4a', '8a', '12p', '4p', '8p'],
@@ -231,7 +233,7 @@ export function getAnalytics(
     const raw = k.base * scale * (0.82 + seeded(i, seedBase) * 0.34)
     const prevRaw = k.base * scale * (0.7 + seeded(i + 7, seedBase) * 0.4)
     const deltaPct = Math.round((seeded(i + 1, seedBase) - 0.42) * 44)
-    const isMoney = 'money' in k ? k.money : k.key === 'revenue' || k.key === 'aov' || k.key === 'ltv'
+    const isMoney = k.money === true || k.key === 'aov' || k.key === 'ltv'
     const isPct = k.key === 'bounce'
     const value = isMoney ? fmtMoney(raw) : isPct ? fmtPct(Math.round(raw)) : fmtNum(raw)
     const previousValue = compare
@@ -277,7 +279,14 @@ export function getAnalytics(
     const value = Math.round(100 * scale * (0.4 + seeded(i + 3, seedBase) * 0.9))
     const share = Math.round((100 / totalShare) * (0.6 + seeded(i + 5, seedBase) * 0.8))
     const deltaPct = Math.round((seeded(i + 9, seedBase) - 0.4) * 40)
-    return { id: b.id, label: b.label, value, share, deltaPct, color: BREAKDOWN_PALETTE[i % BREAKDOWN_PALETTE.length] }
+    return {
+      id: b.id,
+      label: b.label,
+      value,
+      share,
+      deltaPct,
+      color: BREAKDOWN_PALETTE[i % BREAKDOWN_PALETTE.length],
+    }
   })
 
   let breakdowns: AnalyticsBreakdownGroup[] | undefined
@@ -291,8 +300,12 @@ export function getAnalytics(
       moneyValue: boolean,
     ): AnalyticsBreakdownGroup => {
       const rows: AnalyticsBreakdownRow[] = defs.map((b, i) => {
-        const value = Math.round((moneyValue ? 4200 : 40) * scale * (0.4 + seeded(i + 30 + id.length, seedBase) * 1.2))
-        const share = Math.round((100 / defs.length) * (0.6 + seeded(i + 40 + id.length, seedBase) * 0.8))
+        const value = Math.round(
+          (moneyValue ? 4200 : 40) * scale * (0.4 + seeded(i + 30 + id.length, seedBase) * 1.2),
+        )
+        const share = Math.round(
+          (100 / defs.length) * (0.6 + seeded(i + 40 + id.length, seedBase) * 0.8),
+        )
         const deltaPct = Math.round((seeded(i + 50 + id.length, seedBase) - 0.4) * 40)
         return {
           id: b.id,
@@ -368,7 +381,18 @@ export function getAnalytics(
     })
   }
 
-  return { section, range, compare, kpis, chart, breakdown, breakdowns, insights, products, customers }
+  return {
+    section,
+    range,
+    compare,
+    kpis,
+    chart,
+    breakdown,
+    breakdowns,
+    insights,
+    products,
+    customers,
+  }
 }
 
 export interface SalesTrendOptions {
@@ -379,7 +403,11 @@ export interface SalesTrendOptions {
 export function getSalesTrend(
   range: AnalyticsRange,
   opts: SalesTrendOptions & { compare?: boolean; filter?: AnalyticsFilter } = {},
-): { points: AnalyticsChartPoint[]; granularity: AnalyticsChartGranularity; grossNet: 'gross' | 'net' } {
+): {
+  points: AnalyticsChartPoint[]
+  granularity: AnalyticsChartGranularity
+  grossNet: 'gross' | 'net'
+} {
   const granularity = opts.granularity ?? 'day'
   const grossNet = opts.grossNet ?? 'net'
   const compare = opts.compare ?? false
@@ -389,7 +417,12 @@ export function getSalesTrend(
   const seedBase = days + granularity.length + grossNet.length + (filter?.categoryId?.length ?? 0)
 
   const granularityLabels: Record<AnalyticsChartGranularity, string[]> = {
-    day: days <= 1 ? ['12a', '4a', '8a', '12p', '4p', '8p'] : days <= 7 ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] : Array.from({ length: Math.min(days, 14) }, (_, i) => `D${i + 1}`),
+    day:
+      days <= 1
+        ? ['12a', '4a', '8a', '12p', '4p', '8p']
+        : days <= 7
+          ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+          : Array.from({ length: Math.min(days, 14) }, (_, i) => `D${i + 1}`),
     week: ['W1', 'W2', 'W3', 'W4', 'W5', 'W6'],
     month: ['M1', 'M2', 'M3'],
   }

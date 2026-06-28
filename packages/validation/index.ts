@@ -12,6 +12,12 @@ export {
   riderPersonalSchema,
   storefrontSchema,
   storeSetupSchema,
+  businessKycSchema,
+  productFormSchema,
+  productMediaSectionSchema,
+  productDetailsSectionSchema,
+  productPricingSectionSchema,
+  productDescriptionSectionSchema,
 } from './schemas'
 
 export type {
@@ -28,4 +34,6 @@ export type {
   RiderPersonalInput,
   StorefrontInput,
   StoreSetupInput,
+  BusinessKycInput,
+  ProductFormInput,
 } from './schemas'

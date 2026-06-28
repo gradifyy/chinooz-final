@@ -459,6 +459,9 @@ importers:
       '@chinooz/utils':
         specifier: workspace:*
         version: link:../../packages/utils
+      '@chinooz/validation':
+        specifier: workspace:*
+        version: link:../../packages/validation
       '@tanstack/react-query':
         specifier: ^5.0.0
         version: 5.101.1(react@18.3.1)

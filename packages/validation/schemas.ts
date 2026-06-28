@@ -180,3 +180,77 @@ export const storeSetupSchema = z.object({
 })
 
 export type StoreSetupInput = z.infer<typeof storeSetupSchema>
+
+export const businessKycSchema = z.object({
+  businessType: z.enum(['individual', 'registered']),
+  legalName: z.string().min(2, 'Legal name must be at least 2 characters').max(100),
+  panNumber: z
+    .string()
+    .regex(/^\d{9}$/, 'PAN must be 9 digits'),
+  regNumber: z.string().optional().or(z.literal('')),
+  docId: z.string().min(1, 'Please upload your ID document'),
+  docReg: z.string().optional().or(z.literal('')),
+  docPan: z.string().min(1, 'Please upload your PAN certificate'),
+}).superRefine((data, ctx) => {
+  if (data.businessType === 'registered') {
+    if (!data.regNumber || data.regNumber.trim().length < 3) {
+      ctx.addIssue({
+        path: ['regNumber'],
+        message: 'Registration number is required for registered businesses',
+        code: 'custom',
+      })
+    }
+    if (!data.docReg) {
+      ctx.addIssue({
+        path: ['docReg'],
+        message: 'Please upload your business registration',
+        code: 'custom',
+      })
+    }
+  }
+})
+
+export type BusinessKycInput = z.infer<typeof businessKycSchema>
+
+// --- Seller Product Form ---
+
+export const productFormSchema = z.object({
+  name: z.string().min(2, 'Product name must be at least 2 characters').max(200, 'Product name is too long'),
+  sku: z.string().min(1, 'SKU is required').max(100, 'SKU is too long'),
+  categoryId: z.string().min(1, 'Please select a category'),
+  price: z.number().min(1, 'Price must be at least NPR 1').max(10000000, 'Price is too high'),
+  compareAtPrice: z.number().optional(),
+  stockCount: z.number().min(0, 'Stock cannot be negative').max(999999, 'Stock is too high'),
+  description: z.string().min(10, 'Description must be at least 10 characters').max(5000, 'Description is too long'),
+  image: z.string().optional().or(z.literal('')),
+  weight: z.number().optional(),
+  shippingWidth: z.number().optional(),
+  shippingHeight: z.number().optional(),
+  shippingLength: z.number().optional(),
+  specs: z.string().max(2000, 'Specs are too long').optional().or(z.literal('')),
+  status: z.enum(['active', 'draft']),
+})
+
+export type ProductFormInput = z.infer<typeof productFormSchema>
+
+// Per-section sub-schemas for completion tracking
+export const productMediaSectionSchema = z.object({
+  image: z.string().min(1, 'At least one image is required'),
+})
+
+export const productDetailsSectionSchema = z.object({
+  name: z.string().min(2, 'Product name must be at least 2 characters').max(200, 'Product name is too long'),
+  sku: z.string().min(1, 'SKU is required').max(100, 'SKU is too long'),
+  categoryId: z.string().min(1, 'Please select a category'),
+})
+
+export const productPricingSectionSchema = z.object({
+  price: z.number().min(1, 'Price must be at least NPR 1').max(10000000, 'Price is too high'),
+  compareAtPrice: z.number().optional(),
+  stockCount: z.number().min(0, 'Stock cannot be negative').max(999999, 'Stock is too high'),
+})
+
+export const productDescriptionSectionSchema = z.object({
+  description: z.string().min(10, 'Description must be at least 10 characters').max(5000, 'Description is too long'),
+  specs: z.string().max(2000, 'Specs are too long').optional().or(z.literal('')),
+})

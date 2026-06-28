@@ -15,8 +15,6 @@ import {
   type AnalyticsFilter,
 } from '@chinooz/mock-data'
 
-type Kpi = AnalyticsSectionData['kpis'][number]
-
 function trendCls(t: 'up' | 'down' | 'flat') {
   return t === 'up' ? 'text-success' : t === 'down' ? 'text-error' : 'text-text-muted'
 }
@@ -50,9 +48,7 @@ export default function SalesSection({
     [range, granularity, grossNet, compare, filter],
   )
 
-  const salesKpis = data.kpis.filter(k =>
-    ['netRevenue', 'orders', 'units', 'aov'].includes(k.key),
-  )
+  const salesKpis = data.kpis.filter(k => ['netRevenue', 'orders', 'units', 'aov'].includes(k.key))
 
   return (
     <section aria-labelledby="an-sales-title">
@@ -76,9 +72,7 @@ export default function SalesSection({
             aria-label={`${kpi.label}: ${kpi.value}, ${trendWord(kpi.trend)} ${kpi.deltaPct > 0 ? '+' : ''}${kpi.deltaPct}%${compare && kpi.previousValue ? `, previous ${kpi.previousValue}` : ''}`}
             role="group"
           >
-            <span className="text-[12px] font-medium text-text-muted leading-4">
-              {kpi.label}
-            </span>
+            <span className="text-[12px] font-medium text-text-muted leading-4">{kpi.label}</span>
             <span
               className="text-[22px] leading-7 font-bold text-text tabular-nums"
               style={{ fontVariantNumeric: 'tabular-nums' }}
@@ -96,9 +90,7 @@ export default function SalesSection({
                   vs {kpi.previousValue}
                 </span>
               ) : (
-                <span className="text-[11px] text-text-tertiary ml-auto truncate">
-                  {kpi.hint}
-                </span>
+                <span className="text-[11px] text-text-tertiary ml-auto truncate">{kpi.hint}</span>
               )}
             </div>
           </motion.div>
@@ -232,7 +224,10 @@ function SalesTrendChart({
   const { t } = useTranslation()
   const [hover, setHover] = useState<number | null>(null)
   const max = Math.max(1, ...points.map(p => Math.max(p.current, p.previous ?? 0)))
-  const peakIdx = points.reduce((best, p, i) => (p.current > (points[best]?.current ?? 0) ? i : best), 0)
+  const peakIdx = points.reduce(
+    (best, p, i) => (p.current > (points[best]?.current ?? 0) ? i : best),
+    0,
+  )
   const w = 100 / Math.max(1, points.length)
   const h = 160
   const pad = 8
@@ -240,11 +235,15 @@ function SalesTrendChart({
   const toX = (i: number) => `${pad + i * w + w / 2}%`
   const toY = (v: number) => `${h - pad - (v / max) * (h - pad * 2)}px`
 
-  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${toX(i)} ${toY(p.current)}`).join(' ')
+  const linePath = points
+    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${toX(i)} ${toY(p.current)}`)
+    .join(' ')
   const prevPath =
     compare && points.some(p => p.previous != null)
       ? points
-          .map((p, i) => (p.previous != null ? `${i === 0 ? 'M' : 'L'} ${toX(i)} ${toY(p.previous)}` : ''))
+          .map((p, i) =>
+            p.previous != null ? `${i === 0 ? 'M' : 'L'} ${toX(i)} ${toY(p.previous)}` : '',
+          )
           .filter(Boolean)
           .join(' ')
       : null
@@ -302,7 +301,13 @@ function SalesTrendChart({
         {points.map((p, i) => (
           <g key={p.label + i}>
             {i === peakIdx && (
-              <circle cx={toX(i)} cy={toY(p.current)} r={1.2} fill="#E0A93B" vectorEffect="non-scaling-stroke" />
+              <circle
+                cx={toX(i)}
+                cy={toY(p.current)}
+                r={1.2}
+                fill="#E0A93B"
+                vectorEffect="non-scaling-stroke"
+              />
             )}
             <rect
               x={`calc(${toX(i)} - 2%)`}
@@ -324,11 +329,15 @@ function SalesTrendChart({
           style={{ left: toX(hover), top: 4 }}
         >
           <p className="font-semibold text-text tabular-nums">
-            {t('seller.analytics.sales.tooltipCurrent', { value: points[hover].current.toLocaleString() })}
+            {t('seller.analytics.sales.tooltipCurrent', {
+              value: points[hover].current.toLocaleString(),
+            })}
           </p>
           {compare && points[hover].previous != null && (
             <p className="text-text-muted tabular-nums">
-              {t('seller.analytics.sales.tooltipPrevious', { value: points[hover].previous!.toLocaleString() })}
+              {t('seller.analytics.sales.tooltipPrevious', {
+                value: points[hover].previous!.toLocaleString(),
+              })}
             </p>
           )}
           <p className="text-text-tertiary mt-0.5">{points[hover].label}</p>
@@ -359,7 +368,9 @@ function SalesTrendChart({
                 {t('seller.analytics.sales.granularity')}
               </th>
               <th scope="col" className="text-right py-1.5 font-semibold text-text-muted">
-                {grossNet === 'gross' ? t('seller.analytics.sales.grossNetGross') : t('seller.analytics.sales.grossNetNet')}
+                {grossNet === 'gross'
+                  ? t('seller.analytics.sales.grossNetGross')
+                  : t('seller.analytics.sales.grossNetNet')}
               </th>
               {compare && (
                 <th scope="col" className="text-right py-1.5 font-semibold text-text-muted">
@@ -406,7 +417,11 @@ function InsightCallout({ insight }: { insight: AnalyticsInsight }) {
     <div
       className={`rounded-lg border p-4 ${toneCls}`}
       role="note"
-      aria-label={t('seller.analytics.sales.insightAria', { tone: toneLabel, title: insight.title, body: insight.body })}
+      aria-label={t('seller.analytics.sales.insightAria', {
+        tone: toneLabel,
+        title: insight.title,
+        body: insight.body,
+      })}
     >
       <div className="flex items-start gap-2.5">
         <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gold/15 text-gold shrink-0">
@@ -442,9 +457,7 @@ function BreakdownCard({ group, compare }: { group: AnalyticsBreakdownGroup; com
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-text">{title}</h3>
         {!isStatus && (
-          <span className="text-[11px] text-text-muted tabular-nums">
-            {fmtNPR(group.total)}
-          </span>
+          <span className="text-[11px] text-text-muted tabular-nums">{fmtNPR(group.total)}</span>
         )}
       </div>
 
@@ -479,7 +492,9 @@ function BreakdownCard({ group, compare }: { group: AnalyticsBreakdownGroup; com
               </div>
               <div className="flex items-center justify-between mt-0.5">
                 <span className="text-[10px] text-text-tertiary">{sharePct}%</span>
-                <span className={`text-[10px] font-semibold tabular-nums ${trendCls(r.deltaPct > 3 ? 'up' : r.deltaPct < -3 ? 'down' : 'flat')}`}>
+                <span
+                  className={`text-[10px] font-semibold tabular-nums ${trendCls(r.deltaPct > 3 ? 'up' : r.deltaPct < -3 ? 'down' : 'flat')}`}
+                >
                   {r.deltaPct > 0 ? '+' : ''}
                   {r.deltaPct}%
                 </span>
@@ -493,10 +508,16 @@ function BreakdownCard({ group, compare }: { group: AnalyticsBreakdownGroup; com
       {isStatus && refunded && cancelled && (
         <div className="flex items-center gap-3 pt-2 border-t border-border-light text-[11px] text-text-muted">
           <span>
-            {t('seller.analytics.sales.refundRate')}: <span className="font-semibold text-text tabular-nums">{Math.round((refunded.value / total) * 100)}%</span>
+            {t('seller.analytics.sales.refundRate')}:{' '}
+            <span className="font-semibold text-text tabular-nums">
+              {Math.round((refunded.value / total) * 100)}%
+            </span>
           </span>
           <span>
-            {t('seller.analytics.sales.cancelRate')}: <span className="font-semibold text-text tabular-nums">{Math.round((cancelled.value / total) * 100)}%</span>
+            {t('seller.analytics.sales.cancelRate')}:{' '}
+            <span className="font-semibold text-text tabular-nums">
+              {Math.round((cancelled.value / total) * 100)}%
+            </span>
           </span>
         </div>
       )}
@@ -509,20 +530,34 @@ function BreakdownCard({ group, compare }: { group: AnalyticsBreakdownGroup; com
         <table className="mt-2 w-full text-[12px]">
           <thead>
             <tr className="border-b border-border-light">
-              <th scope="col" className="text-left py-1.5 font-semibold text-text-muted">{t('seller.analytics.colLabel')}</th>
-              <th scope="col" className="text-right py-1.5 font-semibold text-text-muted">{t('seller.analytics.colValue')}</th>
-              <th scope="col" className="text-right py-1.5 font-semibold text-text-muted">{t('seller.analytics.colShare')}</th>
-              {compare && <th scope="col" className="text-right py-1.5 font-semibold text-text-muted">{t('seller.analytics.colDelta')}</th>}
+              <th scope="col" className="text-left py-1.5 font-semibold text-text-muted">
+                {t('seller.analytics.colLabel')}
+              </th>
+              <th scope="col" className="text-right py-1.5 font-semibold text-text-muted">
+                {t('seller.analytics.colValue')}
+              </th>
+              <th scope="col" className="text-right py-1.5 font-semibold text-text-muted">
+                {t('seller.analytics.colShare')}
+              </th>
+              {compare && (
+                <th scope="col" className="text-right py-1.5 font-semibold text-text-muted">
+                  {t('seller.analytics.colDelta')}
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
             {group.rows.map(r => (
               <tr key={r.id} className="border-b border-border-light last:border-b-0">
                 <td className="py-1.5 text-text-secondary">{r.label}</td>
-                <td className="py-1.5 text-right tabular-nums">{isStatus ? r.value.toLocaleString() : fmtNPR(r.value)}</td>
+                <td className="py-1.5 text-right tabular-nums">
+                  {isStatus ? r.value.toLocaleString() : fmtNPR(r.value)}
+                </td>
                 <td className="py-1.5 text-right tabular-nums">{r.share}%</td>
                 {compare && (
-                  <td className={`py-1.5 text-right tabular-nums ${trendCls(r.deltaPct > 3 ? 'up' : r.deltaPct < -3 ? 'down' : 'flat')}`}>
+                  <td
+                    className={`py-1.5 text-right tabular-nums ${trendCls(r.deltaPct > 3 ? 'up' : r.deltaPct < -3 ? 'down' : 'flat')}`}
+                  >
                     {r.deltaPct > 0 ? '+' : ''}
                     {r.deltaPct}%
                   </td>
