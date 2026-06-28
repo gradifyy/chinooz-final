@@ -4,6 +4,13 @@ import { useRouter } from 'expo-router'
 import { useTranslation } from 'react-i18next'
 import { LocateFixed, Flame, ChevronRight } from 'lucide-react-native'
 import Svg, { Polygon, Circle, G, Defs, ClipPath } from 'react-native-svg'
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withSequence,
+  ReduceMotion,
+} from 'react-native-reanimated'
 import { colors, spacing, radii, fontFamily, fontSize, shadow } from '@chinooz/theme'
 import { Skeleton } from '@chinooz/ui'
 import { useA11y } from './A11yProvider'
@@ -96,12 +103,28 @@ export default function MapSlot({ status, title, offlineHint, onlineHint }: MapS
   const goOnline = useCallback(() => setOnlineStatus('online'), [setOnlineStatus])
 
   // Recenter: in the SVG mini-map this is a visual nudge (no real pan state).
-  // We animate the rider marker scale briefly to confirm the action.
+  // We animate the rider marker scale briefly to confirm the action, using
+  // a spring for a satisfying bounce. Reduced-motion: instant snap.
   const [recentered, setRecentered] = useState(false)
+  const recenterBtnScale = useSharedValue(1)
+
   const handleRecenter = useCallback(() => {
+    if (reducedMotion) {
+      setRecentered(true)
+      setTimeout(() => setRecentered(false), 200)
+      return
+    }
     setRecentered(true)
-    setTimeout(() => setRecentered(false), reducedMotion ? 0 : 600)
+    recenterBtnScale.value = withSequence(
+      withSpring(0.88, { damping: 15, stiffness: 300, reduceMotion: ReduceMotion.System }),
+      withSpring(1, { damping: 12, stiffness: 200, reduceMotion: ReduceMotion.System }),
+    )
+    setTimeout(() => setRecentered(false), 600)
   }, [reducedMotion])
+
+  const recenterBtnStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: recenterBtnScale.value }],
+  }))
 
   if (isLoading) {
     return (
@@ -221,14 +244,17 @@ export default function MapSlot({ status, title, offlineHint, onlineHint }: MapS
           </View>
         )}
 
-        {/* Recenter floating button (e2 elevation) */}
+        {/* Recenter floating button (e2 elevation, press-scale spring) */}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t('rider.home.mapRecenterAria')}
-          style={[styles.recenterBtn, { minHeight: minTouchTarget, minWidth: minTouchTarget }]}
           onPress={handleRecenter}
         >
-          <LocateFixed size={20} color={isOnline ? colors.primary : colors.textTertiary} />
+          <Animated.View
+            style={[styles.recenterBtn, { minHeight: minTouchTarget, minWidth: minTouchTarget }, recenterBtnStyle]}
+          >
+            <LocateFixed size={20} color={isOnline ? colors.primary : colors.textTertiary} />
+          </Animated.View>
         </Pressable>
       </View>
 

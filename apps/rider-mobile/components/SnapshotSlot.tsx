@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View, Text, StyleSheet, Pressable } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useTranslation } from 'react-i18next'
@@ -138,6 +138,9 @@ export default function SnapshotSlot({ title }: SnapshotSlotProps) {
           ariaLabel={t('rider.home.snapEarningsAria', { amount: earnedNpr.toLocaleString('en-IN') })}
           onPress={goEarnings}
           minTouchTarget={minTouchTarget}
+          countUpTarget={earnedNpr}
+          countUpFormat={v => formatNPR(v)}
+          reducedMotion={reducedMotion}
         />
         <StatTile
           icon={<Bike size={16} color={colors.primary} />}
@@ -147,6 +150,9 @@ export default function SnapshotSlot({ title }: SnapshotSlotProps) {
           ariaLabel={t('rider.home.snapTripsAria', { count: trips })}
           onPress={goEarnings}
           minTouchTarget={minTouchTarget}
+          countUpTarget={trips}
+          countUpFormat={v => String(v)}
+          reducedMotion={reducedMotion}
         />
         <StatTile
           icon={<Clock size={16} color={colors.info} />}
@@ -206,6 +212,57 @@ export default function SnapshotSlot({ title }: SnapshotSlotProps) {
 }
 
 // ---------------------------------------------------------------------------
+// CountUp — animates a numeric value from 0 to target (60fps, reduced-motion)
+// ---------------------------------------------------------------------------
+
+function CountUp({
+  target,
+  format,
+  reducedMotion,
+  durationMs,
+}: {
+  target: number
+  format: (v: number) => string
+  reducedMotion: boolean
+  durationMs?: number
+}) {
+  const [display, setDisplay] = useState(reducedMotion ? target : 0)
+  const rafRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    if (reducedMotion) {
+      setDisplay(target)
+      return
+    }
+    const total = durationMs ?? duration.slow
+    const start = Date.now()
+    setDisplay(0)
+
+    rafRef.current = setInterval(() => {
+      const elapsed = Date.now() - start
+      const t = Math.min(1, elapsed / total)
+      // easeOut curve for a satisfying settle
+      const eased = 1 - Math.pow(1 - t, 3)
+      setDisplay(Math.round(target * eased))
+      if (t >= 1 && rafRef.current) {
+        clearInterval(rafRef.current)
+        rafRef.current = null
+      }
+    }, 16)
+
+    return () => {
+      if (rafRef.current) clearInterval(rafRef.current)
+    }
+  }, [target, reducedMotion, durationMs])
+
+  return (
+    <Text style={styles.tileValue} numberOfLines={1}>
+      {format(display)}
+    </Text>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Stat tile
 // ---------------------------------------------------------------------------
 
@@ -217,6 +274,9 @@ function StatTile({
   ariaLabel,
   onPress,
   minTouchTarget,
+  countUpTarget,
+  countUpFormat,
+  reducedMotion,
 }: {
   icon: React.ReactNode
   value: string
@@ -225,6 +285,9 @@ function StatTile({
   ariaLabel: string
   onPress?: () => void
   minTouchTarget: number
+  countUpTarget?: number
+  countUpFormat?: (v: number) => string
+  reducedMotion?: boolean
 }) {
   const inner = (
     <>
@@ -234,9 +297,17 @@ function StatTile({
           {caption}
         </Text>
       </View>
-      <Text style={styles.tileValue} numberOfLines={1}>
-        {value}
-      </Text>
+      {countUpTarget != null && countUpFormat ? (
+        <CountUp
+          target={countUpTarget}
+          format={countUpFormat}
+          reducedMotion={reducedMotion ?? false}
+        />
+      ) : (
+        <Text style={styles.tileValue} numberOfLines={1}>
+          {value}
+        </Text>
+      )}
       <Text style={styles.tileLabel} numberOfLines={1}>
         {label}
       </Text>

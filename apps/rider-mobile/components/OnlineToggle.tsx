@@ -5,6 +5,8 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
+  withRepeat,
+  withDelay,
   Easing,
   ReduceMotion,
   runOnJS,
@@ -13,6 +15,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics'
 import { colors, radii, spacing, duration, easing } from '@chinooz/theme'
 import { useA11y } from './A11yProvider'
+import { useAppState } from './AppStateProvider'
 import type { OnlineStatus } from '@chinooz/state'
 
 const TRACK_HEIGHT = 64
@@ -39,6 +42,7 @@ export default function OnlineToggle({
   hintOffline,
 }: OnlineToggleProps) {
   const { reducedMotion } = useA11y()
+  const { isForeground } = useAppState()
   const isOnline = status === 'online'
 
   // Knob position: 0 = top (offline), TRAVEL = bottom (online). We use a tall
@@ -91,11 +95,17 @@ export default function OnlineToggle({
     onToggle(next)
   }, [isOnline, reducedMotion, hintOnline, hintOffline, onToggle])
 
+  // Track background + border color crossfade (status-color transition).
   const trackStyle = useAnimatedStyle(() => ({
     backgroundColor: interpolateColor(
       knob.value,
       [0, TRAVEL],
       [colors.surface, colors.success],
+    ),
+    borderColor: interpolateColor(
+      knob.value,
+      [0, TRAVEL],
+      [colors.borderLight, colors.success],
     ),
   }))
 
@@ -106,14 +116,43 @@ export default function OnlineToggle({
     ],
   }))
 
-  // A subtle glow ring that fades in when online.
+  // Knob dot color crossfade (instead of instant swap).
+  const knobDotStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(
+      knob.value,
+      [0, TRAVEL],
+      [colors.textTertiary, colors.success],
+    ),
+  }))
+
+  // A subtle glow ring that fades in when online. When foregrounded + not
+  // reduced-motion, it gently pulses (battery-aware: no repeat in background).
   const glowOpacity = useSharedValue(isOnline ? 1 : 0)
   React.useEffect(() => {
-    glowOpacity.value = withTiming(isOnline ? 1 : 0, {
-      duration: reducedMotion ? 0 : duration.normal,
-      easing: Easing.bezier(...easing.easeOut),
-    })
-  }, [isOnline, reducedMotion])
+    if (reducedMotion) {
+      glowOpacity.value = isOnline ? 0.5 : 0
+      return
+    }
+    if (isOnline && isForeground) {
+      // Gentle pulse: 0.3 → 0.7 → 0.3, slow enough to be calm, not distracting.
+      glowOpacity.value = withDelay(
+        duration.normal,
+        withRepeat(
+          withTiming(0.7, {
+            duration: duration.slower,
+            easing: Easing.bezier(...easing.easeInOut),
+          }),
+          -1,
+          true,
+        ),
+      )
+    } else {
+      glowOpacity.value = withTiming(isOnline ? 0.5 : 0, {
+        duration: duration.normal,
+        easing: Easing.bezier(...easing.easeOut),
+      })
+    }
+  }, [isOnline, reducedMotion, isForeground])
   const glowStyle = useAnimatedStyle(() => ({ opacity: glowOpacity.value }))
 
   return (
@@ -160,7 +199,7 @@ export default function OnlineToggle({
 
         {/* Knob */}
         <Animated.View style={[styles.knob, knobAnimStyle]}>
-          <View style={[styles.knobDot, isOnline ? styles.knobDotOnline : styles.knobDotOffline]} />
+          <Animated.View style={[styles.knobDot, knobDotStyle]} />
         </Animated.View>
       </Animated.View>
     </Pressable>
@@ -237,11 +276,5 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: radii.full,
-  },
-  knobDotOffline: {
-    backgroundColor: colors.textTertiary,
-  },
-  knobDotOnline: {
-    backgroundColor: colors.success,
   },
 })

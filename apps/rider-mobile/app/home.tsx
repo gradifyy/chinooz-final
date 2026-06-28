@@ -3,7 +3,15 @@ import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native'
 import { useTranslation } from 'react-i18next'
 import { useRouter } from 'expo-router'
 import { Target, ChevronRight, Wallet, AlertTriangle, Lock, Bell } from 'lucide-react-native'
-import { colors, spacing, radii, fontFamily, fontSize } from '@chinooz/theme'
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated'
+import { colors, spacing, radii, fontFamily, fontSize, duration, easing } from '@chinooz/theme'
 import { SegmentedControl } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
 import {
@@ -115,6 +123,29 @@ export default function RiderHomeScreen() {
   useEffect(() => {
     analytics.screen({ name: 'rider-home' })
   }, [])
+
+  // Subtle listening pulse — battery-aware: only animates when online +
+  // foregrounded + not reduced-motion. Calm opacity cycle, not a spinner.
+  const listeningOpacity = useSharedValue(1)
+  useEffect(() => {
+    const shouldPulse = status === 'online' && isForeground && !reducedMotion
+    if (shouldPulse) {
+      listeningOpacity.value = withRepeat(
+        withSequence(
+          withTiming(0.5, { duration: duration.slower, easing: Easing.bezier(...easing.easeInOut) }),
+          withTiming(1, { duration: duration.slower, easing: Easing.bezier(...easing.easeInOut) }),
+        ),
+        -1,
+        false,
+      )
+    } else {
+      listeningOpacity.value = 1
+    }
+  }, [status, isForeground, reducedMotion])
+
+  const listeningStyle = useAnimatedStyle(() => ({
+    opacity: listeningOpacity.value,
+  }))
 
   // Dev smoke-test: if not logged in, flip the mock login so the smoke-test
   // surface renders without forcing a real onboarding flow.
@@ -264,7 +295,7 @@ export default function RiderHomeScreen() {
 
       {/* Toggle pending indicator */}
       {togglePending && (
-        <View style={styles.togglePending} accessibilityRole="status" accessibilityLabel={t('rider.home.togglePendingAria')}>
+        <View style={styles.togglePending} accessibilityRole="text" accessibilityLabel={t('rider.home.togglePendingAria')}>
           <View style={styles.pendingDot} />
           <Text style={styles.togglePendingText}>{t('rider.home.togglePending')}</Text>
         </View>
@@ -297,15 +328,19 @@ export default function RiderHomeScreen() {
         </View>
       )}
 
-      {/* Listening line — calms when offline */}
-      <Text
-        style={[styles.listening, status !== 'online' && styles.listeningOff]}
+      {/* Listening line — calms when offline, subtle pulse when online */}
+      <Animated.Text
+        style={[
+          styles.listening,
+          status !== 'online' && styles.listeningOff,
+          status === 'online' && !togglePending ? listeningStyle : undefined,
+        ]}
         accessibilityLiveRegion="polite"
       >
         {togglePending
           ? t('rider.home.togglePending')
           : status === 'online' ? t('rider.home.listening') : t('rider.home.offlineSubtitle')}
-      </Text>
+      </Animated.Text>
 
       {/* Quick controls: break/pause, go-offline, job filter */}
       <QuickControls status={status} />
@@ -331,7 +366,7 @@ export default function RiderHomeScreen() {
 
       {/* Offline cached snapshot banner */}
       {status !== 'online' && connectivity === 'offline' && (
-        <View style={styles.cachedBanner} accessibilityRole="status" accessibilityLabel={t('rider.home.offlineCachedAria')}>
+        <View style={styles.cachedBanner} accessibilityRole="text" accessibilityLabel={t('rider.home.offlineCachedAria')}>
           <View style={styles.cachedDot} />
           <View style={styles.cachedBody}>
             <Text style={styles.cachedTitle}>{t('rider.home.offlineCachedTitle')}</Text>

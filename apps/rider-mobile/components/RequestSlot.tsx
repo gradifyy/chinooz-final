@@ -10,10 +10,20 @@ import {
 import { useRouter } from 'expo-router'
 import { useTranslation } from 'react-i18next'
 import * as Haptics from 'expo-haptics'
-import { MapPin, Navigation, Package, Banknote, X, Clock } from 'lucide-react-native'
+import { MapPin, Navigation, Package, Banknote, X, Clock, ChevronRight } from 'lucide-react-native'
 import { runOnJS } from 'react-native-reanimated'
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withRepeat,
+  withSequence,
+  Easing,
+  ReduceMotion,
+} from 'react-native-reanimated'
 import Svg, { Circle } from 'react-native-svg'
-import { colors, spacing, radii, fontFamily, fontSize, shadow } from '@chinooz/theme'
+import { colors, spacing, radii, fontFamily, fontSize, shadow, duration, easing } from '@chinooz/theme'
 import { useA11y } from './A11yProvider'
 import { useAppActiveCallback } from './AppStateProvider'
 import { useActiveDeliveryStore, hasActiveDelivery } from '@chinooz/state'
@@ -236,9 +246,35 @@ export default function RequestSlot({ status, title }: RequestSlotProps) {
   // Offline: no request surface at all.
   if (!isOnline) return null
 
-  // Listening state (no offer, or between offers).
+  // Accept-error: job gone, calm recovery with back-to-listening.
+  if (phase === 'accept_error') {
+    return (
+      <InfoState
+        icon={<X size={24} color={colors.textTertiary} />}
+        title={t('rider.home.acceptErrorTitle')}
+        sub={t('rider.home.acceptErrorBody')}
+        onDismiss={handleDismiss}
+        dismissLabel={t('rider.home.acceptErrorRetry')}
+        dismissAria={t('rider.home.acceptErrorRetryAria')}
+        minTouchTarget={minTouchTarget}
+      />
+    )
+  }
+
+  // Listening state (no offer, or between offers) — quiet/hotspots nudge.
   if (phase === 'listening' && !offeredJob) {
-    return <ListeningState title={t('rider.home.requestListening')} sub={t('rider.home.requestListeningSub')} />
+    return (
+      <QuietState
+        title={t('rider.home.quietTitle')}
+        sub={t('rider.home.quietSub')}
+        hotspotsLabel={t('rider.home.quietHotspots')}
+        hotspotsAria={t('rider.home.quietHotspotsAria')}
+        ariaLabel={t('rider.home.quietAria')}
+        onHotspots={() => router.push('/hotspots')}
+        minTouchTarget={minTouchTarget}
+        reducedMotion={reducedMotion}
+      />
+    )
   }
 
   // Expired state.
@@ -261,6 +297,7 @@ export default function RequestSlot({ status, title }: RequestSlotProps) {
         sub={t('rider.home.requestTakenSub')}
         onDismiss={handleDismiss}
         dismissLabel={t('rider.home.requestDismiss')}
+        dismissAria={t('rider.home.requestDismiss')}
         minTouchTarget={minTouchTarget}
       />
     )
@@ -268,7 +305,18 @@ export default function RequestSlot({ status, title }: RequestSlotProps) {
 
   // No job to show.
   if (!offeredJob) {
-    return <ListeningState title={t('rider.home.requestListening')} sub={t('rider.home.requestListeningSub')} />
+    return (
+      <QuietState
+        title={t('rider.home.quietTitle')}
+        sub={t('rider.home.quietSub')}
+        hotspotsLabel={t('rider.home.quietHotspots')}
+        hotspotsAria={t('rider.home.quietHotspotsAria')}
+        ariaLabel={t('rider.home.quietAria')}
+        onHotspots={() => router.push('/hotspots')}
+        minTouchTarget={minTouchTarget}
+        reducedMotion={reducedMotion}
+      />
+    )
   }
 
   const tripKm = Math.max(
@@ -280,9 +328,70 @@ export default function RequestSlot({ status, title }: RequestSlotProps) {
   const isDeclining = phase === 'declining'
   const isBusy = isAccepting || isDeclining
 
+  // Arrival attention animation: slide-up + scale-in when a new offer appears.
+  const cardEnter = useSharedValue(reducedMotion ? 0 : 1)
+  const cardScale = useSharedValue(reducedMotion ? 1 : 0.92)
+
+  useEffect(() => {
+    if (reducedMotion) {
+      cardEnter.value = 0
+      cardScale.value = 1
+    } else {
+      cardEnter.value = withSequence(
+        withTiming(0, { duration: duration.fast, easing: Easing.bezier(...easing.easeOut) }),
+      )
+      cardScale.value = withSpring(1, {
+        damping: 16,
+        stiffness: 200,
+        mass: 0.8,
+        reduceMotion: ReduceMotion.System,
+      })
+    }
+  }, [offeredJob?.id, reducedMotion])
+
+  const cardEnterStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: cardEnter.value * 24 },
+      { scale: cardScale.value },
+    ],
+    opacity: reducedMotion ? 1 : 1 - cardEnter.value * 0.3,
+  }))
+
+  // Accept/decline press-scale feedback.
+  const acceptScale = useSharedValue(1)
+  const declineScale = useSharedValue(1)
+
+  const handleAcceptPressIn = useCallback(() => {
+    if (reducedMotion) return
+    acceptScale.value = withSpring(0.96, { damping: 20, stiffness: 400 })
+  }, [reducedMotion])
+
+  const handleAcceptPressOut = useCallback(() => {
+    if (reducedMotion) return
+    acceptScale.value = withSpring(1, { damping: 20, stiffness: 400 })
+  }, [reducedMotion])
+
+  const handleDeclinePressIn = useCallback(() => {
+    if (reducedMotion) return
+    declineScale.value = withSpring(0.96, { damping: 20, stiffness: 400 })
+  }, [reducedMotion])
+
+  const handleDeclinePressOut = useCallback(() => {
+    if (reducedMotion) return
+    declineScale.value = withSpring(1, { damping: 20, stiffness: 400 })
+  }, [reducedMotion])
+
+  const acceptBtnStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: acceptScale.value }],
+  }))
+
+  const declineBtnStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: declineScale.value }],
+  }))
+
   return (
-    <View
-      style={styles.card}
+    <Animated.View
+      style={[styles.card, cardEnterStyle]}
       accessibilityRole="alert"
       accessibilityLabel={t('rider.home.requestArrivalAria', {
         pickup: offeredJob.pickup.label,
@@ -366,31 +475,51 @@ export default function RequestSlot({ status, title }: RequestSlotProps) {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t('rider.home.requestAcceptAria', { payout: offeredJob.payout })}
-          style={[styles.acceptBtn, { minHeight: minTouchTarget }, isAccepting && styles.btnDisabled]}
           onPress={handleAccept}
+          onPressIn={handleAcceptPressIn}
+          onPressOut={handleAcceptPressOut}
           disabled={isBusy}
         >
-          {isAccepting ? (
-            <ActivityIndicator size="small" color={colors.white} />
-          ) : (
-            <Text style={styles.acceptText}>{t('rider.home.requestAccept')}</Text>
-          )}
+          <Animated.View
+            style={[
+              styles.acceptBtn,
+              { minHeight: minTouchTarget },
+              isAccepting && styles.btnDisabled,
+              acceptBtnStyle,
+            ]}
+          >
+            {isAccepting ? (
+              <ActivityIndicator size="small" color={colors.white} />
+            ) : (
+              <Text style={styles.acceptText}>{t('rider.home.requestAccept')}</Text>
+            )}
+          </Animated.View>
         </Pressable>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t('rider.home.requestDeclineAria')}
-          style={[styles.declineBtn, { minHeight: minTouchTarget }, isDeclining && styles.btnDisabled]}
           onPress={handleDecline}
+          onPressIn={handleDeclinePressIn}
+          onPressOut={handleDeclinePressOut}
           disabled={isBusy}
         >
-          {isDeclining ? (
-            <ActivityIndicator size="small" color={colors.textMuted} />
-          ) : (
-            <Text style={styles.declineText}>{t('rider.home.requestDecline')}</Text>
-          )}
+          <Animated.View
+            style={[
+              styles.declineBtn,
+              { minHeight: minTouchTarget },
+              isDeclining && styles.btnDisabled,
+              declineBtnStyle,
+            ]}
+          >
+            {isDeclining ? (
+              <ActivityIndicator size="small" color={colors.textMuted} />
+            ) : (
+              <Text style={styles.declineText}>{t('rider.home.requestDecline')}</Text>
+            )}
+          </Animated.View>
         </Pressable>
       </View>
-    </View>
+    </Animated.View>
   )
 }
 
@@ -455,23 +584,81 @@ function CountdownRing({
 }
 
 // ---------------------------------------------------------------------------
-// Listening state
+// Quiet state — online, no offers, encourages hotspots (subtle pulse)
 // ---------------------------------------------------------------------------
 
-function ListeningState({ title, sub }: { title: string; sub: string }) {
+function QuietState({
+  title,
+  sub,
+  hotspotsLabel,
+  hotspotsAria,
+  ariaLabel,
+  onHotspots,
+  minTouchTarget,
+  reducedMotion,
+}: {
+  title: string
+  sub: string
+  hotspotsLabel: string
+  hotspotsAria: string
+  ariaLabel: string
+  onHotspots: () => void
+  minTouchTarget: number
+  reducedMotion: boolean
+}) {
+  // Subtle pulse on the dot — battery-aware (disabled in reduced-motion).
+  const pulseOpacity = useSharedValue(reducedMotion ? 1 : 0.4)
+  const pulseScale = useSharedValue(reducedMotion ? 1 : 1)
+
+  useEffect(() => {
+    if (reducedMotion) return
+    pulseOpacity.value = withRepeat(
+      withSequence(
+        withTiming(0.4, { duration: duration.slower, easing: Easing.bezier(...easing.easeInOut) }),
+        withTiming(1, { duration: duration.slower, easing: Easing.bezier(...easing.easeInOut) }),
+      ),
+      -1,
+      false,
+    )
+    pulseScale.value = withRepeat(
+      withSequence(
+        withTiming(1.3, { duration: duration.slower, easing: Easing.bezier(...easing.easeInOut) }),
+        withTiming(1, { duration: duration.slower, easing: Easing.bezier(...easing.easeInOut) }),
+      ),
+      -1,
+      false,
+    )
+  }, [reducedMotion])
+
+  const dotStyle = useAnimatedStyle(() => ({
+    opacity: pulseOpacity.value,
+    transform: [{ scale: pulseScale.value }],
+  }))
+
   return (
-    <View style={styles.listeningCard} accessibilityRole="summary">
-      <View style={styles.listeningDot} />
-      <View style={styles.listeningText}>
-        <Text style={styles.listeningTitle}>{title}</Text>
-        <Text style={styles.listeningSub}>{sub}</Text>
+    <View style={styles.quietCard} accessibilityRole="text" accessibilityLabel={ariaLabel}>
+      <View style={styles.quietPulse}>
+        <Animated.View style={[styles.quietDot, dotStyle]} />
       </View>
+      <View style={styles.quietBody}>
+        <Text style={styles.quietTitle}>{title}</Text>
+        <Text style={styles.quietSub}>{sub}</Text>
+      </View>
+      <Pressable
+        accessibilityRole="link"
+        accessibilityLabel={hotspotsAria}
+        style={[styles.quietLink, { minHeight: minTouchTarget }]}
+        onPress={onHotspots}
+      >
+        <Text style={styles.quietLinkText}>{hotspotsLabel}</Text>
+        <ChevronRight size={16} color={colors.primary} />
+      </Pressable>
     </View>
   )
 }
 
 // ---------------------------------------------------------------------------
-// Info state (expired / taken)
+// Info state (expired / taken / accept-error)
 // ---------------------------------------------------------------------------
 
 function InfoState({
@@ -480,6 +667,7 @@ function InfoState({
   sub,
   onDismiss,
   dismissLabel,
+  dismissAria,
   minTouchTarget,
 }: {
   icon: React.ReactNode
@@ -487,6 +675,7 @@ function InfoState({
   sub: string
   onDismiss?: () => void
   dismissLabel?: string
+  dismissAria?: string
   minTouchTarget?: number
 }) {
   return (
@@ -497,7 +686,7 @@ function InfoState({
       {onDismiss && dismissLabel && minTouchTarget && (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={dismissLabel}
+          accessibilityLabel={dismissAria ?? dismissLabel}
           style={[styles.dismissBtn, { minHeight: minTouchTarget }]}
           onPress={onDismiss}
         >
@@ -727,8 +916,8 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.sansBold[0],
     fontVariant: ['tabular-nums'],
   },
-  // Listening state
-  listeningCard: {
+  // Quiet state (listening, no offers)
+  quietCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[3],
@@ -738,28 +927,48 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderLight,
   },
-  listeningDot: {
+  quietPulse: {
+    width: 32,
+    height: 32,
+    borderRadius: radii.full,
+    backgroundColor: colors.successLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quietDot: {
     width: 10,
     height: 10,
     borderRadius: radii.full,
     backgroundColor: colors.success,
   },
-  listeningText: {
+  quietBody: {
     flex: 1,
   },
-  listeningTitle: {
+  quietTitle: {
     fontSize: 14,
     fontWeight: '600',
     color: colors.textSecondary,
     fontFamily: fontFamily.sansSemiBold[0],
   },
-  listeningSub: {
+  quietSub: {
     fontSize: 12,
     color: colors.textMuted,
     marginTop: 1,
     fontFamily: fontFamily.sans[0],
   },
-  // Info state (expired / taken)
+  quietLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
+    paddingHorizontal: spacing[2],
+  },
+  quietLinkText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.primary,
+    fontFamily: fontFamily.sansSemiBold[0],
+  },
+  // Info state (expired / taken / accept-error)
   infoCard: {
     alignItems: 'center',
     backgroundColor: colors.surface,
