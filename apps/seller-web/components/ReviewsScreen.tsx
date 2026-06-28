@@ -77,7 +77,19 @@ export default function ReviewsScreen() {
   const [composeSuccess, setComposeSuccess] = useState(false)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [deleteReviewId, setDeleteReviewId] = useState<string | null>(null)
+  const [isOffline, setIsOffline] = useState(false)
   const sortRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const update = () => setIsOffline(!navigator.onLine)
+    update()
+    window.addEventListener('online', update)
+    window.addEventListener('offline', update)
+    return () => {
+      window.removeEventListener('online', update)
+      window.removeEventListener('offline', update)
+    }
+  }, [])
 
   useEffect(() => {
     analytics.screen({ name: 'seller-reviews' })
@@ -114,7 +126,7 @@ export default function ReviewsScreen() {
     [status, rating, hasResponse, hasPhotos, productId, sort],
   )
 
-  const { data, isLoading, isFetching, refetch } = useSellerReviews(filter)
+  const { data, isLoading, isFetching, isError, refetch } = useSellerReviews(filter)
   const { data: productsData } = useSellerProducts({ status: 'all', sort: 'best_selling' })
 
   const respond = useRespondToSellerReview()
@@ -288,6 +300,9 @@ export default function ReviewsScreen() {
       <Container className="max-w-[1000px]">
         <div className="py-6 flex flex-col gap-5">
           {/* Summary card (e1) */}
+          {isLoading ? (
+            <SummarySkeleton />
+          ) : (
           <section
             aria-label={t('seller.reviews.summaryAria', { average: average.toFixed(1), total: totalReviews })}
             className="rounded-lg border border-border-light bg-surface p-5 md:p-6 shadow-sm"
@@ -372,6 +387,8 @@ export default function ReviewsScreen() {
               </div>
             </div>
           </section>
+
+          )}
 
           {/* Filter / sort bar */}
           <div className="flex flex-col gap-3">
@@ -532,6 +549,14 @@ export default function ReviewsScreen() {
             {t('seller.reviews.count', { count: data?.total ?? 0 })}
           </p>
 
+          {/* Offline banner */}
+          {isOffline && !isLoading && !isError && items.length > 0 && (
+            <div role="status" aria-label={t('seller.reviews.offlineAria')} className="rounded-md bg-warning/10 border border-warning/20 px-4 py-2.5 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-warning shrink-0" aria-hidden="true" />
+              <span className="text-[13px] text-[#92400E]">{t('seller.reviews.offlineSubtitle')}</span>
+            </div>
+          )}
+
           {/* List slot (SV2) */}
           <div className="flex flex-col gap-3">
             {isLoading ? (
@@ -540,16 +565,19 @@ export default function ReviewsScreen() {
                   <ReviewCardSkeleton key={i} />
                 ))}
               </div>
+            ) : isError ? (
+              <ErrorState
+                title={t('seller.reviews.errorTitle')}
+                subtitle={t('seller.reviews.errorSubtitle')}
+                retryLabel={t('seller.reviews.errorRetry')}
+                retryAria={t('seller.reviews.errorRetryAria')}
+                onRetry={() => refetch()}
+              />
             ) : items.length === 0 ? (
-              <EmptyState
-                icon={<MessageSquare size={40} className="text-text-tertiary" aria-hidden="true" />}
-                title={hasActiveFilters ? t('seller.reviews.noFilteredTitle') : t('seller.reviews.noReviewsTitle')}
-                subtitle={hasActiveFilters ? t('seller.reviews.noFilteredSubtitle') : t('seller.reviews.noReviewsSubtitle')}
-                action={
-                  hasActiveFilters
-                    ? { label: t('seller.products.clearAll'), onPress: clearAll }
-                    : undefined
-                }
+              <ReviewsEmptyState
+                status={status}
+                hasActiveFilters={hasActiveFilters}
+                onClearFilters={clearAll}
               />
             ) : (
               <AnimatePresence mode="popLayout">
@@ -608,6 +636,71 @@ export default function ReviewsScreen() {
       />
     </Screen>
   )
+}
+
+function SummarySkeleton() {
+  return (
+    <div aria-busy="true" aria-label="Loading review summary" className="rounded-lg border border-border-light bg-surface p-5 md:p-6 shadow-sm">
+      <div className="flex flex-col md:flex-row md:items-start gap-6">
+        <div className="flex flex-row md:flex-col items-center md:items-start gap-3 md:min-w-[180px]">
+          <div className="w-20 h-8 rounded-md bg-shimmer animate-pulse" />
+          <div className="flex flex-col gap-1">
+            <div className="flex gap-0.5">
+              {Array.from({ length: 5 }).map((_, i) => (<div key={i} className="w-4 h-4 rounded-full bg-shimmer animate-pulse" />))}
+            </div>
+            <div className="w-24 h-3 rounded bg-shimmer animate-pulse" />
+          </div>
+        </div>
+        <div className="flex-1 flex flex-col gap-1.5">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3">
+              <div className="w-6 h-3 rounded bg-shimmer animate-pulse" />
+              <div className="flex-1 h-2 rounded-full bg-shimmer animate-pulse" />
+              <div className="w-14 h-3 rounded bg-shimmer animate-pulse" />
+              <div className="w-10 h-3 rounded bg-shimmer animate-pulse" />
+            </div>
+          ))}
+        </div>
+        <div className="md:min-w-[140px] md:border-l md:border-border-light md:pl-6 flex md:flex-col items-center md:items-end gap-2">
+          <div className="w-16 h-3 rounded bg-shimmer animate-pulse" />
+          <div className="w-20 h-3 rounded bg-shimmer animate-pulse" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ErrorState({ title, subtitle, retryLabel, retryAria, onRetry }: { title: string; subtitle: string; retryLabel: string; retryAria: string; onRetry: () => void }) {
+  return (
+    <div role="alert" className="flex flex-col items-center justify-center px-8 py-12 gap-3 text-center">
+      <div className="w-12 h-12 rounded-full bg-error/10 flex items-center justify-center">
+        <AlertTriangle size={24} className="text-error" aria-hidden="true" />
+      </div>
+      <h3 className="text-lg font-semibold text-text">{title}</h3>
+      <p className="text-sm text-text-muted leading-5 max-w-sm">{subtitle}</p>
+      <button type="button" onClick={onRetry} aria-label={retryAria} className="mt-2 inline-flex items-center gap-1.5 rounded-md border-2 border-primary text-primary px-4 py-2 text-sm font-semibold hover:bg-primary-50 transition-colors">
+        <RefreshCw size={15} aria-hidden="true" />
+        {retryLabel}
+      </button>
+    </div>
+  )
+}
+
+function ReviewsEmptyState({ status, hasActiveFilters, onClearFilters }: { status: SellerReviewStatus; hasActiveFilters: boolean; onClearFilters: () => void }) {
+  const { t } = useTranslation()
+  if (hasActiveFilters) {
+    return (<EmptyState icon={<MessageSquare size={40} className="text-text-tertiary" aria-hidden="true" />} title={t('seller.reviews.noResultsTitle')} subtitle={t('seller.reviews.noResultsSubtitle')} action={{ label: t('seller.reviews.noResultsClearFilters'), onPress: onClearFilters }} />)
+  }
+  if (status === 'needs_response') {
+    return (<EmptyState icon={<CheckCircle2 size={40} className="text-success" aria-hidden="true" />} title={t('seller.reviews.allCaughtUpTitle')} subtitle={t('seller.reviews.allCaughtUpSubtitle')} />)
+  }
+  if (status === 'responded') {
+    return (<EmptyState icon={<CheckCircle2 size={40} className="text-success" aria-hidden="true" />} title={t('seller.reviews.allCaughtUpRespondedTitle')} subtitle={t('seller.reviews.allCaughtUpRespondedSubtitle')} />)
+  }
+  if (status === 'flagged') {
+    return (<EmptyState icon={<AlertTriangle size={40} className="text-text-tertiary" aria-hidden="true" />} title={t('seller.reviews.allCaughtUpFlaggedTitle')} subtitle={t('seller.reviews.allCaughtUpFlaggedSubtitle')} />)
+  }
+  return (<EmptyState icon={<MessageSquare size={40} className="text-text-tertiary" aria-hidden="true" />} title={t('seller.reviews.noReviewsTitle')} subtitle={t('seller.reviews.noReviewsSubtitle')} />)
 }
 
 function FilterChip({

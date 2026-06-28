@@ -47,6 +47,7 @@ import type {
   SellerReviewResponseFilter,
 } from '@chinooz/mock-data'
 import type { ReviewFlagReason } from '@chinooz/types'
+import { useNetInfo } from '@react-native-community/netinfo'
 import { ReviewCard, ReviewCardSkeleton } from '@chinooz/ui'
 import BottomSheet from '@chinooz/ui/BottomSheet'
 import EmptyState from '@chinooz/ui/EmptyState'
@@ -86,6 +87,8 @@ export default function SellerReviews() {
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkBarAnim] = useState(new Animated.Value(0))
+  const netInfo = useNetInfo()
+  const isOffline = netInfo.isConnected === false || (netInfo.isInternetReachable === false)
   const barAnims = useRef<Animated.Value[]>(STARS.map(() => new Animated.Value(0)))
 
   useEffect(() => {
@@ -116,7 +119,7 @@ export default function SellerReviews() {
     [status, rating, hasResponse, hasPhotos, productId, sort],
   )
 
-  const { data, isLoading, refetch } = useSellerReviews(filter)
+  const { data, isLoading, isError, refetch } = useSellerReviews(filter)
   const { data: productsData } = useSellerProducts({ status: 'all', sort: 'best_selling' })
   const respond = useRespondToSellerReview()
   const editResponse = useEditSellerReviewResponse()
@@ -380,6 +383,9 @@ export default function SellerReviews() {
         }
       >
         {/* Summary card (e1) */}
+        {isLoading ? (
+          <SummarySkeleton />
+        ) : (
         <View
           accessibilityLabel={t('seller.reviews.summaryAria', {
             average: average.toFixed(1),
@@ -458,6 +464,8 @@ export default function SellerReviews() {
             })}
           </View>
         </View>
+
+        )}
 
         {/* Filter / sort bar */}
         <View style={styles.filterSection}>
@@ -616,6 +624,14 @@ export default function SellerReviews() {
           </View>
         )}
 
+        {/* Offline banner */}
+        {isOffline && !isLoading && !isError && items.length > 0 && (
+          <View accessibilityRole="alert" accessibilityLabel={t('seller.reviews.offlineAria')} style={offlineStyles.banner}>
+            <View style={offlineStyles.dot} />
+            <Text style={offlineStyles.text}>{t('seller.reviews.offlineSubtitle')}</Text>
+          </View>
+        )}
+
         {/* List slot (SV2) */}
         <View style={styles.list}>
           {isLoading ? (
@@ -625,15 +641,10 @@ export default function SellerReviews() {
               ))}
             </View>
           ) : items.length === 0 ? (
-            <EmptyState
-              icon={<MessageSquare size={40} color={colors.textTertiary} />}
-              title={status === 'flagged' ? t('seller.reviews.noFlaggedTitle') : hasActiveFilters ? t('seller.reviews.noFilteredTitle') : t('seller.reviews.noReviewsTitle')}
-              subtitle={status === 'flagged' ? t('seller.reviews.noFlaggedSubtitle') : hasActiveFilters ? t('seller.reviews.noFilteredSubtitle') : t('seller.reviews.noReviewsSubtitle')}
-              action={
-                hasActiveFilters && status !== 'flagged'
-                  ? { label: t('seller.reviews.clearAll'), onPress: clearAll }
-                  : undefined
-              }
+            <ReviewsEmptyState
+              status={status}
+              hasActiveFilters={hasActiveFilters}
+              onClearFilters={clearAll}
             />
           ) : (
             items.map((review) => (
@@ -929,6 +940,68 @@ export default function SellerReviews() {
   )
 }
 
+function SummarySkeleton() {
+  return (
+    <View accessibilityState={{ busy: true }} accessibilityLabel="Loading review summary" style={styles.summaryCard}>
+      <View style={styles.summaryTop}>
+        <View style={styles.summaryLeft}>
+          <View style={skeletonStyles.bigNum} />
+          <View style={skeletonStyles.starsRow}>
+            {Array.from({ length: 5 }).map((_, i) => (<View key={i} style={skeletonStyles.starDot} />))}
+          </View>
+          <View style={skeletonStyles.smallLine} />
+        </View>
+        <View style={styles.trendCol}>
+          <View style={skeletonStyles.smallLine} />
+          <View style={skeletonStyles.smallLine} />
+        </View>
+      </View>
+      <View style={styles.distribution}>
+        {Array.from({ length: 5 }).map((_, i) => (
+          <View key={i} style={styles.distRow}>
+            <View style={skeletonStyles.tinySquare} />
+            <View style={skeletonStyles.barTrack} />
+            <View style={skeletonStyles.tinyRect} />
+            <View style={skeletonStyles.tinyRect} />
+          </View>
+        ))}
+      </View>
+    </View>
+  )
+}
+
+function ErrorState({ title, subtitle, retryLabel, onRetry }: { title: string; subtitle: string; retryLabel: string; onRetry: () => void }) {
+  const { t } = useTranslation()
+  return (
+    <View accessibilityRole="alert" style={errorStyles.container}>
+      <View style={errorStyles.iconWrap}><AlertTriangle size={24} color={colors.error} /></View>
+      <Text style={errorStyles.title}>{title}</Text>
+      <Text style={errorStyles.subtitle}>{subtitle}</Text>
+      <TouchableOpacity onPress={onRetry} accessibilityRole="button" accessibilityLabel={t('seller.reviews.errorRetryAria')} style={errorStyles.retryBtn} activeOpacity={0.85}>
+        <RefreshCw size={15} color={colors.primary} />
+        <Text style={errorStyles.retryText}>{retryLabel}</Text>
+      </TouchableOpacity>
+    </View>
+  )
+}
+
+function ReviewsEmptyState({ status, hasActiveFilters, onClearFilters }: { status: SellerReviewStatus; hasActiveFilters: boolean; onClearFilters: () => void }) {
+  const { t } = useTranslation()
+  if (hasActiveFilters) {
+    return (<EmptyState icon={<MessageSquare size={40} color={colors.textTertiary} />} title={t('seller.reviews.noResultsTitle')} subtitle={t('seller.reviews.noResultsSubtitle')} action={{ label: t('seller.reviews.noResultsClearFilters'), onPress: onClearFilters }} />)
+  }
+  if (status === 'needs_response') {
+    return (<EmptyState icon={<CheckCircle2 size={40} color={colors.success} />} title={t('seller.reviews.allCaughtUpTitle')} subtitle={t('seller.reviews.allCaughtUpSubtitle')} />)
+  }
+  if (status === 'responded') {
+    return (<EmptyState icon={<CheckCircle2 size={40} color={colors.success} />} title={t('seller.reviews.allCaughtUpRespondedTitle')} subtitle={t('seller.reviews.allCaughtUpRespondedSubtitle')} />)
+  }
+  if (status === 'flagged') {
+    return (<EmptyState icon={<Flag size={40} color={colors.textTertiary} />} title={t('seller.reviews.allCaughtUpFlaggedTitle')} subtitle={t('seller.reviews.allCaughtUpFlaggedSubtitle')} />)
+  }
+  return (<EmptyState icon={<MessageSquare size={40} color={colors.textTertiary} />} title={t('seller.reviews.noReviewsTitle')} subtitle={t('seller.reviews.noReviewsSubtitle')} />)
+}
+
 function FilterChip({
   label,
   pressed,
@@ -953,6 +1026,31 @@ function FilterChip({
     </TouchableOpacity>
   )
 }
+
+const skeletonStyles = StyleSheet.create({
+  bigNum: { width: 80, height: 32, borderRadius: radii.md, backgroundColor: colors.shimmer },
+  starsRow: { flexDirection: 'row', gap: 2 },
+  starDot: { width: 16, height: 16, borderRadius: 8, backgroundColor: colors.shimmer },
+  smallLine: { width: 100, height: 12, borderRadius: radii.sm, backgroundColor: colors.shimmer },
+  tinySquare: { width: 16, height: 12, borderRadius: radii.sm, backgroundColor: colors.shimmer },
+  barTrack: { flex: 1, height: 8, borderRadius: radii.full, backgroundColor: colors.shimmer },
+  tinyRect: { width: 36, height: 12, borderRadius: radii.sm, backgroundColor: colors.shimmer },
+})
+
+const errorStyles = StyleSheet.create({
+  container: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing[8], paddingVertical: spacing[12], gap: spacing[3] },
+  iconWrap: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.errorLight, alignItems: 'center', justifyContent: 'center' },
+  title: { fontSize: 18, fontWeight: '600', color: colors.text, textAlign: 'center' },
+  subtitle: { fontSize: 14, color: colors.textMuted, textAlign: 'center', lineHeight: 20 },
+  retryBtn: { flexDirection: 'row', alignItems: 'center', gap: spacing[1.5], borderWidth: 2, borderColor: colors.primary, borderRadius: radii.md, paddingHorizontal: spacing[4], paddingVertical: spacing[2], marginTop: spacing[1] },
+  retryText: { fontSize: 14, fontWeight: '600', color: colors.primary },
+})
+
+const offlineStyles = StyleSheet.create({
+  banner: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], backgroundColor: colors.warningLight, borderRadius: radii.md, paddingHorizontal: spacing[3], paddingVertical: spacing[2.5] },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.warning },
+  text: { flex: 1, fontSize: 13, color: '#92400E' },
+})
 
 const composeStyles = StyleSheet.create({
   toneHint: {
