@@ -23,6 +23,7 @@ import {
   Target,
 } from 'lucide-react-native'
 import { colors, spacing, radii, fontFamily, fontSize } from '@chinooz/theme'
+import { analytics } from '@chinooz/analytics'
 import { getIncentives, type RiderQuest } from '@chinooz/mock-data'
 import { useRiderIncentivesStore } from '@chinooz/state'
 import Skeleton from '@chinooz/ui/Skeleton'
@@ -86,9 +87,36 @@ export default function IncentivesHubScreen() {
       timeLeft: (tl: string) => t('rider.incentives.activeQuestTimeLeft', { timeLeft: tl }),
       viewAria: (title: string) => t('rider.incentives.activeQuestCtaAria', { title }),
       cardAria: (title: string, p: number, g: number, reward: number, timeLeft: string) =>
-        t('rider.incentives.questCardAria', { title, progress: p, goal: g, reward, timeLeft }),
+        t('rider.incentives.questCardAria', { title, progress: p, goal: g, reward, timeLeft, status: '' }),
       availableAria: (title: string, reward: number, timeLeft: string) =>
-        t('rider.incentives.questCardAvailableAria', { title, reward, timeLeft }),
+        t('rider.incentives.questCardAvailableAria', { title, reward, timeLeft, status: '' }),
+      statusLabel: (status: RiderQuest['status']) => {
+        switch (status) {
+          case 'available': return t('rider.incentives.statusAvailable')
+          case 'active': return t('rider.incentives.statusActive')
+          case 'completed': return t('rider.incentives.statusCompleted')
+          case 'expired': return t('rider.incentives.statusExpired')
+        }
+      },
+      statusAria: (status: RiderQuest['status']) => {
+        switch (status) {
+          case 'available': return t('rider.incentives.statusAvailableAria')
+          case 'active': return t('rider.incentives.statusActiveAria')
+          case 'completed': return t('rider.incentives.statusCompletedAria')
+          case 'expired': return t('rider.incentives.statusExpiredAria')
+        }
+      },
+      claim: (amount: number) => t('rider.incentives.claim', { amount }),
+      claimAria: (title: string, amount: number) => t('rider.incentives.claimAria', { title, amount }),
+      claiming: t('rider.incentives.claiming'),
+      claimDone: t('rider.incentives.claimDone'),
+      claimDoneAria: (title: string, amount: number) => t('rider.incentives.claimDoneAria', { title, amount }),
+      progressEarnings: (p: number, g: number) => t('rider.incentives.progressEarnings', { progress: p, goal: g }),
+      progressCountAria: (p: number, g: number, pct: number) => t('rider.incentives.progressCountAria', { progress: p, goal: g, pct }),
+      progressEarningsAria: (p: number, g: number, pct: number) => t('rider.incentives.progressEarningsAria', { progress: p, goal: g, pct }),
+      completedAria: (title: string, reward: number) => t('rider.incentives.questCardCompletedAria', { title, reward, status: t('rider.incentives.statusCompleted') }),
+      expiredAria: (title: string, reward: number) => t('rider.incentives.questCardExpiredAria', { title, reward, status: t('rider.incentives.statusExpired') }),
+      viewDetailAria: (title: string) => t('rider.incentives.viewDetailAria', { title }),
     }),
     [t],
   )
@@ -101,6 +129,12 @@ export default function IncentivesHubScreen() {
       )
     } catch {}
     router.push(`/quests/${quest.id}` as never)
+  }
+
+  const handleQuestClaim = (quest: RiderQuest) => {
+    // Mock claim: the QuestCard handles haptics + announcement + UI state.
+    // In a real app this would call a claim API and update the store.
+    analytics.track({ name: 'rider_quest_claimed', properties: { questId: quest.id, rewardNpr: quest.rewardNpr } })
   }
 
   const openStreaks = () => {
@@ -288,6 +322,7 @@ export default function IncentivesHubScreen() {
               quest={{ ...prominentQuest, description: prominentQuest.description }}
               labels={{ ...questCardLabels, kind: kindLabel(prominentQuest.kind) }}
               onPress={handleQuestPress}
+              onClaim={handleQuestClaim}
               prominent
             />
           </View>
@@ -302,6 +337,7 @@ export default function IncentivesHubScreen() {
                 quest={q}
                 labels={{ ...questCardLabels, kind: kindLabel(q.kind) }}
                 onPress={handleQuestPress}
+              onClaim={handleQuestClaim}
               />
             ))}
           </Section>
@@ -322,6 +358,7 @@ export default function IncentivesHubScreen() {
                 quest={q}
                 labels={{ ...questCardLabels, kind: kindLabel(q.kind) }}
                 onPress={handleQuestPress}
+              onClaim={handleQuestClaim}
               />
             ))
           )}
