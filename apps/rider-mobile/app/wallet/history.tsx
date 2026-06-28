@@ -33,6 +33,8 @@ import { colors, radii, spacing, fontFamily, fontSize, shadow } from '@chinooz/t
 import { useReducedMotion } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
 import { useA11y } from '../../components/A11yProvider'
+import { useAppState } from '../../components/AppStateProvider'
+import { OfflineBanner, PartialDepositBanner } from '../../components/WalletStates'
 import {
   getDepositHistory,
   getDepositReceipt,
@@ -129,6 +131,8 @@ export default function DepositHistoryScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const reduced = useReducedMotion()
+  const { connectivity } = useAppState()
+  const isOffline = connectivity === 'offline'
   const { minTouchTarget } = useA11y()
 
   const [history, setHistory] = useState<DepositHistory | null>(null)
@@ -338,6 +342,30 @@ export default function DepositHistoryScreen() {
             <EmptyState t={t} router={router} minTouchTarget={minTouchTarget} />
           ) : (
             <>
+              {/* Offline banner — cached history */}
+              {isOffline && (
+                <OfflineBanner
+                  title={t('rider.wallet.states.offlineTitle')}
+                  body={t('rider.wallet.states.offlineBody')}
+                  ariaLabel={t('rider.wallet.states.offlineAria')}
+                />
+              )}
+
+              {/* Partial deposit banner — if pending deposits exist */}
+              {history && history.pendingCount > 0 && (
+                <PartialDepositBanner
+                  title={t('rider.wallet.states.partialDepositTitle')}
+                  body={t('rider.wallet.states.partialDepositBody', {
+                    amount: formatRiderNPRAmount(history.outstanding),
+                    remaining: formatRiderNPRAmount(history.outstanding),
+                  })}
+                  ariaLabel={t('rider.wallet.states.partialDepositAria', {
+                    amount: formatRiderNPRAmount(history.outstanding),
+                    remaining: formatRiderNPRAmount(history.outstanding),
+                  })}
+                />
+              )}
+
               {/* Reconciliation summary */}
               {history && (
                 <ReconciliationCard t={t} history={history} />

@@ -138,6 +138,9 @@ export default function ProductFormScreen() {
   const [showUnsaved, setShowUnsaved] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [snackbar, setSnackbar] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState(false)
+  const [publishError, setPublishError] = useState(false)
+  const [notFound, setNotFound] = useState(false)
 
   const formRef = useRef<FormState>(form)
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -541,6 +544,52 @@ export default function ProductFormScreen() {
         </div>
       </Container>
 
+      {/* Save/publish error banners (non-destructive, input preserved) */}
+      {saveError && (
+        <div
+          role="alert"
+          className="fixed top-20 left-1/2 -translate-x-1/2 z-toast w-full max-w-md px-4"
+        >
+          <div className="bg-error/10 border border-error/30 rounded-lg px-4 py-3 flex items-center gap-3 shadow-lg">
+            <AlertCircle size={18} className="text-error shrink-0" aria-hidden="true" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-semibold text-error">{t('seller.products.saveErrorTitle')}</p>
+              <p className="text-[12px] text-error/80">{t('seller.products.saveErrorSubtitle')}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => { setSaveError(false); handleSaveDraft() }}
+              aria-label={t('seller.products.saveErrorRetryAria')}
+              className="h-8 px-3 rounded-md border border-error text-error text-[12px] font-semibold hover:bg-error/10 transition-colors shrink-0"
+            >
+              {t('seller.products.saveErrorRetry')}
+            </button>
+          </div>
+        </div>
+      )}
+      {publishError && (
+        <div
+          role="alert"
+          className="fixed top-20 left-1/2 -translate-x-1/2 z-toast w-full max-w-md px-4"
+        >
+          <div className="bg-error/10 border border-error/30 rounded-lg px-4 py-3 flex items-center gap-3 shadow-lg">
+            <AlertCircle size={18} className="text-error shrink-0" aria-hidden="true" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-semibold text-error">{t('seller.products.publishErrorTitle')}</p>
+              <p className="text-[12px] text-error/80">{t('seller.products.publishErrorSubtitle')}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => { setPublishError(false); handlePublish() }}
+              aria-label={t('seller.products.publishErrorRetryAria')}
+              className="h-8 px-3 rounded-md border border-error text-error text-[12px] font-semibold hover:bg-error/10 transition-colors shrink-0"
+            >
+              {t('seller.products.publishErrorRetry')}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Mobile save bar */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-sticky bg-surface border-t border-border shadow-xl">
         <div className="flex items-center gap-3 px-4 py-3">
@@ -689,6 +738,7 @@ interface MediaImage {
   url: string
   uploading: boolean
   progress: number
+  error?: boolean
 }
 
 function MediaSection({ form, errors, updateField, t, reduced }: { form: FormState; errors: Record<string, string>; updateField: (f: keyof FormState, v: string | string[]) => void; t: any; reduced: boolean }) {
@@ -737,6 +787,27 @@ function MediaSection({ form, errors, updateField, t, reduced }: { form: FormSta
     if (!imageUrl.trim()) return
     addImage(imageUrl)
     setImageUrl('')
+  }
+
+  const retryUpload = (id: string) => {
+    const img = mediaImages.find(i => i.id === id)
+    if (!img) return
+    setMediaImages(prev => prev.map(i => i.id === id ? { ...i, error: false, uploading: true, progress: 0 } : i))
+    let pct = 0
+    const interval = setInterval(() => {
+      pct += Math.random() * 30 + 15
+      if (pct >= 100) {
+        pct = 100
+        clearInterval(interval)
+        setMediaImages(prev => {
+          const next = prev.map(i => i.id === id ? { ...i, uploading: false, progress: 100, error: false } : i)
+          syncToForm(next)
+          return next
+        })
+      } else {
+        setMediaImages(prev => prev.map(i => i.id === id ? { ...i, progress: pct } : i))
+      }
+    }, 200)
   }
 
   const handleDelete = (id: string) => {
@@ -824,7 +895,20 @@ function MediaSection({ form, errors, updateField, t, reduced }: { form: FormSta
                 aria-label={t('seller.products.mediaThumbAria', { n: idx + 1, cover: isCover ? `, ${t('seller.products.mediaCoverLabel')}` : '' })}
               >
                 {/* Image */}
-                {img.uploading && img.progress < 100 ? (
+                {img.error ? (
+                  <div className="w-full h-full bg-error/5 flex flex-col items-center justify-center gap-1 p-1">
+                    <AlertCircle size={18} className="text-error" aria-hidden="true" />
+                    <span className="text-[10px] text-error font-medium text-center">{t('seller.products.uploadError')}</span>
+                    <button
+                      type="button"
+                      onClick={() => retryUpload(img.id)}
+                      aria-label={t('seller.products.uploadRetryAria', { n: idx + 1 })}
+                      className="text-[10px] text-primary font-semibold hover:underline"
+                    >
+                      {t('seller.products.uploadRetry')}
+                    </button>
+                  </div>
+                ) : img.uploading && img.progress < 100 ? (
                   <div className="w-full h-full bg-shimmer flex items-center justify-center">
                     <div className="absolute bottom-0 left-0 right-0 h-1 bg-border">
                       <div

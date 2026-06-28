@@ -70,6 +70,8 @@ export default function CodCollectionLedgerScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const reduced = useReducedMotion()
+  const { connectivity } = useAppState()
+  const isOffline = connectivity === 'offline'
 
   const [ledger, setLedger] = useState<CodCollectionLedger | null>(null)
   const [loading, setLoading] = useState(true)
@@ -262,6 +264,37 @@ export default function CodCollectionLedgerScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
         }
       >
+        {/* Offline banner — cached ledger */}
+        {isOffline && !loading && !error && (
+          <OfflineBanner
+            title={t('rider.wallet.states.offlineTitle')}
+            body={t('rider.wallet.states.offlineBody')}
+            ariaLabel={t('rider.wallet.states.offlineAria')}
+          />
+        )}
+
+        {/* Dispute banner — if flagged collections exist */}
+        {ledger && ledger.flaggedCount > 0 && !loading && !error && (
+          <DisputeBanner
+            title={t('rider.wallet.states.disputeWarningTitle')}
+            body={t('rider.wallet.states.disputeWarningBody', {
+              amount: formatRiderNPRAmount(
+                ledger.days
+                  .flatMap(d => d.rows)
+                  .filter(r => r.flagged)
+                  .reduce((s, r) => s + r.amount, 0),
+              ),
+              orderId: ledger.days
+                .flatMap(d => d.rows)
+                .find(r => r.flagged)?.orderId ?? '—',
+            })}
+            ariaLabel={t('rider.wallet.states.disputeWarningAria', {
+              amount: formatRiderNPRAmount(ledger.flaggedCount),
+              orderId: '—',
+            })}
+          />
+        )}
+
         {loading ? (
           <LedgerSkeleton ariaLabel={t('rider.wallet.ledger.skeletonAria')} />
         ) : error ? (

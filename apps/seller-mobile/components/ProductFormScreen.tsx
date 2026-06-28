@@ -572,6 +572,7 @@ interface MediaImage {
   url: string
   uploading: boolean
   progress: number
+  error?: boolean
 }
 
 function MediaSection({ form, errors, updateField, t, reduced }: { form: FormState; errors: Record<string, string>; updateField: (f: keyof FormState, v: string | string[]) => void; t: any; reduced: boolean }) {
@@ -613,6 +614,25 @@ function MediaSection({ form, errors, updateField, t, reduced }: { form: FormSta
     if (!imageUrl.trim()) return
     addImage(imageUrl)
     setImageUrl('')
+  }
+
+  const retryUpload = (id: string) => {
+    setMediaImages(prev => prev.map(i => i.id === id ? { ...i, error: false, uploading: true, progress: 0 } : i))
+    let pct = 0
+    const interval = setInterval(() => {
+      pct += Math.random() * 30 + 15
+      if (pct >= 100) {
+        pct = 100
+        clearInterval(interval)
+        setMediaImages(prev => {
+          const next = prev.map(i => i.id === id ? { ...i, uploading: false, progress: 100, error: false } : i)
+          syncToForm(next)
+          return next
+        })
+      } else {
+        setMediaImages(prev => prev.map(i => i.id === id ? { ...i, progress: pct } : i))
+      }
+    }, 200)
   }
 
   const handleDelete = (id: string) => {
@@ -663,7 +683,20 @@ function MediaSection({ form, errors, updateField, t, reduced }: { form: FormSta
                 accessibilityRole="image"
               >
                 <View style={styles.mediaThumb}>
-                  {img.uploading && img.progress < 100 ? (
+                  {img.error ? (
+                    <View style={styles.mediaErrorWrap}>
+                      <Text style={styles.mediaErrorIcon}>⚠</Text>
+                      <Text style={styles.mediaErrorText}>{t('seller.products.uploadError')}</Text>
+                      <TouchableOpacity
+                        onPress={() => retryUpload(img.id)}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('seller.products.uploadRetryAria', { n: idx + 1 })}
+                        style={styles.mediaRetryBtn}
+                      >
+                        <Text style={styles.mediaRetryText}>{t('seller.products.uploadRetry')}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : img.uploading && img.progress < 100 ? (
                     <View style={styles.mediaUploading}>
                       <View style={styles.mediaProgressTrack}>
                         <View
@@ -1814,6 +1847,11 @@ const styles = StyleSheet.create({
   },
   mediaProgressTrack: { height: 3, backgroundColor: colors.border },
   mediaProgressBar: { height: 3, backgroundColor: colors.primary },
+  mediaErrorWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2, padding: 4 },
+  mediaErrorIcon: { fontSize: 18, color: colors.error },
+  mediaErrorText: { fontSize: 9, color: colors.error, fontWeight: '500', textAlign: 'center' },
+  mediaRetryBtn: { paddingHorizontal: 4, paddingVertical: 2, borderRadius: radii.sm, borderWidth: 1, borderColor: colors.primary },
+  mediaRetryText: { fontSize: 9, color: colors.primary, fontWeight: '600' },
   mediaCoverBadge: {
     position: 'absolute',
     top: 4,

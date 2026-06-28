@@ -35,7 +35,6 @@ import {
   WalletErrorState,
   OfflineBanner,
   AtLimitBanner,
-  DisputeBanner,
 } from './WalletStates'
 
 /**
@@ -75,6 +74,9 @@ export default function CODWalletScreen() {
   const { t } = useTranslation()
   const router = useRouter()
   const { reducedMotion, minTouchTarget } = useA11y()
+  const { connectivity } = useAppState()
+  const isOffline = connectivity === 'offline'
+  const limitStatus = useCodLimitStatus()
 
   // Shared codWalletStatus store — hero reads from here for instant paint.
   const cashInHand = useCODWalletStore(s => s.cashInHand)
@@ -209,25 +211,76 @@ export default function CODWalletScreen() {
       >
         <Text style={styles.subtitle}>{t('rider.wallet.subtitle')}</Text>
 
-        {/* Error / retry banner */}
-        {error && (
+        {/* Loading skeleton — shimmer, not spinners */}
+        {loading && (
+          <WalletSkeleton ariaLabel={t('rider.wallet.states.skeletonHeroAria')} />
+        )}
+
+        {/* Error — calm, safe, retry */}
+        {error && !loading && (
+          <WalletErrorState
+            title={t('rider.wallet.states.errorWalletTitle')}
+            body={t('rider.wallet.states.errorWalletBody')}
+            ariaLabel={t('rider.wallet.states.errorWalletAria')}
+            retryLabel={t('rider.wallet.states.errorWalletRetry')}
+            retryAria={t('rider.wallet.states.errorWalletRetryAria')}
+            onRetry={retry}
+          />
+        )}
+
+        {/* Offline banner — cached balance */}
+        {isOffline && !loading && !error && (
+          <OfflineBanner
+            title={t('rider.wallet.states.offlineTitle')}
+            body={t('rider.wallet.states.offlineBody')}
+            ariaLabel={t('rider.wallet.states.offlineAria')}
+          />
+        )}
+
+        {/* Empty wallet — no collections yet */}
+        {!loading && !error && cashInHand === 0 && collectedTodayCount === 0 && (
           <View
-            accessibilityRole="alert"
-            accessibilityLabel={t('rider.wallet.errorTitle')}
-            style={styles.errorCard}
+            style={styles.emptyWalletCard}
+            accessibilityRole="summary"
+            accessibilityLabel={t('rider.wallet.states.emptyWalletAria')}
           >
-            <Text style={styles.errorTitle}>{t('rider.wallet.errorTitle')}</Text>
-            <Text style={styles.errorSubtitle}>{t('rider.wallet.errorSubtitle')}</Text>
+            <View style={styles.emptyWalletIconWrap}>
+              <Inbox size={28} color={colors.textMuted} />
+            </View>
+            <Text style={styles.emptyWalletTitle}>
+              {t('rider.wallet.states.emptyWalletTitle')}
+            </Text>
+            <Text style={styles.emptyWalletBody}>
+              {t('rider.wallet.states.emptyWalletBody')}
+            </Text>
             <TouchableOpacity
               accessibilityRole="button"
-              accessibilityLabel={t('rider.wallet.retry')}
-              onPress={retry}
-              style={[styles.retryBtn, { minHeight: minTouchTarget }]}
-              activeOpacity={0.85}
+              accessibilityLabel={t('rider.wallet.depositCtaAria', { amount: '0' })}
+              onPress={deposit}
+              style={styles.emptyWalletBtn}
             >
-              <Text style={styles.retryText}>{t('rider.wallet.retry')}</Text>
+              <Landmark size={16} color={colors.white} />
+              <Text style={styles.emptyWalletBtnText}>{t('rider.wallet.depositCta')}</Text>
             </TouchableOpacity>
           </View>
+        )}
+
+        {/* Main content — hidden while loading or error */}
+        {!loading && !error && (cashInHand > 0 || collectedTodayCount > 0) && (
+        <>
+        {/* At-limit banner — COD jobs blocked */}
+        {limitStatus.kind === 'atLimit' && (
+          <AtLimitBanner
+            title={t('rider.wallet.states.atLimitBannerTitle')}
+            body={t('rider.wallet.states.atLimitBannerBody')}
+            ariaLabel={t('rider.wallet.states.atLimitBannerAria')}
+            actionLabel={t('rider.wallet.depositToUnlock')}
+            actionAria={t('rider.wallet.depositToUnlockAria', {
+              amount: formatRiderNPRAmount(cashInHand),
+              limit: formatRiderNPRAmount(limitStatus.maxCodFloat),
+            })}
+            onAction={deposit}
+          />
         )}
 
         {/* Hero cash-in-hand */}
@@ -351,6 +404,8 @@ export default function CODWalletScreen() {
         </View>
 
         <View style={{ height: spacing[8] }} />
+        </>
+        )}
       </ScrollView>
     </View>
   )
@@ -630,6 +685,54 @@ const styles = StyleSheet.create({
   },
   retryText: {
     fontSize: fontSize.sm[0],
+    fontWeight: '700',
+    color: colors.white,
+    fontFamily: fontFamily.sansBold[0],
+  },
+  emptyWalletCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    padding: spacing[6],
+    alignItems: 'center',
+    gap: spacing[3],
+  },
+  emptyWalletIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: radii.full,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyWalletTitle: {
+    fontSize: fontSize.lg[0],
+    fontWeight: '700',
+    color: colors.text,
+    textAlign: 'center',
+    fontFamily: fontFamily.sansBold[0],
+  },
+  emptyWalletBody: {
+    fontSize: fontSize.sm[0],
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    fontFamily: fontFamily.sans[0],
+  },
+  emptyWalletBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    backgroundColor: colors.primary,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing[5],
+    paddingVertical: spacing[3],
+    minHeight: 48,
+  },
+  emptyWalletBtnText: {
+    fontSize: fontSize.base[0],
     fontWeight: '700',
     color: colors.white,
     fontFamily: fontFamily.sansBold[0],
