@@ -1,9 +1,21 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo } from 'react'
 import { View, StyleSheet } from 'react-native'
 import Svg, { Polyline, Circle, Rect, Line, Text as SvgText } from 'react-native-svg'
+import Animated, {
+  useSharedValue,
+  useAnimatedProps,
+  withTiming,
+  withRepeat,
+  Easing,
+  ReduceMotion,
+  cancelAnimation,
+} from 'react-native-reanimated'
 import { colors, fontFamily } from '@chinooz/theme'
 import { rs3Project, sampleLeg } from '@chinooz/rs3'
+import { useA11y } from '../A11yProvider'
 import type { ActiveDelivery, DeliveryStatus, GeoPoint } from '@chinooz/types'
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle)
 
 interface ActiveMapProps {
   delivery: ActiveDelivery
@@ -16,13 +28,18 @@ interface ActiveMapProps {
  *
  * Renders the RS3 boundary as a framed canvas, the two route legs as
  * polylines, the pickup/dropoff markers, and the rider marker at the
- * delivery's `currentPoint`. The rider marker is driven entirely by the
- * shared activeDelivery store, so it animates as the trip simulator ticks.
+ * delivery's `currentPoint`. The rider marker smoothly animates between
+ * simulator ticks via Reanimated (withTiming), and the halo pulses gently
+ * to signal the rider is live. Both respect reduced-motion.
  *
  * No external map tiles are fetched — the map is drawn with react-native-svg
- * so it stays light on battery and data and works offline.
+ * so it stays light on battery and data and works offline. The SVG is
+ * efficient: polylines are sampled once (memoized), and the only animated
+ * element is the rider marker (2 circles), keeping it 60fps on low-end
+ * Android.
  */
 export default function ActiveMap({ delivery, a11ySummary, testID }: ActiveMapProps) {
+  const { reducedMotion } = useA11y()
   const { pickup, dropoff, legToPickup, legToDropoff, currentPoint, status } = delivery
 
   // Sample the legs into drawable polylines in normalized [0..1] space.
@@ -32,6 +49,60 @@ export default function ActiveMap({ delivery, a11ySummary, testID }: ActiveMapPr
   const rider = useMemo(() => rs3Project(currentPoint), [currentPoint])
   const pickupProj = useMemo(() => rs3Project(pickup), [pickup])
   const dropoffProj = useMemo(() => rs3Project(dropoff), [dropoff])
+
+  // Smooth marker animation: animate cx/cy from the previous position to
+  // the new one over 800ms (ease-out) so the marker glides between ticks.
+  const markerCx = useSharedValue(rider.x * 100)
+  const markerCy = useSharedValue(rider.y * 100)
+  const haloRadius = useSharedValue(4.5)
+
+  useEffect(() => {
+    if (reducedMotion) {
+      markerCx.value = rider.x * 100
+      markerCy.value = rider.y * 100
+    } else {
+      markerCx.value = withTiming(rider.x * 100, {
+        duration: 800,
+        easing: Easing.out(Easing.quad),
+        reduceMotion: ReduceMotion.System,
+      })
+      markerCy.value = withTiming(rider.y * 100, {
+        duration: 800,
+        easing: Easing.out(Easing.quad),
+        reduceMotion: ReduceMotion.System,
+      })
+    }
+  }, [rider.x, rider.y, reducedMotion, markerCx, markerCy])
+
+  // Halo pulse: gentle repeating scale to signal the rider is live.
+  // Skipped under reduced-motion (static halo).
+  useEffect(() => {
+    if (reducedMotion || isTerminal(status)) {
+      cancelAnimation(haloRadius)
+      haloRadius.value = 4.5
+      return
+    }
+    haloRadius.value = withRepeat(
+      withTiming(6, {
+        duration: 1500,
+        easing: Easing.inOut(Easing.ease),
+        reduceMotion: ReduceMotion.System,
+      }),
+      -1,
+      true,
+    )
+  }, [reducedMotion, status, haloRadius])
+
+  const haloProps = useAnimatedProps(() => ({
+    r: haloRadius.value,
+    cx: markerCx.value,
+    cy: markerCy.value,
+  }))
+
+  const markerProps = useAnimatedProps(() => ({
+    cx: markerCx.value,
+    cy: markerCy.value,
+  }))
 
   const toPoints = (pts: GeoPoint[]) =>
     pts
@@ -148,13 +219,18 @@ export default function ActiveMap({ delivery, a11ySummary, testID }: ActiveMapPr
           {dropoff.label.length > 14 ? `${dropoff.label.slice(0, 13)}…` : dropoff.label}
         </SvgText>
 
-        {/* Rider marker (animated by the store's currentPoint) */}
+        {/* Rider marker: smoothly animated position + pulsing halo.
+            The inner circle uses useAnimatedProps for cx/cy so it glides
+            between simulator ticks. The halo pulses to signal liveness. */}
         {!isTerminal(status) && (
           <>
-            <Circle cx={rider.x * 100} cy={rider.y * 100} r={4.5} fill={colors.primary} opacity={0.18} />
-            <Circle
-              cx={rider.x * 100}
-              cy={rider.y * 100}
+            <AnimatedCircle
+              animatedProps={haloProps}
+              fill={colors.primary}
+              opacity={0.18}
+            />
+            <AnimatedCircle
+              animatedProps={markerProps}
               r={2.6}
               fill={colors.primary}
               stroke={colors.white}

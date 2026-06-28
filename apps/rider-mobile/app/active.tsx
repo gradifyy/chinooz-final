@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router'
 import { useTranslation } from 'react-i18next'
 import { colors, spacing, radii, fontFamily, fontSize } from '@chinooz/theme'
 import { useActiveDeliveryStore } from '@chinooz/state'
+import { useUpdateDeliveryStatus, useCollectCOD } from '@chinooz/hooks/useRider'
 import { analytics } from '@chinooz/analytics'
 import { useAppState } from '../components/AppStateProvider'
 import ActiveMap from '../components/active/ActiveMap'
@@ -53,7 +54,14 @@ export default function ActiveDeliveryScreen() {
   const clearError = useActiveDeliveryStore(s => s.clearError)
   const acknowledgeRestore = useActiveDeliveryStore(s => s.acknowledgeRestore)
 
-  const { connectivity } = useAppState()
+  // TanStack Query mutations: status transitions + COD collection.
+  // These call the mock API with optimistic + rollback, propagate to the
+  // shared order store (buyer O4 + seller OM), and sync back to the
+  // Zustand store on success.
+  const statusMutation = useUpdateDeliveryStatus()
+  const codMutation = useCollectCOD()
+
+  const { connectivity, isForeground } = useAppState()
   const isOffline = connectivity === 'offline'
 
   const [cancelOpen, setCancelOpen] = useState(false)
@@ -122,14 +130,16 @@ export default function ActiveDeliveryScreen() {
   }, [delivery])
 
   // RS3 trip simulator tick: advance movement every second while a leg is
-  // active (heading_to_pickup / picked_up / in_transit).
+  // active (heading_to_pickup / picked_up / in_transit) AND the app is in
+  // the foreground. Pauses when backgrounded to save battery/data.
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null)
   useEffect(() => {
     if (!delivery) return
     const moving =
-      delivery.status === 'heading_to_pickup' ||
-      delivery.status === 'picked_up' ||
-      delivery.status === 'in_transit'
+      isForeground &&
+      (delivery.status === 'heading_to_pickup' ||
+        delivery.status === 'picked_up' ||
+        delivery.status === 'in_transit')
     if (moving) {
       tickRef.current = setInterval(() => tick(1), 1000)
     } else if (tickRef.current) {
@@ -142,7 +152,7 @@ export default function ActiveDeliveryScreen() {
         tickRef.current = null
       }
     }
-  }, [delivery?.status, tick, delivery])
+  }, [delivery?.status, tick, delivery, isForeground])
 
   // The simulator moves the rider toward the leg end but does NOT auto-advance
   // the state machine: the rider must tap "Arrived at pickup" / "Arrived at
@@ -168,8 +178,41 @@ export default function ActiveDeliveryScreen() {
       }
       return
     }
+    // Online: optimistic store advance + API mutation with rollback.
+    const next = nextStatus(delivery.status)
+    if (!next) return
+    const opRef = `${delivery.jobId}:${delivery.status}->${next}:${Date.now()}`
+    // Optimistic: advance the store immediately.
     advanceStatus()
-  }, [delivery, advanceStatus, clearActiveDelivery, router, isOffline])
+    analytics.track('rider_active_status_advance', {
+      jobId: delivery.jobId,
+      from: delivery.status,
+      to: next,
+    })
+    // Fire the mutation; on error, rollback + set error state.
+    statusMutation.mutate(
+      { jobId: delivery.jobId, next, opRef },
+      {
+        onError: () => {
+          // Rollback: the mutation's onError already restored the query cache.
+          // Set the store error so the ErrorBanner shows with retry.
+          useActiveDeliveryStore.getState().setError('status_update_failed')
+        },
+      },
+    )
+    // If transitioning to delivered and COD, collect COD (idempotent).
+    if (next === 'delivered' && delivery.isCod && delivery.codAmount > 0) {
+      const codRef = `${delivery.jobId}:cod:${delivery.codAmount}`
+      codMutation.mutate(
+        { jobId: delivery.jobId, amountNpr: delivery.codAmount, opRef: codRef },
+        {
+          onError: () => {
+            useActiveDeliveryStore.getState().setError('cod_record_failed')
+          },
+        },
+      )
+    }
+  }, [delivery, advanceStatus, clearActiveDelivery, router, isOffline, statusMutation, codMutation])
 
   const handleErrorRetry = useCallback(() => {
     clearError()

@@ -8,6 +8,15 @@ import {
 } from 'react-native'
 import { useTranslation } from 'react-i18next'
 import * as Haptics from 'expo-haptics'
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  Easing,
+  ReduceMotion,
+  withDelay,
+} from 'react-native-reanimated'
 import {
   Wallet,
   Banknote,
@@ -57,6 +66,11 @@ export default function DeliveredSummary({ delivery, onDone }: DeliveredSummaryP
   }, [startedAt, completedAt])
 
   // Celebration: success haptic + announce on mount (reduced-motion aware).
+  // The celebration icon scales in with a spring + the earnings card fades up.
+  const iconScale = useSharedValue(0)
+  const cardOpacity = useSharedValue(0)
+  const cardTranslateY = useSharedValue(12)
+
   useEffect(() => {
     analytics.track({ event: 'rider_active_delivered_summary', screen: 'rider-active-delivery' })
     try {
@@ -67,7 +81,52 @@ export default function DeliveredSummary({ delivery, onDone }: DeliveredSummaryP
     try {
       AccessibilityInfo.announceForAccessibility(t('rider.active.deliveredCelebration'))
     } catch {}
-  }, [reducedMotion, t])
+    if (reducedMotion) {
+      iconScale.value = 1
+      cardOpacity.value = 1
+      cardTranslateY.value = 0
+    } else {
+      iconScale.value = withSpring(1, {
+        damping: 12,
+        stiffness: 200,
+        mass: 0.8,
+        reduceMotion: ReduceMotion.System,
+      })
+      cardOpacity.value = withDelay(200, withTiming(1, {
+        duration: 400,
+        easing: Easing.out(Easing.quad),
+        reduceMotion: ReduceMotion.System,
+      }))
+      cardTranslateY.value = withDelay(200, withTiming(0, {
+        duration: 400,
+        easing: Easing.out(Easing.quad),
+        reduceMotion: ReduceMotion.System,
+      }))
+    }
+  }, [reducedMotion, t, iconScale, cardOpacity, cardTranslateY])
+
+  // COD-collected feedback: an additional success haptic + announce when
+  // COD was collected for this delivery.
+  useEffect(() => {
+    if (isCod && codAmount > 0 && !reducedMotion) {
+      try {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      } catch {}
+      try {
+        AccessibilityInfo.announceForAccessibility(
+          t('rider.active.deliveredCodAmount', { amount: formatNpr(codAmount) }),
+        )
+      } catch {}
+    }
+  }, [isCod, codAmount, reducedMotion, t])
+
+  const iconAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: iconScale.value }],
+  }))
+  const cardAnimStyle = useAnimatedStyle(() => ({
+    opacity: cardOpacity.value,
+    transform: [{ translateY: cardTranslateY.value }],
+  }))
 
   const handleDone = useCallback(() => {
     try { if (!reducedMotion) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light) } catch {}
@@ -78,15 +137,15 @@ export default function DeliveredSummary({ delivery, onDone }: DeliveredSummaryP
     <View style={styles.wrap} testID="delivered-summary">
       {/* Celebration header */}
       <View style={styles.celebration} accessibilityRole="header">
-        <View style={styles.celebrationIcon}>
+        <Animated.View style={[styles.celebrationIcon, iconAnimStyle]}>
           <PartyPopper size={28} color={colors.success} />
-        </View>
+        </Animated.View>
         <Text style={styles.celebrationTitle}>{t('rider.active.deliveredTitle')}</Text>
         <Text style={styles.celebrationText}>{t('rider.active.deliveredCelebration')}</Text>
       </View>
 
       {/* Earnings summary */}
-      <View style={styles.earningsCard} accessibilityRole="summary">
+      <Animated.View style={[styles.earningsCard, cardAnimStyle]} accessibilityRole="summary">
         <View style={styles.earningRow}>
           <View style={styles.earningIconWrap}>
             <Wallet size={18} color={colors.primary} />
@@ -136,7 +195,7 @@ export default function DeliveredSummary({ delivery, onDone }: DeliveredSummaryP
           </View>
           <Text style={styles.earningValueMuted}>{formatDuration(durationMs)}</Text>
         </View>
-      </View>
+      </Animated.View>
 
       {/* Listening indicator */}
       <View style={styles.listeningRow}>
