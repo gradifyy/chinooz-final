@@ -27,10 +27,11 @@ import {
   Banknote,
   UserCog,
   Rocket,
+  TriangleAlert,
   type LucideIcon,
 } from 'lucide-react-native'
 import { colors, spacing, radii, fontSize, fontFamily } from '@chinooz/theme'
-import { EmptyState } from '@chinooz/ui'
+import { EmptyState, Skeleton } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
 import {
   getRiderHelpArticle,
@@ -68,9 +69,18 @@ export default function HelpArticleScreen() {
   const related = useMemo(() => getRelatedHelpArticles(articleId), [articleId])
 
   const [vote, setVote] = useState<'yes' | 'no' | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
     analytics.screen({ name: 'rider-help-article', properties: { articleId } })
+    // Simulate async article load (mock data is sync but real API would be async).
+    const id = setTimeout(() => {
+      const art = getRiderHelpArticle(articleId)
+      if (!art) setLoadError(true)
+      setIsLoading(false)
+    }, 400)
+    return () => clearTimeout(id)
   }, [articleId])
 
   const handleVote = (choice: 'yes' | 'no') => {
@@ -82,6 +92,77 @@ export default function HelpArticleScreen() {
   const openRelated = (id: string) => {
     analytics.track({ event: 'rider_help_related_opened', screen: 'rider-help-article', properties: { fromArticleId: articleId, toArticleId: id } })
     router.replace({ pathname: '/support/faq/[article]', params: { article: id } })
+  }
+
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.topBar}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel={t('rider.support.help.articleView.back')}
+            hitSlop={8}
+            style={styles.topBarBtn}
+          >
+            <ChevronLeft size={22} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={styles.topBarTitle} numberOfLines={1}>{t('rider.support.help.title')}</Text>
+          <View style={styles.topBarBtn} />
+        </View>
+        <View
+          style={styles.articleSkeleton}
+          accessibilityRole="none"
+          accessibilityState={{ busy: true }}
+          accessibilityLabel={t('rider.support.help.skeletonAria')}
+        >
+          <Skeleton width="40%" height={16} />
+          <Skeleton width="90%" height={28} />
+          <View style={{ gap: spacing[2] }}>
+            <Skeleton width="100%" height={14} />
+            <Skeleton width="95%" height={14} />
+            <Skeleton width="80%" height={14} />
+            <Skeleton width="92%" height={14} />
+            <Skeleton width="70%" height={14} />
+          </View>
+        </View>
+      </View>
+    )
+  }
+
+  // ---- Load error ----
+  if (loadError && !article) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.topBar}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel={t('rider.support.help.articleView.back')}
+            hitSlop={8}
+            style={styles.topBarBtn}
+          >
+            <ChevronLeft size={22} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={styles.topBarTitle} numberOfLines={1}>{t('rider.support.help.title')}</Text>
+          <View style={styles.topBarBtn} />
+        </View>
+        <View style={styles.articleErrorWrap} accessibilityRole="alert" accessibilityLabel={t('rider.support.states.articleLoadErrorAria')}>
+          <TriangleAlert size={36} color={colors.error} />
+          <Text accessibilityRole="header" style={styles.articleErrorTitle}>{t('rider.support.states.articleLoadErrorTitle')}</Text>
+          <Text style={styles.articleErrorBody}>{t('rider.support.states.articleLoadErrorBody')}</Text>
+          <TouchableOpacity
+            style={styles.articleRetryBtn}
+            onPress={() => { setIsLoading(true); setLoadError(false); setTimeout(() => { const a = getRiderHelpArticle(articleId); if (!a) setLoadError(true); setIsLoading(false) }, 400) }}
+            accessibilityRole="button"
+            accessibilityLabel={t('rider.support.states.retryAria')}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.articleRetryBtnText}>{t('rider.support.states.retryBtn')}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    )
   }
 
   if (!article) {
@@ -352,6 +433,16 @@ const styles = StyleSheet.create({
   topBarTitleWrap: { flex: 1, alignItems: 'center' },
   topBarTitle: { fontSize: fontSize.lg[0], fontWeight: '600', color: colors.text, textAlign: 'center' },
   scroll: { paddingHorizontal: spacing[4], paddingTop: spacing[4], gap: spacing[4] },
+
+  // Skeleton
+  articleSkeleton: { paddingHorizontal: spacing[4], paddingTop: spacing[4], gap: spacing[3] },
+
+  // Error
+  articleErrorWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing[6], gap: spacing[3] },
+  articleErrorTitle: { fontSize: fontSize.lg[0], fontWeight: '700', color: colors.text, textAlign: 'center' },
+  articleErrorBody: { fontSize: fontSize.sm[0], color: colors.textMuted, textAlign: 'center' },
+  articleRetryBtn: { backgroundColor: colors.primary, borderRadius: radii.md, paddingHorizontal: spacing[5], paddingVertical: spacing[3], minHeight: 44 },
+  articleRetryBtnText: { color: colors.white, fontWeight: '700', fontSize: fontSize.base[0] },
 
   // Article header
   articleHeader: { gap: spacing[2] },

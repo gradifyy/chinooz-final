@@ -33,6 +33,9 @@ import {
   UserCog,
   Rocket,
   Sparkles,
+  WifiOff,
+  Siren,
+  Navigation,
   type LucideIcon,
 } from 'lucide-react-native'
 import { colors, spacing, radii, fontSize, fontFamily } from '@chinooz/theme'
@@ -89,6 +92,7 @@ export default function HelpCenterScreen() {
   const [debounced, setDebounced] = useState(search)
   const [activeCategory, setActiveCategory] = useState<RiderHelpCategory | 'all'>('all')
   const [isLoading, setIsLoading] = useState(true)
+  const [isOffline, setIsOffline] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -96,6 +100,28 @@ export default function HelpCenterScreen() {
     const id = setTimeout(() => setIsLoading(false), 450)
     return () => clearTimeout(id)
   }, [])
+
+  // Simulate offline detection (in a real app, use NetInfo).
+  useEffect(() => {
+    const checkOnline = async () => {
+      try {
+        // Mock: randomly simulate offline 10% of the time in dev.
+        // In production, this would use @react-native-community/netinfo.
+        const isOnline = true
+        setIsOffline(!isOnline)
+      } catch {
+        setIsOffline(true)
+      }
+    }
+    checkOnline()
+  }, [])
+
+  // Announce offline state.
+  useEffect(() => {
+    if (isOffline) {
+      try { AccessibilityInfo.announceForAccessibility(t('rider.support.states.offlineAria')) } catch {}
+    }
+  }, [isOffline, t])
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -238,6 +264,41 @@ export default function HelpCenterScreen() {
           />
         ))}
       </View>
+
+      {/* Offline banner — key safety info always available */}
+      {isOffline && (
+        <View style={styles.offlineBanner} accessibilityLiveRegion="polite" accessibilityLabel={t('rider.support.states.offlineAria')}>
+          <WifiOff size={16} color={colors.warning} />
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={styles.offlineBannerTitle}>{t('rider.support.states.offlineTitle')}</Text>
+            <Text style={styles.offlineBannerBody}>{t('rider.support.states.offlineBody')}</Text>
+          </View>
+        </View>
+      )}
+
+      {/* Offline cached emergency info — ALWAYS available */}
+      {isOffline && (
+        <View style={styles.offlineEmergencyCard} accessibilityLabel={t('rider.support.states.offlineCachedSection')}>
+          <Text accessibilityRole="header" style={styles.offlineSectionTitle}>{t('rider.support.states.offlineCachedSection')}</Text>
+          <View style={styles.offlineEmergencyList}>
+            <View style={styles.offlineEmergencyRow}>
+              <Siren size={16} color={colors.error} />
+              <Text style={styles.offlineEmergencyLabel}>{t('rider.support.emergencyPolice')}</Text>
+              <Text style={styles.offlineEmergencyNumber}>{t('rider.support.emergencyPoliceNumber')}</Text>
+            </View>
+            <View style={styles.offlineEmergencyRow}>
+              <LifeBuoy size={16} color={colors.error} />
+              <Text style={styles.offlineEmergencyLabel}>{t('rider.support.emergencyAmbulance')}</Text>
+              <Text style={styles.offlineEmergencyNumber}>{t('rider.support.emergencyAmbulanceNumber')}</Text>
+            </View>
+            <View style={styles.offlineEmergencyRow}>
+              <Navigation size={16} color={colors.error} />
+              <Text style={styles.offlineEmergencyLabel}>{t('rider.support.emergencyTraffic')}</Text>
+              <Text style={styles.offlineEmergencyNumber}>{t('rider.support.emergencyTrafficNumber')}</Text>
+            </View>
+          </View>
+        </View>
+      )}
 
       {isLoading ? (
         <View
@@ -521,4 +582,36 @@ const styles = StyleSheet.create({
     minHeight: 52,
   },
   escalateText: { flex: 1, fontSize: fontSize.base[0], fontWeight: '600', color: colors.text },
+
+  // Offline banner
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing[2],
+    marginHorizontal: spacing[4],
+    marginBottom: spacing[2],
+    backgroundColor: colors.warningLight,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.warning,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2.5],
+  },
+  offlineBannerTitle: { fontSize: fontSize.sm[0], fontWeight: '700', color: colors.warning },
+  offlineBannerBody: { fontSize: fontSize.xs[0], color: colors.textMuted },
+  offlineEmergencyCard: {
+    marginHorizontal: spacing[4],
+    marginBottom: spacing[3],
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    padding: spacing[3],
+    gap: spacing[2],
+  },
+  offlineSectionTitle: { fontSize: fontSize.xs[0], fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.4 },
+  offlineEmergencyList: { gap: spacing[1] },
+  offlineEmergencyRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], paddingVertical: spacing[1.5] },
+  offlineEmergencyLabel: { flex: 1, fontSize: fontSize.sm[0], fontWeight: '500', color: colors.text },
+  offlineEmergencyNumber: { fontSize: fontSize.sm[0], fontWeight: '700', color: colors.error, fontFamily: fontFamily.sansSemiBold[0] },
 })

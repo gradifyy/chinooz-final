@@ -53,7 +53,7 @@ const DIRECT_CALLS: DirectCall[] = [
   { key: 'traffic', icon: Navigation, labelKey: 'rider.support.emergencyTraffic', number: '103' },
 ]
 
-type SosPhase = 'idle' | 'counting' | 'active'
+type SosPhase = 'idle' | 'counting' | 'active' | 'fallback'
 
 export default function SosScreen() {
   const { t } = useTranslation()
@@ -87,14 +87,28 @@ export default function SosScreen() {
 
   const ringStyle = useAnimatedStyle(() => ({ opacity: pulse.value * 0.4 }))
 
-  const activate = useCallback(() => {
-    setPhase('active')
-    analytics.track({ event: 'rider_sos_activated', screen: 'rider-support-sos', properties: { hasActiveTrip: !!activeDelivery, orderRef: activeDelivery?.orderRef ?? null } })
+  const activate = useCallback(async () => {
     try {
       if (!reducedMotion) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
     } catch {}
     try { AccessibilityInfo.announceForAccessibility(t('rider.support.sos.activeAria')) } catch {}
-  }, [activeDelivery, reducedMotion, t])
+    analytics.track({ event: 'rider_sos_activated', screen: 'rider-support-sos', properties: { hasActiveTrip: !!activeDelivery, orderRef: activeDelivery?.orderRef ?? null } })
+    // Try mock SOS — on failure, fall back to direct phone dialer.
+    try {
+      const { triggerSOS } = await import('@chinooz/mock-data')
+      await triggerSOS({
+        orderRef: activeDelivery?.orderRef,
+        pickup: activeDelivery?.pickupLabel,
+        dropoff: activeDelivery?.dropoffLabel,
+        trustedContacts,
+      })
+      setPhase('active')
+    } catch {
+      // Network failure — safety must NEVER hard-fail. Fall back to phone dialer.
+      setPhase('fallback')
+      try { AccessibilityInfo.announceForAccessibility(t('rider.support.states.sosFallbackAria')) } catch {}
+    }
+  }, [activeDelivery, reducedMotion, t, trustedContacts])
 
   const cancelCountdown = useCallback(() => {
     if (holdInterval.current) {
@@ -189,6 +203,58 @@ export default function SosScreen() {
             onDeactivate={deactivate}
             t={t}
           />
+        ) : phase === 'fallback' ? (
+          <View style={styles.fallbackArea} accessibilityRole="alert" accessibilityLabel={t('rider.support.states.sosFallbackAria')}>
+            <View style={styles.fallbackCard}>
+              <View style={styles.fallbackIconWrap}>
+                <Phone size={32} color={colors.error} />
+              </View>
+              <Text accessibilityRole="header" style={styles.fallbackTitle}>{t('rider.support.states.sosFallbackTitle')}</Text>
+              <Text style={styles.fallbackBody}>{t('rider.support.states.sosFallbackBody')}</Text>
+              {/* Direct Chinooz Safety call */}
+              <TouchableOpacity
+                style={styles.fallbackCallBtn}
+                onPress={() => {
+                  analytics.track({ event: 'rider_sos_fallback_call', screen: 'rider-support-sos' })
+                  try { Linking.openURL(`tel:${t('rider.support.states.sosFallbackCallNumber')}`) } catch {}
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={t('rider.support.states.sosFallbackCallAria')}
+                activeOpacity={0.85}
+              >
+                <Phone size={20} color={colors.white} />
+                <Text style={styles.fallbackCallBtnText}>{t('rider.support.states.sosFallbackCall')}</Text>
+              </TouchableOpacity>
+              {/* Emergency numbers still dialable */}
+              <View style={styles.fallbackEmergencyList}>
+                {DIRECT_CALLS.map((c) => {
+                  const Icon = c.icon
+                  return (
+                    <TouchableOpacity
+                      key={c.key}
+                      style={styles.fallbackEmergencyRow}
+                      onPress={() => callDirect(c.number, c.key)}
+                      accessibilityRole="button"
+                      accessibilityLabel={t(`rider.support.emergency${c.key === 'police' ? 'Police' : c.key === 'ambulance' ? 'Ambulance' : 'Traffic'}Aria`)}
+                      activeOpacity={0.85}
+                    >
+                      <Icon size={16} color={colors.error} />
+                      <Text style={styles.fallbackEmergencyLabel}>{t(c.labelKey)}</Text>
+                      <Text style={styles.fallbackEmergencyNumber}>{c.number}</Text>
+                    </TouchableOpacity>
+                  )
+                })}
+              </View>
+              <TouchableOpacity
+                style={styles.fallbackBackBtn}
+                onPress={() => { setPhase('idle'); holdElapsed.current = 0; setSecondsLeft(Math.ceil(HOLD_MS / 1000)) }}
+                accessibilityRole="button"
+                accessibilityLabel={t('rider.support.sos.cancelAria')}
+              >
+                <Text style={styles.fallbackBackBtnText}>{t('rider.support.sos.cancel')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         ) : (
           <View style={styles.sosArea}>
             <Animated.View pointerEvents="none" style={[styles.holdRing, ringStyle]} />
@@ -424,6 +490,41 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cancelBtnText: { fontSize: fontSize.base[0], fontWeight: '700', color: colors.text },
+
+  // SOS fallback (network failure → phone dialer)
+  fallbackArea: { alignItems: 'center', paddingVertical: spacing[2] },
+  fallbackCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.xl,
+    borderWidth: 2,
+    borderColor: colors.error,
+    padding: spacing[5],
+    alignItems: 'center',
+    gap: spacing[3],
+    width: '100%',
+  },
+  fallbackIconWrap: { width: 56, height: 56, borderRadius: 9999, backgroundColor: colors.errorLight, alignItems: 'center', justifyContent: 'center' },
+  fallbackTitle: { fontSize: fontSize.xl[0], fontWeight: '800', color: colors.error, fontFamily: fontFamily.sansBold[0], textAlign: 'center' },
+  fallbackBody: { fontSize: fontSize.base[0], color: colors.textSecondary, textAlign: 'center', lineHeight: 22, fontFamily: fontFamily.sans[0] },
+  fallbackCallBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    backgroundColor: colors.error,
+    borderRadius: radii.md,
+    paddingVertical: spacing[3.5],
+    paddingHorizontal: spacing[6],
+    minHeight: 52,
+    alignSelf: 'stretch',
+  },
+  fallbackCallBtnText: { color: colors.white, fontWeight: '800', fontSize: fontSize.base[0] },
+  fallbackEmergencyList: { alignSelf: 'stretch', backgroundColor: colors.background, borderRadius: radii.md, padding: spacing[2], gap: spacing[1] },
+  fallbackEmergencyRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], paddingVertical: spacing[2], paddingHorizontal: spacing[2] },
+  fallbackEmergencyLabel: { flex: 1, fontSize: fontSize.sm[0], fontWeight: '500', color: colors.text },
+  fallbackEmergencyNumber: { fontSize: fontSize.sm[0], fontWeight: '700', color: colors.error, fontFamily: fontFamily.sansSemiBold[0] },
+  fallbackBackBtn: { paddingVertical: spacing[2], paddingHorizontal: spacing[4] },
+  fallbackBackBtnText: { fontSize: fontSize.sm[0], fontWeight: '600', color: colors.textMuted },
 
   // Active state
   activeArea: { alignItems: 'center', paddingVertical: spacing[2] },

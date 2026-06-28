@@ -21,6 +21,22 @@ import type { Product, Category } from '@chinooz/types'
 
 type SectionKey = 'media' | 'details' | 'pricing' | 'description'
 
+interface VariantOption {
+  id: string
+  name: string
+  values: string[]
+}
+
+interface VariantRow {
+  id: string
+  label: string
+  enabled: boolean
+  sku: string
+  price: string
+  compareAtPrice: string
+  stock: string
+}
+
 interface FormState {
   images: string[]
   videoUrl: string
@@ -32,7 +48,10 @@ interface FormState {
   condition: 'new' | 'used'
   price: string
   compareAtPrice: string
+  costPrice: string
   stockCount: string
+  options: VariantOption[]
+  variants: VariantRow[]
   description: string
   specs: string
   weight: string
@@ -53,7 +72,10 @@ const EMPTY_FORM: FormState = {
   condition: 'new',
   price: '',
   compareAtPrice: '',
+  costPrice: '',
   stockCount: '',
+  options: [],
+  variants: [],
   description: '',
   specs: '',
   weight: '',
@@ -137,7 +159,10 @@ export default function ProductFormScreen() {
         condition: 'new' as const,
         price: String(product.price),
         compareAtPrice: product.compareAtPrice ? String(product.compareAtPrice) : '',
+        costPrice: '',
         stockCount: String(product.stockCount),
+        options: [],
+        variants: [],
         description: product.name + ' — ' + product.categoryName,
         specs: '',
         weight: '',
@@ -192,7 +217,7 @@ export default function ProductFormScreen() {
     snackbarTimer.current = setTimeout(() => setSnackbar(null), 3000)
   }
 
-  const updateField = useCallback((field: keyof FormState, value: string | string[]) => {
+  const updateField = useCallback((field: keyof FormState, value: string | string[] | VariantOption[] | VariantRow[]) => {
     setForm(prev => ({ ...prev, [field]: value }))
     setErrors(prev => {
       const next = { ...prev }
@@ -455,7 +480,7 @@ export default function ProductFormScreen() {
                       <DetailsSection form={form} errors={errors} updateField={updateField} t={t} categories={sellerCats} categoryTree={categoryTree} reduced={reduced} />
                     )}
                     {s.key === 'pricing' && (
-                      <PricingSection form={form} errors={errors} updateField={updateField} t={t} />
+                      <PricingSection form={form} errors={errors} updateField={updateField} t={t} reduced={reduced} />
                     )}
                     {s.key === 'description' && (
                       <DescriptionSection form={form} errors={errors} updateField={updateField} t={t} />
@@ -1279,48 +1304,430 @@ function DetailsSection({ form, errors, updateField, t, categories, categoryTree
   )
 }
 
-function PricingSection({ form, errors, updateField, t }: { form: FormState; errors: Record<string, string>; updateField: (f: keyof FormState, v: string) => void; t: any }) {
+function generateVariantMatrix(options: VariantOption[]): VariantRow[] {
+  if (options.length === 0 || options.every(o => o.values.length === 0)) return []
+  const combos: string[][] = [[]]
+  for (const opt of options) {
+    if (opt.values.length === 0) continue
+    const next: string[][] = []
+    for (const combo of combos) {
+      for (const val of opt.values) {
+        next.push([...combo, val])
+      }
+    }
+    combos.length = 0
+    combos.push(...next)
+  }
+  return combos.map((combo, i) => ({
+    id: `var-${i}-${Date.now()}`,
+    label: combo.join(' / '),
+    enabled: true,
+    sku: '',
+    price: '',
+    compareAtPrice: '',
+    stock: '',
+  }))
+}
+
+function vatInclusive(price: number): number {
+  return Math.round(price / 1.13)
+}
+
+function marginPercent(price: number, cost: number): number | null {
+  if (!cost || cost <= 0 || !price || price <= 0) return null
+  return Math.round(((price - cost) / price) * 100)
+}
+
+function validateVariantRow(row: VariantRow): { compareAt?: string; negative?: string; empty?: string } {
+  const errs: { compareAt?: string; negative?: string; empty?: string } = {}
+  if (row.compareAtPrice && row.price) {
+    if (Number(row.compareAtPrice) <= Number(row.price)) errs.compareAt = 'compareAt'
+  }
+  if (row.stock && Number(row.stock) < 0) errs.negative = 'negative'
+  if (row.enabled && !row.price) errs.empty = 'empty'
+  return errs
+}
+
+function PricingSection({ form, errors, updateField, t, reduced }: { form: FormState; errors: Record<string, string>; updateField: (f: keyof FormState, v: string | string[] | VariantOption[] | VariantRow[]) => void; t: any; reduced: boolean }) {
+  const [newOptionName, setNewOptionName] = useState('')
+  const [optionValueInput, setOptionValueInput] = useState<Record<string, string>>({})
+  const [bulkPrice, setBulkPrice] = useState('')
+  const [bulkStock, setBulkStock] = useState('')
+
+  const hasOptions = form.options.length > 0 && form.options.some(o => o.values.length > 0)
+  const variants = form.variants
+  const priceNum = form.price ? Number(form.price) : 0
+  const costNum = form.costPrice ? Number(form.costPrice) : 0
+  const margin = marginPercent(priceNum, costNum)
+  const vatAmt = priceNum > 0 ? vatInclusive(priceNum) : 0
+
+  // Regenerate matrix when options change
+  const regenerateMatrix = useCallback((opts: VariantOption[]) => {
+    const matrix = generateVariantMatrix(opts)
+    updateField('variants', matrix)
+  }, [updateField])
+
+  const addOption = () => {
+    if (!newOptionName.trim()) return
+    const opt: VariantOption = {
+      id: `opt-${Date.now()}`,
+      name: newOptionName.trim(),
+      values: [],
+    }
+    const next = [...form.options, opt]
+    updateField('options', next)
+    setNewOptionName('')
+  }
+
+  const removeOption = (id: string) => {
+    const next = form.options.filter(o => o.id !== id)
+    updateField('options', next)
+    regenerateMatrix(next)
+  }
+
+  const addOptionValue = (optId: string) => {
+    const val = (optionValueInput[optId] || '').trim().replace(/,/g, '')
+    if (!val) return
+    const next = form.options.map(o => {
+      if (o.id === optId) return { ...o, values: [...o.values, val] }
+      return o
+    })
+    updateField('options', next)
+    setOptionValueInput(prev => ({ ...prev, [optId]: '' }))
+    regenerateMatrix(next)
+  }
+
+  const removeOptionValue = (optId: string, val: string) => {
+    const next = form.options.map(o => {
+      if (o.id === optId) return { ...o, values: o.values.filter(v => v !== val) }
+      return o
+    })
+    updateField('options', next)
+    regenerateMatrix(next)
+  }
+
+  const updateVariant = (id: string, field: keyof VariantRow, value: string | boolean) => {
+    const next = form.variants.map(v => v.id === id ? { ...v, [field]: value } : v)
+    updateField('variants', next)
+  }
+
+  const applyBulkPrice = () => {
+    if (!bulkPrice) return
+    const next = form.variants.map(v => ({ ...v, price: bulkPrice }))
+    updateField('variants', next)
+    setBulkPrice('')
+  }
+
+  const applyBulkStock = () => {
+    if (!bulkStock) return
+    const next = form.variants.map(v => ({ ...v, stock: bulkStock }))
+    updateField('variants', next)
+    setBulkStock('')
+  }
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid sm:grid-cols-2 gap-4">
-        <Field label={t('seller.products.formFieldPrice')} hint={t('seller.products.formFieldPriceHint')} error={errors.price} errorId="error-price">
+      {/* Single-variant pricing (when no options) */}
+      {!hasOptions && (
+        <>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Field label={t('seller.products.formFieldPrice')} hint={t('seller.products.formFieldPriceHint')} error={errors.price} errorId="error-price">
+              <input
+                type="number"
+                inputMode="numeric"
+                value={form.price}
+                onChange={e => updateField('price', e.target.value)}
+                placeholder="0"
+                aria-label={t('seller.products.formFieldPrice')}
+                aria-describedby={errors.price ? 'error-price' : undefined}
+                aria-invalid={!!errors.price}
+                className={`${inputCls(!!errors.price)} tabular-nums`}
+              />
+              {priceNum > 0 && (
+                <p className="text-[12px] text-text-muted mt-1 tabular-nums">{t('seller.products.vatInclusive')} · NPR {vatAmt.toLocaleString('en-IN')}</p>
+              )}
+            </Field>
+            <Field label={t('seller.products.formFieldCompareAtPrice')} hint={t('seller.products.formFieldCompareAtPriceHint')} error={errors.compareAtPrice} errorId="error-compareAtPrice">
+              <input
+                type="number"
+                inputMode="numeric"
+                value={form.compareAtPrice}
+                onChange={e => updateField('compareAtPrice', e.target.value)}
+                placeholder="0"
+                aria-label={t('seller.products.formFieldCompareAtPrice')}
+                className={`${inputCls(!!errors.compareAtPrice)} tabular-nums`}
+              />
+            </Field>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Field label={t('seller.products.formFieldStock')} hint={t('seller.products.formFieldStockHint')} error={errors.stockCount} errorId="error-stockCount">
+              <input
+                type="number"
+                inputMode="numeric"
+                value={form.stockCount}
+                onChange={e => updateField('stockCount', e.target.value)}
+                placeholder="0"
+                aria-label={t('seller.products.formFieldStock')}
+                aria-describedby={errors.stockCount ? 'error-stockCount' : undefined}
+                aria-invalid={!!errors.stockCount}
+                className={`${inputCls(!!errors.stockCount)} tabular-nums`}
+              />
+            </Field>
+            <Field label={t('seller.products.formFieldCostPrice')} hint={t('seller.products.formFieldCostPriceHint')}>
+              <input
+                type="number"
+                inputMode="numeric"
+                value={form.costPrice}
+                onChange={e => updateField('costPrice', e.target.value)}
+                placeholder="0"
+                aria-label={t('seller.products.formFieldCostPrice')}
+                className={`${inputCls()} tabular-nums`}
+              />
+            </Field>
+          </div>
+          {/* Margin hint */}
+          {margin !== null && (
+            <p className={`text-[12px] font-medium ${margin < 0 ? 'text-error' : margin < 20 ? 'text-warning' : 'text-success'}`}>
+              {margin < 0
+                ? t('seller.products.marginNegative', { percent: Math.abs(margin) })
+                : margin < 20
+                ? t('seller.products.marginThin', { percent: margin })
+                : t('seller.products.marginHealthy', { percent: margin })}
+            </p>
+          )}
+          <p className="text-[12px] text-text-muted bg-primary-50/50 rounded-md px-3 py-2">
+            {t('seller.products.variantsSingleMode')}
+          </p>
+        </>
+      )}
+
+      {/* Option builder */}
+      <div className="flex flex-col gap-3">
+        <div>
+          <h4 className="text-[14px] font-semibold text-text">{t('seller.products.variantsTitle')}</h4>
+          <p className="text-[12px] text-text-muted mt-0.5">{t('seller.products.variantsSubtitle')}</p>
+        </div>
+
+        {/* Existing options */}
+        {form.options.map(opt => (
+          <div key={opt.id} className="rounded-md border border-border-light bg-surface p-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[14px] font-semibold text-text">{opt.name}</span>
+              <button
+                type="button"
+                onClick={() => removeOption(opt.id)}
+                aria-label={t('seller.products.variantsRemoveOptionAria', { name: opt.name })}
+                className="text-[12px] text-error hover:underline"
+              >
+                {t('seller.products.variantsRemoveOption')}
+              </button>
+            </div>
+            {/* Value chips */}
+            <div className="flex flex-wrap items-center gap-2">
+              <AnimatePresence mode="popLayout">
+                {opt.values.map(val => (
+                  <motion.span
+                    key={val}
+                    initial={reduced ? false : { opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.8 }}
+                    transition={reduced ? { duration: 0 } : { type: 'spring', stiffness: 400, damping: 25 }}
+                    className="inline-flex items-center gap-1 rounded-full bg-primary-50 text-primary text-[13px] font-medium pl-2.5 pr-1 py-0.5"
+                  >
+                    {val}
+                    <button
+                      type="button"
+                      onClick={() => removeOptionValue(opt.id, val)}
+                      aria-label={t('seller.products.variantsRemoveOptionAria', { name: val })}
+                      className="inline-flex items-center justify-center w-4 h-4 rounded-full hover:bg-primary/20 transition-colors"
+                    >
+                      <span className="text-[10px]">✕</span>
+                    </button>
+                  </motion.span>
+                ))}
+              </AnimatePresence>
+              <input
+                type="text"
+                value={optionValueInput[opt.id] || ''}
+                onChange={e => setOptionValueInput(prev => ({ ...prev, [opt.id]: e.target.value }))}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addOptionValue(opt.id) }
+                }}
+                placeholder={t('seller.products.variantsOptionValuesPlaceholder')}
+                aria-label={`${opt.name} ${t('seller.products.variantsOptionValues')}`}
+                className="h-7 min-w-[80px] flex-1 bg-transparent text-[14px] text-text outline-none placeholder:text-text-tertiary"
+              />
+            </div>
+          </div>
+        ))}
+
+        {/* Add option */}
+        <div className="flex items-center gap-2">
           <input
-            type="number"
-            inputMode="numeric"
-            value={form.price}
-            onChange={e => updateField('price', e.target.value)}
-            placeholder="0"
-            aria-label={t('seller.products.formFieldPrice')}
-            aria-describedby={errors.price ? 'error-price' : undefined}
-            aria-invalid={!!errors.price}
-            className={`${inputCls(!!errors.price)} tabular-nums`}
+            type="text"
+            value={newOptionName}
+            onChange={e => setNewOptionName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addOption() } }}
+            placeholder={t('seller.products.variantsOptionNamePlaceholder')}
+            aria-label={t('seller.products.variantsOptionName')}
+            className={`${inputCls(false)} flex-1`}
           />
-        </Field>
-        <Field label={t('seller.products.formFieldCompareAtPrice')} hint={t('seller.products.formFieldCompareAtPriceHint')} error={errors.compareAtPrice} errorId="error-compareAtPrice">
-          <input
-            type="number"
-            inputMode="numeric"
-            value={form.compareAtPrice}
-            onChange={e => updateField('compareAtPrice', e.target.value)}
-            placeholder="0"
-            aria-label={t('seller.products.formFieldCompareAtPrice')}
-            className={`${inputCls(!!errors.compareAtPrice)} tabular-nums`}
-          />
-        </Field>
+          <button
+            type="button"
+            onClick={addOption}
+            disabled={!newOptionName.trim()}
+            aria-label={t('seller.products.variantsAddOptionAria')}
+            className="h-10 px-3 rounded-md border border-border bg-surface text-[13px] font-medium text-text-muted hover:bg-background hover:text-text transition-colors disabled:opacity-50"
+          >
+            + {t('seller.products.variantsAddOption')}
+          </button>
+        </div>
       </div>
-      <Field label={t('seller.products.formFieldStock')} hint={t('seller.products.formFieldStockHint')} error={errors.stockCount} errorId="error-stockCount">
-        <input
-          type="number"
-          inputMode="numeric"
-          value={form.stockCount}
-          onChange={e => updateField('stockCount', e.target.value)}
-          placeholder="0"
-          aria-label={t('seller.products.formFieldStock')}
-          aria-describedby={errors.stockCount ? 'error-stockCount' : undefined}
-          aria-invalid={!!errors.stockCount}
-          className={`${inputCls(!!errors.stockCount)} tabular-nums`}
-        />
-      </Field>
+
+      {/* Variant matrix (table) */}
+      {hasOptions && variants.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <h4 className="text-[14px] font-semibold text-text">{t('seller.products.variantsMatrixTitle')}</h4>
+
+          {/* Bulk-edit row */}
+          <div className="flex items-center gap-2 rounded-md border border-border-light bg-background px-3 py-2">
+            <span className="text-[12px] font-semibold text-text-muted shrink-0">{t('seller.products.variantsBulkApply')}:</span>
+            <input
+              type="number"
+              inputMode="numeric"
+              value={bulkPrice}
+              onChange={e => setBulkPrice(e.target.value)}
+              placeholder={t('seller.products.variantsColPrice')}
+              aria-label={t('seller.products.variantsBulkPriceAria')}
+              className="h-8 w-24 rounded-md border border-border bg-surface px-2 text-[13px] text-text tabular-nums outline-none focus:border-primary"
+            />
+            <button type="button" onClick={applyBulkPrice} disabled={!bulkPrice} className="h-8 px-2 rounded-md bg-primary text-white text-[12px] font-semibold disabled:opacity-50">
+              {t('seller.products.variantsBulkApplyBtn')}
+            </button>
+            <span className="w-px h-6 bg-border" />
+            <input
+              type="number"
+              inputMode="numeric"
+              value={bulkStock}
+              onChange={e => setBulkStock(e.target.value)}
+              placeholder={t('seller.products.variantsColStock')}
+              aria-label={t('seller.products.variantsBulkStockAria')}
+              className="h-8 w-24 rounded-md border border-border bg-surface px-2 text-[13px] text-text tabular-nums outline-none focus:border-primary"
+            />
+            <button type="button" onClick={applyBulkStock} disabled={!bulkStock} className="h-8 px-2 rounded-md bg-primary text-white text-[12px] font-semibold disabled:opacity-50">
+              {t('seller.products.variantsBulkApplyBtn')}
+            </button>
+          </div>
+
+          {/* Table */}
+          <div className="border border-border-light rounded-md overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b border-border bg-background sticky top-0">
+                  <th scope="col" className="px-3 py-2 text-left text-[12px] font-semibold text-text-muted uppercase">{t('seller.products.variantsColVariant')}</th>
+                  <th scope="col" className="px-3 py-2 text-left text-[12px] font-semibold text-text-muted uppercase">{t('seller.products.variantsColSku')}</th>
+                  <th scope="col" className="px-3 py-2 text-right text-[12px] font-semibold text-text-muted uppercase">{t('seller.products.variantsColPrice')}</th>
+                  <th scope="col" className="px-3 py-2 text-right text-[12px] font-semibold text-text-muted uppercase">{t('seller.products.variantsColCompareAt')}</th>
+                  <th scope="col" className="px-3 py-2 text-right text-[12px] font-semibold text-text-muted uppercase">{t('seller.products.variantsColStock')}</th>
+                  <th scope="col" className="px-3 py-2 text-center text-[12px] font-semibold text-text-muted uppercase">{t('seller.products.variantsColEnabled')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <AnimatePresence>
+                  {variants.map(v => {
+                    const vErrs = validateVariantRow(v)
+                    return (
+                      <motion.tr
+                        key={v.id}
+                        initial={reduced ? false : { opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={reduced ? { opacity: 0 } : { opacity: 0 }}
+                        transition={reduced ? { duration: 0 } : { duration: 0.2 }}
+                        className="border-b border-border last:border-b-0"
+                      >
+                        <td className="px-3 py-2.5">
+                          <span className="text-[14px] font-medium text-text">{v.label}</span>
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <input
+                            type="text"
+                            value={v.sku}
+                            onChange={e => updateVariant(v.id, 'sku', e.target.value)}
+                            placeholder="—"
+                            aria-label={t('seller.products.variantsSkuAria', { label: v.label })}
+                            className="w-full h-8 px-2 rounded-md border border-border bg-surface text-[13px] font-mono text-text outline-none focus:border-primary"
+                          />
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            value={v.price}
+                            onChange={e => updateVariant(v.id, 'price', e.target.value)}
+                            placeholder="0"
+                            aria-label={t('seller.products.variantsPriceAria', { label: v.label })}
+                            aria-invalid={!!vErrs.empty}
+                            className="w-24 h-8 px-2 rounded-md border border-border bg-surface text-[13px] text-text tabular-nums outline-none focus:border-primary text-right"
+                          />
+                          {v.price && Number(v.price) > 0 && (
+                            <p className="text-[10px] text-text-muted mt-0.5 tabular-nums">{t('seller.products.vatInclusive')}</p>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            value={v.compareAtPrice}
+                            onChange={e => updateVariant(v.id, 'compareAtPrice', e.target.value)}
+                            placeholder="0"
+                            aria-label={t('seller.products.variantsCompareAtAria', { label: v.label })}
+                            aria-invalid={!!vErrs.compareAt}
+                            className="w-24 h-8 px-2 rounded-md border border-border bg-surface text-[13px] text-text tabular-nums outline-none focus:border-primary text-right"
+                          />
+                          {vErrs.compareAt && (
+                            <p className="text-[10px] text-error mt-0.5">{t('seller.products.variantsErrorCompareAt')}</p>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            value={v.stock}
+                            onChange={e => updateVariant(v.id, 'stock', e.target.value)}
+                            placeholder="0"
+                            aria-label={t('seller.products.variantsStockAria', { label: v.label })}
+                            aria-invalid={!!vErrs.negative}
+                            className="w-20 h-8 px-2 rounded-md border border-border bg-surface text-[13px] text-text tabular-nums outline-none focus:border-primary text-right"
+                          />
+                        </td>
+                        <td className="px-3 py-2.5 text-center">
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={v.enabled}
+                            aria-label={t('seller.products.variantsEnableAria', { label: v.label })}
+                            onClick={() => updateVariant(v.id, 'enabled', !v.enabled)}
+                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${v.enabled ? 'bg-primary' : 'bg-border'}`}
+                          >
+                            <span className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${v.enabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                          </button>
+                        </td>
+                      </motion.tr>
+                    )
+                  })}
+                </AnimatePresence>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* No variants state */}
+      {hasOptions && variants.length === 0 && (
+        <p className="text-[12px] text-text-muted bg-background rounded-md px-3 py-3 text-center">
+          {t('seller.products.variantsNoOptions')}
+        </p>
+      )}
     </div>
   )
 }

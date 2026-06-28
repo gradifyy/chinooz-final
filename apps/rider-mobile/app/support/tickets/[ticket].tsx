@@ -29,6 +29,7 @@ import {
   Send,
   RotateCcw,
   XCircle,
+  TriangleAlert,
   type LucideIcon,
 } from 'lucide-react-native'
 import { colors, spacing, radii, fontSize, fontFamily } from '@chinooz/theme'
@@ -99,6 +100,8 @@ export default function TicketThreadScreen() {
 
   const [ticket, setTicket] = useState<RiderTicket | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [replyError, setReplyError] = useState(false)
   const [reply, setReply] = useState('')
   const [isSending, setIsSending] = useState(false)
   const [showReopen, setShowReopen] = useState(false)
@@ -108,15 +111,17 @@ export default function TicketThreadScreen() {
 
   const loadTicket = useCallback(async () => {
     setIsLoading(true)
+    setLoadError(false)
     try {
       const tk = await getTicketById(ticketId)
       setTicket(tk)
     } catch {
-      setTicket(null)
+      setLoadError(true)
+      try { AccessibilityInfo.announceForAccessibility(t('rider.support.states.ticketThreadLoadErrorAria')) } catch {}
     } finally {
       setIsLoading(false)
     }
-  }, [ticketId])
+  }, [ticketId, t])
 
   useEffect(() => {
     analytics.screen({ name: 'rider-ticket-thread', properties: { ticketId } })
@@ -141,13 +146,20 @@ export default function TicketThreadScreen() {
     const trimmed = reply.trim()
     if (!trimmed || !ticket) return
     setIsSending(true)
+    setReplyError(false)
     try {
       const result = await addTicketMessage(ticket.id, trimmed)
       if (result.success && result.ticket) {
         setTicket(result.ticket)
         setReply('')
         try { AccessibilityInfo.announceForAccessibility(t(thKey('threadReplySent'))) } catch {}
+      } else {
+        setReplyError(true)
+        try { AccessibilityInfo.announceForAccessibility(t('rider.support.states.replyErrorAria')) } catch {}
       }
+    } catch {
+      setReplyError(true)
+      try { AccessibilityInfo.announceForAccessibility(t('rider.support.states.replyErrorAria')) } catch {}
     } finally {
       setIsSending(false)
     }
@@ -207,6 +219,29 @@ export default function TicketThreadScreen() {
               <Skeleton width="60%" height={36} borderRadius={18} />
             </View>
           ))}
+        </View>
+      </View>
+    )
+  }
+
+  // ---- Load error ----
+  if (loadError) {
+    return (
+      <View style={styles.container}>
+        <TopBar title={t(thKey('threadTitle'), { id: ticketId })} onBack={() => router.back()} backAria={t(thKey('threadBack'))} />
+        <View style={styles.errorWrap} accessibilityRole="alert" accessibilityLabel={t('rider.support.states.ticketThreadLoadErrorAria')}>
+          <TriangleAlert size={36} color={colors.error} />
+          <Text accessibilityRole="header" style={styles.errorTitle}>{t('rider.support.states.ticketThreadLoadErrorTitle')}</Text>
+          <Text style={styles.errorBody}>{t('rider.support.states.ticketThreadLoadErrorBody')}</Text>
+          <TouchableOpacity
+            style={styles.retryBtn}
+            onPress={() => loadTicket()}
+            accessibilityRole="button"
+            accessibilityLabel={t('rider.support.states.retryAria')}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.retryBtnText}>{t('rider.support.states.retryBtn')}</Text>
+          </TouchableOpacity>
         </View>
       </View>
     )
@@ -391,6 +426,22 @@ export default function TicketThreadScreen() {
           </View>
         </Modal>
 
+        {/* Reply error banner — preserves draft */}
+        {replyError && !isResolved && (
+          <View style={styles.replyErrorBanner} accessibilityRole="alert">
+            <TriangleAlert size={14} color={colors.error} />
+            <Text style={styles.replyErrorText}>{t('rider.support.states.replyErrorBody')}</Text>
+            <TouchableOpacity
+              onPress={() => handleSendReply()}
+              disabled={isSending}
+              accessibilityRole="button"
+              accessibilityLabel={t('rider.support.states.submitErrorRetryAria')}
+            >
+              <Text style={styles.replyErrorRetry}>{t('rider.support.states.submitErrorRetry')}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Action bar: reply or reopen/close */}
         {isResolved ? (
           <View style={[styles.actionBar, { paddingBottom: insets.bottom + spacing[2] }]}>
@@ -528,6 +579,18 @@ const styles = StyleSheet.create({
   notFoundBody: { fontSize: fontSize.sm[0], color: colors.textMuted, textAlign: 'center' },
   notFoundBtn: { backgroundColor: colors.primary, borderRadius: radii.md, paddingHorizontal: spacing[5], paddingVertical: spacing[3] },
   notFoundBtnText: { color: colors.white, fontWeight: '700', fontSize: fontSize.base[0] },
+
+  // Load error
+  errorWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing[6], gap: spacing[3] },
+  errorTitle: { fontSize: fontSize.lg[0], fontWeight: '700', color: colors.text, textAlign: 'center' },
+  errorBody: { fontSize: fontSize.sm[0], color: colors.textMuted, textAlign: 'center' },
+  retryBtn: { backgroundColor: colors.primary, borderRadius: radii.md, paddingHorizontal: spacing[5], paddingVertical: spacing[3], minHeight: 44 },
+  retryBtnText: { color: colors.white, fontWeight: '700', fontSize: fontSize.base[0] },
+
+  // Reply error banner
+  replyErrorBanner: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], backgroundColor: colors.errorLight, borderTopWidth: 1, borderTopColor: colors.error, paddingHorizontal: spacing[3], paddingVertical: spacing[2] },
+  replyErrorText: { flex: 1, fontSize: fontSize.xs[0], color: colors.error, fontWeight: '500' },
+  replyErrorRetry: { fontSize: fontSize.xs[0], fontWeight: '700', color: colors.error },
 
   // Ticket info card (ListHeader)
   ticketInfoCard: {

@@ -60,6 +60,7 @@ export default function ReportIncidentScreen() {
   const [context, setContext] = useState<RiderSafetyIncidentContext>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [validationError, setValidationError] = useState(false)
+  const [submitError, setSubmitError] = useState(false)
   const [submitted, setSubmitted] = useState<{ id: string } | null>(null)
   const MAX_DESC = 500
 
@@ -103,6 +104,7 @@ export default function ReportIncidentScreen() {
       return
     }
     setValidationError(false)
+    setSubmitError(false)
     setIsSubmitting(true)
     try {
       const result = await reportSafetyIncident({
@@ -115,9 +117,15 @@ export default function ReportIncidentScreen() {
         try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}) } catch {}
         analytics.track({ event: 'rider_safety_incident_reported', screen: 'rider-safety-report-incident', properties: { incidentId: result.incident.id, type } })
         setSubmitted({ id: result.incident.id })
+      } else {
+        // Preserve draft + attachments on failure.
+        setSubmitError(true)
+        try { AccessibilityInfo.announceForAccessibility(t('rider.support.states.submitErrorAria')) } catch {}
       }
     } catch {
-      setValidationError(true)
+      // Preserve draft + attachments on failure.
+      setSubmitError(true)
+      try { AccessibilityInfo.announceForAccessibility(t('rider.support.states.submitErrorAria')) } catch {}
     } finally {
       setIsSubmitting(false)
     }
@@ -309,6 +317,14 @@ export default function ReportIncidentScreen() {
             </View>
           )}
 
+          {/* Submit error — draft + attachments preserved */}
+          {submitError && (
+            <View style={styles.submitErrorBanner} accessibilityRole="alert" accessibilityLabel={t('rider.support.states.submitErrorAria')}>
+              <Text style={styles.submitErrorTitle}>{t('rider.support.states.submitErrorTitle')}</Text>
+              <Text style={styles.submitErrorBody}>{t('rider.support.states.submitErrorBody')}</Text>
+            </View>
+          )}
+
           {/* Submit */}
           <TouchableOpacity
             style={[styles.submitBtn, isSubmitting && styles.submitBtnDisabled]}
@@ -407,6 +423,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[3], paddingVertical: spacing[2.5],
   },
   validationErrorText: { fontSize: fontSize.sm[0], fontWeight: '600', color: colors.error },
+  submitErrorBanner: {
+    backgroundColor: colors.errorLight,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.error,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[3],
+    gap: spacing[1],
+  },
+  submitErrorTitle: { fontSize: fontSize.sm[0], fontWeight: '700', color: colors.error },
+  submitErrorBody: { fontSize: fontSize.xs[0], color: colors.textSecondary, lineHeight: 16 },
 
   // Submit
   submitBtn: {

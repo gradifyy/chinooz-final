@@ -37,6 +37,22 @@ import { useA11y } from './A11yProvider'
 
 type SectionKey = 'media' | 'details' | 'pricing' | 'description'
 
+interface VariantOption {
+  id: string
+  name: string
+  values: string[]
+}
+
+interface VariantRow {
+  id: string
+  label: string
+  enabled: boolean
+  sku: string
+  price: string
+  compareAtPrice: string
+  stock: string
+}
+
 interface FormState {
   images: string[]
   videoUrl: string
@@ -48,7 +64,10 @@ interface FormState {
   condition: 'new' | 'used'
   price: string
   compareAtPrice: string
+  costPrice: string
   stockCount: string
+  options: VariantOption[]
+  variants: VariantRow[]
   description: string
   specs: string
   weight: string
@@ -69,7 +88,10 @@ const EMPTY_FORM: FormState = {
   condition: 'new',
   price: '',
   compareAtPrice: '',
+  costPrice: '',
   stockCount: '',
+  options: [],
+  variants: [],
   description: '',
   specs: '',
   weight: '',
@@ -140,7 +162,10 @@ export default function ProductFormScreen() {
         condition: 'new' as const,
         price: String(product.price),
         compareAtPrice: product.compareAtPrice ? String(product.compareAtPrice) : '',
+        costPrice: '',
         stockCount: String(product.stockCount),
+        options: [],
+        variants: [],
         description: product.name + ' — ' + product.categoryName,
         specs: '',
         weight: '',
@@ -192,7 +217,7 @@ export default function ProductFormScreen() {
     transform: [{ translateY: snackbarOpacity.value === 1 ? 0 : 20 }],
   }))
 
-  const updateField = useCallback((field: keyof FormState, value: string | string[]) => {
+  const updateField = useCallback((field: keyof FormState, value: string | string[] | VariantOption[] | VariantRow[]) => {
     setForm(prev => ({ ...prev, [field]: value }))
     setErrors(prev => {
       const next = { ...prev }
@@ -376,7 +401,7 @@ export default function ProductFormScreen() {
             >
               {s.key === 'media' && <MediaSection form={form} errors={errors} updateField={updateField} t={t} reduced={reducedMotion} />}
               {s.key === 'details' && <DetailsSection form={form} errors={errors} updateField={updateField} t={t} categories={sellerCats} categoryTree={categoryTree} reduced={reducedMotion} />}
-              {s.key === 'pricing' && <PricingSection form={form} errors={errors} updateField={updateField} t={t} />}
+              {s.key === 'pricing' && <PricingSection form={form} errors={errors} updateField={updateField} t={t} reduced={reducedMotion} />}
               {s.key === 'description' && <DescriptionSection form={form} errors={errors} updateField={updateField} t={t} />}
             </CollapsibleSection>
           ))}
@@ -1027,54 +1052,356 @@ function DetailsSection({ form, errors, updateField, t, categories, categoryTree
   )
 }
 
-function PricingSection({ form, errors, updateField, t }: { form: FormState; errors: Record<string, string>; updateField: (f: keyof FormState, v: string) => void; t: any }) {
+function generateVariantMatrix(options: VariantOption[]): VariantRow[] {
+  if (options.length === 0 || options.every(o => o.values.length === 0)) return []
+  const combos: string[][] = [[]]
+  for (const opt of options) {
+    if (opt.values.length === 0) continue
+    const next: string[][] = []
+    for (const combo of combos) {
+      for (const val of opt.values) {
+        next.push([...combo, val])
+      }
+    }
+    combos.length = 0
+    combos.push(...next)
+  }
+  return combos.map((combo, i) => ({
+    id: `var-${i}-${Date.now()}`,
+    label: combo.join(' / '),
+    enabled: true,
+    sku: '',
+    price: '',
+    compareAtPrice: '',
+    stock: '',
+  }))
+}
+
+function vatInclusive(price: number): number {
+  return Math.round(price / 1.13)
+}
+
+function marginPercent(price: number, cost: number): number | null {
+  if (!cost || cost <= 0 || !price || price <= 0) return null
+  return Math.round(((price - cost) / price) * 100)
+}
+
+function validateVariantRow(row: VariantRow): { compareAt?: boolean; negative?: boolean; empty?: boolean } {
+  const errs: { compareAt?: boolean; negative?: boolean; empty?: boolean } = {}
+  if (row.compareAtPrice && row.price) {
+    if (Number(row.compareAtPrice) <= Number(row.price)) errs.compareAt = true
+  }
+  if (row.stock && Number(row.stock) < 0) errs.negative = true
+  if (row.enabled && !row.price) errs.empty = true
+  return errs
+}
+
+function PricingSection({ form, errors, updateField, t, reduced }: { form: FormState; errors: Record<string, string>; updateField: (f: keyof FormState, v: string | string[] | VariantOption[] | VariantRow[]) => void; t: any; reduced: boolean }) {
+  const [newOptionName, setNewOptionName] = useState('')
+  const [optionValueInput, setOptionValueInput] = useState<Record<string, string>>({})
+  const [bulkPrice, setBulkPrice] = useState('')
+  const [bulkStock, setBulkStock] = useState('')
+
+  const hasOptions = form.options.length > 0 && form.options.some(o => o.values.length > 0)
+  const variants = form.variants
+  const priceNum = form.price ? Number(form.price) : 0
+  const costNum = form.costPrice ? Number(form.costPrice) : 0
+  const margin = marginPercent(priceNum, costNum)
+  const vatAmt = priceNum > 0 ? vatInclusive(priceNum) : 0
+
+  const regenerateMatrix = useCallback((opts: VariantOption[]) => {
+    updateField('variants', generateVariantMatrix(opts))
+  }, [updateField])
+
+  const addOption = () => {
+    if (!newOptionName.trim()) return
+    const next = [...form.options, { id: `opt-${Date.now()}`, name: newOptionName.trim(), values: [] }]
+    updateField('options', next)
+    setNewOptionName('')
+  }
+
+  const removeOption = (id: string) => {
+    const next = form.options.filter(o => o.id !== id)
+    updateField('options', next)
+    regenerateMatrix(next)
+  }
+
+  const addOptionValue = (optId: string) => {
+    const val = (optionValueInput[optId] || '').trim().replace(/,/g, '')
+    if (!val) return
+    const next = form.options.map(o => o.id === optId ? { ...o, values: [...o.values, val] } : o)
+    updateField('options', next)
+    setOptionValueInput(prev => ({ ...prev, [optId]: '' }))
+    regenerateMatrix(next)
+  }
+
+  const removeOptionValue = (optId: string, val: string) => {
+    const next = form.options.map(o => o.id === optId ? { ...o, values: o.values.filter(v => v !== val) } : o)
+    updateField('options', next)
+    regenerateMatrix(next)
+  }
+
+  const updateVariant = (id: string, field: keyof VariantRow, value: string | boolean) => {
+    updateField('variants', form.variants.map(v => v.id === id ? { ...v, [field]: value } : v))
+  }
+
+  const applyBulkPrice = () => {
+    if (!bulkPrice) return
+    updateField('variants', form.variants.map(v => ({ ...v, price: bulkPrice })))
+    setBulkPrice('')
+  }
+
+  const applyBulkStock = () => {
+    if (!bulkStock) return
+    updateField('variants', form.variants.map(v => ({ ...v, stock: bulkStock })))
+    setBulkStock('')
+  }
+
   return (
     <View style={styles.sectionContent}>
-      <View style={styles.priceRow}>
-        <Field label={t('seller.products.formFieldPrice')} hint={t('seller.products.formFieldPriceHint')} error={errors.price}>
+      {/* Single-variant pricing */}
+      {!hasOptions && (
+        <>
+          <View style={styles.priceRow}>
+            <Field label={t('seller.products.formFieldPrice')} hint={t('seller.products.formFieldPriceHint')} error={errors.price}>
+              <TextInput
+                style={[styles.input, { flex: 1 }]}
+                value={form.price}
+                onChangeText={v => updateField('price', v)}
+                placeholder="0"
+                placeholderTextColor={colors.textTertiary}
+                keyboardType="numeric"
+                inputMode="numeric"
+                accessibilityLabel={t('seller.products.formFieldPrice')}
+              />
+              {priceNum > 0 && (
+                <Text style={styles.vatText}>{t('seller.products.vatInclusive')} · NPR {vatAmt.toLocaleString('en-IN')}</Text>
+              )}
+            </Field>
+            <Field label={t('seller.products.formFieldCompareAtPrice')} hint={t('seller.products.formFieldCompareAtPriceHint')} error={errors.compareAtPrice}>
+              <TextInput
+                style={[styles.input, { flex: 1 }]}
+                value={form.compareAtPrice}
+                onChangeText={v => updateField('compareAtPrice', v)}
+                placeholder="0"
+                placeholderTextColor={colors.textTertiary}
+                keyboardType="numeric"
+                inputMode="numeric"
+                accessibilityLabel={t('seller.products.formFieldCompareAtPrice')}
+              />
+            </Field>
+          </View>
+          <View style={styles.priceRow}>
+            <Field label={t('seller.products.formFieldStock')} hint={t('seller.products.formFieldStockHint')} error={errors.stockCount}>
+              <TextInput
+                style={[styles.input, { flex: 1 }]}
+                value={form.stockCount}
+                onChangeText={v => updateField('stockCount', v)}
+                placeholder="0"
+                placeholderTextColor={colors.textTertiary}
+                keyboardType="numeric"
+                inputMode="numeric"
+                accessibilityLabel={t('seller.products.formFieldStock')}
+              />
+            </Field>
+            <Field label={t('seller.products.formFieldCostPrice')} hint={t('seller.products.formFieldCostPriceHint')}>
+              <TextInput
+                style={[styles.input, { flex: 1 }]}
+                value={form.costPrice}
+                onChangeText={v => updateField('costPrice', v)}
+                placeholder="0"
+                placeholderTextColor={colors.textTertiary}
+                keyboardType="numeric"
+                inputMode="numeric"
+                accessibilityLabel={t('seller.products.formFieldCostPrice')}
+              />
+            </Field>
+          </View>
+          {margin !== null && (
+            <Text style={[styles.marginHint, margin < 0 ? { color: colors.error } : margin < 20 ? { color: colors.warning } : { color: colors.success }]}>
+              {margin < 0
+                ? t('seller.products.marginNegative', { percent: Math.abs(margin) })
+                : margin < 20
+                ? t('seller.products.marginThin', { percent: margin })
+                : t('seller.products.marginHealthy', { percent: margin })}
+            </Text>
+          )}
+          <View style={styles.singleModeHint}>
+            <Text style={styles.singleModeText}>{t('seller.products.variantsSingleMode')}</Text>
+          </View>
+        </>
+      )}
+
+      {/* Option builder */}
+      <View style={styles.optionBuilderWrap}>
+        <Text style={styles.optionBuilderTitle}>{t('seller.products.variantsTitle')}</Text>
+        <Text style={styles.optionBuilderSubtitle}>{t('seller.products.variantsSubtitle')}</Text>
+
+        {form.options.map(opt => (
+          <View key={opt.id} style={styles.optionCard}>
+            <View style={styles.optionHeader}>
+              <Text style={styles.optionName}>{opt.name}</Text>
+              <TouchableOpacity onPress={() => removeOption(opt.id)} accessibilityRole="button" accessibilityLabel={t('seller.products.variantsRemoveOptionAria', { name: opt.name })}>
+                <Text style={styles.optionRemoveText}>{t('seller.products.variantsRemoveOption')}</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.optionValuesWrap}>
+              {opt.values.map(val => (
+                <View key={val} style={styles.optionValueChip}>
+                  <Text style={styles.optionValueChipText}>{val}</Text>
+                  <TouchableOpacity onPress={() => removeOptionValue(opt.id, val)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                    <Text style={styles.optionValueChipRemove}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+              <TextInput
+                style={styles.optionValueInput}
+                value={optionValueInput[opt.id] || ''}
+                onChangeText={v => setOptionValueInput(prev => ({ ...prev, [opt.id]: v }))}
+                onSubmitEditing={() => addOptionValue(opt.id)}
+                placeholder={t('seller.products.variantsOptionValuesPlaceholder')}
+                placeholderTextColor={colors.textTertiary}
+                accessibilityLabel={`${opt.name} ${t('seller.products.variantsOptionValues')}`}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+          </View>
+        ))}
+
+        <View style={styles.addOptionRow}>
           <TextInput
             style={[styles.input, { flex: 1 }]}
-            value={form.price}
-            onChangeText={v => updateField('price', v)}
-            placeholder="0"
+            value={newOptionName}
+            onChangeText={setNewOptionName}
+            onSubmitEditing={addOption}
+            placeholder={t('seller.products.variantsOptionNamePlaceholder')}
             placeholderTextColor={colors.textTertiary}
-            keyboardType="numeric"
-            inputMode="numeric"
-            accessibilityLabel={t('seller.products.formFieldPrice')}
+            accessibilityLabel={t('seller.products.variantsOptionName')}
           />
-        </Field>
-        <Field label={t('seller.products.formFieldCompareAtPrice')} hint={t('seller.products.formFieldCompareAtPriceHint')} error={errors.compareAtPrice}>
-          <TextInput
-            style={[styles.input, { flex: 1 }]}
-            value={form.compareAtPrice}
-            onChangeText={v => updateField('compareAtPrice', v)}
-            placeholder="0"
-            placeholderTextColor={colors.textTertiary}
-            keyboardType="numeric"
-            inputMode="numeric"
-            accessibilityLabel={t('seller.products.formFieldCompareAtPrice')}
-          />
-        </Field>
+          <TouchableOpacity onPress={addOption} disabled={!newOptionName.trim()} style={[styles.addOptionBtn, !newOptionName.trim() && { opacity: 0.5 }]} accessibilityRole="button" accessibilityLabel={t('seller.products.variantsAddOptionAria')}>
+            <Text style={styles.addOptionBtnText}>+ {t('seller.products.variantsAddOption')}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-      <Field label={t('seller.products.formFieldStock')} hint={t('seller.products.formFieldStockHint')} error={errors.stockCount}>
-        <TextInput
-          style={styles.input}
-          value={form.stockCount}
-          onChangeText={v => updateField('stockCount', v)}
-          placeholder="0"
-          placeholderTextColor={colors.textTertiary}
-          keyboardType="numeric"
-          inputMode="numeric"
-          accessibilityLabel={t('seller.products.formFieldStock')}
-        />
-      </Field>
-      {/* Live preview snippet */}
-      <View style={styles.pricePreview}>
-        <Text style={styles.pricePreviewLabel}>{t('seller.products.formPreview')}</Text>
-        <Text style={styles.pricePreviewValue}>
-          {form.price ? formatNPR(Number(form.price)) : 'NPR 0'}
-        </Text>
-      </View>
+
+      {/* Variant cards */}
+      {hasOptions && variants.length > 0 && (
+        <View style={styles.variantsWrap}>
+          <Text style={styles.optionBuilderTitle}>{t('seller.products.variantsMatrixTitle')}</Text>
+
+          {/* Bulk-edit */}
+          <View style={styles.bulkRow}>
+            <Text style={styles.bulkLabel}>{t('seller.products.variantsBulkApply')}</Text>
+            <TextInput
+              style={styles.bulkInput}
+              value={bulkPrice}
+              onChangeText={setBulkPrice}
+              placeholder={t('seller.products.variantsColPrice')}
+              placeholderTextColor={colors.textTertiary}
+              keyboardType="numeric"
+              inputMode="numeric"
+              accessibilityLabel={t('seller.products.variantsBulkPriceAria')}
+            />
+            <TouchableOpacity onPress={applyBulkPrice} disabled={!bulkPrice} style={[styles.bulkBtn, !bulkPrice && { opacity: 0.5 }]}>
+              <Text style={styles.bulkBtnText}>↵</Text>
+            </TouchableOpacity>
+            <TextInput
+              style={styles.bulkInput}
+              value={bulkStock}
+              onChangeText={setBulkStock}
+              placeholder={t('seller.products.variantsColStock')}
+              placeholderTextColor={colors.textTertiary}
+              keyboardType="numeric"
+              inputMode="numeric"
+              accessibilityLabel={t('seller.products.variantsBulkStockAria')}
+            />
+            <TouchableOpacity onPress={applyBulkStock} disabled={!bulkStock} style={[styles.bulkBtn, !bulkStock && { opacity: 0.5 }]}>
+              <Text style={styles.bulkBtnText}>↵</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Variant cards */}
+          {variants.map(v => {
+            const vErrs = validateVariantRow(v)
+            return (
+              <View key={v.id} style={[styles.variantCard, !v.enabled && styles.variantCardDisabled]}>
+                <View style={styles.variantCardHeader}>
+                  <Text style={styles.variantLabel}>{v.label}</Text>
+                  <TouchableOpacity
+                    onPress={() => updateVariant(v.id, 'enabled', !v.enabled)}
+                    accessibilityRole="switch"
+                    accessibilityState={{ checked: v.enabled }}
+                    accessibilityLabel={t('seller.products.variantsEnableAria', { label: v.label })}
+                    style={[styles.toggleSwitch, v.enabled && styles.toggleSwitchActive]}
+                  >
+                    <View style={[styles.toggleThumb, v.enabled && styles.toggleThumbActive]} />
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.variantInputs}>
+                  <View style={{ flex: 1 }}>
+                    <TextInput
+                      style={[styles.variantInput, { fontFamily: 'monospace' }]}
+                      value={v.sku}
+                      onChangeText={val => updateVariant(v.id, 'sku', val)}
+                      placeholder="SKU"
+                      placeholderTextColor={colors.textTertiary}
+                      accessibilityLabel={t('seller.products.variantsSkuAria', { label: v.label })}
+                      autoCapitalize="none"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <TextInput
+                      style={[styles.variantInput, { textAlign: 'right' }]}
+                      value={v.price}
+                      onChangeText={val => updateVariant(v.id, 'price', val)}
+                      placeholder="Price"
+                      placeholderTextColor={colors.textTertiary}
+                      keyboardType="numeric"
+                      inputMode="numeric"
+                      accessibilityLabel={t('seller.products.variantsPriceAria', { label: v.label })}
+                    />
+                  </View>
+                </View>
+                <View style={styles.variantInputs}>
+                  <View style={{ flex: 1 }}>
+                    <TextInput
+                      style={[styles.variantInput, { textAlign: 'right' }]}
+                      value={v.compareAtPrice}
+                      onChangeText={val => updateVariant(v.id, 'compareAtPrice', val)}
+                      placeholder="Compare-at"
+                      placeholderTextColor={colors.textTertiary}
+                      keyboardType="numeric"
+                      inputMode="numeric"
+                      accessibilityLabel={t('seller.products.variantsCompareAtAria', { label: v.label })}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <TextInput
+                      style={[styles.variantInput, { textAlign: 'right' }]}
+                      value={v.stock}
+                      onChangeText={val => updateVariant(v.id, 'stock', val)}
+                      placeholder="Stock"
+                      placeholderTextColor={colors.textTertiary}
+                      keyboardType="numeric"
+                      inputMode="numeric"
+                      accessibilityLabel={t('seller.products.variantsStockAria', { label: v.label })}
+                    />
+                  </View>
+                </View>
+                {vErrs.compareAt && <Text style={styles.variantError}>{t('seller.products.variantsErrorCompareAt')}</Text>}
+                {vErrs.negative && <Text style={styles.variantError}>{t('seller.products.variantsErrorNegative')}</Text>}
+              </View>
+            )
+          })}
+        </View>
+      )}
+
+      {hasOptions && variants.length === 0 && (
+        <View style={styles.noVariantsWrap}>
+          <Text style={styles.noVariantsText}>{t('seller.products.variantsNoOptions')}</Text>
+        </View>
+      )}
     </View>
   )
 }
@@ -1471,18 +1798,145 @@ const styles = StyleSheet.create({
   catEmpty: { fontSize: 14, color: colors.textMuted, textAlign: 'center', paddingVertical: spacing[6] },
 
   priceRow: { flexDirection: 'row', gap: spacing[3] },
-  pricePreview: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  vatText: { fontSize: 11, color: colors.textMuted, marginTop: spacing[1], fontVariant: ['tabular-nums'] },
+  marginHint: { fontSize: 12, fontWeight: '500', fontVariant: ['tabular-nums'] },
+  singleModeHint: {
     backgroundColor: colors.primary50,
     borderRadius: radii.md,
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[2.5],
     marginTop: spacing[1],
   },
-  pricePreviewLabel: { fontSize: 12, fontWeight: '600', color: colors.primary },
-  pricePreviewValue: { fontSize: 18, fontWeight: '700', color: colors.primary, fontVariant: ['tabular-nums'] },
+  singleModeText: { fontSize: 12, color: colors.primary },
+
+  optionBuilderWrap: { gap: spacing[3] },
+  optionBuilderTitle: { fontSize: 14, fontWeight: '600', color: colors.text },
+  optionBuilderSubtitle: { fontSize: 12, color: colors.textMuted, marginTop: -spacing[1] },
+  optionCard: {
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
+    padding: spacing[3],
+    gap: spacing[2],
+  },
+  optionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  optionName: { fontSize: 14, fontWeight: '600', color: colors.text },
+  optionRemoveText: { fontSize: 12, color: colors.error },
+  optionValuesWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[1.5], alignItems: 'center' },
+  optionValueChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
+    backgroundColor: colors.primary50,
+    borderRadius: radii.full,
+    paddingLeft: spacing[2.5],
+    paddingRight: spacing[1],
+    paddingVertical: spacing[1],
+  },
+  optionValueChipText: { fontSize: 13, fontWeight: '500', color: colors.primary },
+  optionValueChipRemove: { fontSize: 11, color: colors.primary, opacity: 0.7 },
+  optionValueInput: { flex: 1, minWidth: 80, fontSize: 14, color: colors.text, padding: 0, borderWidth: 0, backgroundColor: 'transparent' },
+  addOptionRow: { flexDirection: 'row', gap: spacing[2], alignItems: 'center' },
+  addOptionBtn: {
+    height: 44,
+    paddingHorizontal: spacing[3],
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addOptionBtnText: { fontSize: 12, fontWeight: '600', color: colors.text },
+
+  variantsWrap: { gap: spacing[3] },
+  bulkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    borderRadius: radii.md,
+    backgroundColor: colors.background,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+  },
+  bulkLabel: { fontSize: 12, fontWeight: '600', color: colors.textMuted },
+  bulkInput: {
+    width: 60,
+    height: 32,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing[2],
+    fontSize: 13,
+    color: colors.text,
+    backgroundColor: colors.surface,
+    fontVariant: ['tabular-nums'],
+    textAlign: 'right',
+  },
+  bulkBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: radii.sm,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bulkBtnText: { color: colors.white, fontSize: 14, fontWeight: '700' },
+
+  variantCard: {
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
+    padding: spacing[3],
+    gap: spacing[2],
+  },
+  variantCardDisabled: { opacity: 0.5 },
+  variantCardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  variantLabel: { fontSize: 14, fontWeight: '600', color: colors.text, flex: 1 },
+  toggleSwitch: {
+    width: 36,
+    height: 20,
+    borderRadius: radii.full,
+    backgroundColor: colors.border,
+    padding: 2,
+    justifyContent: 'center',
+  },
+  toggleSwitchActive: { backgroundColor: colors.primary },
+  toggleThumb: {
+    width: 16,
+    height: 16,
+    borderRadius: radii.full,
+    backgroundColor: colors.white,
+    alignSelf: 'flex-start',
+  },
+  toggleThumbActive: { alignSelf: 'flex-end' },
+  variantInputs: { flexDirection: 'row', gap: spacing[2] },
+  variantInput: {
+    height: 36,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing[2],
+    fontSize: 13,
+    color: colors.text,
+    backgroundColor: colors.surface,
+    fontVariant: ['tabular-nums'],
+  },
+  variantError: { fontSize: 11, color: colors.error },
+
+  noVariantsWrap: {
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    borderRadius: radii.md,
+    backgroundColor: colors.background,
+    padding: spacing[4],
+    alignItems: 'center',
+  },
+  noVariantsText: { fontSize: 12, color: colors.textMuted, textAlign: 'center' },
 
   dimsLabel: { fontSize: 14, fontWeight: '600', color: colors.text },
   dimsRow: { flexDirection: 'row', gap: spacing[2] },

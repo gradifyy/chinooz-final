@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
+  AccessibilityInfo,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -24,6 +25,7 @@ import {
   Clock,
   CheckCircle2,
   Loader,
+  TriangleAlert,
   type LucideIcon,
 } from 'lucide-react-native'
 import { colors, spacing, radii, fontSize, fontFamily } from '@chinooz/theme'
@@ -66,16 +68,19 @@ export default function MyTicketsScreen() {
 
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [loadError, setLoadError] = useState(false)
   const [tickets, setTickets] = useState<RiderTicket[]>([])
 
   const loadTickets = async (isRefresh = false) => {
     if (isRefresh) setIsRefreshing(true)
     else setIsLoading(true)
+    setLoadError(false)
     try {
       const list = await getTickets()
       setTickets(list)
     } catch {
-      // mock — ignore
+      setLoadError(true)
+      try { AccessibilityInfo.announceForAccessibility(t('rider.support.states.ticketLoadErrorAria')) } catch {}
     } finally {
       setIsLoading(false)
       setIsRefreshing(false)
@@ -91,6 +96,12 @@ export default function MyTicketsScreen() {
     () => [...tickets].sort((a, b) => b.updatedAt - a.updatedAt),
     [tickets],
   )
+
+  useEffect(() => {
+    if (!isLoading && !loadError && sorted.length === 0) {
+      try { AccessibilityInfo.announceForAccessibility(t('rider.support.tickets.emptyTitle')) } catch {}
+    }
+  }, [isLoading, loadError, sorted.length, t])
 
   return (
     <View style={styles.container}>
@@ -160,6 +171,21 @@ export default function MyTicketsScreen() {
                 </View>
               </View>
             ))}
+          </View>
+        ) : loadError ? (
+          <View style={styles.errorWrap} accessibilityRole="alert" accessibilityLabel={t('rider.support.states.ticketLoadErrorAria')}>
+            <TriangleAlert size={36} color={colors.error} />
+            <Text accessibilityRole="header" style={styles.errorTitle}>{t('rider.support.states.ticketLoadErrorTitle')}</Text>
+            <Text style={styles.errorBody}>{t('rider.support.states.ticketLoadErrorBody')}</Text>
+            <TouchableOpacity
+              style={styles.retryBtn}
+              onPress={() => loadTickets()}
+              accessibilityRole="button"
+              accessibilityLabel={t('rider.support.states.retryAria')}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.retryBtnText}>{t('rider.support.states.retryBtn')}</Text>
+            </TouchableOpacity>
           </View>
         ) : sorted.length === 0 ? (
           <EmptyState
@@ -337,4 +363,9 @@ const styles = StyleSheet.create({
   metaDot: { fontSize: fontSize.xs[0], color: colors.textTertiary },
   ticketOrder: { fontSize: fontSize.xs[0], fontWeight: '500', color: colors.textSecondary },
   ticketDate: { fontSize: fontSize.xs[0], color: colors.textMuted, fontFamily: fontFamily.sans[0] },
+  errorWrap: { alignItems: 'center', justifyContent: 'center', paddingVertical: spacing[10], paddingHorizontal: spacing[5], gap: spacing[3] },
+  errorTitle: { fontSize: fontSize.lg[0], fontWeight: '700', color: colors.text, textAlign: 'center' },
+  errorBody: { fontSize: fontSize.sm[0], color: colors.textMuted, textAlign: 'center', lineHeight: 18 },
+  retryBtn: { backgroundColor: colors.primary, borderRadius: radii.md, paddingHorizontal: spacing[5], paddingVertical: spacing[3], minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  retryBtnText: { color: colors.white, fontWeight: '700', fontSize: fontSize.base[0] },
 })
