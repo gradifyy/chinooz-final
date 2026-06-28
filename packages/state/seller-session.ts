@@ -40,6 +40,13 @@ export interface StoreDraft {
   pickupCity: string
   pickupPhone: string
   setupStep: number
+  businessType: 'individual' | 'registered'
+  legalName: string
+  panNumber: string
+  regNumber: string
+  docId: string
+  docReg: string
+  docPan: string
 }
 
 const defaultDraft: StoreDraft = {
@@ -54,6 +61,13 @@ const defaultDraft: StoreDraft = {
   pickupCity: '',
   pickupPhone: '',
   setupStep: 0,
+  businessType: 'individual',
+  legalName: '',
+  panNumber: '',
+  regNumber: '',
+  docId: '',
+  docReg: '',
+  docPan: '',
 }
 
 interface SellerSessionState {
