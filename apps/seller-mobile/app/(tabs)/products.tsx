@@ -23,6 +23,7 @@ import type { SellerProduct, SellerProductStatus, StockStatus } from '@chinooz/t
 import type { SellerProductFilter } from '@chinooz/mock-data'
 import { useA11y } from '../../components/A11yProvider'
 import { ProductListCard, ProductListCardSkeleton } from '../../components/ProductListCard'
+import { BulkActionBar, type BulkAction, type BulkActionParams } from '../../components/BulkActionBar'
 
 type StatusTab = SellerProductStatus | 'all'
 type SortKey = NonNullable<SellerProductFilter['sort']>
@@ -193,6 +194,34 @@ export default function ProductsScreen() {
   const handleStockChange = (p: SellerProduct, stock: number) => {
     analytics.track({ name: 'seller_product_stock_edit', properties: { productId: p.id, stock } })
   }
+
+  const allSelected = items.length > 0 && selectedIds.size === items.length
+  const indeterminate = selectedIds.size > 0 && selectedIds.size < items.length
+
+  const handleSelectAll = () => {
+    try { if (!reducedMotion) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light) } catch {}
+    if (allSelected) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(items.map(p => p.id)))
+    }
+  }
+
+  const handleClearSelection = () => {
+    try { if (!reducedMotion) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light) } catch {}
+    setSelectedIds(new Set())
+  }
+
+  const handleBulkApply = async (action: BulkAction, params?: BulkActionParams): Promise<boolean> => {
+    analytics.track({ name: 'seller_bulk_apply', properties: { action, count: selectedIds.size, params } })
+    await new Promise(r => setTimeout(r, 400))
+    if (action === 'delete') {
+      setSelectedIds(new Set())
+    }
+    return true
+  }
+
+  const sellerCatList = sellerCats?.map(c => ({ id: c.id, name: c.name })) ?? []
 
   return (
     <View style={styles.container}>
@@ -415,6 +444,18 @@ export default function ProductsScreen() {
           )
         })}
       </BottomSheet>
+
+      {/* Bulk action bar — slides up from bottom */}
+      <BulkActionBar
+        selectedCount={selectedIds.size}
+        totalCount={items.length}
+        allSelected={allSelected}
+        indeterminate={indeterminate}
+        onSelectAll={handleSelectAll}
+        onClearSelection={handleClearSelection}
+        onApply={handleBulkApply}
+        categories={sellerCatList}
+      />
     </View>
   )
 }

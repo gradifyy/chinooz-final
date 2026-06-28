@@ -14,6 +14,7 @@ import type { SellerProduct, SellerProductStatus, StockStatus } from '@chinooz/t
 import type { SellerProductFilter } from '@chinooz/mock-data'
 import { useA11y } from '@/components/A11yProvider'
 import { ProductRow, ProductRowSkeleton } from '@/components/ProductRow'
+import { BulkActionBar, type BulkAction, type BulkActionParams } from '@/components/BulkActionBar'
 
 type StatusTab = SellerProductStatus | 'all'
 type SortKey = NonNullable<SellerProductFilter['sort']>
@@ -165,6 +166,32 @@ export default function ProductsScreen() {
   const handleStockChange = (p: SellerProduct, stock: number) => {
     analytics.track({ event: 'seller_product_stock_edit', screen: 'seller-products', properties: { productId: p.id, stock } })
   }
+
+  const allSelected = items.length > 0 && selectedIds.size === items.length
+  const indeterminate = selectedIds.size > 0 && selectedIds.size < items.length
+
+  const handleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(items.map(p => p.id)))
+    }
+  }
+
+  const handleClearSelection = () => setSelectedIds(new Set())
+
+  const handleBulkApply = async (action: BulkAction, params?: BulkActionParams): Promise<boolean> => {
+    analytics.track({ event: 'seller_bulk_apply', screen: 'seller-products', properties: { action, count: selectedIds.size, params } })
+    // Optimistic: simulate success (mock). In SP10 this would call a mutation.
+    // On error, rollback would restore the previous query cache.
+    await new Promise(r => setTimeout(r, 400))
+    if (action === 'delete') {
+      setSelectedIds(new Set())
+    }
+    return true
+  }
+
+  const sellerCatList = sellerCats?.map(c => ({ id: c.id, name: c.name })) ?? []
 
   return (
     <Screen>
@@ -438,6 +465,20 @@ export default function ProductsScreen() {
                 </div>
               </>
             )}
+          </div>
+
+          {/* Bulk action bar */}
+          <div className="mt-4">
+            <BulkActionBar
+              selectedCount={selectedIds.size}
+              totalCount={items.length}
+              allSelected={allSelected}
+              indeterminate={indeterminate}
+              onSelectAll={handleSelectAll}
+              onClearSelection={handleClearSelection}
+              onApply={handleBulkApply}
+              categories={sellerCatList}
+            />
           </div>
         </div>
       </Container>
