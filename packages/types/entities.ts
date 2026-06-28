@@ -709,4 +709,34 @@ export interface ActiveDelivery {
   acceptedAt: number
   /** Epoch ms of the ETA at drop-off, if known — RJ5 Jobs tab compat. */
   etaDropoffMs: number | null
+  /** True when the delivery was cancelled by seller/system mid-trip. */
+  cancelledBySystem?: boolean
+  /** Compensation note for mid-trip system cancellation. */
+  compensationNote?: string
 }
+
+/** A queued status update waiting for reconnect (offline-tolerant). */
+export interface QueuedStatusUpdate {
+  /** The status to transition to. */
+  status: DeliveryStatus
+  /** Epoch ms when the update was queued. */
+  queuedAt: number
+  /** Optional reason (for cancel/fail). */
+  reason?: string
+  /** Optional proof payload (for delivered). */
+  proofPayload?: {
+    otpVerified?: boolean
+    photoCaptured?: boolean
+    signatureCaptured?: boolean
+  }
+}
+
+/** Active delivery error types for retry surfaces. */
+export type ActiveDeliveryError =
+  | 'status_update_failed'
+  | 'proof_submit_failed'
+  | 'cod_record_failed'
+  | 'map_gps_failed'
+  | 'offline'
+  | 'system_cancel'
+  | 'restore'

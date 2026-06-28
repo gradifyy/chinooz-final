@@ -1,16 +1,25 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Pressable } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Pressable, BackHandler } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useTranslation } from 'react-i18next'
 import { colors, spacing, radii, fontFamily, fontSize } from '@chinooz/theme'
 import { useActiveDeliveryStore } from '@chinooz/state'
 import { analytics } from '@chinooz/analytics'
+import { useAppState } from '../components/AppStateProvider'
 import ActiveMap from '../components/active/ActiveMap'
 import ActiveTopBar from '../components/active/ActiveTopBar'
 import ActiveBottomSheet from '../components/active/ActiveBottomSheet'
 import ContactSheet from '../components/active/ContactSheet'
 import SafetySheet from '../components/active/SafetySheet'
 import IssueReportSheet from '../components/active/IssueReportSheet'
+import {
+  ActiveLoadingSkeleton,
+  ErrorBanner,
+  OfflineBanner,
+  RestoreNotice,
+  SystemCancelNotice,
+  PausedBanner,
+} from '../components/active/ActiveStates'
 import type { DeliveryStatus } from '@chinooz/types'
 
 /**
@@ -37,15 +46,80 @@ export default function ActiveDeliveryScreen() {
   const escalate = useActiveDeliveryStore(s => s.escalate)
   const tick = useActiveDeliveryStore(s => s.tick)
   const clearActiveDelivery = useActiveDeliveryStore(s => s.clearActiveDelivery)
+  const pendingQueue = useActiveDeliveryStore(s => s.pendingQueue)
+  const storeError = useActiveDeliveryStore(s => s.error)
+  const restored = useActiveDeliveryStore(s => s.restored)
+  const syncQueue = useActiveDeliveryStore(s => s.syncQueue)
+  const clearError = useActiveDeliveryStore(s => s.clearError)
+  const acknowledgeRestore = useActiveDeliveryStore(s => s.acknowledgeRestore)
+
+  const { connectivity } = useAppState()
+  const isOffline = connectivity === 'offline'
 
   const [cancelOpen, setCancelOpen] = useState(false)
   const [contactOpen, setContactOpen] = useState(false)
   const [safetyOpen, setSafetyOpen] = useState(false)
   const [issueOpen, setIssueOpen] = useState(false)
+  const [backGuardOpen, setBackGuardOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [syncing, setSyncing] = useState(false)
+  const [synced, setSynced] = useState(false)
 
   useEffect(() => {
     analytics.screen({ name: 'rider-active-delivery' })
   }, [])
+
+  // Loading: simulate map + route calc for 1.2s on first entry.
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 1200)
+    return () => clearTimeout(timer)
+  }, [])
+
+  // Restore detection: if a non-terminal delivery is found in the persisted
+  // store on mount, mark it as restored so the restore notice shows.
+  useEffect(() => {
+    if (delivery && !isTerminal(delivery.status) && restored) {
+      try {
+        const statusLabel = t(`rider.active.status_${delivery.status}`)
+        analytics.track({
+          event: 'rider_active_restored',
+          screen: 'rider-active-delivery',
+          status: delivery.status,
+        })
+        void statusLabel
+      } catch {}
+    }
+  }, [delivery, restored, t])
+
+  // Offline → online: sync the queued updates.
+  const prevOffline = useRef(false)
+  useEffect(() => {
+    if (prevOffline.current && !isOffline && pendingQueue.length > 0) {
+      setSyncing(true)
+      setSynced(false)
+      // Mock: simulate sync latency.
+      const timer = setTimeout(() => {
+        syncQueue()
+        setSyncing(false)
+        setSynced(true)
+        setTimeout(() => setSynced(false), 3000)
+      }, 1500)
+      return () => clearTimeout(timer)
+    }
+    prevOffline.current = isOffline
+  }, [isOffline, pendingQueue.length, syncQueue])
+
+  // Back-press guard: intercept hardware back to prevent accidental exit.
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (delivery && !isTerminal(delivery.status)) {
+        setBackGuardOpen(true)
+        return true
+      }
+      return false
+    })
+    return () => backHandler.remove()
+  }, [delivery])
 
   // RS3 trip simulator tick: advance movement every second while a leg is
   // active (heading_to_pickup / picked_up / in_transit).
@@ -79,13 +153,39 @@ export default function ActiveDeliveryScreen() {
   const handlePrimary = useCallback(() => {
     if (!delivery) return
     if (isTerminal(delivery.status)) {
-      // Terminal: leave the route.
       clearActiveDelivery()
       router.replace('/jobs')
       return
     }
+    if (isOffline) {
+      // Offline: queue the status update for sync on reconnect.
+      const next = nextStatus(delivery.status)
+      if (next) {
+        useActiveDeliveryStore.getState().queueStatusUpdate({
+          status: next,
+          queuedAt: Date.now(),
+        })
+      }
+      return
+    }
     advanceStatus()
-  }, [delivery, advanceStatus, clearActiveDelivery, router])
+  }, [delivery, advanceStatus, clearActiveDelivery, router, isOffline])
+
+  const handleErrorRetry = useCallback(() => {
+    clearError()
+    // Retry the last action (mock — just clears the error).
+  }, [clearError])
+
+  const handleResumeFromPause = useCallback(() => {
+    // Clear the pause signal (failureReason with PAUSED: prefix).
+    if (delivery?.failureReason?.startsWith('PAUSED:')) {
+      useActiveDeliveryStore.setState(state => ({
+        activeDelivery: state.activeDelivery
+          ? { ...state.activeDelivery, failureReason: undefined, updatedAt: Date.now() }
+          : null,
+      }))
+    }
+  }, [delivery])
 
   const handleMinimize = useCallback(() => {
     minimize()
@@ -118,8 +218,39 @@ export default function ActiveDeliveryScreen() {
   }, [cancel])
 
   if (!delivery) {
-    // Nothing active — bounce back to Jobs.
-    return <View style={styles.empty} />
+    // Nothing active — redirect to Jobs after a brief delay so screen readers
+    // announce the redirect.
+    return (
+      <View
+        style={styles.empty}
+        accessibilityRole="alert"
+        accessibilityLabel={t('rider.active.emptyRedirectAria')}
+        accessibilityLiveRegion="assertive"
+      >
+        <Text style={styles.emptyText}>{t('rider.active.emptyRedirect')}</Text>
+        <RedirectToJobs router={router} />
+      </View>
+    )
+  }
+
+  // Loading state: map + route calc skeleton.
+  if (loading) {
+    return <ActiveLoadingSkeleton />
+  }
+
+  // System cancellation notice (mid-trip cancel by seller/system).
+  if (delivery.cancelledBySystem) {
+    return (
+      <View style={styles.screen}>
+        <SystemCancelNotice
+          compensationNote={delivery.compensationNote}
+          onDone={() => {
+            clearActiveDelivery()
+            router.replace('/jobs')
+          }}
+        />
+      </View>
+    )
   }
 
   const targetLabel =
@@ -161,6 +292,35 @@ export default function ActiveDeliveryScreen() {
       >
         <Text accessibilityRole="text">{t(`rider.active.status_${delivery.status}`)}</Text>
       </View>
+
+      {/* Offline banner: queued updates + sync on reconnect */}
+      {!isTerminal(delivery.status) && (isOffline || syncing || synced) && (
+        <View style={styles.bannerWrap}>
+          <OfflineBanner
+            queuedCount={pendingQueue.length}
+            syncing={syncing}
+            synced={synced}
+          />
+        </View>
+      )}
+
+      {/* Error banner: status/proof/COD/map failure with retry */}
+      {storeError && (
+        <View style={styles.bannerWrap}>
+          <ErrorBanner
+            error={storeError}
+            onRetry={handleErrorRetry}
+            onDismiss={clearError}
+          />
+        </View>
+      )}
+
+      {/* Paused banner: issue reported, dispatch reviewing */}
+      {!isTerminal(delivery.status) && delivery.failureReason?.startsWith('PAUSED:') && (
+        <View style={styles.bannerWrap}>
+          <PausedBanner onResume={handleResumeFromPause} />
+        </View>
+      )}
 
       <ActiveBottomSheet delivery={delivery} onPrimary={handlePrimary} onCancel={handleCancelPress} onFailed={handleFailed} />
 
@@ -220,12 +380,75 @@ export default function ActiveDeliveryScreen() {
         onCancel={handleIssueCancel}
         onEscalate={handleEscalate}
       />
+
+      {/* Restore notice: app-kill relaunch with non-terminal delivery */}
+      {restored && !isTerminal(delivery.status) && (
+        <RestoreNotice
+          statusLabel={t(`rider.active.status_${delivery.status}`)}
+          onContinue={acknowledgeRestore}
+        />
+      )}
+
+      {/* Back-press guard: confirm before leaving active delivery */}
+      <Modal
+        transparent
+        visible={backGuardOpen}
+        animationType="fade"
+        onRequestClose={() => setBackGuardOpen(false)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setBackGuardOpen(false)}>
+          <Pressable style={styles.modalCard} onPress={() => {}}>
+            <Text style={styles.modalTitle}>{t('rider.active.backGuardTitle')}</Text>
+            <Text style={styles.modalBody}>{t('rider.active.backGuardBody')}</Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={t('rider.active.backGuardStay')}
+                onPress={() => setBackGuardOpen(false)}
+                style={styles.modalSecondary}
+              >
+                <Text style={styles.modalSecondaryText}>{t('rider.active.backGuardStay')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={t('rider.active.backGuardLeave')}
+                onPress={() => {
+                  setBackGuardOpen(false)
+                  handleMinimize()
+                }}
+                style={styles.modalPrimary}
+              >
+                <Text style={styles.modalPrimaryText}>{t('rider.active.backGuardLeave')}</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   )
 }
 
 function isTerminal(s: DeliveryStatus): boolean {
   return s === 'delivered' || s === 'cancelled' || s === 'failed'
+}
+
+/** Next status in the happy-path flow, or null if terminal. */
+function nextStatus(s: DeliveryStatus): DeliveryStatus | null {
+  const flow: DeliveryStatus[] = [
+    'assigned', 'heading_to_pickup', 'at_pickup', 'picked_up', 'in_transit', 'at_dropoff', 'delivered',
+  ]
+  const idx = flow.indexOf(s)
+  if (idx < 0 || idx >= flow.length - 1) return null
+  return flow[idx + 1]
+}
+
+/** Redirect to Jobs after a brief delay for screen reader announcement. */
+function RedirectToJobs({ router }: { router: ReturnType<typeof useRouter> }) {
+  useEffect(() => {
+    const timer = setTimeout(() => router.replace('/jobs'), 1500)
+    return () => clearTimeout(timer)
+  }, [router])
+  return null
 }
 
 function formatEta(sec: number): string {
@@ -251,6 +474,22 @@ const styles = StyleSheet.create({
   empty: {
     flex: 1,
     backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing[5],
+  },
+  emptyText: {
+    fontSize: fontSize.base[0],
+    fontFamily: fontFamily.sans[0],
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
+  bannerWrap: {
+    position: 'absolute',
+    top: 80,
+    left: 0,
+    right: 0,
+    zIndex: 25,
   },
   liveRegion: {
     position: 'absolute',

@@ -30,6 +30,7 @@ import {
 } from './sellerFixtures'
 import { getSellerOrders, sellerDisplayName } from './sellerOrders'
 import { getSellerProducts, getSellerInventory } from './api'
+import { sellerProducts } from './fixtures'
 import type { SellerProductFilter, SellerInventoryFilter } from './api'
 
 function delay(ms: number): Promise<void> {
@@ -107,24 +108,28 @@ export async function createProduct(input: {
   stockCount: number
   sku?: string
   image?: string
+  description?: string
+  status?: 'active' | 'draft'
 }): Promise<SellerProduct> {
   await randomDelay(400, 800)
   maybeError()
   const nowIso = new Date().toISOString()
   const stock: StockStatus =
     input.stockCount <= 0 ? 'out_of_stock' : input.stockCount < 10 ? 'low_stock' : 'in_stock'
+  const id = `sp-${Date.now()}`
+  const categoryName = sellerProducts.find(p => p.categoryId === input.categoryId)?.categoryName ?? 'General'
   const product: SellerProduct = {
-    id: `prod-${Date.now()}`,
+    id,
     name: input.name,
     sku: input.sku ?? `SKU-${Date.now()}`,
     image: input.image ?? `https://picsum.photos/seed/${Date.now()}/200/200`,
     price: input.price,
     currency: 'NPR',
     categoryId: input.categoryId,
-    categoryName: 'New Category',
+    categoryName,
     stock,
     stockCount: input.stockCount,
-    status: 'draft',
+    status: input.status ?? 'draft',
     salesCount: 0,
     viewsCount: 0,
     rating: 0,
@@ -132,6 +137,8 @@ export async function createProduct(input: {
     createdAt: nowIso,
     updatedAt: nowIso,
   }
+  // Persist to fixture array
+  sellerProducts.unshift(product)
   return product
 }
 
@@ -141,13 +148,107 @@ export async function updateProduct(
 ): Promise<SellerProduct | null> {
   await randomDelay(300, 600)
   maybeError()
-  return await getSellerProductById(productId).then(p => (p ? { ...p, ...data, updatedAt: new Date().toISOString() } : null))
+  const idx = sellerProducts.findIndex(p => p.id === productId)
+  if (idx < 0) return null
+  const updated: SellerProduct = {
+    ...sellerProducts[idx],
+    ...data,
+    updatedAt: new Date().toISOString(),
+  }
+  // Recompute stock status if stockCount changed
+  if (data.stockCount !== undefined) {
+    updated.stock = data.stockCount <= 0 ? 'out_of_stock' : data.stockCount < 10 ? 'low_stock' : 'in_stock'
+  }
+  sellerProducts[idx] = updated
+  return updated
 }
 
 export async function deleteProduct(productId: string): Promise<{ success: boolean }> {
   await randomDelay(300, 500)
   maybeError()
+  const idx = sellerProducts.findIndex(p => p.id === productId)
+  if (idx >= 0) sellerProducts.splice(idx, 1)
   return { success: true }
+}
+
+export async function duplicateProduct(productId: string): Promise<SellerProduct | null> {
+  await randomDelay(400, 700)
+  maybeError()
+  const original = sellerProducts.find(p => p.id === productId)
+  if (!original) return null
+  const copy: SellerProduct = {
+    ...original,
+    id: `sp-${Date.now()}`,
+    name: `${original.name} (copy)`,
+    sku: `${original.sku}-COPY`,
+    status: 'draft',
+    salesCount: 0,
+    viewsCount: 0,
+    rating: 0,
+    reviewCount: 0,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  }
+  sellerProducts.unshift(copy)
+  return copy
+}
+
+export async function toggleProductStatus(productId: string): Promise<SellerProduct | null> {
+  await randomDelay(200, 400)
+  maybeError()
+  const idx = sellerProducts.findIndex(p => p.id === productId)
+  if (idx < 0) return null
+  const newStatus = sellerProducts[idx].status === 'active' ? 'archived' : 'active'
+  sellerProducts[idx] = {
+    ...sellerProducts[idx],
+    status: newStatus,
+    updatedAt: new Date().toISOString(),
+  }
+  return sellerProducts[idx]
+}
+
+export async function bulkUpdateProducts(
+  ids: string[],
+  action: 'activate' | 'deactivate' | 'delete' | 'setCategory' | 'adjustPrice' | 'updateStock',
+  params?: { categoryId?: string; priceMode?: 'percent' | 'amount'; priceValue?: number; stockValue?: number },
+): Promise<{ success: boolean; count: number }> {
+  await randomDelay(400, 800)
+  maybeError()
+  let count = 0
+  for (const id of ids) {
+    const idx = sellerProducts.findIndex(p => p.id === id)
+    if (idx < 0) continue
+    if (action === 'delete') {
+      sellerProducts.splice(idx, 1)
+      count++
+      continue
+    }
+    const p = sellerProducts[idx]
+    if (action === 'activate') {
+      sellerProducts[idx] = { ...p, status: 'active', updatedAt: new Date().toISOString() }
+    } else if (action === 'deactivate') {
+      sellerProducts[idx] = { ...p, status: 'archived', updatedAt: new Date().toISOString() }
+    } else if (action === 'setCategory' && params?.categoryId) {
+      const catName = sellerProducts.find(sp => sp.categoryId === params.categoryId)?.categoryName ?? 'Category'
+      sellerProducts[idx] = { ...p, categoryId: params.categoryId, categoryName: catName, updatedAt: new Date().toISOString() }
+    } else if (action === 'adjustPrice' && params?.priceValue !== undefined) {
+      const oldPrice = p.price
+      const newPrice = params.priceMode === 'percent'
+        ? Math.round(oldPrice * (1 + params.priceValue / 100))
+        : oldPrice + params.priceValue
+      sellerProducts[idx] = { ...p, price: Math.max(0, newPrice), updatedAt: new Date().toISOString() }
+    } else if (action === 'updateStock' && params?.stockValue !== undefined) {
+      const newCount = Math.max(0, params.stockValue)
+      sellerProducts[idx] = {
+        ...p,
+        stockCount: newCount,
+        stock: newCount <= 0 ? 'out_of_stock' : newCount < 10 ? 'low_stock' : 'in_stock',
+        updatedAt: new Date().toISOString(),
+      }
+    }
+    count++
+  }
+  return { success: true, count }
 }
 
 export async function updateStock(

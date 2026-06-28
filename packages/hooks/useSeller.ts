@@ -148,6 +148,60 @@ export function useDeleteProduct() {
   })
 }
 
+export function useDuplicateProduct() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.duplicateProduct,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['seller-products'] })
+      qc.invalidateQueries({ queryKey: ['seller-inventory'] })
+    },
+  })
+}
+
+export function useToggleProductStatus() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.toggleProductStatus,
+    onMutate: async (productId: string) => {
+      await qc.cancelQueries({ queryKey: ['seller-products'] })
+      const prev = qc.getQueryData<{ items: SellerProduct[]; total: number; counts: Record<string, number> }>(['seller-products', {}])
+      if (prev) {
+        qc.setQueryData(['seller-products', {}], {
+          ...prev,
+          items: prev.items.map(p =>
+            p.id === productId
+              ? { ...p, status: (p.status === 'active' ? 'archived' : 'active') as SellerProductStatus, updatedAt: new Date().toISOString() }
+              : p
+          ),
+        })
+      }
+      return { prev }
+    },
+    onError: (_err, _productId, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['seller-products', {}], ctx.prev)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['seller-products'] })
+    },
+  })
+}
+
+export function useBulkUpdateProducts() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (vars: {
+      ids: string[]
+      action: 'activate' | 'deactivate' | 'delete' | 'setCategory' | 'adjustPrice' | 'updateStock'
+      params?: { categoryId?: string; priceMode?: 'percent' | 'amount'; priceValue?: number; stockValue?: number }
+    }) => api.bulkUpdateProducts(vars.ids, vars.action, vars.params),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['seller-products'] })
+      qc.invalidateQueries({ queryKey: ['seller-inventory'] })
+    },
+  })
+}
+
 /**
  * Optimistic stock update — updates the cache immediately, rolls back on error.
  * Inventory (SI) screens rely on this pattern.

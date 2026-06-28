@@ -6,7 +6,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft, Check, AlertCircle, Image as ImageIcon, Tag, DollarSign, FileText, Save, Plus, Trash2, ChevronLeft, ChevronRight, Star, Video } from 'lucide-react'
 import { Container, Screen, SafeImage, useReducedMotion } from '@chinooz/ui-web'
-import { useSellerCategories, useSellerProducts, useCategories } from '@chinooz/hooks'
+import { useSellerCategories, useSellerProducts, useCategories, useCreateProduct, useUpdateProduct, useSellerProductById } from '@chinooz/hooks'
 import { analytics } from '@chinooz/analytics'
 import { useSellerSessionStore } from '@chinooz/state'
 import { formatNPR } from '@chinooz/utils'
@@ -130,6 +130,13 @@ export default function ProductFormScreen() {
   const { data: sellerCats } = useSellerCategories()
   const { data: categoryTree } = useCategories()
   const { data: productData } = useSellerProducts({})
+  const { data: editProduct } = useSellerProductById(isEdit ? editId : null)
+  const createMutation = useCreateProduct()
+  const updateMutation = useUpdateProduct()
+
+  const productLoading = isEdit && !productData && !editProduct
+  const productError = false
+  const refetchProduct = () => {}
 
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
   const [initialForm, setInitialForm] = useState<FormState>(EMPTY_FORM)
@@ -162,10 +169,10 @@ export default function ProductFormScreen() {
     if (!isLoggedIn) router.replace('/onboarding')
   }, [isLoggedIn, router])
 
-  // Load product for edit
+  // Load product for edit — use dedicated hook or fallback to list
   useEffect(() => {
-    if (!isEdit || !productData) return
-    const product = productData.items.find(p => p.id === editId)
+    if (!isEdit) return
+    const product = editProduct ?? productData?.items.find(p => p.id === editId)
     if (product) {
       const loaded: FormState = {
         images: product.image ? [product.image] : [],
@@ -197,8 +204,10 @@ export default function ProductFormScreen() {
       }
       setForm(loaded)
       setInitialForm(loaded)
+    } else if (isEdit && !productLoading && !editProduct && !productData) {
+      setNotFound(true)
     }
-  }, [isEdit, editId, productData])
+  }, [isEdit, editId, editProduct, productData, productLoading])
 
   // Dirty check
   const isDirty = useMemo(() => {
@@ -327,30 +336,68 @@ export default function ProductFormScreen() {
     return true
   }
 
-  const handleSaveDraft = () => {
+  const handleSaveDraft = async () => {
     analytics.track({ event: 'seller_product_save_draft', screen: 'seller-product-form' })
     setSaveState('saving')
-    setTimeout(() => {
+    setSaveError(false)
+    try {
+      const payload = {
+        name: form.name || 'Untitled',
+        price: Number(form.price) || 0,
+        categoryId: form.categoryId || 'cat-general',
+        stockCount: Number(form.stockCount) || 0,
+        sku: form.sku || undefined,
+        image: form.images[0] || undefined,
+        description: form.description || undefined,
+        status: 'draft' as const,
+      }
+      if (isEdit && editId) {
+        await updateMutation.mutateAsync({ productId: editId, data: { ...payload, status: 'draft' } as any })
+      } else {
+        await createMutation.mutateAsync(payload)
+      }
       setSaveState('saved')
       setInitialForm(form)
       showSnackbar(t('seller.products.formDraftSaved'))
       setTimeout(() => setSaveState('idle'), 2000)
-    }, 500)
+    } catch {
+      setSaveState('idle')
+      setSaveError(true)
+    }
   }
 
-  const handlePublish = () => {
+  const handlePublish = async () => {
     if (!validateAll()) {
       showSnackbar(t('seller.products.formErrorSummary'))
       return
     }
     setPublishing(true)
+    setPublishError(false)
     analytics.track({ event: 'seller_product_publish', screen: 'seller-product-form' })
-    setTimeout(() => {
+    try {
+      const payload = {
+        name: form.name,
+        price: Number(form.price),
+        categoryId: form.categoryId,
+        stockCount: Number(form.stockCount),
+        sku: form.sku || undefined,
+        image: form.images[0] || undefined,
+        description: form.description || undefined,
+        status: 'active' as const,
+      }
+      if (isEdit && editId) {
+        await updateMutation.mutateAsync({ productId: editId, data: { ...payload, status: 'active' } as any })
+      } else {
+        await createMutation.mutateAsync(payload)
+      }
       setPublishing(false)
       setInitialForm(form)
       showSnackbar(t('seller.products.formPublished'))
       setTimeout(() => router.push('/products'), 1200)
-    }, 600)
+    } catch {
+      setPublishing(false)
+      setPublishError(true)
+    }
   }
 
   const handleBack = () => {

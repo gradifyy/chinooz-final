@@ -2,9 +2,11 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type {
   ActiveDelivery as Rs3ActiveDelivery,
+  ActiveDeliveryError,
   DeliveryLeg,
   DeliveryStatus,
   GeoPoint,
+  QueuedStatusUpdate,
   RiderJob,
   RouteStop,
 } from '@chinooz/types'
@@ -39,6 +41,12 @@ interface ActiveDeliveryState {
   activeDelivery: ActiveDelivery | null
   /** The active leg's simulator state, kept in sync with `activeDelivery`. */
   sim: TripSimState | null
+  /** Queued status updates waiting for reconnect (offline-tolerant). */
+  pendingQueue: QueuedStatusUpdate[]
+  /** Current error state, if any (drives retry surfaces). */
+  error: ActiveDeliveryError | null
+  /** True when the delivery was restored after an app-kill relaunch. */
+  restored: boolean
 
   /** Accept a job and begin the delivery (entry point from Jobs/Home). */
   acceptJob: (job: RiderJob) => void
@@ -64,6 +72,18 @@ interface ActiveDeliveryState {
   tick: (deltaSeconds: number) => void
   /** Clear the delivery once delivered / cancelled / failed and dismissed. */
   clearActiveDelivery: () => void
+  /** Queue a status update (used when offline). */
+  queueStatusUpdate: (update: QueuedStatusUpdate) => void
+  /** Sync queued updates on reconnect (mock — processes the queue). */
+  syncQueue: () => void
+  /** Set the current error state. */
+  setError: (error: ActiveDeliveryError | null) => void
+  /** Mark the delivery as cancelled by seller/system mid-trip. */
+  cancelBySystem: (reason: string, compensationNote?: string) => void
+  /** Acknowledge the restore (clears the restored flag). */
+  acknowledgeRestore: () => void
+  /** Clear the error state. */
+  clearError: () => void
 }
 
 /** Ordered happy-path statuses. */
@@ -114,6 +134,9 @@ export const useActiveDeliveryStore = create<ActiveDeliveryState>()(
     (set, get) => ({
       activeDelivery: null,
       sim: null,
+      pendingQueue: [],
+      error: null,
+      restored: false,
 
       acceptJob: job => {
         const now = Date.now()
@@ -315,12 +338,80 @@ export const useActiveDeliveryStore = create<ActiveDeliveryState>()(
         })
       },
 
-      clearActiveDelivery: () => set({ activeDelivery: null, sim: null }),
+      clearActiveDelivery: () => set({ activeDelivery: null, sim: null, pendingQueue: [], error: null, restored: false }),
+
+      queueStatusUpdate: update => {
+        set(state => ({ pendingQueue: [...state.pendingQueue, update] }))
+      },
+
+      syncQueue: () => {
+        const { pendingQueue, activeDelivery } = get()
+        if (pendingQueue.length === 0 || !activeDelivery) {
+          set({ pendingQueue: [] })
+          return
+        }
+        // Mock: process the queue in order. The last update wins (the most
+        // recent status). In production, each would be sent to the API.
+        const last = pendingQueue[pendingQueue.length - 1]
+        const now = Date.now()
+        if (last.reason && (last.status === 'cancelled' || last.status === 'failed')) {
+          set({
+            pendingQueue: [],
+            sim: null,
+            activeDelivery: {
+              ...activeDelivery,
+              status: last.status,
+              cancelReason: last.status === 'cancelled' ? last.reason : undefined,
+              failureReason: last.status === 'failed' ? last.reason : undefined,
+              minimized: false,
+              completedAt: now,
+              updatedAt: now,
+            },
+          })
+        } else if (FLOW.includes(last.status)) {
+          set({
+            pendingQueue: [],
+            activeDelivery: {
+              ...activeDelivery,
+              status: last.status,
+              updatedAt: now,
+            },
+          })
+        } else {
+          set({ pendingQueue: [] })
+        }
+      },
+
+      setError: error => set({ error }),
+      clearError: () => set({ error: null }),
+
+      cancelBySystem: (reason, compensationNote) => {
+        const { activeDelivery } = get()
+        if (!activeDelivery) return
+        set({
+          sim: null,
+          activeDelivery: {
+            ...activeDelivery,
+            status: 'cancelled',
+            cancelReason: reason,
+            cancelledBySystem: true,
+            compensationNote,
+            minimized: false,
+            completedAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+        })
+      },
+
+      acknowledgeRestore: () => set({ restored: false }),
     }),
     {
       name: 'chinooz-rider-active-delivery',
       storage: getStorage(),
-      partialize: state => ({ activeDelivery: state.activeDelivery }),
+      partialize: state => ({
+        activeDelivery: state.activeDelivery,
+        pendingQueue: state.pendingQueue,
+      }),
     },
   ),
 )

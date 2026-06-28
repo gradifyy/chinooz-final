@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Search, SlidersHorizontal, ArrowUpDown, Plus, X, Package, ChevronDown } from 'lucide-react'
 import { Container, Screen, Button, EmptyState, SafeImage, useReducedMotion } from '@chinooz/ui-web'
-import { useSellerProducts, useSellerCategories } from '@chinooz/hooks'
+import { useSellerProducts, useSellerCategories, useDeleteProduct, useDuplicateProduct, useToggleProductStatus, useBulkUpdateProducts } from '@chinooz/hooks'
 import { analytics } from '@chinooz/analytics'
 import { useSellerSessionStore } from '@chinooz/state'
 import { formatNPR } from '@chinooz/utils'
@@ -143,6 +143,11 @@ export default function ProductsScreen() {
     router.push('/products/new')
   }
 
+  const deleteMutation = useDeleteProduct()
+  const duplicateMutation = useDuplicateProduct()
+  const toggleMutation = useToggleProductStatus()
+  const bulkMutation = useBulkUpdateProducts()
+
   const handleEdit = (p: SellerProduct) => {
     analytics.track({ event: 'seller_product_edit_tapped', screen: 'seller-products', properties: { productId: p.id } })
     router.push(`/products/${p.id}/edit`)
@@ -159,15 +164,22 @@ export default function ProductsScreen() {
 
   const handleDuplicate = (p: SellerProduct) => {
     analytics.track({ event: 'seller_product_duplicate_tapped', screen: 'seller-products', properties: { productId: p.id } })
+    duplicateMutation.mutate(p.id)
   }
   const handleToggleActive = (p: SellerProduct) => {
     analytics.track({ event: 'seller_product_toggle_active', screen: 'seller-products', properties: { productId: p.id, from: p.status } })
+    toggleMutation.mutate(p.id)
   }
   const handleDelete = (p: SellerProduct) => {
     analytics.track({ event: 'seller_product_delete_tapped', screen: 'seller-products', properties: { productId: p.id } })
+    deleteMutation.mutate(p.id)
   }
   const handleStockChange = (p: SellerProduct, stock: number) => {
     analytics.track({ event: 'seller_product_stock_edit', screen: 'seller-products', properties: { productId: p.id, stock } })
+    // Use updateProduct via the toggle mutation pattern — we'll use a direct mutate
+    import('@chinooz/mock-data').then(api => {
+      api.updateProduct(p.id, { stockCount: stock })
+    })
   }
 
   const allSelected = items.length > 0 && selectedIds.size === items.length
@@ -185,13 +197,19 @@ export default function ProductsScreen() {
 
   const handleBulkApply = async (action: BulkAction, params?: BulkActionParams): Promise<boolean> => {
     analytics.track({ event: 'seller_bulk_apply', screen: 'seller-products', properties: { action, count: selectedIds.size, params } })
-    // Optimistic: simulate success (mock). In SP10 this would call a mutation.
-    // On error, rollback would restore the previous query cache.
-    await new Promise(r => setTimeout(r, 400))
-    if (action === 'delete') {
-      setSelectedIds(new Set())
+    try {
+      const result = await bulkMutation.mutateAsync({
+        ids: [...selectedIds],
+        action,
+        params,
+      })
+      if (action === 'delete') {
+        setSelectedIds(new Set())
+      }
+      return result.success
+    } catch {
+      return false
     }
-    return true
   }
 
   const sellerCatList = sellerCats?.map(c => ({ id: c.id, name: c.name })) ?? []
