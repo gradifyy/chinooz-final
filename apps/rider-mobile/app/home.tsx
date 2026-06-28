@@ -63,8 +63,6 @@ export default function RiderHomeScreen() {
   const activeDelivery = useActiveDeliveryStore(s => s.activeDelivery)
   const resumeActive = useActiveDeliveryStore(s => s.resume)
   const tickOnline = useOnlineStatusStore(s => s.tickOnline)
-  const onlineSecondsToday = useOnlineStatusStore(s => s.onlineSecondsToday)
-
   const isLoggedIn = useRiderSessionStore(s => s.isLoggedIn)
   const toggleLogin = useRiderSessionStore(s => s.toggleLogin)
   const rider = useRiderSessionStore(s => s.rider)
@@ -113,13 +111,6 @@ export default function RiderHomeScreen() {
     if (h < 21) return 'rider.home.greetingEvening'
     return 'rider.home.greetingNight'
   }, [])
-
-  const onlineTimeDisplay = useMemo(() => {
-    const total = Math.floor(onlineSecondsToday / 60)
-    const hours = Math.floor(total / 60)
-    const minutes = total % 60
-    return t('rider.home.hoursShort', { hours, minutes })
-  }, [onlineSecondsToday, t])
 
   // Reuse the shared integer-paisa money helpers for the smoke-test payout.
   const samplePayoutPaisa = nprToPaisa(125.5)
@@ -252,13 +243,7 @@ export default function RiderHomeScreen() {
 
       {/* Snapshot slot */}
       <View style={styles.section}>
-        <SnapshotSlot
-          status={status}
-          title={t('rider.home.snapshotTitle')}
-          emptyText={t('rider.home.snapshotEmpty')}
-          onlineTimeLabel={t('rider.home.onlineTimeToday')}
-          onlineTimeValue={onlineTimeDisplay}
-        />
+        <SnapshotSlot title={t('rider.home.snapshotTitle')} />
       </View>
 
       {/* Incentives & Quests entry — reachable from Home, not a bottom tab */}
