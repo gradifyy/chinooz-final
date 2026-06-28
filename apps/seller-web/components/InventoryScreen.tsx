@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import {
@@ -385,7 +385,7 @@ function ProductGroupRow({
 
 const VARIANT_GRID = 'grid grid-cols-[1.4fr_1fr_120px_110px_70px_130px] items-center'
 
-function VariantRow({ v, onStockChange, editState, selected, onToggleSelect, onShowHistory }: {
+const VariantRow = memo(function VariantRow({ v, onStockChange, editState, selected, onToggleSelect, onShowHistory }: {
   v: SellerInventoryVariant
   onStockChange: (newStock: number, mode: 'set' | 'adjust', reason?: 'restock' | 'correction' | 'damage' | 'loss' | 'return' | 'other') => void
   editState: 'idle' | 'saving' | 'saved' | 'error'
@@ -419,7 +419,7 @@ function VariantRow({ v, onStockChange, editState, selected, onToggleSelect, onS
       )}
     </div>
   )
-}
+})
 
 function ProductGroupCard({
   product,
@@ -815,7 +815,17 @@ export default function InventoryScreen() {
                       className="inline-flex items-center gap-2 text-sm font-semibold text-error hover:underline"
                     >
                       <AlertTriangle size={16} />
-                      {t('seller.inventory.alertsTitle')} ({alertsQ.data.total})
+                      {t('seller.inventory.alertsTitle')}
+                      <motion.span
+                        key={alertsQ.data.total}
+                        initial={reduced ? false : { scale: 1 }}
+                        animate={reduced ? {} : { scale: [1, 1.3, 1] }}
+                        transition={reduced ? { duration: 0 } : { duration: 0.3, type: 'spring', damping: 12, stiffness: 300 }}
+                        className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-error-light text-error text-xs font-semibold"
+                        style={{ fontVariant: 'tabular-nums' }}
+                      >
+                        {alertsQ.data.total}
+                      </motion.span>
                       <ChevronDown size={14} className={'transition-transform ' + (showAlerts ? 'rotate-180' : '')} />
                     </button>
                     {showAlerts && (
@@ -843,11 +853,12 @@ export default function InventoryScreen() {
                   />
                 </div>
 
-                {/* Web data table */}
+                {/* Web data table — CSS containment for scroll perf */}
                 <div
                   className="hidden md:block rounded-xl border border-border-light bg-surface overflow-hidden"
                   role="table"
                   aria-label={t('seller.inventory.title')}
+                  style={{ contain: 'content' }}
                 >
                   {/* Sticky header */}
                   <div role="rowgroup" className="sticky top-[112px] z-10 bg-surface border-b border-border">

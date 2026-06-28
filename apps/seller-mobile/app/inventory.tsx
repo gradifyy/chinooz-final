@@ -1,10 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react'
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   ScrollView,
+  FlatList,
   StyleSheet,
   ActivityIndicator,
   LayoutChangeEvent,
@@ -171,6 +172,7 @@ function VariantRowCard({ v, onStockChange, editState, selected, onToggleSelect,
   onToggleSelect?: (id: string) => void
   onShowHistory?: () => void
 }) {
+  const { t } = useTranslation()
   return (
     <View>
       <InventoryRow
@@ -190,14 +192,14 @@ function VariantRowCard({ v, onStockChange, editState, selected, onToggleSelect,
           accessibilityLabel="Stock history"
           style={styles.historyBtn}
         >
-          <Text style={styles.historyBtnText}>History</Text>
+          <Text style={styles.historyBtnText}>{t('seller.inventory.history')}</Text>
         </TouchableOpacity>
       )}
     </View>
   )
 }
 
-function ProductGroupCard({
+const ProductGroupCard = memo(function ProductGroupCard({
   product,
   expanded,
   onToggle,
@@ -271,7 +273,7 @@ function ProductGroupCard({
       </Collapsible>
     </View>
   )
-}
+})
 
 export default function InventoryScreen() {
   const { t } = useTranslation()
@@ -520,25 +522,21 @@ export default function InventoryScreen() {
       </View>
 
       {/* Body */}
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ padding: spacing[4], paddingBottom: insets.bottom + spacing[6] }}
-        keyboardShouldPersistTaps="handled"
-      >
-        {isLoading && (
+      {isLoading ? (
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: spacing[4] }}>
           <InventoryRowSkeletons count={4} />
-        )}
-
-        {isError && !isLoading && (
+        </ScrollView>
+      ) : isError ? (
+        <View style={{ padding: spacing[4] }}>
           <EmptyState
             icon={<WifiOff size={32} color={colors.textMuted} />}
             title={t('seller.inventory.loadError')}
             subtitle={t('seller.inventory.loadErrorSub')}
             action={{ label: t('seller.inventory.retry'), onPress: () => invQ.refetch() }}
           />
-        )}
-
-        {!isLoading && !isError && products.length === 0 && (
+        </View>
+      ) : products.length === 0 ? (
+        <View style={{ padding: spacing[4] }}>
           <EmptyState
             icon={tab === 'out_of_stock'
               ? <CheckCircle size={32} color={colors.success} />
@@ -567,39 +565,49 @@ export default function InventoryScreen() {
             }
             action={tab === 'all' && !query ? { label: t('seller.inventory.addProduct'), onPress: () => {} } : undefined}
           />
-        )}
-
-        {!isLoading && !isError && products.length > 0 && (
-          <View style={{ gap: spacing[2.5] }}>
-            {/* Low-stock alerts */}
-            {alertsQ.data && alertsQ.data.total > 0 && (
-              <LowStockAlerts
-                summary={alertsQ.data}
-                onJumpToVariant={(variantId, productId) => {
-                  setExpanded(prev => { const n = new Set(prev); n.add(productId); return n })
-                }}
-              />
-            )}
-            {products.map(p => (
-              <ProductGroupCard
-                key={p.id}
-                product={p}
-                expanded={expanded.has(p.id)}
-                onToggle={() => toggleGroup(p.id)}
-                reduced={reduced}
-                onStockChange={handleStockChange}
-                variantEditState={variantEditState}
-                selected={selected}
-                onToggleSelect={toggleSelect}
-                onShowHistory={setHistoryVariant}
-              />
-            ))}
-            <Text style={styles.countText}>
+        </View>
+      ) : (
+        <FlatList
+          data={products}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item: p }) => (
+            <ProductGroupCard
+              product={p}
+              expanded={expanded.has(p.id)}
+              onToggle={() => toggleGroup(p.id)}
+              reduced={reduced}
+              onStockChange={handleStockChange}
+              variantEditState={variantEditState}
+              selected={selected}
+              onToggleSelect={toggleSelect}
+              onShowHistory={setHistoryVariant}
+            />
+          )}
+          ListHeaderComponent={
+            alertsQ.data && alertsQ.data.total > 0 ? (
+              <View style={{ paddingBottom: spacing[2] }}>
+                <LowStockAlerts
+                  summary={alertsQ.data}
+                  onJumpToVariant={(variantId, productId) => {
+                    setExpanded(prev => { const n = new Set(prev); n.add(productId); return n })
+                  }}
+                />
+              </View>
+            ) : null
+          }
+          ListFooterComponent={
+            <Text style={[styles.countText, { paddingBottom: insets.bottom + spacing[6] }]}>
               {t('seller.inventory.count', { count: invQ.data?.totalVariants ?? 0 })}
             </Text>
-          </View>
-        )}
-      </ScrollView>
+          }
+          contentContainerStyle={{ padding: spacing[4], gap: spacing[2.5] }}
+          keyboardShouldPersistTaps="handled"
+          removeClippedSubviews
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+        />
+      )}
 
       {/* Filter sheet */}
       <BottomSheet visible={filterOpen} onClose={() => setFilterOpen(false)} title={t('seller.inventory.filterTitle')}>

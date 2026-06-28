@@ -211,6 +211,9 @@ export function useUpdateStock() {
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ['seller-inventory'] })
       qc.invalidateQueries({ queryKey: ['seller-products'] })
+      qc.invalidateQueries({ queryKey: ['products'] })
+      qc.invalidateQueries({ queryKey: ['search'] })
+      qc.invalidateQueries({ queryKey: ['low-stock-alerts'] })
     },
   }
 
@@ -270,6 +273,9 @@ export function useBulkUpdateStock() {
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ['seller-inventory'] })
       qc.invalidateQueries({ queryKey: ['seller-products'] })
+      qc.invalidateQueries({ queryKey: ['products'] })
+      qc.invalidateQueries({ queryKey: ['search'] })
+      qc.invalidateQueries({ queryKey: ['low-stock-alerts'] })
     },
   }
 
@@ -407,6 +413,77 @@ export function usePartialShipOrder() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['seller-orders'] })
       qc.invalidateQueries({ queryKey: ['seller-order'] })
+    },
+  })
+}
+
+export function useBulkUpdateStatus() {
+  const qc = useQueryClient()
+  type Vars = { subOrderIds: string[]; newStatusKey: SellerOrderStatusKey }
+  type Result = { results: { subOrderId: string; success: boolean; statusKey: SellerOrderStatusKey }[]; succeeded: number; failed: number }
+
+  return useMutation<Result, Error, Vars>({
+    mutationFn: vars => api.bulkUpdateStatus(vars.subOrderIds, vars.newStatusKey),
+    onMutate: async (vars: Vars) => {
+      await qc.cancelQueries({ queryKey: ['seller-orders'] })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const prevOrders = qc.getQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] })
+      qc.setQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] }, (old) => {
+        if (!old) return old
+        return old.map(o =>
+          vars.subOrderIds.includes(o.subOrderId)
+            ? { ...o, statusKey: vars.newStatusKey }
+            : o,
+        )
+      })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return { prevOrders }
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (_err: Error, _vars: Vars, ctx: any) => {
+      if (ctx?.prevOrders) {
+        for (const [key, data] of ctx.prevOrders) {
+          qc.setQueryData(key, data)
+        }
+      }
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['seller-orders'] })
+    },
+  })
+}
+
+export function useBulkFulfillOrders() {
+  const qc = useQueryClient()
+  type Vars = { shipments: { subOrderId: string; trackingNumber: string; carrier: string }[] }
+  type Result = { results: { subOrderId: string; success: boolean; trackingNumber: string }[]; succeeded: number; failed: number }
+
+  return useMutation<Result, Error, Vars>({
+    mutationFn: vars => api.bulkFulfillOrders(vars.shipments),
+    onMutate: async (vars: Vars) => {
+      await qc.cancelQueries({ queryKey: ['seller-orders'] })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const prevOrders = qc.getQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] })
+      const idSet = new Set(vars.shipments.map(s => s.subOrderId))
+      qc.setQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] }, (old) => {
+        if (!old) return old
+        return old.map(o =>
+          idSet.has(o.subOrderId) ? { ...o, statusKey: 'shipped' as SellerOrderStatusKey } : o,
+        )
+      })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return { prevOrders }
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (_err: Error, _vars: Vars, ctx: any) => {
+      if (ctx?.prevOrders) {
+        for (const [key, data] of ctx.prevOrders) {
+          qc.setQueryData(key, data)
+        }
+      }
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['seller-orders'] })
     },
   })
 }
