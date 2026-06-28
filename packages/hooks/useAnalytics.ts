@@ -15,7 +15,17 @@ export function useAnalytics(
   opts: { compare?: boolean; filter?: AnalyticsFilter } = {},
 ) {
   return useQuery({
-    queryKey: ['analytics', section, range.key, range.days, range.custom?.start, range.custom?.end, opts.compare, opts.filter?.categoryId, opts.filter?.productId],
+    queryKey: [
+      'analytics',
+      section,
+      range.key,
+      range.days,
+      range.custom?.start,
+      range.custom?.end,
+      opts.compare,
+      opts.filter?.categoryId,
+      opts.filter?.productId,
+    ],
     queryFn: () => analyticsService.getAnalytics(section, range, opts),
     staleTime: STALE_TIME,
   })
@@ -31,7 +41,16 @@ export function useSalesTrend(
   } = {},
 ) {
   return useQuery({
-    queryKey: ['analytics-sales-trend', range.key, range.days, opts.granularity, opts.grossNet, opts.compare, opts.filter?.categoryId, opts.filter?.productId],
+    queryKey: [
+      'analytics-sales-trend',
+      range.key,
+      range.days,
+      opts.granularity,
+      opts.grossNet,
+      opts.compare,
+      opts.filter?.categoryId,
+      opts.filter?.productId,
+    ],
     queryFn: () => analyticsService.getSalesTrend(range, opts),
     staleTime: STALE_TIME,
   })

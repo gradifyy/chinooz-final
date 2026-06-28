@@ -131,10 +131,15 @@ export {
   useClaimQuest,
   useDemandZones,
   useSurgeZones,
+  useSurgeDetail,
   useDemandForecast,
   useZoneDetail,
   useRiderPerformance,
   useRiderPerformanceDetail,
+  useRiderMetricDetail,
+  useRiderRatings,
+  useReportRiderRating,
+  useRiderTierDetail,
 } from './useRider'
 
 export {

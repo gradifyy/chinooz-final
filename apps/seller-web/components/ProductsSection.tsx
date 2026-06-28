@@ -2,9 +2,18 @@
 
 import React, { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { motion, AnimatePresence } from 'framer-motion'
-import { TrendingUp, TrendingDown, Minus, ArrowUp, ArrowDown, ArrowLeft, Package } from 'lucide-react'
+import { motion } from 'framer-motion'
+import {
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  ArrowUp,
+  ArrowDown,
+  ArrowLeft,
+  Package,
+} from 'lucide-react'
 import { useReducedMotion } from '@chinooz/ui-web'
+import { KpiValue } from './AnalyticsStates'
 import {
   type AnalyticsSectionData,
   type AnalyticsProductRow,
@@ -128,7 +137,12 @@ export default function ProductsSection({
               className="text-[22px] leading-7 font-bold text-text tabular-nums"
               style={{ fontVariantNumeric: 'tabular-nums' }}
             >
-              {kpi.value}
+              <KpiValue
+                rawValue={kpi.rawValue}
+                displayValue={kpi.value}
+                isMoney={kpi.key === 'pRevenue'}
+                isPct={kpi.key === 'pConvRate' || kpi.key === 'pReturnRate'}
+              />
             </span>
             <div className="flex items-center gap-1">
               <TrendIcon t={kpi.trend} />
@@ -224,10 +238,16 @@ function ProductTable({
 
   return (
     <div className="rounded-lg border border-border-light bg-surface overflow-hidden overflow-x-auto">
-      <table className="w-full border-collapse" aria-label={t('seller.analytics.products.tableAria')}>
+      <table
+        className="w-full border-collapse"
+        aria-label={t('seller.analytics.products.tableAria')}
+      >
         <thead>
           <tr className="border-b border-border bg-background sticky top-0">
-            <th scope="col" className="px-4 py-2.5 text-[12px] font-semibold text-text-muted tracking-wide uppercase text-left">
+            <th
+              scope="col"
+              className="px-4 py-2.5 text-[12px] font-semibold text-text-muted tracking-wide uppercase text-left"
+            >
               {t('seller.analytics.products.colProduct')}
             </th>
             {COLUMNS.map(col => (
@@ -244,7 +264,10 @@ function ProductTable({
                 </span>
               </th>
             ))}
-            <th scope="col" className="px-4 py-2.5 text-[12px] font-semibold text-text-muted tracking-wide uppercase text-center">
+            <th
+              scope="col"
+              className="px-4 py-2.5 text-[12px] font-semibold text-text-muted tracking-wide uppercase text-center"
+            >
               {t('seller.analytics.products.colSpark')}
             </th>
           </tr>
@@ -268,7 +291,9 @@ function ProductTable({
             >
               <td className="py-2 px-4">
                 <div className="flex items-center gap-2">
-                  <span className="text-[12px] font-semibold text-text-tertiary tabular-nums w-5">{i + 1}</span>
+                  <span className="text-[12px] font-semibold text-text-tertiary tabular-nums w-5">
+                    {i + 1}
+                  </span>
                   <div className="min-w-0">
                     <p className="text-[14px] font-semibold text-text truncate max-w-[220px]">
                       {p.name}
@@ -283,15 +308,31 @@ function ProductTable({
                   </div>
                 </div>
               </td>
-              <td className="py-2 px-4 text-right text-[13px] text-text-secondary tabular-nums">{p.views.toLocaleString()}</td>
-              <td className="py-2 px-4 text-right text-[13px] text-text-secondary tabular-nums">{p.addToCart.toLocaleString()}</td>
-              <td className="py-2 px-4 text-right text-[13px] text-text-secondary tabular-nums">{p.units.toLocaleString()}</td>
-              <td className="py-2 px-4 text-right text-[14px] font-semibold text-text tabular-nums">{fmtNPR(p.revenue)}</td>
-              <td className="py-2 px-4 text-right text-[13px] tabular-nums">
-                <span className={p.convPct < 3 ? 'text-warning font-semibold' : 'text-text-secondary'}>{p.convPct}%</span>
+              <td className="py-2 px-4 text-right text-[13px] text-text-secondary tabular-nums">
+                {p.views.toLocaleString()}
+              </td>
+              <td className="py-2 px-4 text-right text-[13px] text-text-secondary tabular-nums">
+                {p.addToCart.toLocaleString()}
+              </td>
+              <td className="py-2 px-4 text-right text-[13px] text-text-secondary tabular-nums">
+                {p.units.toLocaleString()}
+              </td>
+              <td className="py-2 px-4 text-right text-[14px] font-semibold text-text tabular-nums">
+                {fmtNPR(p.revenue)}
               </td>
               <td className="py-2 px-4 text-right text-[13px] tabular-nums">
-                <span className={p.returnRate > 5 ? 'text-error font-semibold' : 'text-text-secondary'}>{p.returnRate}%</span>
+                <span
+                  className={p.convPct < 3 ? 'text-warning font-semibold' : 'text-text-secondary'}
+                >
+                  {p.convPct}%
+                </span>
+              </td>
+              <td className="py-2 px-4 text-right text-[13px] tabular-nums">
+                <span
+                  className={p.returnRate > 5 ? 'text-error font-semibold' : 'text-text-secondary'}
+                >
+                  {p.returnRate}%
+                </span>
               </td>
               <td className="py-2 px-4 text-center">
                 <Sparkline data={p.sparkline} />
@@ -349,7 +390,9 @@ function ProductCardMobile({
       tabIndex={0}
       aria-label={t('seller.analytics.products.viewProductAria', { name: product.name })}
     >
-      <span className="text-[14px] font-bold text-text-tertiary tabular-nums w-6 shrink-0">{rank}</span>
+      <span className="text-[14px] font-bold text-text-tertiary tabular-nums w-6 shrink-0">
+        {rank}
+      </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
           <p className="text-[14px] font-semibold text-text truncate">
@@ -396,7 +439,11 @@ function CalloutCard({
         ? 'border-warning/30 bg-warning/5'
         : 'border-error/30 bg-error/5'
   const iconColor =
-    callout.type === 'top' ? 'text-success' : callout.type === 'under' ? 'text-warning' : 'text-error'
+    callout.type === 'top'
+      ? 'text-success'
+      : callout.type === 'under'
+        ? 'text-warning'
+        : 'text-error'
 
   return (
     <div
@@ -412,7 +459,10 @@ function CalloutCard({
       <p className="text-[11px] text-text-muted mt-0.5 mb-2">{callout.hint}</p>
       <ul className="flex flex-col gap-1">
         {callout.productNames.map(name => (
-          <li key={name} className="text-[12px] font-medium text-text flex items-center justify-between">
+          <li
+            key={name}
+            className="text-[12px] font-medium text-text flex items-center justify-between"
+          >
             <span className="truncate">{name}</span>
             {callout.type === 'oos_demand' && (
               <a
@@ -449,10 +499,16 @@ function CategoryComparison({
             <li key={cat.id}>
               <div className="flex items-center justify-between mb-1">
                 <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-text">
-                  <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: cat.color }} aria-hidden="true" />
+                  <span
+                    className="w-2.5 h-2.5 rounded-sm"
+                    style={{ backgroundColor: cat.color }}
+                    aria-hidden="true"
+                  />
                   {cat.label}
                 </span>
-                <span className="text-[12px] font-semibold text-text tabular-nums">{fmtNPR(cat.revenue)}</span>
+                <span className="text-[12px] font-semibold text-text tabular-nums">
+                  {fmtNPR(cat.revenue)}
+                </span>
               </div>
               <div className="h-2 rounded-full bg-background overflow-hidden">
                 <motion.div
@@ -467,7 +523,9 @@ function CategoryComparison({
                 <span className="text-[10px] text-text-tertiary">
                   {cat.share}% · {cat.units} {t('seller.analytics.products.colUnits')}
                 </span>
-                <span className="text-[10px] text-text-tertiary">{cat.convPct}% {t('seller.analytics.products.colConv')}</span>
+                <span className="text-[10px] text-text-tertiary">
+                  {cat.convPct}% {t('seller.analytics.products.colConv')}
+                </span>
               </div>
             </li>
           )
@@ -480,11 +538,21 @@ function CategoryComparison({
         <table className="mt-2 w-full text-[12px]">
           <thead>
             <tr className="border-b border-border-light">
-              <th scope="col" className="text-left py-1.5 font-semibold text-text-muted">{t('seller.analytics.colLabel')}</th>
-              <th scope="col" className="text-right py-1.5 font-semibold text-text-muted">{t('seller.analytics.products.colRevenue')}</th>
-              <th scope="col" className="text-right py-1.5 font-semibold text-text-muted">{t('seller.analytics.products.colUnits')}</th>
-              <th scope="col" className="text-right py-1.5 font-semibold text-text-muted">{t('seller.analytics.colShare')}</th>
-              <th scope="col" className="text-right py-1.5 font-semibold text-text-muted">{t('seller.analytics.products.colConv')}</th>
+              <th scope="col" className="text-left py-1.5 font-semibold text-text-muted">
+                {t('seller.analytics.colLabel')}
+              </th>
+              <th scope="col" className="text-right py-1.5 font-semibold text-text-muted">
+                {t('seller.analytics.products.colRevenue')}
+              </th>
+              <th scope="col" className="text-right py-1.5 font-semibold text-text-muted">
+                {t('seller.analytics.products.colUnits')}
+              </th>
+              <th scope="col" className="text-right py-1.5 font-semibold text-text-muted">
+                {t('seller.analytics.colShare')}
+              </th>
+              <th scope="col" className="text-right py-1.5 font-semibold text-text-muted">
+                {t('seller.analytics.products.colConv')}
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -531,23 +599,42 @@ function ProductDetail({
         {t('seller.analytics.products.detailBack')}
       </button>
 
-      <h2 id="an-product-detail-title" className="text-xl font-bold text-text mb-1">{p.name}</h2>
+      <h2 id="an-product-detail-title" className="text-xl font-bold text-text mb-1">
+        {p.name}
+      </h2>
       <p className="text-sm text-text-muted mb-6">{p.category}</p>
 
       {/* Product KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-6">
-        <DetailKpi label={t('seller.analytics.products.detailKpiViews')} value={p.views.toLocaleString()} />
-        <DetailKpi label={t('seller.analytics.products.detailKpiAddToCart')} value={p.addToCart.toLocaleString()} />
-        <DetailKpi label={t('seller.analytics.products.detailKpiUnits')} value={p.units.toLocaleString()} />
-        <DetailKpi label={t('seller.analytics.products.detailKpiRevenue')} value={fmtNPR(p.revenue)} />
+        <DetailKpi
+          label={t('seller.analytics.products.detailKpiViews')}
+          value={p.views.toLocaleString()}
+        />
+        <DetailKpi
+          label={t('seller.analytics.products.detailKpiAddToCart')}
+          value={p.addToCart.toLocaleString()}
+        />
+        <DetailKpi
+          label={t('seller.analytics.products.detailKpiUnits')}
+          value={p.units.toLocaleString()}
+        />
+        <DetailKpi
+          label={t('seller.analytics.products.detailKpiRevenue')}
+          value={fmtNPR(p.revenue)}
+        />
         <DetailKpi label={t('seller.analytics.products.detailKpiConv')} value={`${p.convPct}%`} />
-        <DetailKpi label={t('seller.analytics.products.detailKpiReturn')} value={`${p.returnRate}%`} />
+        <DetailKpi
+          label={t('seller.analytics.products.detailKpiReturn')}
+          value={`${p.returnRate}%`}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Trend */}
         <div className="rounded-lg border border-border-light bg-surface p-5">
-          <h3 className="text-sm font-semibold text-text mb-4">{t('seller.analytics.products.detailTrend')}</h3>
+          <h3 className="text-sm font-semibold text-text mb-4">
+            {t('seller.analytics.products.detailTrend')}
+          </h3>
           {compare && (
             <div className="flex items-center gap-3 text-[11px] text-text-muted mb-3">
               <span className="inline-flex items-center gap-1.5">
@@ -560,17 +647,31 @@ function ProductDetail({
               </span>
             </div>
           )}
-          <div className="flex items-end gap-2 h-36" role="img" aria-label={detail.trend.map(pt => `${pt.label}: ${fmtNPR(pt.current)}`).join(', ')}>
+          <div
+            className="flex items-end gap-2 h-36"
+            role="img"
+            aria-label={detail.trend.map(pt => `${pt.label}: ${fmtNPR(pt.current)}`).join(', ')}
+          >
             {detail.trend.map((pt, i) => {
               const h = Math.max(4, Math.round((pt.current / maxTrend) * 100))
-              const ph = pt.previous != null ? Math.max(4, Math.round((pt.previous / maxTrend) * 100)) : 0
+              const ph =
+                pt.previous != null ? Math.max(4, Math.round((pt.previous / maxTrend) * 100)) : 0
               return (
-                <div key={pt.label + i} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
+                <div
+                  key={pt.label + i}
+                  className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end"
+                >
                   <div className="w-full flex items-end justify-center flex-1 gap-1">
                     {compare && pt.previous != null && (
-                      <div className="w-1/2 max-w-[14px] rounded-t bg-primary/35 min-h-[4px]" style={{ height: `${ph}%` }} />
+                      <div
+                        className="w-1/2 max-w-[14px] rounded-t bg-primary/35 min-h-[4px]"
+                        style={{ height: `${ph}%` }}
+                      />
                     )}
-                    <div className={`${compare ? 'w-1/2 max-w-[14px]' : 'w-full max-w-[24px]'} rounded-t bg-primary min-h-[4px]`} style={{ height: `${h}%` }} />
+                    <div
+                      className={`${compare ? 'w-1/2 max-w-[14px]' : 'w-full max-w-[24px]'} rounded-t bg-primary min-h-[4px]`}
+                      style={{ height: `${h}%` }}
+                    />
                   </div>
                   <span className="text-[11px] text-text-muted font-medium">{pt.label}</span>
                 </div>
@@ -581,8 +682,18 @@ function ProductDetail({
 
         {/* Funnel */}
         <div className="rounded-lg border border-border-light bg-surface p-5">
-          <h3 className="text-sm font-semibold text-text mb-4">{t('seller.analytics.products.detailFunnel')}</h3>
-          <div role="img" aria-label={detail.funnel.map(f => `${f.label}: ${f.count}, ${f.convFromPrev}% conversion, ${f.dropOffPct}% drop-off`).join('. ')}>
+          <h3 className="text-sm font-semibold text-text mb-4">
+            {t('seller.analytics.products.detailFunnel')}
+          </h3>
+          <div
+            role="img"
+            aria-label={detail.funnel
+              .map(
+                f =>
+                  `${f.label}: ${f.count}, ${f.convFromPrev}% conversion, ${f.dropOffPct}% drop-off`,
+              )
+              .join('. ')}
+          >
             {detail.funnel.map((f, i) => {
               const maxF = Math.max(1, ...detail.funnel.map(ff => ff.count))
               const widthPct = Math.max(8, Math.round((f.count / maxF) * 100))
@@ -591,9 +702,15 @@ function ProductDetail({
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[13px] font-semibold text-text">{f.label}</span>
                     <div className="flex items-center gap-2 text-[11px]">
-                      <span className="font-semibold text-text tabular-nums">{f.count.toLocaleString()}</span>
+                      <span className="font-semibold text-text tabular-nums">
+                        {f.count.toLocaleString()}
+                      </span>
                       {i > 0 && (
-                        <span className={f.isBiggestLeak ? 'text-gold font-semibold' : 'text-text-tertiary'}>
+                        <span
+                          className={
+                            f.isBiggestLeak ? 'text-gold font-semibold' : 'text-text-tertiary'
+                          }
+                        >
                           {f.dropOffPct}% drop
                         </span>
                       )}
@@ -621,7 +738,10 @@ function DetailKpi({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-border-light bg-surface shadow-sm p-3 flex flex-col gap-1">
       <span className="text-[11px] font-medium text-text-muted">{label}</span>
-      <span className="text-[18px] font-bold text-text tabular-nums" style={{ fontVariantNumeric: 'tabular-nums' }}>
+      <span
+        className="text-[18px] font-bold text-text tabular-nums"
+        style={{ fontVariantNumeric: 'tabular-nums' }}
+      >
         {value}
       </span>
     </div>

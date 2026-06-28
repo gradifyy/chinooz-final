@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { useReducedMotion } from '@chinooz/ui-web'
+import { KpiValue } from './AnalyticsStates'
 import {
   type AnalyticsSectionData,
   type AnalyticsCustomerRow,
@@ -70,7 +71,12 @@ export default function CustomersSection({
               className="text-[22px] leading-7 font-bold text-text tabular-nums"
               style={{ fontVariantNumeric: 'tabular-nums' }}
             >
-              {kpi.value}
+              <KpiValue
+                rawValue={kpi.rawValue}
+                displayValue={kpi.value}
+                isMoney={kpi.key === 'ltv'}
+                isPct={kpi.key === 'repeatRate'}
+              />
             </span>
             <div className="flex items-center gap-1">
               <TrendIcon t={kpi.trend} />

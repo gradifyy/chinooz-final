@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import { Store, AlertCircle, WifiOff, RefreshCw, Info } from 'lucide-react'
 import { Skeleton, useReducedMotion } from '@chinooz/ui-web'
+import { useCountUp } from './useCountUp'
 
 export type AnalyticsStatus =
   | 'loading'
@@ -44,7 +45,7 @@ export function AnalyticsStateWrapper({
     return (
       <EmptyNoResults
         onClear={onClearFilters ?? (() => {})}
-        hasFilters={hasFilters}
+        hasFilters={hasFilters ?? false}
         reduced={reduced}
         t={t}
       />
@@ -308,4 +309,30 @@ export function PartialDataChip({
       </span>
     </motion.div>
   )
+}
+
+export function KpiValue({
+  rawValue,
+  displayValue: _displayValue,
+  isMoney,
+  isPct,
+  isConvRate,
+}: {
+  rawValue: number
+  displayValue: string
+  isMoney?: boolean
+  isPct?: boolean
+  isConvRate?: boolean
+}) {
+  const animated = useCountUp(rawValue, 300)
+  if (isConvRate) {
+    return <>{`${animated.toFixed(1)}%`}</>
+  }
+  if (isMoney) {
+    return <>{`NPR ${animated.toLocaleString()}`}</>
+  }
+  if (isPct) {
+    return <>{`${animated}%`}</>
+  }
+  return <>{animated.toLocaleString()}</>
 }

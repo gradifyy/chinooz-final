@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import { TrendingUp, TrendingDown, Minus, AlertTriangle } from 'lucide-react'
 import { useReducedMotion } from '@chinooz/ui-web'
+import { KpiValue } from './AnalyticsStates'
 import {
   type AnalyticsSectionData,
   type AnalyticsFunnelStage,
@@ -68,7 +69,11 @@ export default function TrafficSection({
               className="text-[22px] leading-7 font-bold text-text tabular-nums"
               style={{ fontVariantNumeric: 'tabular-nums' }}
             >
-              {kpi.value}
+              <KpiValue
+                rawValue={kpi.rawValue}
+                displayValue={kpi.value}
+                isConvRate={kpi.key === 'convRate'}
+              />
             </span>
             <div className="flex items-center gap-1">
               <TrendIcon t={kpi.trend} />

@@ -60,7 +60,11 @@ export const analyticsService = {
   async getSalesTrend(
     range: AnalyticsRange,
     opts: SalesTrendOpts = {},
-  ): Promise<{ points: AnalyticsChartPoint[]; granularity: AnalyticsChartGranularity; grossNet: 'gross' | 'net' }> {
+  ): Promise<{
+    points: AnalyticsChartPoint[]
+    granularity: AnalyticsChartGranularity
+    grossNet: 'gross' | 'net'
+  }> {
     return getSalesTrend(range, opts)
   },
 
