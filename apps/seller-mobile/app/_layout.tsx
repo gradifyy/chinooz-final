@@ -39,6 +39,7 @@ export default function RootLayout() {
                   <Stack.Screen name="settings/[id]" options={{ animation: 'slide_from_right' }} />
                   <Stack.Screen name="settings/storefront" options={{ animation: 'slide_from_right' }} />
                   <Stack.Screen name="settings/business" options={{ animation: 'slide_from_right' }} />
+                  <Stack.Screen name="settings/shipping" options={{ animation: 'slide_from_right' }} />
                 </Stack>
               </SafeAreaProvider>
             </A11yProvider>
