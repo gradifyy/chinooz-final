@@ -16,6 +16,7 @@ import {
   type FinanceRangeKey,
   type FinanceSummary,
 } from '@chinooz/mock-data'
+import EarningsChart from '@/components/EarningsChart'
 
 function useCountUp(target: number, enabled: boolean, durationMs = 900): number {
   const [value, setValue] = useState(0)
@@ -242,36 +243,10 @@ export default function FinanceScreen() {
             </div>
 
             <div className="mt-5">
-              <p className="text-xs font-medium text-text-muted mb-2">
-                {t('seller.finance.chartLabel')}
+              <p className="text-xs font-medium text-text-muted mb-3">
+                {t('seller.finance.chartNetEarnings')}
               </p>
-              <div
-                className="flex items-end gap-2 h-32"
-                role="img"
-                aria-label={t('seller.finance.chartLabel')}
-              >
-                {loading
-                  ? null
-                  : summary?.chart.map((pt, i) => {
-                      const h = Math.round((pt.value / maxChart) * 100)
-                      return (
-                        <div key={pt.label + i} className="flex-1 flex flex-col items-center gap-1">
-                          <div className="w-full flex items-end justify-center h-full">
-                            <div
-                              className="w-full max-w-[28px] rounded-t bg-primary/80"
-                              style={{
-                                height: `${h}%`,
-                                transition: reducedMotion ? 'none' : 'height 0.5s ease',
-                              }}
-                            />
-                          </div>
-                          <span className="text-[10px] text-text-tertiary tabular-nums">
-                            {pt.label}
-                          </span>
-                        </div>
-                      )
-                    })}
-              </div>
+              <EarningsChart series={summary?.earnings ?? null} loading={loading} />
             </div>
           </div>
 

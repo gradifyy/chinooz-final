@@ -445,17 +445,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: colors.textMuted,
   },
-  chart: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing[2], height: 128 },
-  chartCol: { flex: 1, alignItems: 'center', gap: spacing[1] },
-  chartBarWrap: { height: '100%', width: '100%', alignItems: 'center', justifyContent: 'flex-end' },
-  chartBar: {
-    width: 28,
-    maxWidth: '100%',
-    borderRadius: radii.sm,
-    backgroundColor: colors.primary,
-    opacity: 0.85,
-  },
-  chartAxis: { fontSize: 10, color: colors.textTertiary, fontVariant: ['tabular-nums'] },
 
   sectionTitle: {
     fontSize: fontSize.sm[0],
