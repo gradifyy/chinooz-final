@@ -2,17 +2,23 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import {
   getCODWalletSync,
+  computeCodLimitStatus,
   type CODWalletStatus,
+  type CODLimitStatus,
 } from '@chinooz/mock-data'
 
 /**
- * RW2 — shared rider Cash & COD Wallet store (`codWalletStatus`).
+ * RW2/RW6 — shared rider Cash & COD Wallet store (`codWalletStatus`).
  *
  * Single source of truth for the cash-in-hand figure the rider holds from
- * Cash-on-Delivery collections. The hero number on the overview screen reads
- * from this store so it can render immediately (optimistic seed) and stay
- * consistent across the overview (RW2), collection ledger (RW3) and deposit
- * history (RW5).
+ * Cash-on-Delivery collections, AND for the COD float limit that gates
+ * whether the rider can accept new COD jobs.
+ *
+ * The hero number on the overview screen reads from here so it can render
+ * immediately (optimistic seed) and stay consistent across the overview
+ * (RW2), collection ledger (RW3), deposit history (RW5) and the limit meter
+ * (RW6). Jobs/Active Delivery read the derived `codLimitStatus` /
+ * `canAcceptCodJob` so COD jobs are greyed/blocked at the limit everywhere.
  *
  * Invariant:
  *   cashInHand = codCollectedTotal − codDepositedTotal
@@ -65,6 +71,7 @@ function seed(): CODWalletStatus {
     pendingToDeposit: snap.pendingToDeposit,
     collectedTodayCount: snap.collectedTodayCount,
     nextDepositBy: snap.nextDepositBy,
+    maxCodFloat: snap.maxCodFloat,
   }
 }
 
@@ -126,8 +133,26 @@ export const useCODWalletStore = create<CODWalletStoreState>()(
         pendingToDeposit: state.pendingToDeposit,
         collectedTodayCount: state.collectedTodayCount,
         nextDepositBy: state.nextDepositBy,
+        maxCodFloat: state.maxCodFloat,
         hydrated: state.hydrated,
       }),
     },
   ),
 )
+
+/**
+ * Selector hook: derive the COD limit status from the shared store.
+ * Use anywhere that needs to know whether the rider can accept COD jobs
+ * (Jobs/AvailableTab, Home wallet entry, the wallet limit meter).
+ */
+export function useCodLimitStatus(): CODLimitStatus {
+  return useCODWalletStore(s => computeCodLimitStatus(s.cashInHand, s.maxCodFloat))
+}
+
+/**
+ * Selector hook: true when the rider is NOT at the COD float limit and may
+ * accept new COD jobs. False (blocked) when cash-in-hand >= maxCodFloat.
+ */
+export function useCanAcceptCodJob(): boolean {
+  return useCODWalletStore(s => s.cashInHand < s.maxCodFloat)
+}

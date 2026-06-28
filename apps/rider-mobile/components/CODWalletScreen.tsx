@@ -27,6 +27,7 @@ import {
   formatRiderNPRAmount,
   type CODWalletSnapshot,
 } from '@chinooz/mock-data'
+import CODLimitMeter from './CODLimitMeter'
 
 /**
  * RW2 — Cash & COD Wallet overview.
@@ -267,6 +268,9 @@ export default function CODWalletScreen() {
             <Text style={styles.depositText}>{t('rider.wallet.depositCta')}</Text>
           </TouchableOpacity>
         </View>
+
+        {/* COD limit meter + collection status (RW6) */}
+        <CODLimitMeter />
 
         {/* Quick stats — small tiles */}
         <View style={styles.statsRow}>

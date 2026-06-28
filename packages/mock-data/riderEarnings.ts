@@ -635,6 +635,60 @@ export interface CODWalletStatus {
   collectedTodayCount: number
   /** Suggested next deposit deadline (ISO yyyy-mm-dd). */
   nextDepositBy: string
+  /**
+   * Max COD cash the rider is allowed to hold (the COD float limit, NPR).
+   * At/above this the rider is blocked from accepting new COD jobs until a
+   * deposit brings cash-in-hand back under the limit.
+   */
+  maxCodFloat: number
+}
+
+/**
+ * Derived limit status for the COD float meter (RW6).
+ *
+ * - healthy:      cash-in-hand < 80% of the limit.
+ * - approaching:  80%–99% of the limit (nudge to deposit soon).
+ * - atLimit:      >= 100% of the limit (COD jobs blocked until deposit).
+ *
+ * Never color-only: each state carries an icon + label so screen readers and
+ * low-vision users get the same signal.
+ */
+export type CODLimitStatusKind = 'healthy' | 'approaching' | 'atLimit'
+
+export interface CODLimitStatus {
+  kind: CODLimitStatusKind
+  /** Cash-in-hand (NPR). */
+  cashInHand: number
+  /** Max allowed COD float (NPR). */
+  maxCodFloat: number
+  /** Remaining headroom before the limit is hit (NPR, >= 0). */
+  headroom: number
+  /** Fraction of the limit used, 0–1 (clamped). */
+  fraction: number
+  /** Percent of the limit used, 0–100 (clamped, rounded). */
+  percent: number
+}
+
+/** Threshold (fraction of the limit) at which "approaching" kicks in. */
+export const COD_LIMIT_APPROACHING_THRESHOLD = 0.8
+
+/**
+ * Compute the derived COD limit status from cash-in-hand and the max float.
+ * Pure function so the store, the wallet screen and Jobs all derive the same
+ * status from the same shared numbers.
+ */
+export function computeCodLimitStatus(
+  cashInHand: number,
+  maxCodFloat: number,
+): CODLimitStatus {
+  const safeLimit = Math.max(1, maxCodFloat)
+  const rawFrac = cashInHand / safeLimit
+  const fraction = Math.max(0, Math.min(1, rawFrac))
+  const percent = Math.round(fraction * 100)
+  const headroom = Math.max(0, safeLimit - cashInHand)
+  const kind: CODLimitStatusKind =
+    rawFrac >= 1 ? 'atLimit' : rawFrac >= COD_LIMIT_APPROACHING_THRESHOLD ? 'approaching' : 'healthy'
+  return { kind, cashInHand, maxCodFloat: safeLimit, headroom, fraction, percent }
 }
 
 export interface CODWalletSnapshot extends CODWalletStatus {
@@ -654,6 +708,7 @@ const COD_WALLET_DEFAULT: CODWalletSnapshot = {
   nextDepositBy: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000)
     .toISOString()
     .slice(0, 10),
+  maxCodFloat: 15000,
   recentCollections: [
     {
       id: 'col-1',

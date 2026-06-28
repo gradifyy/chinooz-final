@@ -15,7 +15,7 @@ import * as Haptics from 'expo-haptics'
 import { Circle, Radio, Flame, ChevronRight } from 'lucide-react-native'
 import { colors, spacing, radii, fontFamily, fontSize } from '@chinooz/theme'
 import { SegmentedControl } from '@chinooz/ui'
-import { useOnlineStatusStore, useActiveDeliveryStore, hasActiveDelivery } from '@chinooz/state'
+import { useOnlineStatusStore, useActiveDeliveryStore, hasActiveDelivery, useCodLimitStatus } from '@chinooz/state'
 import { jobRequestToActivePayload } from '@chinooz/rs3'
 import { analytics } from '@chinooz/analytics'
 import { useA11y } from '../components/A11yProvider'
@@ -40,6 +40,10 @@ export default function JobsScreen() {
   const activeDelivery = useActiveDeliveryStore(s => s.activeDelivery)
   const acceptJob = useActiveDeliveryStore(s => s.acceptJob)
   const resume = useActiveDeliveryStore(s => s.resume)
+
+  // COD float limit — at limit, new COD jobs are blocked (shared store).
+  const codLimitStatus = useCodLimitStatus()
+  const codAtLimit = codLimitStatus.kind === 'atLimit'
 
   const [tab, setTab] = useState<JobsTabKey>('available')
   const [refreshing, setRefreshing] = useState(false)
@@ -132,6 +136,15 @@ export default function JobsScreen() {
     router.push('/hotspots')
   }, [reducedMotion, router])
 
+  // Open the Cash & COD Wallet deposit flow to unlock blocked COD jobs.
+  const handleDepositToUnlock = useCallback(() => {
+    try {
+      if (!reducedMotion) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    } catch {}
+    analytics.track({ name: 'rider_cod_deposit_to_unlock' })
+    router.push('/wallet/deposit' as never)
+  }, [reducedMotion, router])
+
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + spacing[4] }]}>
@@ -219,6 +232,8 @@ export default function JobsScreen() {
             isOnline={isOnline}
             onGoOnline={handleGoOnline}
             onAccept={handleAccept}
+            codAtLimit={codAtLimit}
+            onDepositToUnlock={handleDepositToUnlock}
           />
         )}
         {tab === 'active' && <ActiveTab />}

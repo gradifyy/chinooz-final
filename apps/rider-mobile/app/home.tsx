@@ -2,7 +2,7 @@ import React, { useEffect, useMemo } from 'react'
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native'
 import { useTranslation } from 'react-i18next'
 import { useRouter } from 'expo-router'
-import { Target, ChevronRight, Wallet } from 'lucide-react-native'
+import { Target, ChevronRight, Wallet, AlertTriangle, Lock } from 'lucide-react-native'
 import { colors, spacing, radii, fontFamily, fontSize } from '@chinooz/theme'
 import { SegmentedControl } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
@@ -13,6 +13,7 @@ import {
   useRiderIncentivesStore,
   useActiveDeliveryStore,
   useCODWalletStore,
+  useCodLimitStatus,
   hasActiveDelivery,
   type OnlineStatus,
   type Locale,
@@ -78,8 +79,10 @@ export default function RiderHomeScreen() {
 
   // Cash & COD Wallet — cash-in-hand read from the shared codWalletStatus
   // store so the entry row shows the live figure (RW2 reachability). Pushed
-  // route, not a bottom tab.
+  // route, not a bottom tab. The limit status surfaces an at-limit /
+  // approaching chip on the entry (RW6).
   const cashInHand = useCODWalletStore(s => s.cashInHand)
+  const codLimitStatus = useCodLimitStatus()
 
   // Reuse the shared no-op analytics wrapper (not a fork).
   useEffect(() => {
@@ -292,7 +295,13 @@ export default function RiderHomeScreen() {
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={t('rider.wallet.homeEntryAria')}
-        accessibilityHint={a11yHint(t('rider.wallet.homeEntrySub'))}
+        accessibilityHint={a11yHint(
+          codLimitStatus.kind === 'atLimit'
+            ? t('rider.wallet.homeLimitAtLimit')
+            : codLimitStatus.kind === 'approaching'
+              ? t('rider.wallet.homeLimitApproaching')
+              : t('rider.wallet.homeEntrySub'),
+        )}
         style={[styles.walletEntry, { minHeight: minTouchTarget }]}
         onPress={() => router.push('/wallet')}
       >
@@ -302,9 +311,27 @@ export default function RiderHomeScreen() {
         <View style={styles.walletEntryBody}>
           <Text style={styles.walletEntryTitle}>{t('rider.wallet.title')}</Text>
           <Text style={styles.walletEntrySub} numberOfLines={1}>
-            {t('rider.wallet.homeEntrySub')}
+            {codLimitStatus.kind === 'atLimit'
+              ? t('rider.wallet.homeLimitAtLimit')
+              : codLimitStatus.kind === 'approaching'
+                ? t('rider.wallet.homeLimitApproaching')
+                : t('rider.wallet.homeEntrySub')}
           </Text>
         </View>
+        {codLimitStatus.kind !== 'healthy' && (
+          <View
+            style={[
+              styles.walletLimitChip,
+              { backgroundColor: codLimitStatus.kind === 'atLimit' ? colors.errorLight : colors.warningLight },
+            ]}
+          >
+            {codLimitStatus.kind === 'atLimit' ? (
+              <Lock size={11} color={colors.error} />
+            ) : (
+              <AlertTriangle size={11} color={colors.warning} />
+            )}
+          </View>
+        )}
         <Text style={styles.walletEntryAmount}>
           NPR {cashInHand.toLocaleString('en-IN')}
         </Text>
@@ -515,6 +542,13 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontVariant: ['tabular-nums'],
     fontFamily: fontFamily.sansBold[0],
+  },
+  walletLimitChip: {
+    width: 22,
+    height: 22,
+    borderRadius: radii.full,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   smokeLabel: {
     fontSize: fontSize.sm[0],
