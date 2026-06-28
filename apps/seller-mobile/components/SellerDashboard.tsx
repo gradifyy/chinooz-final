@@ -36,21 +36,25 @@ import {
   RotateCcw,
   ShieldAlert,
   ChevronRight,
+  Settings,
 } from 'lucide-react-native'
 import { colors, spacing, radii, fontSize } from '@chinooz/theme'
 import Svg, { Path, Circle as SvgCircle, Line as SvgLine, Text as SvgText, Defs, LinearGradient, Stop } from 'react-native-svg'
+import NetInfo from '@react-native-community/netinfo'
 import { useA11y } from './A11yProvider'
 import { useSellerSessionStore } from '@chinooz/state'
-import { useSellerReviews } from '@chinooz/hooks'
+import { useSellerReviews, useSellerDashboardStats, useGoLiveChecklist } from '@chinooz/hooks'
 import {
-  getSellerDashboardMetrics,
-  SELLER_GO_LIVE_TASKS,
+  getEmptySellerDashboardMetrics,
   type SellerDateRange,
   type SellerDateRangeKey,
   type SellerKpi,
   type SellerChartPoint,
   type SellerChartMetric,
   type SellerAlert,
+  type SellerQuickAction,
+  type SellerActivityItem,
+  type SellerActivityKind,
 } from '@chinooz/mock-data'
 import { analytics } from '@chinooz/analytics'
 
@@ -95,8 +99,17 @@ export default function SellerDashboard() {
   const [rangeKey, setRangeKey] = useState<SellerDateRangeKey>('7d')
   const [customRange, setCustomRange] = useState<{ start: string; end: string } | null>(null)
   const [customSheet, setCustomSheet] = useState(false)
-  const [refreshing, setRefreshing] = useState(false)
+  const [isOffline, setIsOffline] = useState(false)
   const fadeAnim = React.useRef(new Animated.Value(1)).current
+
+  useEffect(() => {
+    const unsub = NetInfo.addEventListener(state => {
+      setIsOffline(!(state.isConnected && state.isInternetReachable !== false))
+    })
+    return () => unsub()
+  }, [])
+
+  const isFirstRun = goLiveStatus !== 'live'
 
   const range: SellerDateRange = useMemo(() => {
     const days = rangeKey === 'today' ? 1 : rangeKey === '7d' ? 7 : 30
@@ -108,13 +121,23 @@ export default function SellerDashboard() {
     }
   }, [rangeKey, customRange, t])
 
-  const metrics = useMemo(() => getSellerDashboardMetrics(range), [range])
+  const statsQuery = useSellerDashboardStats(range)
+  const goLiveQuery = useGoLiveChecklist()
+
+  const loading = !isFirstRun && statsQuery.isLoading
+  const error = !isFirstRun && statsQuery.isError
+  const refreshing = statsQuery.isFetching && !statsQuery.isLoading
+
+  const metrics = useMemo(() => {
+    if (isFirstRun) return getEmptySellerDashboardMetrics(range)
+    return statsQuery.data ?? getEmptySellerDashboardMetrics(range)
+  }, [isFirstRun, statsQuery.data, range])
 
   useEffect(() => {
     analytics.screen({ name: 'seller-dashboard' })
   }, [])
 
-  const goLiveTasks: GoLiveTask[] = SELLER_GO_LIVE_TASKS
+  const goLiveTasks: GoLiveTask[] = goLiveQuery.data ?? []
   const goLiveDone = goLiveTasks.filter(t => t.done).length
   const goLiveComplete = goLiveDone === goLiveTasks.length
 
@@ -170,9 +193,13 @@ export default function SellerDashboard() {
   }, [customRange, reducedMotion, fadeAnim])
 
   const onRefresh = useCallback(() => {
-    setRefreshing(true)
-    setTimeout(() => setRefreshing(false), 900)
-  }, [])
+    statsQuery.refetch()
+    goLiveQuery.refetch()
+  }, [statsQuery, goLiveQuery])
+
+  const onRetry = useCallback(() => {
+    statsQuery.refetch()
+  }, [statsQuery])
 
   return (
     <View style={styles.container}>
@@ -220,29 +247,57 @@ export default function SellerDashboard() {
         </View>
 
         <Animated.View style={{ opacity: fadeAnim }}>
-          {!goLiveComplete && <GoLiveChecklist tasks={goLiveTasks} done={goLiveDone} total={goLiveTasks.length} onContinue={() => router.push('/onboarding')} />}
+          {isOffline && !loading && !error && (
+            <View style={styles.offlineBanner} accessibilityRole="status" accessibilityLabel={t('seller.dashboard.offlineBannerAria')}>
+              <View style={styles.offlineDot} />
+              <Text style={styles.offlineText}>{t('seller.dashboard.offlineBanner')}</Text>
+            </View>
+          )}
 
-          <View style={styles.sections}>
-            <SectionHeader title={t('seller.dashboard.sectionKpis')} />
-            <KpiCards kpis={metrics.kpis} loading={refreshing} onPress={(kpi) => router.push(kpi.route as any)} t={t} />
+          {error ? (
+            <DashboardErrorState onRetry={onRetry} t={t} reducedMotion={reducedMotion} />
+          ) : loading ? (
+            <DashboardSkeleton t={t} />
+          ) : isFirstRun ? (
+            <FirstRunEmpty onAddProduct={() => router.push('/products/new' as any)} t={t} reducedMotion={reducedMotion} />
+          ) : (
+            <>
+              {!goLiveComplete && <GoLiveChecklist tasks={goLiveTasks} done={goLiveDone} total={goLiveTasks.length} onContinue={() => router.push('/onboarding')} />}
 
-            <SalesChart points={metrics.chart} rangeLabel={range.label} t={t} />
+              <View style={styles.sections}>
+                <StaggerSection index={0} reducedMotion={reducedMotion}>
+                  <SectionHeader title={t('seller.dashboard.sectionKpis')} />
+                  <KpiCards kpis={metrics.kpis} loading={refreshing} onPress={(kpi) => router.push(kpi.route as any)} t={t} />
+                </StaggerSection>
 
-            <SectionHeader title={t('seller.dashboard.sectionAlerts')} seeAllLabel={t('seller.dashboard.seeAll')} onSeeAll={() => router.push('/orders')} />
-            <Alerts alerts={metrics.alerts} onRoute={(route) => router.push(route as any)} t={t} />
+                <StaggerSection index={1} reducedMotion={reducedMotion}>
+                  <SalesChart points={metrics.chart} rangeLabel={range.label} t={t} />
+                </StaggerSection>
 
-            <SectionHeader title={t('seller.dashboard.sectionQuickActions')} />
-            <QuickActions
-              actions={metrics.quickActions}
-              onPress={id => {
-                const action = metrics.quickActions.find(a => a.id === id)
-                if (action?.href) router.push(action.href as any)
-              }}
-            />
+                <StaggerSection index={2} reducedMotion={reducedMotion}>
+                  <SectionHeader title={t('seller.dashboard.sectionAlerts')} seeAllLabel={t('seller.dashboard.seeAll')} onSeeAll={() => router.push('/orders')} />
+                  <Alerts alerts={metrics.alerts} onRoute={(route) => router.push(route as any)} t={t} />
+                </StaggerSection>
 
-            <SectionHeader title={t('seller.dashboard.sectionActivity')} seeAllLabel={t('seller.dashboard.seeAll')} onSeeAll={() => router.push('/analytics')} />
-            <RecentActivity items={metrics.activity} />
-          </View>
+                <StaggerSection index={3} reducedMotion={reducedMotion}>
+                  <SectionHeader title={t('seller.dashboard.sectionQuickActions')} />
+                  <QuickActions
+                    actions={metrics.quickActions}
+                    onPress={id => {
+                      const action = metrics.quickActions.find(a => a.id === id)
+                      if (action?.href) router.push(action.href as any)
+                    }}
+                    t={t}
+                  />
+                </StaggerSection>
+
+                <StaggerSection index={4} reducedMotion={reducedMotion}>
+                  <SectionHeader title={t('seller.dashboard.sectionActivity')} seeAllLabel={t('seller.dashboard.seeAll')} onSeeAll={() => router.push('/orders')} />
+                  <RecentActivity items={metrics.activity} loading={refreshing} onRoute={(route) => router.push(route as any)} lastViewed={0} t={t} />
+                </StaggerSection>
+              </View>
+            </>
+          )}
         </Animated.View>
 
         <View style={{ height: spacing[8] }} />
@@ -444,7 +499,7 @@ function formatValue(kpi: SellerKpi, raw: number): string {
   return v.toLocaleString()
 }
 
-function KpiCard({ kpi, onPress, width, t }: { kpi: SellerKpi; onPress: (kpi: SellerKpi) => void; width: number; t: (k: string, o?: Record<string, unknown>) => string }) {
+const KpiCard = React.memo(function KpiCard({ kpi, onPress, width, t }: { kpi: SellerKpi; onPress: (kpi: SellerKpi) => void; width: number; t: (k: string, o?: Record<string, unknown>) => string }) {
   const { reducedMotion } = useA11y()
   const scale = useRef(new Animated.Value(1)).current
   const animatedValue = useCountUp(kpi.numericValue, !reducedMotion)
@@ -496,9 +551,9 @@ function KpiCard({ kpi, onPress, width, t }: { kpi: SellerKpi; onPress: (kpi: Se
           <Text style={styles.kpiVsPrev}>{t('seller.dashboard.kpiVsPrev')}</Text>
         </View>
       </TouchableOpacity>
-    </Animated.View>
-  )
-}
+     </Animated.View>
+   )
+})
 
 function Sparkline({ data, accent }: { data: number[]; accent: 'plum' | 'default' }) {
   const max = Math.max(1, ...data)
@@ -577,7 +632,7 @@ function metricPrefix(metric: SellerChartMetric): string {
   return metric === 'revenue' ? 'NPR ' : ''
 }
 
-function SalesChart({ points, rangeLabel, t }: { points: SellerChartPoint[]; rangeLabel: string; t: (k: string, o?: Record<string, unknown>) => string }) {
+const SalesChart = React.memo(function SalesChart({ points, rangeLabel, t }: { points: SellerChartPoint[]; rangeLabel: string; t: (k: string, o?: Record<string, unknown>) => string }) {
   const { reducedMotion } = useA11y()
   const [metric, setMetric] = useState<SellerChartMetric>('revenue')
   const [hoverIdx, setHoverIdx] = useState<number | null>(null)
@@ -777,7 +832,7 @@ function SalesChart({ points, rangeLabel, t }: { points: SellerChartPoint[]; ran
       </View>
     </View>
   )
-}
+})
 
 const ALERT_SEVERITY_STYLE = {
   error: { color: colors.error, bg: colors.errorLight },
@@ -900,26 +955,198 @@ const ACTION_ICON: Record<string, React.ComponentType<{ size?: number; color?: s
   layers: Layers,
   wallet: Wallet,
   tag: Tag,
+  settings: Settings,
 }
 
-function QuickActions({ actions, onPress }: { actions: { id: string; label: string; icon: string }[]; onPress: (id: string) => void }) {
+const ACTION_LABEL_KEY: Record<string, string> = {
+  'add-product': 'seller.dashboard.actionAddProduct',
+  'orders': 'seller.dashboard.actionViewOrders',
+  'promotions': 'seller.dashboard.actionCreatePromotion',
+  'inventory': 'seller.dashboard.actionUpdateInventory',
+  'payouts': 'seller.dashboard.actionViewPayouts',
+  'settings': 'seller.dashboard.actionStoreSettings',
+}
+
+function QuickActions({ actions, onPress, t }: { actions: SellerQuickAction[]; onPress: (id: string) => void; t: (k: string) => string }) {
+  const { reducedMotion } = useA11y()
+
   return (
-    <View style={styles.quickActionsRow}>
+    <View style={styles.quickActionsGrid}>
       {actions.map(a => {
         const Icon = ACTION_ICON[a.icon] ?? Plus
+        const label = t(ACTION_LABEL_KEY[a.id] ?? a.label)
+        return (
+          <QuickActionTile
+            key={a.id}
+            icon={Icon}
+            label={label}
+            reducedMotion={reducedMotion}
+            onPress={() => onPress(a.id)}
+          />
+        )
+      })}
+    </View>
+  )
+}
+
+function QuickActionTile({
+  icon: Icon,
+  label,
+  reducedMotion,
+  onPress,
+}: {
+  icon: React.ComponentType<{ size?: number; color?: string }>
+  label: string
+  reducedMotion: boolean
+  onPress: () => void
+}) {
+  const scale = useRef(new Animated.Value(1)).current
+  const handlePressIn = () => {
+    if (!reducedMotion) Animated.timing(scale, { toValue: 0.96, duration: 100, useNativeDriver: true }).start()
+  }
+  const handlePressOut = () => {
+    if (!reducedMotion) Animated.timing(scale, { toValue: 1, duration: 100, useNativeDriver: true }).start()
+  }
+  return (
+    <Animated.View style={[styles.quickActionTileWrap, { transform: reducedMotion ? [] : [{ scale }] }]}>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        activeOpacity={0.9}
+        style={styles.quickActionBtn}
+      >
+        <View style={styles.quickActionIcon}>
+          <Icon size={28} color={colors.primary} />
+        </View>
+        <Text style={styles.quickActionLabel} numberOfLines={2}>{label}</Text>
+      </TouchableOpacity>
+    </Animated.View>
+  )
+}
+
+const ACTIVITY_ICON: Record<SellerActivityKind, { Icon: React.ComponentType<{ size?: number; color?: string }>; color: string; bg: string }> = {
+  order: { Icon: Box, color: colors.info, bg: colors.infoLight },
+  review: { Icon: Star, color: colors.gold, bg: colors.warningLight },
+  message: { Icon: MessageCircle, color: colors.primary, bg: colors.primary50 },
+}
+
+const ACTIVITY_STATUS_STYLE: Record<string, { color: string; bg: string }> = {
+  new: { color: colors.info, bg: colors.infoLight },
+  confirmed: { color: colors.info, bg: colors.infoLight },
+  shipped: { color: colors.warning, bg: colors.warningLight },
+  delivered: { color: colors.success, bg: colors.successLight },
+  pending: { color: colors.warning, bg: colors.warningLight },
+  positive: { color: colors.success, bg: colors.successLight },
+  neutral: { color: colors.textMuted, bg: colors.borderLight },
+}
+
+const ACTIVITY_STATUS_KEY: Record<string, string> = {
+  new: 'seller.dashboard.activityStatusNew',
+  confirmed: 'seller.dashboard.activityStatusConfirmed',
+  shipped: 'seller.dashboard.activityStatusShipped',
+  delivered: 'seller.dashboard.activityStatusDelivered',
+  pending: 'seller.dashboard.activityStatusPending',
+  positive: 'seller.dashboard.activityStatusPositive',
+  neutral: 'seller.dashboard.activityStatusNeutral',
+}
+
+const ACTIVITY_FILTERS: { key: 'all' | SellerActivityKind; labelKey: string }[] = [
+  { key: 'all', labelKey: 'seller.dashboard.activityFilterAll' },
+  { key: 'order', labelKey: 'seller.dashboard.activityFilterOrders' },
+  { key: 'review', labelKey: 'seller.dashboard.activityFilterReviews' },
+  { key: 'message', labelKey: 'seller.dashboard.activityFilterMessages' },
+]
+
+const ACTIVITY_SEE_ALL_ROUTE: Record<SellerActivityKind, string> = {
+  order: '/orders',
+  review: '/reviews',
+  message: '/messages',
+}
+
+function RecentActivity({ items, loading, onRoute, lastViewed, t }: { items: SellerActivityItem[]; loading: boolean; onRoute: (route: string) => void; lastViewed: number; t: (k: string, o?: Record<string, unknown>) => string }) {
+  const { reducedMotion } = useA11y()
+  const [filter, setFilter] = useState<'all' | SellerActivityKind>('all')
+
+  const filtered = useMemo(() => {
+    const sorted = [...items].sort((a, b) => b.timestamp - a.timestamp)
+    if (filter === 'all') return sorted
+    return sorted.filter(i => i.kind === filter)
+  }, [items, filter])
+
+  if (loading) {
+    return (
+      <View style={styles.card}>
+        <ActivityFilterBar filter={filter} setFilter={setFilter} t={t} />
+        {Array.from({ length: 4 }).map((_, i) => (
+          <View key={i} style={[styles.activityRowInner, i > 0 && styles.activityRowBorder]} aria-busy accessibilityLabel="Loading activity">
+            <View style={styles.activitySkeletonIcon} />
+            <View style={{ flex: 1, gap: 4 }}>
+              <View style={styles.activitySkeletonTitle} />
+              <View style={styles.activitySkeletonSub} />
+            </View>
+            <View style={styles.activitySkeletonBadge} />
+          </View>
+        ))}
+      </View>
+    )
+  }
+
+  if (items.length === 0) {
+    return (
+      <View style={styles.card}>
+        <View style={styles.activityEmpty}>
+          <Circle size={36} color={colors.textTertiary} />
+          <Text style={styles.activityEmptyTitle}>{t('seller.dashboard.activityEmpty')}</Text>
+          <Text style={styles.activityEmptySub}>{t('seller.dashboard.activityEmptySub')}</Text>
+        </View>
+      </View>
+    )
+  }
+
+  return (
+    <View style={styles.card}>
+      <ActivityFilterBar filter={filter} setFilter={setFilter} t={t} />
+      {filtered.length === 0 ? (
+        <View style={styles.activityEmpty}>
+          <Text style={styles.activityEmptyTitle}>{t('seller.dashboard.activityEmpty')}</Text>
+        </View>
+      ) : (
+        filtered.map((item, i) => (
+          <ActivityRow
+            key={item.id}
+            item={item}
+            index={i}
+            reducedMotion={reducedMotion}
+            isNew={item.timestamp > lastViewed}
+            onRoute={onRoute}
+            t={t}
+          />
+        ))
+      )}
+    </View>
+  )
+}
+
+function ActivityFilterBar({ filter, setFilter, t }: { filter: 'all' | SellerActivityKind; setFilter: (f: 'all' | SellerActivityKind) => void; t: (k: string) => string }) {
+  return (
+    <View style={styles.activityFilterBar} accessibilityRole="tablist">
+      {ACTIVITY_FILTERS.map(f => {
+        const active = f.key === filter
         return (
           <TouchableOpacity
-            key={a.id}
-            style={styles.quickActionBtn}
-            onPress={() => onPress(a.id)}
-            accessibilityRole="button"
-            accessibilityLabel={a.label}
+            key={f.key}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
+            onPress={() => setFilter(f.key)}
+            style={[styles.activityFilterPill, active && styles.activityFilterPillActive]}
             activeOpacity={0.85}
           >
-            <View style={styles.quickActionIcon}>
-              <Icon size={22} color={colors.primary} />
-            </View>
-            <Text style={styles.quickActionLabel}>{a.label}</Text>
+            <Text style={[styles.activityFilterText, active && styles.activityFilterTextActive]}>
+              {t(f.labelKey)}
+            </Text>
           </TouchableOpacity>
         )
       })}
@@ -927,40 +1154,190 @@ function QuickActions({ actions, onPress }: { actions: { id: string; label: stri
   )
 }
 
-const ACTIVITY_ICON = {
-  order: { Icon: Box, color: colors.info },
-  review: { Icon: CheckCircle2, color: colors.success },
-  payout: { Icon: Wallet, color: colors.primary },
-  stock: { Icon: Layers, color: colors.warning },
-  follower: { Icon: TrendingUp, color: colors.info },
-} as const
+function ActivityRow({ item, index, reducedMotion, isNew, onRoute, t }: { item: SellerActivityItem; index: number; reducedMotion: boolean; isNew: boolean; onRoute: (route: string) => void; t: (k: string, o?: Record<string, unknown>) => string }) {
+  const { Icon, color, bg } = ACTIVITY_ICON[item.kind]
+  const highlightAnim = useRef(new Animated.Value(isNew && !reducedMotion ? 1 : 0)).current
 
-function RecentActivity({ items }: { items: { id: string; kind: 'order' | 'review' | 'payout' | 'stock' | 'follower'; title: string; subtitle: string; at: string }[] }) {
-  const { t } = useTranslation()
-  if (items.length === 0) {
-    return (
-      <View style={styles.card}>
-        <Text style={styles.emptyText}>{t('seller.dashboard.noActivity')}</Text>
-      </View>
-    )
-  }
+  useEffect(() => {
+    if (isNew && !reducedMotion) {
+      Animated.timing(highlightAnim, {
+        toValue: 0,
+        duration: 2000,
+        useNativeDriver: false,
+      }).start()
+    }
+  }, [isNew, reducedMotion, highlightAnim])
+
+  const highlightBg = highlightAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [colors.surface, colors.primary + '14'],
+  })
+
+  const statusLabel = item.status ? t(ACTIVITY_STATUS_KEY[item.status] ?? item.status) : undefined
+  const statusStyle = item.status ? ACTIVITY_STATUS_STYLE[item.status] : undefined
+  const ariaLabel = t('seller.dashboard.activityAria', {
+    title: item.title,
+    subtitle: item.subtitle,
+    status: statusLabel ?? '',
+    at: item.at,
+  })
+
   return (
-    <View style={styles.card}>
-      {items.map((item, i) => {
-        const { Icon, color } = ACTIVITY_ICON[item.kind]
-        return (
-          <View key={item.id} style={[styles.activityRow, i > 0 && styles.activityRowBorder]}>
-            <View style={[styles.activityIcon, { backgroundColor: color + '14' }]}>
-              <Icon size={18} color={color} />
-            </View>
-            <View style={styles.activityBody}>
-              <Text style={styles.activityTitle}>{item.title}</Text>
-              <Text style={styles.activitySubtitle}>{item.subtitle}</Text>
-            </View>
-            <Text style={styles.activityAt}>{item.at}</Text>
+    <Animated.View style={[styles.activityRowWrap, index > 0 && styles.activityRowBorder, { backgroundColor: highlightBg }]}>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel={ariaLabel}
+        onPress={() => onRoute(item.route)}
+        style={styles.activityRowInner}
+        activeOpacity={0.7}
+      >
+        <View style={[styles.activityIcon, { backgroundColor: bg }]}>
+          <Icon size={18} color={color} />
+        </View>
+        <View style={styles.activityBody}>
+          <Text style={styles.activityTitle} numberOfLines={1}>{item.title}</Text>
+          <Text style={styles.activitySubtitle} numberOfLines={1}>{item.subtitle}</Text>
+        </View>
+        {statusLabel && statusStyle && (
+          <View style={[styles.activityStatusPill, { backgroundColor: statusStyle.bg }]} accessibilityLabel={statusLabel}>
+            <Text style={[styles.activityStatusText, { color: statusStyle.color }]}>{statusLabel}</Text>
           </View>
-        )
-      })}
+        )}
+        {item.amount && (
+          <Text style={styles.activityAmount}>{item.amount}</Text>
+        )}
+        <ChevronRight size={18} color={colors.textTertiary} />
+      </TouchableOpacity>
+    </Animated.View>
+  )
+}
+
+function StaggerSection({ children, index, reducedMotion }: { children: React.ReactNode; index: number; reducedMotion: boolean }) {
+  const anim = useRef(new Animated.Value(reducedMotion ? 1 : 0)).current
+  useEffect(() => {
+    if (reducedMotion) return
+    const delay = index * 50
+    const timer = setTimeout(() => {
+      Animated.spring(anim, {
+        toValue: 1,
+        damping: 20,
+        stiffness: 300,
+        mass: 0.8,
+        useNativeDriver: true,
+      }).start()
+    }, delay)
+    return () => clearTimeout(timer)
+  }, [index, reducedMotion, anim])
+  const style = reducedMotion
+    ? null
+    : {
+        opacity: anim,
+        transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }],
+      }
+  return <Animated.View style={style}>{children}</Animated.View>
+}
+
+function DashboardSkeleton({ t }: { t: (k: string) => string }) {
+  return (
+    <View style={styles.sections} aria-busy accessibilityLabel={t('seller.dashboard.loadingDashboard')}>
+      <View>
+        <View style={styles.skeletonSectionTitle} />
+        <View style={styles.skeletonKpiGrid}>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <View key={i} style={styles.skeletonKpiCard}>
+              <View style={styles.skeletonBlock} />
+              <View style={styles.skeletonBlockWide} />
+              <View style={styles.skeletonBlockNarrow} />
+            </View>
+          ))}
+        </View>
+      </View>
+      <View>
+        <View style={styles.skeletonSectionTitle} />
+        <View style={styles.skeletonChartCard} />
+      </View>
+      <View>
+        <View style={styles.skeletonSectionTitle} />
+        {Array.from({ length: 3 }).map((_, i) => (
+          <View key={i} style={[styles.skeletonAlertRow, i > 0 && styles.skeletonRowBorder]} />
+        ))}
+      </View>
+      <View>
+        <View style={styles.skeletonSectionTitle} />
+        <View style={styles.skeletonQuickRow}>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <View key={i} style={styles.skeletonQuickTile} />
+          ))}
+        </View>
+      </View>
+      <View>
+        <View style={styles.skeletonSectionTitle} />
+        {Array.from({ length: 4 }).map((_, i) => (
+          <View key={i} style={[styles.skeletonActivityRow, i > 0 && styles.skeletonRowBorder]} />
+        ))}
+      </View>
+    </View>
+  )
+}
+
+function FirstRunEmpty({ onAddProduct, t, reducedMotion }: { onAddProduct: () => void; t: (k: string) => string; reducedMotion: boolean }) {
+  const scale = useRef(new Animated.Value(reducedMotion ? 1 : 0.8)).current
+  const opacity = useRef(new Animated.Value(reducedMotion ? 1 : 0)).current
+  useEffect(() => {
+    if (reducedMotion) return
+    Animated.parallel([
+      Animated.spring(scale, { toValue: 1, damping: 18, stiffness: 200, mass: 0.8, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+    ]).start()
+  }, [reducedMotion, scale, opacity])
+  return (
+    <Animated.View style={[styles.firstRunCard, { opacity, transform: [{ scale }] }]} accessibilityRole="summary" accessibilityLabel={t('seller.dashboard.firstRunTitle')}>
+      <View style={styles.firstRunIllustration}>
+        <View style={styles.firstRunCircle}>
+          <Plus size={40} color={colors.primary} />
+        </View>
+      </View>
+      <Text style={styles.firstRunTitle}>{t('seller.dashboard.firstRunTitle')}</Text>
+      <Text style={styles.firstRunSubtitle}>{t('seller.dashboard.firstRunSubtitle')}</Text>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel={t('seller.dashboard.firstRunCtaAria')}
+        onPress={onAddProduct}
+        style={styles.firstRunCta}
+        activeOpacity={0.9}
+      >
+        <Text style={styles.firstRunCtaText}>{t('seller.dashboard.firstRunCta')}</Text>
+      </TouchableOpacity>
+
+      <View style={styles.firstRunZeroKpis}>
+        {['NPR 0', '0', '0', 'NPR 0', '0%', 'NPR 0'].map((v, i) => (
+          <View key={i} style={styles.firstRunZeroKpi}>
+            <Text style={styles.firstRunZeroValue}>{v}</Text>
+            <Text style={styles.firstRunZeroDelta}>—</Text>
+          </View>
+        ))}
+      </View>
+    </Animated.View>
+  )
+}
+
+function DashboardErrorState({ onRetry, t, reducedMotion }: { onRetry: () => void; t: (k: string) => string; reducedMotion: boolean }) {
+  return (
+    <View style={styles.errorCard} accessibilityRole="alert" accessibilityLabel={t('seller.dashboard.errorTitle')}>
+      <View style={styles.errorIcon}>
+        <XCircle size={40} color={colors.error} />
+      </View>
+      <Text style={styles.errorTitle}>{t('seller.dashboard.errorTitle')}</Text>
+      <Text style={styles.errorSubtitle}>{t('seller.dashboard.errorSubtitle')}</Text>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel={t('seller.dashboard.errorRetryAria')}
+        onPress={onRetry}
+        style={styles.errorRetryBtn}
+        activeOpacity={0.9}
+      >
+        <Text style={styles.errorRetryText}>{t('seller.dashboard.errorRetry')}</Text>
+      </TouchableOpacity>
     </View>
   )
 }
@@ -1187,6 +1564,100 @@ const styles = StyleSheet.create({
   chartTableFallback: { marginTop: spacing[3] },
   chartTableTitle: { fontSize: 12, fontWeight: '600', color: colors.textMuted, marginBottom: spacing[1] },
   chartTableRow: { fontSize: 12, color: colors.textSecondary, fontVariant: ['tabular-nums'], marginTop: 1 },
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    backgroundColor: colors.warningLight,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2.5],
+    marginBottom: spacing[3],
+  },
+  offlineDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.warning },
+  offlineText: { fontSize: 13, fontWeight: '600', color: '#92400E' },
+  skeletonSectionTitle: { width: 120, height: 18, borderRadius: radii.sm, backgroundColor: colors.shimmer, marginBottom: spacing[3] },
+  skeletonKpiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
+  skeletonKpiCard: {
+    width: '48%',
+    flexGrow: 1,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    padding: spacing[4],
+    gap: spacing[2],
+  },
+  skeletonBlock: { width: 80, height: 14, borderRadius: radii.sm, backgroundColor: colors.shimmer },
+  skeletonBlockWide: { width: 120, height: 28, borderRadius: radii.sm, backgroundColor: colors.shimmer },
+  skeletonBlockNarrow: { width: 60, height: 12, borderRadius: radii.sm, backgroundColor: colors.shimmer },
+  skeletonChartCard: { height: 220, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.borderLight, backgroundColor: colors.shimmer },
+  skeletonAlertRow: { height: 56, paddingHorizontal: spacing[4], backgroundColor: colors.shimmer, borderRadius: radii.lg, marginTop: spacing[2] },
+  skeletonQuickRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
+  skeletonQuickTile: { width: '48%', flexGrow: 1, height: 90, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.borderLight, backgroundColor: colors.shimmer },
+  skeletonActivityRow: { height: 56, paddingHorizontal: spacing[3], backgroundColor: colors.shimmer, borderRadius: radii.lg, marginTop: spacing[2] },
+  skeletonRowBorder: { borderTopWidth: 1, borderTopColor: colors.borderLight },
+  firstRunCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    padding: spacing[6],
+    alignItems: 'center',
+    gap: spacing[3],
+  },
+  firstRunIllustration: { marginBottom: spacing[2] },
+  firstRunCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: radii.full,
+    backgroundColor: colors.primary50,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  firstRunTitle: { fontSize: 20, fontWeight: '700', color: colors.text, textAlign: 'center' },
+  firstRunSubtitle: { fontSize: 14, fontWeight: '400', color: colors.textMuted, textAlign: 'center' },
+  firstRunCta: {
+    backgroundColor: colors.primary,
+    borderRadius: radii.md,
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[6],
+    marginTop: spacing[2],
+  },
+  firstRunCtaText: { color: colors.white, fontWeight: '700', fontSize: 14 },
+  firstRunZeroKpis: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2], marginTop: spacing[4], width: '100%' },
+  firstRunZeroKpi: {
+    width: '31%',
+    flexGrow: 1,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    padding: spacing[3],
+    alignItems: 'center',
+    gap: 2,
+  },
+  firstRunZeroValue: { fontSize: 16, fontWeight: '700', color: colors.textTertiary, fontVariant: ['tabular-nums'] },
+  firstRunZeroDelta: { fontSize: 12, fontWeight: '600', color: colors.textTertiary },
+  errorCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    padding: spacing[6],
+    alignItems: 'center',
+    gap: spacing[3],
+  },
+  errorIcon: { marginBottom: spacing[1] },
+  errorTitle: { fontSize: 18, fontWeight: '600', color: colors.text, textAlign: 'center' },
+  errorSubtitle: { fontSize: 14, fontWeight: '400', color: colors.textMuted, textAlign: 'center' },
+  errorRetryBtn: {
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    borderRadius: radii.md,
+    paddingVertical: spacing[2.5],
+    paddingHorizontal: spacing[5],
+    marginTop: spacing[2],
+  },
+  errorRetryText: { color: colors.primary, fontWeight: '700', fontSize: 14 },
   alertsCard: {
     backgroundColor: colors.surface,
     borderRadius: radii.lg,
@@ -1223,33 +1694,48 @@ const styles = StyleSheet.create({
   allCaughtUpIcon: { marginBottom: spacing[1] },
   allCaughtUpTitle: { fontSize: 16, fontWeight: '600', color: colors.text },
   allCaughtUpSub: { fontSize: 12, fontWeight: '400', color: colors.textMuted, textAlign: 'center' },
-  quickActionsRow: { flexDirection: 'row', gap: spacing[2] },
+  quickActionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
+  quickActionTileWrap: { width: '48%', flexGrow: 1 },
   quickActionBtn: {
-    flex: 1,
     alignItems: 'center',
-    gap: spacing[2],
+    gap: spacing[2.5],
     backgroundColor: colors.surface,
     borderRadius: radii.lg,
     borderWidth: 1,
     borderColor: colors.borderLight,
-    paddingVertical: spacing[3.5],
+    paddingVertical: spacing[4],
   },
   quickActionIcon: {
-    width: 40,
-    height: 40,
+    width: 48,
+    height: 48,
     borderRadius: radii.full,
     backgroundColor: colors.primary50,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  quickActionLabel: { fontSize: 12, fontWeight: '600', color: colors.text, textAlign: 'center' },
-  activityRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], paddingVertical: spacing[2.5] },
-  activityRowBorder: { borderTopWidth: 1, borderTopColor: colors.borderLight },
-  activityIcon: { width: 36, height: 36, borderRadius: radii.full, alignItems: 'center', justifyContent: 'center' },
-  activityBody: { flex: 1, gap: 2 },
-  activityTitle: { fontSize: 14, fontWeight: '600', color: colors.text },
-  activitySubtitle: { fontSize: 12, color: colors.textMuted },
-  activityAt: { fontSize: 11, color: colors.textTertiary },
+  quickActionLabel: { fontSize: 14, fontWeight: '600', color: colors.text, textAlign: 'center' },
+  activityRowWrap: { minHeight: 56, paddingHorizontal: spacing[3] },
+  activityRowBorder: { borderTopWidth: 1, borderTopColor: colors.border },
+  activityRowInner: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], paddingVertical: spacing[2.5] },
+  activityIcon: { width: 32, height: 32, borderRadius: radii.full, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  activityBody: { flex: 1, gap: 1, minWidth: 0 },
+  activityTitle: { fontSize: 16, fontWeight: '400', color: colors.text, lineHeight: 22 },
+  activitySubtitle: { fontSize: 12, fontWeight: '400', color: colors.textMuted },
+  activityStatusPill: { paddingHorizontal: spacing[2], paddingVertical: spacing[0.5], borderRadius: radii.full, flexShrink: 0 },
+  activityStatusText: { fontSize: 12, fontWeight: '600' },
+  activityAmount: { fontSize: 12, fontWeight: '600', color: colors.text, fontVariant: ['tabular-nums'], flexShrink: 0 },
+  activityFilterBar: { flexDirection: 'row', gap: spacing[1.5], padding: spacing[2], borderBottomWidth: 1, borderBottomColor: colors.borderLight, marginBottom: spacing[1] },
+  activityFilterPill: { paddingHorizontal: spacing[2.5], paddingVertical: spacing[1], borderRadius: radii.full, backgroundColor: colors.background },
+  activityFilterPillActive: { backgroundColor: colors.primary },
+  activityFilterText: { fontSize: 12, fontWeight: '600', color: colors.textMuted },
+  activityFilterTextActive: { color: colors.white },
+  activityEmpty: { alignItems: 'center', justifyContent: 'center', paddingVertical: spacing[6], gap: spacing[2] },
+  activityEmptyTitle: { fontSize: 16, fontWeight: '600', color: colors.text },
+  activityEmptySub: { fontSize: 12, fontWeight: '400', color: colors.textMuted, textAlign: 'center' },
+  activitySkeletonIcon: { width: 32, height: 32, borderRadius: radii.full, backgroundColor: colors.shimmer },
+  activitySkeletonTitle: { width: 140, height: 14, borderRadius: radii.sm, backgroundColor: colors.shimmer },
+  activitySkeletonSub: { width: 100, height: 12, borderRadius: radii.sm, backgroundColor: colors.shimmer },
+  activitySkeletonBadge: { width: 50, height: 20, borderRadius: radii.full, backgroundColor: colors.shimmer },
   emptyText: { fontSize: 14, color: colors.textMuted, textAlign: 'center', paddingVertical: spacing[3] },
   sheetOverlay: { position: 'absolute', inset: 0, backgroundColor: colors.overlay, justifyContent: 'flex-end', zIndex: 40 },
   sheetCard: {

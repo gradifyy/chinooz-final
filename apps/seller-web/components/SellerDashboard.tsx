@@ -29,20 +29,23 @@ import {
   RotateCcw,
   ShieldAlert,
   ChevronRight,
+  Settings,
 } from 'lucide-react'
 import { Screen, Container } from '@chinooz/ui-web'
 import { useReducedMotion } from '@chinooz/ui-web'
 import { useSellerSessionStore } from '@chinooz/state'
-import { useSellerReviews } from '@chinooz/hooks'
+import { useSellerReviews, useSellerDashboardStats, useGoLiveChecklist } from '@chinooz/hooks'
 import {
-  getSellerDashboardMetrics,
-  SELLER_GO_LIVE_TASKS,
+  getEmptySellerDashboardMetrics,
   type SellerDateRange,
   type SellerDateRangeKey,
   type SellerKpi,
   type SellerChartPoint,
   type SellerChartMetric,
   type SellerAlert,
+  type SellerQuickAction,
+  type SellerActivityItem,
+  type SellerActivityKind,
 } from '@chinooz/mock-data'
 import { analytics } from '@chinooz/analytics'
 
@@ -79,15 +82,33 @@ export default function SellerDashboard() {
   const { t } = useTranslation()
   const router = useRouter()
   const reduced = useReducedMotion()
+  const isLoggedIn = useSellerSessionStore(s => s.isLoggedIn)
   const store = useSellerSessionStore(s => s.store)
   const goLiveStatus = useSellerSessionStore(s => s.goLiveStatus)
+
+  useEffect(() => {
+    if (!isLoggedIn) router.replace('/onboarding')
+  }, [isLoggedIn, router])
 
   const [rangeKey, setRangeKey] = useState<SellerDateRangeKey>('7d')
   const [customRange, setCustomRange] = useState<{ start: string; end: string } | null>(null)
   const [customOpen, setCustomOpen] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
-  const [refreshing, setRefreshing] = useState(false)
+  const [isOffline, setIsOffline] = useState(false)
   const moreRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const update = () => setIsOffline(!navigator.onLine)
+    update()
+    window.addEventListener('online', () => setIsOffline(false))
+    window.addEventListener('offline', update)
+    return () => {
+      window.removeEventListener('online', () => setIsOffline(false))
+      window.removeEventListener('offline', update)
+    }
+  }, [])
+
+  const isFirstRun = goLiveStatus !== 'live'
 
   useEffect(() => {
     if (!moreOpen) return
@@ -108,13 +129,23 @@ export default function SellerDashboard() {
     }
   }, [rangeKey, customRange, t])
 
-  const metrics = useMemo(() => getSellerDashboardMetrics(range), [range])
+  const statsQuery = useSellerDashboardStats(range)
+  const goLiveQuery = useGoLiveChecklist()
+
+  const loading = !isFirstRun && statsQuery.isLoading
+  const error = !isFirstRun && statsQuery.isError
+  const refreshing = statsQuery.isFetching && !statsQuery.isLoading
+
+  const metrics = useMemo(() => {
+    if (isFirstRun) return getEmptySellerDashboardMetrics(range)
+    return statsQuery.data ?? getEmptySellerDashboardMetrics(range)
+  }, [isFirstRun, statsQuery.data, range])
 
   useEffect(() => {
     analytics.screen({ name: 'seller-dashboard' })
   }, [])
 
-  const goLiveTasks = SELLER_GO_LIVE_TASKS
+  const goLiveTasks = goLiveQuery.data ?? []
   const goLiveDone = goLiveTasks.filter(t => t.done).length
   const goLiveComplete = goLiveDone === goLiveTasks.length
 
@@ -143,6 +174,10 @@ export default function SellerDashboard() {
     setCustomOpen(false)
     setRangeKey('custom')
   }, [customRange])
+
+  const onRetry = useCallback(() => {
+    statsQuery.refetch()
+  }, [statsQuery])
 
   return (
     <Screen>
@@ -267,80 +302,122 @@ export default function SellerDashboard() {
           </div>
         </div>
 
-        {!goLiveComplete && (
-          <GoLiveChecklist
-            tasks={goLiveTasks}
-            done={goLiveDone}
-            total={goLiveTasks.length}
-            onContinue={() => router.push('/onboarding')}
-            className="mb-6"
-          />
+        {isOffline && !loading && !error && (
+          <div role="status" aria-label={t('seller.dashboard.offlineBannerAria')} className="mb-4 rounded-md bg-warning/10 border border-warning/20 px-4 py-2.5 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-warning" />
+            <span className="text-[13px] font-semibold text-[#92400E]">{t('seller.dashboard.offlineBanner')}</span>
+          </div>
         )}
 
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={rangeKey + (customRange?.start ?? '') + (customRange?.end ?? '')}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: reduced ? 0 : 0.2 }}
-            className="flex flex-col gap-4"
-          >
-            <section aria-labelledby="sd-kpis">
-              <h3 id="sd-kpis" className="text-lg font-semibold text-text mb-3">
-                {t('seller.dashboard.sectionKpis')}
-              </h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
-                {refreshing
-                  ? Array.from({ length: 6 }).map((_, i) => <KpiCardSkeleton key={i} />)
-                  : metrics.kpis.map(kpi => (
-                      <KpiCard key={kpi.key} kpi={kpi} onPress={(k) => router.push(k.route)} t={t} />
-                    ))}
-              </div>
-            </section>
-
-            <SalesChart points={metrics.chart} rangeLabel={range.label} t={t} />
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <section aria-labelledby="sd-alerts">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 id="sd-alerts" className="text-lg font-semibold text-text">
-                    {t('seller.dashboard.sectionAlerts')}
-                  </h3>
-                  <button className="text-sm font-semibold text-primary hover:underline" onClick={() => router.push('/orders')}>
-                    {t('seller.dashboard.seeAll')}
-                  </button>
-                </div>
-                <Alerts alerts={metrics.alerts} onRoute={(route) => router.push(route)} t={t} />
-              </section>
-
-              <section aria-labelledby="sd-activity">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 id="sd-activity" className="text-lg font-semibold text-text">
-                    {t('seller.dashboard.sectionActivity')}
-                  </h3>
-                  <button className="text-sm font-semibold text-primary hover:underline" onClick={() => router.push('/analytics')}>
-                    {t('seller.dashboard.seeAll')}
-                  </button>
-                </div>
-                <RecentActivity items={metrics.activity} />
-              </section>
-            </div>
-
-            <section aria-labelledby="sd-actions">
-              <h3 id="sd-actions" className="text-lg font-semibold text-text mb-3">
-                {t('seller.dashboard.sectionQuickActions')}
-              </h3>
-              <QuickActions
-                actions={metrics.quickActions}
-                onPress={id => {
-                  const action = metrics.quickActions.find(a => a.id === id)
-                  if (action?.href) router.push(action.href)
-                }}
+        {error ? (
+          <DashboardErrorState onRetry={onRetry} t={t} reduced={reduced} />
+        ) : loading ? (
+          <DashboardSkeleton t={t} />
+        ) : isFirstRun ? (
+          <FirstRunEmpty onAddProduct={() => router.push('/products/new')} t={t} reduced={reduced} />
+        ) : (
+          <>
+            {!goLiveComplete && (
+              <GoLiveChecklist
+                tasks={goLiveTasks}
+                done={goLiveDone}
+                total={goLiveTasks.length}
+                onContinue={() => router.push('/onboarding')}
+                className="mb-6"
               />
-            </section>
-          </motion.div>
-        </AnimatePresence>
+            )}
+
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={rangeKey + (customRange?.start ?? '') + (customRange?.end ?? '')}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: reduced ? 0 : 0.2 }}
+                className="flex flex-col gap-4"
+              >
+                <motion.div
+                  initial={reduced ? {} : { opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={reduced ? { duration: 0 } : { delay: 0, type: 'spring', damping: 20, stiffness: 300 }}
+                >
+                  <section aria-labelledby="sd-kpis">
+                    <h3 id="sd-kpis" className="text-lg font-semibold text-text mb-3">
+                      {t('seller.dashboard.sectionKpis')}
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+                      {refreshing
+                        ? Array.from({ length: 6 }).map((_, i) => <KpiCardSkeleton key={i} />)
+                        : metrics.kpis.map(kpi => (
+                            <KpiCard key={kpi.key} kpi={kpi} onPress={(k) => router.push(k.route)} t={t} />
+                          ))}
+                    </div>
+                  </section>
+                </motion.div>
+
+                <motion.div
+                  initial={reduced ? {} : { opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={reduced ? { duration: 0 } : { delay: 0.05, type: 'spring', damping: 20, stiffness: 300 }}
+                >
+                  <SalesChart points={metrics.chart} rangeLabel={range.label} t={t} />
+                </motion.div>
+
+                <motion.div
+                  initial={reduced ? {} : { opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={reduced ? { duration: 0 } : { delay: 0.1, type: 'spring', damping: 20, stiffness: 300 }}
+                >
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <section aria-labelledby="sd-alerts">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 id="sd-alerts" className="text-lg font-semibold text-text">
+                          {t('seller.dashboard.sectionAlerts')}
+                        </h3>
+                        <button className="text-sm font-semibold text-primary hover:underline" onClick={() => router.push('/orders')}>
+                          {t('seller.dashboard.seeAll')}
+                        </button>
+                      </div>
+                      <Alerts alerts={metrics.alerts} onRoute={(route) => router.push(route)} t={t} />
+                    </section>
+
+                    <section aria-labelledby="sd-activity">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 id="sd-activity" className="text-lg font-semibold text-text">
+                          {t('seller.dashboard.sectionActivity')}
+                        </h3>
+                        <button className="text-sm font-semibold text-primary hover:underline" onClick={() => router.push('/orders')} aria-label={t('seller.dashboard.activitySeeAll')}>
+                          {t('seller.dashboard.seeAll')}
+                        </button>
+                      </div>
+                      <RecentActivity items={metrics.activity} loading={refreshing} onRoute={(route) => router.push(route)} lastViewed={0} t={t} />
+                    </section>
+                  </div>
+                </motion.div>
+
+                <motion.div
+                  initial={reduced ? {} : { opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={reduced ? { duration: 0 } : { delay: 0.15, type: 'spring', damping: 20, stiffness: 300 }}
+                >
+                  <section aria-labelledby="sd-actions">
+                    <h3 id="sd-actions" className="text-lg font-semibold text-text mb-3">
+                      {t('seller.dashboard.sectionQuickActions')}
+                    </h3>
+                    <QuickActions
+                      actions={metrics.quickActions}
+                      onPress={id => {
+                        const action = metrics.quickActions.find(a => a.id === id)
+                        if (action?.href) router.push(action.href)
+                      }}
+                      t={t}
+                    />
+                  </section>
+                </motion.div>
+              </motion.div>
+            </AnimatePresence>
+          </>
+        )}
       </Container>
 
       {customOpen && (
@@ -856,69 +933,305 @@ const ACTION_ICON: Record<string, any> = {
   layers: Layers,
   wallet: Wallet,
   tag: Tag,
+  settings: Settings,
 }
 
-function QuickActions({ actions, onPress }: { actions: { id: string; label: string; icon: string }[]; onPress: (id: string) => void }) {
+const ACTION_LABEL_KEY: Record<string, string> = {
+  'add-product': 'seller.dashboard.actionAddProduct',
+  'orders': 'seller.dashboard.actionViewOrders',
+  'promotions': 'seller.dashboard.actionCreatePromotion',
+  'inventory': 'seller.dashboard.actionUpdateInventory',
+  'payouts': 'seller.dashboard.actionViewPayouts',
+  'settings': 'seller.dashboard.actionStoreSettings',
+}
+
+function QuickActions({ actions, onPress, t }: { actions: SellerQuickAction[]; onPress: (id: string) => void; t: (k: string) => string }) {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 md:flex md:flex-row md:gap-3 xl:grid xl:grid-cols-6 gap-3">
       {actions.map(a => {
         const Icon = ACTION_ICON[a.icon] ?? Plus
+        const label = t(ACTION_LABEL_KEY[a.id] ?? a.label)
         return (
-          <button
+          <QuickActionTile
             key={a.id}
-            onClick={() => onPress(a.id)}
-            aria-label={a.label}
-            className="flex flex-col items-center gap-2 rounded-lg border border-border-light bg-surface py-3.5 hover:border-primary/40 hover:bg-primary-50/40 transition-colors"
-          >
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary-50">
-              <Icon size={22} className="text-primary" />
-            </span>
-            <span className="text-xs font-semibold text-text text-center">{a.label}</span>
-          </button>
+            icon={Icon}
+            label={label}
+            onPress={() => onPress(a.id)}
+          />
         )
       })}
     </div>
   )
 }
 
-const ACTIVITY_ICON = {
-  order: { Icon: Box, color: 'text-info' },
-  review: { Icon: CheckCircle2, color: 'text-success' },
-  payout: { Icon: Wallet, color: 'text-primary' },
-  stock: { Icon: Layers, color: 'text-warning' },
-  follower: { Icon: TrendingUp, color: 'text-info' },
-} as const
-
-function RecentActivity({ items }: { items: { id: string; kind: 'order' | 'review' | 'payout' | 'stock' | 'follower'; title: string; subtitle: string; at: string }[] }) {
-  const { t } = useTranslation()
-  if (items.length === 0) {
-    return (
-      <div className="rounded-lg border border-border-light bg-surface p-5 text-sm text-text-muted text-center">
-        {t('seller.dashboard.noActivity')}
-      </div>
-    )
-  }
+function QuickActionTile({
+  icon: Icon,
+  label,
+  onPress,
+}: {
+  icon: any
+  label: string
+  onPress: () => void
+}) {
+  const reduced = useReducedMotion()
   return (
-    <div className="rounded-lg border border-border-light bg-surface p-2">
-      {items.map((item, i) => {
-        const { Icon, color } = ACTIVITY_ICON[item.kind]
-        return (
-          <div
-            key={item.id}
-            className={`flex items-center gap-3 py-2.5 px-2 ${i > 0 ? 'border-t border-border-light' : ''}`}
-          >
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/5">
-              <Icon size={18} className={color} />
-            </span>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-text truncate">{item.title}</p>
-              <p className="text-xs text-text-muted truncate">{item.subtitle}</p>
+    <motion.button
+      whileTap={{ scale: reduced ? 1 : 0.96 }}
+      transition={{ duration: reduced ? 0 : 0.1 }}
+      onClick={onPress}
+      aria-label={label}
+      className="flex flex-col items-center gap-2.5 rounded-lg border border-border-light bg-surface py-4 px-2 hover:border-primary/30 hover:bg-primary-50/30 transition-colors min-touch md:flex-1 xl:flex-1"
+    >
+      <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary-50">
+        <Icon size={28} className="text-primary" />
+      </span>
+      <span className="text-sm font-semibold text-text text-center leading-tight">{label}</span>
+    </motion.button>
+  )
+}
+
+const ACTIVITY_ICON: Record<SellerActivityKind, { Icon: any; color: string; bg: string }> = {
+  order: { Icon: Box, color: 'text-info', bg: 'bg-info/10' },
+  review: { Icon: Star, color: 'text-gold', bg: 'bg-warning/10' },
+  message: { Icon: MessageCircle, color: 'text-primary', bg: 'bg-primary-50' },
+}
+
+const ACTIVITY_STATUS_STYLE: Record<string, { color: string; bg: string }> = {
+  new: { color: 'text-info', bg: 'bg-info/10' },
+  confirmed: { color: 'text-info', bg: 'bg-info/10' },
+  shipped: { color: 'text-warning', bg: 'bg-warning/10' },
+  delivered: { color: 'text-success', bg: 'bg-success/10' },
+  pending: { color: 'text-warning', bg: 'bg-warning/10' },
+  positive: { color: 'text-success', bg: 'bg-success/10' },
+  neutral: { color: 'text-text-muted', bg: 'bg-border-light' },
+}
+
+const ACTIVITY_STATUS_KEY: Record<string, string> = {
+  new: 'seller.dashboard.activityStatusNew',
+  confirmed: 'seller.dashboard.activityStatusConfirmed',
+  shipped: 'seller.dashboard.activityStatusShipped',
+  delivered: 'seller.dashboard.activityStatusDelivered',
+  pending: 'seller.dashboard.activityStatusPending',
+  positive: 'seller.dashboard.activityStatusPositive',
+  neutral: 'seller.dashboard.activityStatusNeutral',
+}
+
+const ACTIVITY_FILTERS: { key: 'all' | SellerActivityKind; labelKey: string }[] = [
+  { key: 'all', labelKey: 'seller.dashboard.activityFilterAll' },
+  { key: 'order', labelKey: 'seller.dashboard.activityFilterOrders' },
+  { key: 'review', labelKey: 'seller.dashboard.activityFilterReviews' },
+  { key: 'message', labelKey: 'seller.dashboard.activityFilterMessages' },
+]
+
+function RecentActivity({ items, loading, onRoute, lastViewed, t }: { items: SellerActivityItem[]; loading: boolean; onRoute: (route: string) => void; lastViewed: number; t: (k: string, o?: Record<string, unknown>) => string }) {
+  const [filter, setFilter] = useState<'all' | SellerActivityKind>('all')
+
+  const filtered = useMemo(() => {
+    const sorted = [...items].sort((a, b) => b.timestamp - a.timestamp)
+    if (filter === 'all') return sorted
+    return sorted.filter(i => i.kind === filter)
+  }, [items, filter])
+
+  return (
+    <div className="rounded-lg border border-border-light bg-surface overflow-hidden">
+      <div className="flex gap-1.5 p-2 border-b border-border-light" role="tablist">
+        {ACTIVITY_FILTERS.map(f => {
+          const active = f.key === filter
+          return (
+            <button
+              key={f.key}
+              role="tab"
+              aria-selected={active}
+              onClick={() => setFilter(f.key)}
+              className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-colors ${
+                active ? 'bg-primary text-white' : 'bg-background text-text-muted hover:text-text'
+              }`}
+            >
+              {t(f.labelKey)}
+            </button>
+          )
+        })}
+      </div>
+
+      {loading ? (
+        <div aria-busy="true" aria-label="Loading activity">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className={`flex items-center gap-3 py-2.5 px-3 min-h-[56px] ${i > 0 ? 'border-t border-border-light' : ''}`}>
+              <div className="w-8 h-8 rounded-full bg-shimmer flex-shrink-0" />
+              <div className="flex-1 gap-1">
+                <div className="w-32 h-3.5 rounded bg-shimmer" />
+                <div className="w-24 h-3 rounded bg-shimmer mt-1" />
+              </div>
+              <div className="w-12 h-5 rounded-full bg-shimmer flex-shrink-0" />
             </div>
-            <span className="text-[11px] text-text-tertiary whitespace-nowrap">{item.at}</span>
-          </div>
-        )
-      })}
+          ))}
+        </div>
+      ) : items.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-8 gap-2">
+          <Circle size={36} className="text-text-tertiary" />
+          <p className="text-base font-semibold text-text">{t('seller.dashboard.activityEmpty')}</p>
+          <p className="text-xs font-normal text-text-muted text-center">{t('seller.dashboard.activityEmptySub')}</p>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-6 gap-1">
+          <p className="text-sm font-semibold text-text">{t('seller.dashboard.activityEmpty')}</p>
+        </div>
+      ) : (
+        filtered.map((item, i) => (
+          <ActivityRow
+            key={item.id}
+            item={item}
+            index={i}
+            isNew={item.timestamp > lastViewed}
+            onRoute={onRoute}
+            t={t}
+          />
+        ))
+      )}
     </div>
+  )
+}
+
+function ActivityRow({ item, index, isNew, onRoute, t }: { item: SellerActivityItem; index: number; isNew: boolean; onRoute: (route: string) => void; t: (k: string, o?: Record<string, unknown>) => string }) {
+  const reduced = useReducedMotion()
+  const { Icon, color, bg } = ACTIVITY_ICON[item.kind]
+  const statusLabel = item.status ? t(ACTIVITY_STATUS_KEY[item.status] ?? item.status) : undefined
+  const statusStyle = item.status ? ACTIVITY_STATUS_STYLE[item.status] : undefined
+  const ariaLabel = t('seller.dashboard.activityAria', {
+    title: item.title,
+    subtitle: item.subtitle,
+    status: statusLabel ?? '',
+    at: item.at,
+  })
+
+  return (
+    <motion.button
+      key={item.id}
+      onClick={() => onRoute(item.route)}
+      aria-label={ariaLabel}
+      initial={isNew && !reduced ? { backgroundColor: 'rgba(138,27,87,0.08)' } : false}
+      animate={isNew && !reduced ? { backgroundColor: 'rgba(138,27,87,0)' } : {}}
+      transition={reduced ? { duration: 0 } : { duration: 2 }}
+      className={`flex items-center gap-3 min-h-[56px] px-3 py-2.5 text-left w-full ${index > 0 ? 'border-t border-border-light' : ''} hover:bg-background transition-colors`}
+    >
+      <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full flex-shrink-0 ${bg}`}>
+        <Icon size={18} className={color} />
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="text-base font-normal text-text truncate leading-snug">{item.title}</p>
+        <p className="text-xs font-normal text-text-muted truncate">{item.subtitle}</p>
+      </div>
+      {statusLabel && statusStyle && (
+        <span
+          className={`inline-flex items-center rounded-full px-2 py-0.5 flex-shrink-0 ${statusStyle.bg}`}
+          aria-label={statusLabel}
+        >
+          <span className={`text-xs font-semibold ${statusStyle.color}`}>{statusLabel}</span>
+        </span>
+      )}
+      {item.amount && (
+        <span className="text-xs font-semibold text-text tabular-nums flex-shrink-0">{item.amount}</span>
+      )}
+      <ChevronRight size={18} className="text-text-tertiary flex-shrink-0" />
+    </motion.button>
+  )
+}
+
+function DashboardSkeleton({ t }: { t: (k: string) => string }) {
+  return (
+    <div className="flex flex-col gap-4" aria-busy="true" aria-label={t('seller.dashboard.loadingDashboard')}>
+      <div>
+        <div className="w-32 h-5 rounded bg-shimmer mb-3" />
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="rounded-lg border border-border-light bg-surface p-4 flex flex-col gap-2">
+              <div className="w-20 h-3.5 rounded bg-shimmer" />
+              <div className="w-28 h-7 rounded bg-shimmer" />
+              <div className="w-full h-8 rounded bg-shimmer" />
+              <div className="w-16 h-3 rounded bg-shimmer" />
+              <div className="w-20 h-3 rounded bg-shimmer" />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div>
+        <div className="w-24 h-5 rounded bg-shimmer mb-3" />
+        <div className="h-[220px] rounded-lg border border-border-light bg-shimmer" />
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div>
+          <div className="w-20 h-5 rounded bg-shimmer mb-3" />
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-14 rounded-lg bg-shimmer mb-2" />
+          ))}
+        </div>
+        <div>
+          <div className="w-24 h-5 rounded bg-shimmer mb-3" />
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-14 rounded-lg bg-shimmer mb-2" />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function FirstRunEmpty({ onAddProduct, t, reduced }: { onAddProduct: () => void; t: (k: string) => string; reduced: boolean }) {
+  return (
+    <motion.div
+      initial={reduced ? {} : { opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={reduced ? { duration: 0 } : { type: 'spring', damping: 18, stiffness: 200 }}
+      className="rounded-lg border border-border-light bg-surface p-8 flex flex-col items-center gap-3"
+      role="summary"
+      aria-label={t('seller.dashboard.firstRunTitle')}
+    >
+      <div className="w-20 h-20 rounded-full bg-primary-50 flex items-center justify-center">
+        <Plus size={40} className="text-primary" />
+      </div>
+      <h3 className="text-xl font-bold text-text text-center">{t('seller.dashboard.firstRunTitle')}</h3>
+      <p className="text-sm font-normal text-text-muted text-center max-w-sm">{t('seller.dashboard.firstRunSubtitle')}</p>
+      <button
+        onClick={onAddProduct}
+        aria-label={t('seller.dashboard.firstRunCtaAria')}
+        className="mt-2 bg-primary text-white text-sm font-bold px-6 py-2.5 rounded-md hover:opacity-90 transition-opacity"
+      >
+        {t('seller.dashboard.firstRunCta')}
+      </button>
+
+      <div className="grid grid-cols-3 md:grid-cols-6 gap-2 w-full mt-6">
+        {['NPR 0', '0', '0', 'NPR 0', '0%', 'NPR 0'].map((v, i) => (
+          <div key={i} className="rounded-lg border border-border-light p-3 flex flex-col items-center gap-1">
+            <span className="text-base font-bold text-text-tertiary tabular-nums">{v}</span>
+            <span className="text-xs font-semibold text-text-tertiary">—</span>
+          </div>
+        ))}
+      </div>
+    </motion.div>
+  )
+}
+
+function DashboardErrorState({ onRetry, t, reduced }: { onRetry: () => void; t: (k: string) => string; reduced: boolean }) {
+  return (
+    <motion.div
+      initial={reduced ? {} : { opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={reduced ? { duration: 0 } : { duration: 0.3 }}
+      className="rounded-lg border border-border-light bg-surface p-8 flex flex-col items-center gap-3"
+      role="alert"
+      aria-label={t('seller.dashboard.errorTitle')}
+    >
+      <XCircle size={40} className="text-error" />
+      <h3 className="text-lg font-semibold text-text text-center">{t('seller.dashboard.errorTitle')}</h3>
+      <p className="text-sm font-normal text-text-muted text-center">{t('seller.dashboard.errorSubtitle')}</p>
+      <button
+        onClick={onRetry}
+        aria-label={t('seller.dashboard.errorRetryAria')}
+        className="mt-2 border-2 border-primary text-primary text-sm font-bold px-5 py-2.5 rounded-md hover:bg-primary-50 transition-colors"
+      >
+        {t('seller.dashboard.errorRetry')}
+      </button>
+    </motion.div>
   )
 }
 

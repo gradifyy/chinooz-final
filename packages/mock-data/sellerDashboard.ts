@@ -55,12 +55,20 @@ export interface SellerQuickAction {
   href?: string
 }
 
+export type SellerActivityKind = 'order' | 'review' | 'message'
+export type SellerActivityStatus = 'new' | 'confirmed' | 'shipped' | 'delivered' | 'pending' | 'positive' | 'neutral'
+
 export interface SellerActivityItem {
   id: string
-  kind: 'order' | 'review' | 'payout' | 'stock' | 'follower'
+  kind: SellerActivityKind
   title: string
   subtitle: string
+  meta: string
   at: string
+  timestamp: number
+  amount?: string
+  status?: SellerActivityStatus
+  route: string
 }
 
 export interface SellerGoLiveTask {
@@ -185,18 +193,97 @@ const ALERTS: SellerAlert[] = [
 
 const QUICK_ACTIONS: SellerQuickAction[] = [
   { id: 'add-product', label: 'Add product', icon: 'plus', href: '/products/new' },
-  { id: 'orders', label: 'Orders', icon: 'box', href: '/orders' },
-  { id: 'inventory', label: 'Inventory', icon: 'layers', href: '/inventory' },
-  { id: 'promotions', label: 'Promotions', icon: 'tag', href: '/promotions' },
-  { id: 'payouts', label: 'Payouts', icon: 'wallet', href: '/payouts' },
+  { id: 'orders', label: 'View orders', icon: 'box', href: '/orders' },
+  { id: 'promotions', label: 'Create promotion', icon: 'tag', href: '/promotions/new' },
+  { id: 'inventory', label: 'Update inventory', icon: 'layers', href: '/inventory' },
+  { id: 'payouts', label: 'View payouts', icon: 'wallet', href: '/finance' },
+  { id: 'settings', label: 'Store settings', icon: 'settings', href: '/settings' },
 ]
 
+const now = Date.now()
+const minsAgo = (m: number) => now - m * 60_000
+
 const ACTIVITY: SellerActivityItem[] = [
-  { id: 'a1', kind: 'order', title: 'New order #ORD-2051', subtitle: 'Samsung Galaxy A55 — NPR 45,999', at: '2m ago' },
-  { id: 'a2', kind: 'review', title: 'New 5★ review', subtitle: '“Great service, fast delivery!”', at: '1h ago' },
-  { id: 'a3', kind: 'payout', title: 'Payout settled', subtitle: 'NPR 12,400 → Khalti', at: '5h ago' },
-  { id: 'a4', kind: 'stock', title: 'Stock updated', subtitle: 'Dhaka Topi: 24 → 8 units', at: 'Yesterday' },
-  { id: 'a5', kind: 'follower', title: '+12 new followers', subtitle: 'Your store gained followers this week', at: '2d ago' },
+  {
+    id: 'a1',
+    kind: 'order',
+    title: 'Order #ORD-2051',
+    subtitle: 'Samsung Galaxy A55 5G',
+    meta: '1 item',
+    at: '2m ago',
+    timestamp: minsAgo(2),
+    amount: 'NPR 45,999',
+    status: 'new',
+    route: '/orders/ORD-2051',
+  },
+  {
+    id: 'a2',
+    kind: 'review',
+    title: 'New 5★ review',
+    subtitle: '“Great service, fast delivery!”',
+    meta: 'Samsung Galaxy A55',
+    at: '1h ago',
+    timestamp: minsAgo(60),
+    status: 'positive',
+    route: '/reviews',
+  },
+  {
+    id: 'a3',
+    kind: 'message',
+    title: 'Message from Ram S.',
+    subtitle: '“Is this available in blue?”',
+    meta: 'Samsung Galaxy A55',
+    at: '3h ago',
+    timestamp: minsAgo(180),
+    status: 'pending',
+    route: '/messages',
+  },
+  {
+    id: 'a4',
+    kind: 'order',
+    title: 'Order #ORD-2048',
+    subtitle: 'Handmade Dhaka Topi × 2',
+    meta: '2 items',
+    at: '5h ago',
+    timestamp: minsAgo(300),
+    amount: 'NPR 1,700',
+    status: 'shipped',
+    route: '/orders/ORD-2048',
+  },
+  {
+    id: 'a5',
+    kind: 'review',
+    title: 'New 3★ review',
+    subtitle: '“Good product, packaging could be better”',
+    meta: 'Dhaka Topi',
+    at: '8h ago',
+    timestamp: minsAgo(480),
+    status: 'neutral',
+    route: '/reviews',
+  },
+  {
+    id: 'a6',
+    kind: 'order',
+    title: 'Order #ORD-2042',
+    subtitle: 'Organic Honey 500g × 3',
+    meta: '3 items',
+    at: '12h ago',
+    timestamp: minsAgo(720),
+    amount: 'NPR 2,400',
+    status: 'delivered',
+    route: '/orders/ORD-2042',
+  },
+  {
+    id: 'a7',
+    kind: 'message',
+    title: 'Message from Sita K.',
+    subtitle: '“Thank you for the quick delivery!”',
+    meta: 'Organic Honey',
+    at: '1d ago',
+    timestamp: minsAgo(1440),
+    status: 'neutral',
+    route: '/messages',
+  },
 ]
 
 function seeded(n: number, seed: number): number {
@@ -265,6 +352,44 @@ export function getSellerDashboardMetrics(range: SellerDateRange): SellerDashboa
     alerts: ALERTS,
     quickActions: QUICK_ACTIONS,
     activity: ACTIVITY,
+  }
+}
+
+export function getEmptySellerDashboardMetrics(range: SellerDateRange): SellerDashboardMetrics {
+  const period = periodLabel(range.days)
+  const labels = CHART_LABELS[range.days] ?? CHART_LABELS[30]
+
+  const kpis: SellerKpi[] = KPIS.map(k => ({
+    key: k.key,
+    label: k.label,
+    value: k.prefix ? `${k.prefix} 0` : k.suffix ? `0${k.suffix}` : '0',
+    numericValue: 0,
+    prefix: k.prefix,
+    suffix: k.suffix,
+    decimals: k.decimals,
+    deltaPct: 0,
+    trend: 'flat' as const,
+    hint: k.hint,
+    period,
+    sparkline: Array.from({ length: 8 }, () => 0),
+    route: k.route,
+    accent: k.accent,
+  }))
+
+  const chart: SellerChartPoint[] = labels.map(label => ({
+    label,
+    revenue: 0,
+    orders: 0,
+    units: 0,
+  }))
+
+  return {
+    range,
+    kpis,
+    chart,
+    alerts: [],
+    quickActions: QUICK_ACTIONS,
+    activity: [],
   }
 }
 

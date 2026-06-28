@@ -26,6 +26,10 @@ import type {
   SellerNotification,
   ExportReportType,
   ExportReportResult,
+  SellerCancelReason,
+  RefundStatus,
+  SellerReturnRequest,
+  RefundBreakdown,
 } from '@chinooz/types'
 import type { SellerProductFilter, SellerInventoryFilter } from '@chinooz/mock-data'
 import type { ShippingSettings, BusinessDetails, KycDocument, NotificationPreferences, ActiveSession } from '@chinooz/mock-data'
@@ -579,19 +583,17 @@ export function useMarkLabelPrinted() {
             : o,
         )
       })
-      // Also patch the single-order detail cache.
-      for (const id of vars.subOrderIds) {
-        const prev = qc.getQueryData<SellerSubOrder | null>(['seller-order', undefined, id])
-        if (prev) {
-          qc.setQueryData<SellerSubOrder | null>(['seller-order', undefined, id], {
-            ...prev,
-            labelPrinted: true,
-            labelPrintedAt: now,
-            trackingNumber: vars.trackingNumbers?.[id] ?? prev.trackingNumber,
-            carrier: vars.carriers?.[id] ?? prev.carrier,
-          })
+      // Also patch single-order detail caches (key: ['seller-order', sellerId, subOrderId]).
+      qc.setQueriesData<SellerSubOrder | null>({ queryKey: ['seller-order'] }, (old) => {
+        if (!old || !idSet.has(old.subOrderId)) return old
+        return {
+          ...old,
+          labelPrinted: true,
+          labelPrintedAt: now,
+          trackingNumber: vars.trackingNumbers?.[old.subOrderId] ?? old.trackingNumber,
+          carrier: vars.carriers?.[old.subOrderId] ?? old.carrier,
         }
-      }
+      })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return { prevOrders }
     },
@@ -604,6 +606,183 @@ export function useMarkLabelPrinted() {
       }
     },
     onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['seller-orders'] })
+      qc.invalidateQueries({ queryKey: ['seller-order'] })
+    },
+  })
+}
+
+// --- Cancel / Refund / Return (mock) ---
+
+export function useCancelOrder() {
+  const qc = useQueryClient()
+  type Vars = { subOrderId: string; reason: SellerCancelReason; reasonDetail?: string }
+  type Result = {
+    subOrderId: string
+    success: boolean
+    reason: SellerCancelReason
+    restocked: boolean
+    refundTriggered: boolean
+    refundStatus: RefundStatus
+  }
+
+  return useMutation<Result, Error, Vars>({
+    mutationFn: vars => api.cancelOrder(vars.subOrderId, vars.reason, vars.reasonDetail),
+    onMutate: async (vars: Vars) => {
+      await qc.cancelQueries({ queryKey: ['seller-orders'] })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const prevOrders = qc.getQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] })
+      const now = new Date().toISOString()
+      qc.setQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] }, (old) => {
+        if (!old) return old
+        return old.map(o =>
+          o.subOrderId === vars.subOrderId
+            ? {
+                ...o,
+                statusKey: 'cancelled_returned' as SellerOrderStatusKey,
+                status: 'cancelled',
+                cancelReason: vars.reason,
+                cancelReasonDetail: vars.reasonDetail,
+                cancelledAt: now,
+                restockedAt: now,
+                refundStatus: (o.paymentType === 'prepaid' ? 'pending' : 'none') as RefundStatus,
+                actionNeeded: false,
+              }
+            : o,
+        )
+      })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return { prevOrders }
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (_err: Error, _vars: Vars, ctx: any) => {
+      if (ctx?.prevOrders) {
+        for (const [key, data] of ctx.prevOrders) {
+          qc.setQueryData(key, data)
+        }
+      }
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['seller-orders'] })
+      qc.invalidateQueries({ queryKey: ['seller-order'] })
+      qc.invalidateQueries({ queryKey: ['seller-inventory'] })
+    },
+  })
+}
+
+export function useSellerReturnRequests(sellerId: string | null) {
+  return useQuery<SellerReturnRequest[]>({
+    queryKey: ['seller-return-requests', sellerId],
+    queryFn: () => api.getSellerReturnRequests(sellerId as string),
+    enabled: !!sellerId,
+    staleTime: 30_000,
+  })
+}
+
+export function useApproveReturnRequest() {
+  const qc = useQueryClient()
+  type Vars = { requestId: string; resolutionNote?: string }
+  type Result = {
+    requestId: string
+    success: boolean
+    status: 'approved'
+    refundStatus: RefundStatus
+    restocked: boolean
+  }
+
+  return useMutation<Result, Error, Vars>({
+    mutationFn: vars => api.approveReturnRequest(vars.requestId, vars.resolutionNote),
+    onMutate: async (vars: Vars) => {
+      await qc.cancelQueries({ queryKey: ['seller-return-requests'] })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const prev = qc.getQueriesData<SellerReturnRequest[]>({ queryKey: ['seller-return-requests'] })
+      const now = new Date().toISOString()
+      qc.setQueriesData<SellerReturnRequest[]>({ queryKey: ['seller-return-requests'] }, (old) => {
+        if (!old) return old
+        return old.map(r =>
+          r.id === vars.requestId
+            ? { ...r, status: 'approved' as const, refundStatus: 'refunded' as const, resolvedAt: now, resolutionNote: vars.resolutionNote }
+            : r,
+        )
+      })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return { prev }
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (_err: Error, _vars: Vars, ctx: any) => {
+      if (ctx?.prev) {
+        for (const [key, data] of ctx.prev) {
+          qc.setQueryData(key, data)
+        }
+      }
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['seller-return-requests'] })
+      qc.invalidateQueries({ queryKey: ['seller-orders'] })
+      qc.invalidateQueries({ queryKey: ['seller-order'] })
+      qc.invalidateQueries({ queryKey: ['seller-inventory'] })
+    },
+  })
+}
+
+export function useRejectReturnRequest() {
+  const qc = useQueryClient()
+  type Vars = { requestId: string; resolutionNote?: string }
+  type Result = {
+    requestId: string
+    success: boolean
+    status: 'rejected'
+    refundStatus: RefundStatus
+  }
+
+  return useMutation<Result, Error, Vars>({
+    mutationFn: vars => api.rejectReturnRequest(vars.requestId, vars.resolutionNote),
+    onMutate: async (vars: Vars) => {
+      await qc.cancelQueries({ queryKey: ['seller-return-requests'] })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const prev = qc.getQueriesData<SellerReturnRequest[]>({ queryKey: ['seller-return-requests'] })
+      const now = new Date().toISOString()
+      qc.setQueriesData<SellerReturnRequest[]>({ queryKey: ['seller-return-requests'] }, (old) => {
+        if (!old) return old
+        return old.map(r =>
+          r.id === vars.requestId
+            ? { ...r, status: 'rejected' as const, refundStatus: 'rejected' as const, resolvedAt: now, resolutionNote: vars.resolutionNote }
+            : r,
+        )
+      })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return { prev }
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (_err: Error, _vars: Vars, ctx: any) => {
+      if (ctx?.prev) {
+        for (const [key, data] of ctx.prev) {
+          qc.setQueryData(key, data)
+        }
+      }
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['seller-return-requests'] })
+      qc.invalidateQueries({ queryKey: ['seller-orders'] })
+      qc.invalidateQueries({ queryKey: ['seller-order'] })
+    },
+  })
+}
+
+export function useProcessRefund() {
+  const qc = useQueryClient()
+  type Vars = { subOrderId: string }
+  type Result = {
+    subOrderId: string
+    success: boolean
+    refundStatus: RefundStatus
+    refundAmount: number
+    breakdown: RefundBreakdown
+  }
+
+  return useMutation<Result, Error, Vars>({
+    mutationFn: vars => api.processRefund(vars.subOrderId),
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['seller-orders'] })
       qc.invalidateQueries({ queryKey: ['seller-order'] })
     },
@@ -971,5 +1150,37 @@ export function useWithdrawFromCampaign() {
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ['seller-campaigns'] })
     },
+  })
+}
+
+// --- Dashboard ---
+
+const DASHBOARD_STALE = {
+  stats: 1000 * 60,
+  activity: 1000 * 30,
+  goLive: 1000 * 120,
+} as const
+
+export function useSellerDashboardStats(range: import('@chinooz/mock-data').SellerDateRange) {
+  return useQuery<import('@chinooz/mock-data').SellerDashboardMetrics>({
+    queryKey: ['seller-dashboard-stats', range.key, range.days, range.custom?.start, range.custom?.end],
+    queryFn: () => api.getSellerDashboardStats(range),
+    staleTime: DASHBOARD_STALE.stats,
+  })
+}
+
+export function useSellerDashboardEmpty(range: import('@chinooz/mock-data').SellerDateRange) {
+  return useQuery<import('@chinooz/mock-data').SellerDashboardMetrics>({
+    queryKey: ['seller-dashboard-empty', range.key, range.days],
+    queryFn: () => api.getSellerDashboardStatsEmpty(range),
+    staleTime: DASHBOARD_STALE.stats,
+  })
+}
+
+export function useGoLiveChecklist() {
+  return useQuery({
+    queryKey: ['seller-go-live-checklist'],
+    queryFn: () => api.getGoLiveChecklist(),
+    staleTime: DASHBOARD_STALE.goLive,
   })
 }
