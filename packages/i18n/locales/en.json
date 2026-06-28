@@ -914,5 +914,81 @@
         "desc": "Our delivery network is powered by riders who know every galli and tole in the Valley."
       }
     }
+  },
+  "validation": {
+    "emailRequired": "Email is required",
+    "emailInvalid": "Please enter a valid email address",
+    "phoneInvalid": "Please enter a valid phone number (at least 7 digits)",
+    "cityTooShort": "City name must be at least 2 characters"
+  },
+  "waitlist": {
+    "headline": "Join the Waitlist",
+    "subheadline": "Be the first to shop on Chinooz. Sign up now and get early access.",
+    "emailLabel": "Email Address",
+    "emailPlaceholder": "you@example.com",
+    "phoneLabel": "Phone Number",
+    "phonePlaceholder": "+977 98XX XXX XXX",
+    "cityLabel": "City",
+    "cityPlaceholder": "Kathmandu",
+    "roleLabel": "I am a...",
+    "roleBuyer": "Buyer",
+    "roleSeller": "Seller",
+    "roleRider": "Rider",
+    "optional": "optional",
+    "joinButton": "Join the Waitlist",
+    "submitting": "Joining...",
+    "submitError": "Something went wrong. Please try again.",
+    "successTitle": "You're on the list!",
+    "successMessage": "Check your email for updates. नेपाली भाषामा पनि उपलब्ध।",
+    "successSubtext": "We'll notify you as soon as Chinooz launches in your area.",
+    "privacyNote": "We respect your privacy. Unsubscribe anytime."
+  },
+  "download": {
+    "headline": "Download Chinooz",
+    "subheadline": "Get the app and start shopping in minutes.",
+    "comingSoon": "Coming Soon",
+    "showQR": "Show QR Code",
+    "hideQR": "Hide QR Code",
+    "qrPlaceholder": "Scan with your phone",
+    "qrInstructions": "Scan this QR code with your phone camera to download the app.",
+    "waitlistCTA": "App not available yet?",
+    "joinWaitlist": "Join the Waitlist"
+  },
+  "social": {
+    "testimonialHeadline": "Loved by Buyers, Sellers & Riders",
+    "testimonialSubheadline": "Real feedback from our beta community.",
+    "testimonial1Quote": "Chinooz makes shopping so easy. I found everything I needed in minutes, and it arrived the same day!",
+    "testimonial1Author": "Priya",
+    "testimonial1Role": "Buyer, Kathmandu",
+    "testimonial2Quote": "As a seller, I love how simple it is to list products and manage orders. The platform is really seller-friendly.",
+    "testimonial2Author": "Ramesh",
+    "testimonial2Role": "Seller, Lalitpur",
+    "testimonial3Quote": "The delivery experience is smooth. Fair rates, good support, and customers are respectful. Highly recommend!",
+    "testimonial3Author": "Sujan",
+    "testimonial3Role": "Rider, Bhaktapur",
+    "trustedSellers": "Trusted Sellers",
+    "productsListed": "Products Listed",
+    "avgDelivery": "Avg. Delivery",
+    "satisfaction": "Satisfaction",
+    "verifiedBadge": "Verified & Trusted"
+  },
+  "faq": {
+    "headline": "Frequently Asked Questions",
+    "subheadline": "Everything you need to know about Chinooz.",
+    "launchQuestion": "When does Chinooz launch?",
+    "launchAnswer": "Chinooz is launching in Q3 2026 in Kathmandu Valley. We're currently building the platform and onboarding sellers. Join the waitlist to get notified on launch day!",
+    "areasQuestion": "Which areas does Chinooz deliver to?",
+    "areasAnswer": "We're starting with Kathmandu Valley (Kathmandu, Lalitpur, Bhaktapur) and expanding nationwide. Check back soon for delivery zone updates.",
+    "paymentQuestion": "What payment methods does Chinooz accept?",
+    "paymentAnswer": "We accept Cash on Delivery (COD), eSewa, Khalti, Connect IPS, and card payments. Choose what works best for you.",
+    "sellQuestion": "How can I become a seller on Chinooz?",
+    "sellAnswer": "Sellers can register on our platform by providing business details and documents. We verify all sellers to ensure quality. Visit our seller portal to apply.",
+    "riderQuestion": "How can I become a rider?",
+    "riderAnswer": "We're onboarding riders in phases. Join the waitlist as a 'Rider' and we'll contact you when we're hiring in your area.",
+    "codQuestion": "Is Cash on Delivery available everywhere?",
+    "codAnswer": "COD is available in all delivery zones. No extra charges — pay only when your order arrives.",
+    "stillHaveQuestions": "Still have questions?",
+    "contactUs": "Reach out to our support team.",
+    "emailUs": "Email us"
   }
 }
