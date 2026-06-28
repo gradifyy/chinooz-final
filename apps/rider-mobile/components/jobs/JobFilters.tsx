@@ -2,7 +2,7 @@ import React, { useCallback } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { useTranslation } from 'react-i18next'
 import * as Haptics from 'expo-haptics'
-import { List, Map, ArrowDownWideShort, ArrowUpWideNarrow, RotateCcw } from 'lucide-react-native'
+import { List, Map, ArrowDown, ArrowUp, RotateCcw } from 'lucide-react-native'
 import { colors, spacing, radii, fontFamily, fontSize } from '@chinooz/theme'
 import { useReducedMotion } from '@chinooz/ui'
 import type { AvailableSort, AvailableView, AvailableFilters, PaymentFilter } from './types'
@@ -46,7 +46,7 @@ export function SortViewToggle({ sort, view, onSortChange, onViewChange, testID 
     ? tt('rider.jobs.available.sortNearest', undefined, 'Nearest')
     : tt('rider.jobs.available.sortBestPayout', undefined, 'Best payout')
   const nextSort: AvailableSort = sort === 'nearest' ? 'bestPayout' : 'nearest'
-  const SortIcon = sort === 'nearest' ? ArrowDownWideShort : ArrowUpWideNarrow
+  const SortIcon = sort === 'nearest' ? ArrowDown : ArrowUp
 
   const viewLabel = view === 'list'
     ? tt('rider.jobs.available.viewList', undefined, 'List')
@@ -250,7 +250,7 @@ function FilterChip({
     <TouchableOpacity
       accessibilityRole="button"
       accessibilityLabel={aria}
-      accessibilityState={{ pressed: active }}
+      accessibilityState={{ selected: active }}
       onPress={onPress}
       style={[styles.chip, active && styles.chipActive]}
       activeOpacity={0.7}
