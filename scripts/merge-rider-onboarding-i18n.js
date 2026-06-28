@@ -1,0 +1,183 @@
+/* One-shot merge of rider.onboarding stepper + personal i18n keys into en + ne.
+ * Idempotent: overwrites only the rider.onboarding sub-block. Run from repo root. */
+const fs = require('fs')
+const path = require('path')
+
+const ROOT = path.resolve(__dirname, '..')
+const enPath = path.join(ROOT, 'packages/i18n/locales/en.json')
+const nePath = path.join(ROOT, 'packages/i18n/locales/ne.json')
+
+const onboardingEn = {
+  title: 'Become a Chinooz rider',
+  subtitle: "A few steps and you're on the road.",
+  comingSoon: 'Rider onboarding continues here.',
+  stepPersonal: 'Personal',
+  stepVehicle: 'Vehicle',
+  stepDocuments: 'Documents',
+  stepReview: 'Review',
+  stepAria: 'Step {{current}} of {{total}}: {{label}}',
+  personal: {
+    title: 'Personal details',
+    subtitle: 'Tell us about you so we can set up your rider profile.',
+    sectionIdentity: 'Identity',
+    sectionContact: 'Location',
+    sectionEmergency: 'Emergency contact',
+    emergencyHelper: 'Who should we call if something happens on the road?',
+    nameLabel: 'Full name',
+    namePlaceholder: 'Ram Sharma',
+    nameHelper: 'As it appears on your citizenship or ID',
+    photoLabel: 'Profile photo',
+    photoHelper: 'A clear photo of your face. Camera or upload.',
+    photoAria: 'Profile photo. Tap to capture or upload.',
+    photoChange: 'Change photo',
+    photoCapture: 'Take photo',
+    photoUpload: 'Upload from gallery',
+    photoRemove: 'Remove photo',
+    photoInitials: 'Photo',
+    dobLabel: 'Date of birth',
+    dobPlaceholder: 'YYYY-MM-DD',
+    dobHelper: 'You must be at least 18 years old',
+    genderLabel: 'Gender (optional)',
+    genderPlaceholder: 'Select gender',
+    genderMale: 'Male',
+    genderFemale: 'Female',
+    genderOther: 'Other',
+    genderPreferNotToSay: 'Prefer not to say',
+    cityLabel: 'City',
+    cityPlaceholder: 'Select your city',
+    cityHelper: 'Kathmandu Valley areas',
+    zoneLabel: 'Zone / Area',
+    zonePlaceholder: 'Search your zone',
+    zoneHelper: 'Where you want to ride',
+    emergencyNameLabel: 'Contact name',
+    emergencyNamePlaceholder: 'Anita Sharma',
+    emergencyPhoneLabel: 'Contact phone',
+    emergencyPhonePlaceholder: '98XXXXXXXX',
+    emergencyPhoneHelper: '10-digit mobile number',
+    emergencyRelationLabel: 'Relation',
+    emergencyRelationPlaceholder: 'Spouse, parent, sibling...',
+    validationName: 'Name must be at least 2 characters',
+    validationDob: 'Enter a valid date — you must be at least 18',
+    validationCity: 'City is required',
+    validationZone: 'Zone is required',
+    validationEmergencyName: 'Emergency contact name is required',
+    validationEmergencyPhone: 'Enter a valid 10-digit mobile number',
+    validationEmergencyRelation: 'Relation is required',
+    next: 'Next',
+    nextAria: 'Save and continue to Vehicle step',
+    back: 'Back',
+    backAria: 'Go back',
+    saving: 'Saving...',
+    saved: 'Progress saved',
+    dirtyTitle: 'Leave without saving?',
+    dirtyBody: 'You have unsaved changes. They will be kept in your draft so you can resume later.',
+    dirtyStay: 'Stay',
+    dirtyLeave: 'Leave',
+  },
+  vehicle: {
+    title: 'Vehicle details',
+    comingSoon: 'Vehicle step continues here.',
+  },
+  documents: {
+    title: 'Documents',
+    comingSoon: 'Documents step continues here.',
+  },
+  review: {
+    title: 'Review & submit',
+    comingSoon: 'Review step continues here.',
+  },
+}
+
+const onboardingNe = {
+  title: 'चिनुज राइडर बन्नुहोस्',
+  subtitle: 'केही चरण र तपाईं बाटोमा हुनुहुन्छ।',
+  comingSoon: 'राइडर अनबोर्डिङ यहाँ जारी छ।',
+  stepPersonal: 'व्यक्तिगत',
+  stepVehicle: 'सवारी',
+  stepDocuments: 'कागजात',
+  stepReview: 'समीक्षा',
+  stepAria: 'चरण {{current}} / {{total}}: {{label}}',
+  personal: {
+    title: 'व्यक्तिगत विवरण',
+    subtitle: 'तपाईंको राइडर प्रोफाइल सेट गर्न हामीलाई भन्नुहोस्।',
+    sectionIdentity: 'परिचय',
+    sectionContact: 'स्थान',
+    sectionEmergency: 'आपतकालीन सम्पर्क',
+    emergencyHelper: 'बाटोमा केही भएमा हामीले कसलाई फोन गर्ने?',
+    nameLabel: 'पूरा नाम',
+    namePlaceholder: 'राम शर्मा',
+    nameHelper: 'तपाईंको नागरिकता वा ID मा जस्तै',
+    photoLabel: 'प्रोफाइल फोटो',
+    photoHelper: 'तपाईंको अनुहारको स्पष्ट फोटो। क्यामेरा वा अपलोड।',
+    photoAria: 'प्रोफाइल फोटो। खिच्न वा अपलोड गर्न ट्याप गर्नुहोस्।',
+    photoChange: 'फोटो परिवर्तन',
+    photoCapture: 'फोटो खिच्नुहोस्',
+    photoUpload: 'ग्यालरीबाट अपलोड',
+    photoRemove: 'फोटो हटाउनुहोस्',
+    photoInitials: 'फोटो',
+    dobLabel: 'जन्म मिति',
+    dobPlaceholder: 'YYYY-MM-DD',
+    dobHelper: 'तपाईं कम्तिमा १८ वर्षको हुनुपर्छ',
+    genderLabel: 'लिङ्ग (वैकल्पिक)',
+    genderPlaceholder: 'लिङ्ग छान्नुहोस्',
+    genderMale: 'पुरुष',
+    genderFemale: 'महिला',
+    genderOther: 'अन्य',
+    genderPreferNotToSay: 'भन्न नचाहने',
+    cityLabel: 'सहर',
+    cityPlaceholder: 'आफ्नो सहर छान्नुहोस्',
+    cityHelper: 'काठमाडौं उपत्यका क्षेत्रहरू',
+    zoneLabel: 'जोन / क्षेत्र',
+    zonePlaceholder: 'आफ्नो जोन खोज्नुहोस्',
+    zoneHelper: 'तपाईं कहाँ राइड गर्न चाहनुहुन्छ',
+    emergencyNameLabel: 'सम्पर्क नाम',
+    emergencyNamePlaceholder: 'अनिता शर्मा',
+    emergencyPhoneLabel: 'सम्पर्क फोन',
+    emergencyPhonePlaceholder: '98XXXXXXXX',
+    emergencyPhoneHelper: '१०-अंक मोबाइल नम्बर',
+    emergencyRelationLabel: 'नाता',
+    emergencyRelationPlaceholder: 'जीवनसाथी, आमाबुबा, दाजुभाइ...',
+    validationName: 'नाम कम्तिमा २ अक्षरको हुनुपर्छ',
+    validationDob: 'मान्य मिति राख्नुहोस् — कम्तिमा १८ वर्ष',
+    validationCity: 'सहर आवश्यक छ',
+    validationZone: 'जोन आवश्यक छ',
+    validationEmergencyName: 'आपतकालीन सम्पर्क नाम आवश्यक छ',
+    validationEmergencyPhone: 'मान्य १०-अंक मोबाइल नम्बर राख्नुहोस्',
+    validationEmergencyRelation: 'नाता आवश्यक छ',
+    next: 'अर्को',
+    nextAria: 'सेभ गरेर सवारी चरणमा जानुहोस्',
+    back: 'पछाडि',
+    backAria: 'पछाडि जानुहोस्',
+    saving: 'सेभ गर्दै...',
+    saved: 'प्रगति सेभ भयो',
+    dirtyTitle: 'सेभ नगरी छोड्ने?',
+    dirtyBody: 'तपाईंका सेभ नभएका परिवर्तनहरू ड्राफ्टमा राखिनेछन् ताकि पछि फेरि सुरु गर्न सकिन्छ।',
+    dirtyStay: 'बस्नुहोस्',
+    dirtyLeave: 'छोड्नुहोस्',
+  },
+  vehicle: {
+    title: 'सवारी विवरण',
+    comingSoon: 'सवारी चरण यहाँ जारी छ।',
+  },
+  documents: {
+    title: 'कागजात',
+    comingSoon: 'कागजात चरण यहाँ जारी छ।',
+  },
+  review: {
+    title: 'समीक्षा र पेश',
+    comingSoon: 'समीक्षा चरण यहाँ जारी छ।',
+  },
+}
+
+function merge(file, onboarding) {
+  const raw = fs.readFileSync(file, 'utf8')
+  const json = JSON.parse(raw)
+  if (!json.rider || typeof json.rider !== 'object') json.rider = {}
+  json.rider.onboarding = onboarding
+  fs.writeFileSync(file, JSON.stringify(json, null, 2) + '\n', 'utf8')
+  console.log('merged', path.basename(file))
+}
+
+merge(enPath, onboardingEn)
+merge(nePath, onboardingNe)
+console.log('done')

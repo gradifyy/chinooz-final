@@ -461,3 +461,164 @@ export function getRiderRecommendations(
 
   return scored.slice(0, limit)
 }
+
+/**
+ * RD4 — Demand forecast / peak timeline.
+ *
+ * An hourly demand forecast for today (6am-11pm), with peak windows
+ * highlighted (lunch + dinner) and surge windows tied to RI5 so the
+ * timeline lines up with the Incentives hub.
+ */
+
+export interface ForecastHour {
+  /** Hour of the day (24h), e.g. 12 = noon. */
+  hour: number
+  /** Display label, e.g. "12p". */
+  label: string
+  /** Expected demand 0..100 for this hour. */
+  demand: number
+  /** Whether this hour falls in a peak window. */
+  isPeak: boolean
+  /** Peak window label if this hour is in a peak, e.g. "Lunch". */
+  peakLabel?: string
+  /** Surge multiplier for this hour (1 = no surge). Tied to RI5. */
+  surgeMultiplier: number
+  /** Whether a surge window is scheduled for this hour. */
+  hasScheduledSurge: boolean
+}
+
+export interface DemandForecast {
+  /** Hourly bars, 6am to 11pm (18 hours). */
+  hours: ForecastHour[]
+  /** Peak windows for the day. */
+  peaks: { label: string; startHour: number; endHour: number }[]
+  /** The next peak hour after `now`, or null if no more peaks today. */
+  nextPeak: { label: string; hour: number; minutesUntil: number } | null
+  /** RI5 surge tie-in: the headline surge multiplier + zone. */
+  surge: { multiplier: number; zoneLabel: string; minutesLeft: number }
+  /** Plan-your-day hint. */
+  planHint: string
+}
+
+/** Hour label for the chart axis (tabular figures). */
+function hourLabel(h: number): string {
+  if (h === 0) return '12a'
+  if (h < 12) return `${h}a`
+  if (h === 12) return '12p'
+  return `${h - 12}p`
+}
+
+/**
+ * The demand curve for a typical weekday in Kathmandu Valley.
+ * Two peaks: lunch (11am-2pm) and dinner (5pm-9pm).
+ * Values are 0..100 and deterministic so the chart is stable.
+ */
+const HOURLY_DEMAND: number[] = [
+  8,  // 6a
+  12, // 7a
+  22, // 8a
+  35, // 9a
+  48, // 10a
+  68, // 11a — lunch ramp
+  85, // 12p — lunch peak
+  78, // 1p
+  52, // 2p
+  38, // 3p
+  42, // 4p
+  72, // 5p — dinner ramp
+  88, // 6p — dinner peak
+  92, // 7p — dinner peak (highest)
+  80, // 8p
+  55, // 9p
+  30, // 10p
+  15, // 11p
+]
+
+const PEAK_WINDOWS = [
+  { label: 'Lunch', startHour: 11, endHour: 14 },
+  { label: 'Dinner', startHour: 17, endHour: 21 },
+]
+
+/**
+ * Get the demand forecast for today. Ties surge windows to RI5 so the
+ * timeline lines up with the Incentives hub.
+ *
+ * @param opts.now - override for deterministic testing
+ */
+export function getDemandForecast(opts: { now?: number } = {}): DemandForecast {
+  const now = opts.now ?? Date.now()
+  const nowDate = new Date(now)
+  const currentHour = nowDate.getHours()
+  const currentMin = nowDate.getMinutes()
+  const ri5 = getIncentiveSurge()
+
+  // Surge hours: dinner peak aligns with the RI5 surge window.
+  // The headline surge zone (Thamel) surges during 5pm-9pm.
+  const surgeHours = new Set<number>()
+  for (let h = 17; h <= 21; h++) surgeHours.add(h)
+  // Lunch surge is lighter — only 12pm-1pm.
+  surgeHours.add(12)
+  surgeHours.add(13)
+
+  const hours: ForecastHour[] = []
+  for (let i = 0; i < HOURLY_DEMAND.length; i++) {
+    const hour = 6 + i
+    const demand = HOURLY_DEMAND[i]
+    const peak = PEAK_WINDOWS.find(p => hour >= p.startHour && hour < p.endHour)
+    const hasSurge = surgeHours.has(hour)
+    // Surge multiplier: dinner hours get the RI5 headline multiplier,
+    // lunch hours get a lighter 1.2x.
+    const surgeMultiplier = hasSurge
+      ? hour >= 17
+        ? ri5.multiplier
+        : 1.2
+      : 1
+
+    hours.push({
+      hour,
+      label: hourLabel(hour),
+      demand,
+      isPeak: !!peak,
+      peakLabel: peak?.label,
+      surgeMultiplier,
+      hasScheduledSurge: hasSurge,
+    })
+  }
+
+  // Next peak: the first peak hour after the current time.
+  let nextPeak: DemandForecast['nextPeak'] = null
+  for (const p of PEAK_WINDOWS) {
+    if (currentHour < p.endHour) {
+      const peakHour = Math.max(p.startHour, currentHour)
+      const minutesUntil =
+        (peakHour - currentHour) * 60 - currentMin
+      if (minutesUntil > 0 || (currentHour >= p.startHour && currentHour < p.endHour)) {
+        nextPeak = {
+          label: p.label,
+          hour: peakHour,
+          minutesUntil: Math.max(0, minutesUntil),
+        }
+        break
+      }
+    }
+  }
+
+  // Plan-your-day hint.
+  const planHint = nextPeak
+    ? nextPeak.minutesUntil <= 30
+      ? `Peak ${nextPeak.label} starting soon — head toward high-demand zones.`
+      : `Next peak ${nextPeak.label} in ${Math.round(nextPeak.minutesUntil / 60)}h ${nextPeak.minutesUntil % 60}m. Plan your breaks before then.`
+    : 'No more peaks today — steady evening demand until close.'
+
+  return {
+    hours,
+    peaks: PEAK_WINDOWS,
+    nextPeak,
+    surge: {
+      multiplier: ri5.multiplier,
+      zoneLabel: ri5.zoneLabel,
+      minutesLeft: ri5.minutesLeft,
+    },
+    planHint,
+  }
+}

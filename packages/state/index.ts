@@ -21,6 +21,7 @@ export type {
   StoreDraft,
 } from './seller-session'
 export { useSellerMessagesStore } from './seller-messages'
+export { useSellerTemplatesStore } from './seller-templates'
 export { useOnlineStatusStore } from './rider-online'
 export type { OnlineStatus } from './rider-online'
 export { useRiderSessionStore } from './rider-session'
@@ -38,3 +39,10 @@ export {
 export { useCODWalletStore } from './cod-wallet'
 export { useCodLimitStatus, useCanAcceptCodJob } from './cod-wallet'
 export { useRiderIncentivesStore } from './rider-incentives'
+export { useOnboardingStore } from './rider-onboarding'
+export type {
+  OnboardingStep,
+  OnboardingDraft,
+  PersonalDraft,
+} from './rider-onboarding'
+export { ONBOARDING_STEPS } from './rider-onboarding'

@@ -13,6 +13,9 @@ export {
   legEtaSeconds,
   interpolateLeg,
   sampleLeg,
+  bearingDeg,
+  compassLabel,
+  turnHint,
 } from './geometry'
 export {
   RS3_TRIP_SIMULATOR,

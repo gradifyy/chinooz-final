@@ -34,6 +34,10 @@ export interface JobRequest {
   vehicle?: VehicleHint
   /** Epoch ms when this request expires (available jobs only). */
   expiresAtMs?: number
+  /** Zone / area the pickup sits in (used by the zone filter + map pins). */
+  zone?: string
+  /** Order total in NPR (context for the card, not the payout). */
+  totalNpr?: number
 }
 
 export type JobHistoryStatus = 'completed' | 'cancelled'
@@ -64,3 +68,37 @@ export interface JobHistoryEntry {
 }
 
 export type JobsTabKey = 'available' | 'active' | 'history'
+
+/** Sort order for the Available list. */
+export type AvailableSort = 'nearest' | 'bestPayout'
+
+/** List/map view switch for the Available tab. */
+export type AvailableView = 'list' | 'map'
+
+/** Payment filter for the Available list. */
+export type PaymentFilter = 'all' | 'cod' | 'prepaid'
+
+/** Filter state for the Available list. */
+export interface AvailableFilters {
+  /** Max pickup distance in km (null/undefined = no cap). */
+  maxDistanceKm: number | null
+  /** Minimum payout in NPR (null/undefined = no cap). */
+  minPayout: number | null
+  /** Payment type filter. */
+  payment: PaymentFilter
+  /** Zone id filter (null/undefined = all zones). */
+  zoneId: string | null
+}
+
+export const DEFAULT_FILTERS: AvailableFilters = {
+  maxDistanceKm: null,
+  minPayout: null,
+  payment: 'all',
+  zoneId: null,
+}
+
+/** Distance radius options in km. */
+export const DISTANCE_OPTIONS: number[] = [1, 2, 5, 10]
+
+/** Min payout options in NPR. */
+export const MIN_PAYOUT_OPTIONS: number[] = [80, 120, 150, 200]

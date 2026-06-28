@@ -39,6 +39,8 @@ export type {
   InboxTab,
   SegmentedControlProps,
   InventoryRowProps,
+  SellerOrderRowProps,
+  SellerOrderCardProps,
 } from './components'
 
 export type {
@@ -65,6 +67,8 @@ export type {
   RichProductPayload,
   RichOrderPayload,
   RichTrackingPayload,
+  SellerMessageTemplate,
+  SellerAwayMessage,
   Conversation,
   UserProfile,
   CancelReason,

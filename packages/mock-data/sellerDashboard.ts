@@ -214,6 +214,24 @@ export function mockBuyerReply(_sellerText: string): string {
   return CANNED_BUYER_REPLIES[Math.floor(Math.random() * CANNED_BUYER_REPLIES.length)]
 }
 
+export interface TemplateFillContext {
+  orderRef?: string
+  trackingNumber?: string
+  buyerName?: string
+}
+
+export function fillTemplatePlaceholders(body: string, ctx: TemplateFillContext): string {
+  return body
+    .replace(/\{order_id\}/g, ctx.orderRef ?? 'your order')
+    .replace(/\{tracking\}/g, ctx.trackingNumber ?? 'pending')
+    .replace(/\{buyer_name\}/g, ctx.buyerName ?? 'there')
+}
+
+export function getPlaceholders(body: string): string[] {
+  const matches = body.match(/\{(?:order_id|tracking|buyer_name)\}/g)
+  return matches ? Array.from(new Set(matches)) : []
+}
+
 // --- Review Response Templates (SC4) ---
 
 export interface ReviewResponseTemplate {

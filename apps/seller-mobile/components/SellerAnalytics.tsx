@@ -15,6 +15,7 @@ import { colors, spacing, radii, fontSize } from '@chinooz/theme'
 import { useA11y } from './A11yProvider'
 import { useSellerCategories, useSellerProducts } from '@chinooz/hooks'
 import SalesSection from './SalesSection'
+import TrafficSection from './TrafficSection'
 import {
   getAnalytics,
   ANALYTICS_RANGES,
@@ -294,6 +295,8 @@ export default function SellerAnalytics() {
         <Animated.View style={{ opacity: fadeAnim }}>
           {section === 'sales' ? (
             <SalesSection data={data} range={range} compare={compare} filter={filter} />
+          ) : section === 'traffic' ? (
+            <TrafficSection data={data} compare={compare} />
           ) : (
             <SectionContent section={section} data={data} compare={compare} />
           )}

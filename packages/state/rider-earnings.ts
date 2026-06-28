@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
+import type { WithdrawalStatus } from '@chinooz/mock-data'
 
 /**
  * RE1/RE5 — shared rider earnings store.
@@ -23,6 +24,10 @@ interface EarningsState {
   cashoutInFlight: boolean
   /** Epoch ms of the most recent successful cash-out. */
   lastCashoutAt: number | null
+  /** Latest withdrawal id (for polling status on the cash-out screen). */
+  lastWithdrawalId: string | null
+  /** Latest withdrawal status (requested → processing → paid / failed). */
+  lastWithdrawalStatus: WithdrawalStatus | null
   /** Seed the store once the overview has loaded. */
   setWithdrawableBalance: (amount: number) => void
   /** Mark a cash-out as started (optimistic). */
@@ -31,6 +36,12 @@ interface EarningsState {
   completeCashout: (amount: number) => void
   /** Roll back an in-flight cash-out on failure. */
   cancelCashout: () => void
+  /** Track the latest withdrawal request id + status for the pending screen. */
+  setLastWithdrawal: (id: string, status: WithdrawalStatus) => void
+  /** Update the tracked withdrawal status as it transitions. */
+  setWithdrawalStatus: (status: WithdrawalStatus) => void
+  /** Clear the tracked withdrawal once the user dismisses the success state. */
+  clearLastWithdrawal: () => void
 }
 
 function getStorage() {
@@ -50,6 +61,8 @@ export const useRiderEarningsStore = create<EarningsState>()(
       withdrawableBalance: null,
       cashoutInFlight: false,
       lastCashoutAt: null,
+      lastWithdrawalId: null,
+      lastWithdrawalStatus: null,
 
       setWithdrawableBalance: amount => {
         if (get().withdrawableBalance === null) set({ withdrawableBalance: amount })
@@ -68,6 +81,18 @@ export const useRiderEarningsStore = create<EarningsState>()(
         })),
 
       cancelCashout: () => set({ cashoutInFlight: false }),
+
+      setLastWithdrawal: (id, status) =>
+        set({ lastWithdrawalId: id, lastWithdrawalStatus: status }),
+
+      setWithdrawalStatus: status =>
+        set(state => ({
+          lastWithdrawalStatus: status,
+          lastCashoutAt: status === 'paid' ? Date.now() : state.lastCashoutAt,
+        })),
+
+      clearLastWithdrawal: () =>
+        set({ lastWithdrawalId: null, lastWithdrawalStatus: null }),
     }),
     {
       name: 'chinooz-rider-earnings',

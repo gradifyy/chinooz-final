@@ -493,3 +493,81 @@ export function exportFinancePayoutStatementCSV(detail: FinancePayoutDetail): st
   ].join('\n')
   return [header, ...rows, summary].join('\n')
 }
+
+// --- Withdraw / cash-out ---
+
+export interface WithdrawMethod {
+  id: string
+  type: FinancePayoutMethod
+  label: string
+  accountMasked: string
+  isDefault: boolean
+}
+
+export interface WithdrawResult {
+  success: boolean
+  payoutId?: string
+  newAvailableBalance?: number
+  newPendingBalance?: number
+  error?: string
+}
+
+export const MIN_WITHDRAWAL = 500
+
+const WITHDRAW_METHODS: WithdrawMethod[] = [
+  { id: 'm1', type: 'khalti', label: 'Khalti', accountMasked: 'Khalti •••• 4321', isDefault: true },
+  { id: 'm2', type: 'esewa', label: 'eSewa', accountMasked: 'eSewa •••• 8899', isDefault: false },
+  { id: 'm3', type: 'bank', label: 'Bank transfer', accountMasked: 'NIBL •••• 4521', isDefault: false },
+]
+
+let mockAvailableBalance = 45200
+let mockPendingBalance = 12400
+
+export async function getWithdrawMethods(): Promise<WithdrawMethod[]> {
+  await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 150))
+  return [...WITHDRAW_METHODS]
+}
+
+export async function requestWithdraw(input: {
+  amount: number
+  methodId: string
+}): Promise<WithdrawResult> {
+  await new Promise(resolve => setTimeout(resolve, 600 + Math.random() * 600))
+
+  if (input.amount < MIN_WITHDRAWAL) {
+    return { success: false, error: 'below_minimum' }
+  }
+  if (input.amount > mockAvailableBalance) {
+    return { success: false, error: 'exceeds_available' }
+  }
+  const method = WITHDRAW_METHODS.find(m => m.id === input.methodId)
+  if (!method) {
+    return { success: false, error: 'no_method' }
+  }
+
+  // 5% simulated failure
+  if (Math.random() < 0.05) {
+    return { success: false, error: 'service_unavailable' }
+  }
+
+  const fee = 0 // no withdrawal fee for now
+  const payoutAmount = input.amount - fee
+  mockAvailableBalance -= payoutAmount
+  mockPendingBalance += payoutAmount
+
+  return {
+    success: true,
+    payoutId: `payout-w-${Date.now()}`,
+    newAvailableBalance: mockAvailableBalance,
+    newPendingBalance: mockPendingBalance,
+  }
+}
+
+export function getWithdrawBalances(): { available: number; pending: number } {
+  return { available: mockAvailableBalance, pending: mockPendingBalance }
+}
+
+export function rollbackWithdraw(amount: number): void {
+  mockAvailableBalance += amount
+  mockPendingBalance -= amount
+}

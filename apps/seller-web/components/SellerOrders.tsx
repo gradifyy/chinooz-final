@@ -565,7 +565,7 @@ export default function SellerOrders() {
     const ro = new ResizeObserver(update)
     ro.observe(el)
     return () => ro.disconnect()
-  }, [showFilters, activeFilterCount])
+  }, [showFilters])
 
   const { data: allOrders = [], isLoading, isError, refetch } = useSellerOrders(sellerId ?? null)
 

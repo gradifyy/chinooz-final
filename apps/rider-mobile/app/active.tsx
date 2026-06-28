@@ -61,17 +61,11 @@ export default function ActiveDeliveryScreen() {
     }
   }, [delivery?.status, tick, delivery])
 
-  // Auto-advance when the simulator reaches the end of the active leg.
-  useEffect(() => {
-    if (!delivery) return
-    if (delivery.legProgress >= 1) {
-      if (delivery.status === 'heading_to_pickup') {
-        advanceStatus()
-      } else if (delivery.status === 'in_transit') {
-        advanceStatus()
-      }
-    }
-  }, [delivery?.legProgress, delivery?.status, advanceStatus, delivery])
+  // The simulator moves the rider toward the leg end but does NOT auto-advance
+  // the state machine: the rider must tap "Arrived at pickup" / "Arrived at
+  // drop-off" to confirm arrival, per the delivery state machine. The tick
+  // loop stops once legProgress reaches 1 (the store's advance() is a no-op
+  // when arrived), so the marker rests at the stop until the rider confirms.
 
   const handlePrimary = useCallback(() => {
     if (!delivery) return

@@ -30,8 +30,15 @@ export function buildLeg(from: GeoPoint, to: GeoPoint, segments = 8): DeliveryLe
   return { points, distanceMeters, etaSeconds }
 }
 
-function stop(point: GeoPoint, label: string, address: string, contactName: string, contactPhone: string): RouteStop {
-  return { ...rs3Clamp(point), label, address, contactName, contactPhone }
+function stop(
+  point: GeoPoint,
+  label: string,
+  address: string,
+  contactName: string,
+  contactPhone: string,
+  extra: { items?: string[]; prepNote?: string; area?: string } = {},
+): RouteStop {
+  return { ...rs3Clamp(point), label, address, contactName, contactPhone, ...extra }
 }
 
 /**
@@ -84,6 +91,11 @@ export function rs3SampleJobs(): RiderJob[] {
         'Thamel Rd 22, Kathmandu',
         'Bishal (Store)',
         '9801002041',
+        {
+          area: 'Thamel',
+          items: ['1× Handmade pashmina shawl', '2× Singing bowl (medium)', '1× Prayer flag set'],
+          prepNote: 'Ask for Bishal at the rear counter. Items are packed and labeled CNZ-2041.',
+        },
       ),
       dropoff: stop(
         { lat: 27.676, lng: 85.289 },
@@ -91,6 +103,7 @@ export function rs3SampleJobs(): RiderJob[] {
         'Kirtipur Marg 7, Kirtipur',
         'Aarati Sharma',
         '9801002041',
+        { area: 'Kirtipur' },
       ),
       payout: 180,
       isCod: true,
@@ -108,6 +121,11 @@ export function rs3SampleJobs(): RiderJob[] {
         'Patan Dhoka 3, Lalitpur',
         'Sunita (Store)',
         '9801002038',
+        {
+          area: 'Patan',
+          items: ['1× Dhaka topi (black)', '1× Ceramic tea set (4 cups)'],
+          prepNote: 'Fragile — handle with care. Sunita will hand over the sealed box.',
+        },
       ),
       dropoff: stop(
         { lat: 27.679, lng: 85.361 },
@@ -115,6 +133,7 @@ export function rs3SampleJobs(): RiderJob[] {
         'Koteshwor Rd 12, Kathmandu',
         'Prakash Maharjan',
         '9801002038',
+        { area: 'Koteshwor' },
       ),
       payout: 220,
       isCod: false,
@@ -132,6 +151,11 @@ export function rs3SampleJobs(): RiderJob[] {
         'Boudha Stupa Rd 1, Kathmandu',
         'Karma (Store)',
         '9801002035',
+        {
+          area: 'Boudha',
+          items: ['3× Incense gift pack', '1× Singing bowl (large)'],
+          prepNote: 'Pickup from the Boudha Stupa Rd entrance. Karma is expecting you.',
+        },
       ),
       dropoff: stop(
         { lat: 27.7065, lng: 85.3405 },
@@ -139,6 +163,7 @@ export function rs3SampleJobs(): RiderJob[] {
         'Chabahil Chowk 9, Kathmandu',
         'Maya Gurung',
         '9801002035',
+        { area: 'Chabahil' },
       ),
       payout: 150,
       isCod: true,

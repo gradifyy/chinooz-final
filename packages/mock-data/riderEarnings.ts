@@ -775,3 +775,292 @@ export function getCODWalletSync(): CODWalletSnapshot {
   snap.pendingToDeposit = snap.cashInHand
   return snap
 }
+
+// ─── RE5/RE6 — Payout methods + withdrawal history ──────────────────────
+
+/** Payout instrument types the rider can link. */
+export type PayoutMethodKind = 'bank' | 'esewa' | 'khalti'
+
+export interface RiderPayoutMethod {
+  id: string
+  kind: PayoutMethodKind
+  /** Human label, e.g. "NIBL Bank" or "eSewa". */
+  label: string
+  /** Masked identifier, e.g. "•••• 4521" (bank) or "98••• 8899" (wallet). */
+  maskedAccount: string
+  /** Is this the default payout method? */
+  isDefault: boolean
+  /** Bank-specific (null for wallets). */
+  bankName?: string
+  accountNumber?: string
+  /** Wallet-specific (null for bank). */
+  walletPhone?: string
+  /** Display color accent per kind (for icon tinting). */
+  accentColor: string
+}
+
+export type WithdrawalStatus = 'requested' | 'processing' | 'paid' | 'failed'
+
+export interface RiderWithdrawal {
+  id: string
+  /** ISO timestamp of request. */
+  requestedAt: string
+  /** ISO timestamp of completion (paid/failed), or null if still pending. */
+  completedAt: string | null
+  /** NPR amount requested. */
+  amount: number
+  /** Fee deducted (NPR). */
+  fee: number
+  /** NPR net payout (amount − fee). */
+  net: number
+  /** Payout method used. */
+  method: PayoutMethodKind
+  methodLabel: string
+  maskedAccount: string
+  status: WithdrawalStatus
+  /** Reference number once paid. */
+  reference?: string
+  /** Reason if failed. */
+  failureReason?: string
+}
+
+export interface RiderWithdrawalDetail extends RiderWithdrawal {
+  /** Timeline of the withdrawal lifecycle. */
+  timeline: { key: string; label: string; status: 'completed' | 'current' | 'upcoming'; timestamp?: string; note?: string }[]
+  /** Full breakdown. */
+  breakdown: { label: string; amount: number; direction: 'credit' | 'debit' }[]
+}
+
+/** Minimum withdrawable amount (NPR). */
+export const MIN_WITHDRAWAL = 500
+
+/** Fee for instant withdrawal (NPR, flat). 0 for weekly auto-payout. */
+export const INSTANT_FEE = 25
+
+/** Weekly auto-payout has no fee. */
+export const WEEKLY_FEE = 0
+
+/** Mock payout methods. */
+const PAYOUT_METHOD_FIXTURES: RiderPayoutMethod[] = [
+  {
+    id: 'pm-bank-1',
+    kind: 'bank',
+    label: 'NIBL Bank',
+    maskedAccount: '•••• 4521',
+    isDefault: true,
+    bankName: 'NIBL',
+    accountNumber: '12345678904521',
+    accentColor: '#4A6FA5',
+  },
+  {
+    id: 'pm-esewa-1',
+    kind: 'esewa',
+    label: 'eSewa',
+    maskedAccount: '98••• 8899',
+    isDefault: false,
+    walletPhone: '9800008899',
+    accentColor: '#60B246',
+  },
+  {
+    id: 'pm-khalti-1',
+    kind: 'khalti',
+    label: 'Khalti',
+    maskedAccount: '98••• 4321',
+    isDefault: false,
+    walletPhone: '9800004321',
+    accentColor: '#7C3AED',
+  },
+]
+
+/** Mock withdrawal history. */
+function buildWithdrawals(): RiderWithdrawal[] {
+  const now = Date.now()
+  return [
+    {
+      id: 'wd-1',
+      requestedAt: new Date(now - 2 * 60 * 60 * 1000).toISOString(),
+      completedAt: null,
+      amount: 5000,
+      fee: INSTANT_FEE,
+      net: 5000 - INSTANT_FEE,
+      method: 'bank',
+      methodLabel: 'NIBL Bank',
+      maskedAccount: '•••• 4521',
+      status: 'processing',
+    },
+    {
+      id: 'wd-2',
+      requestedAt: new Date(now - 26 * 60 * 60 * 1000).toISOString(),
+      completedAt: new Date(now - 24 * 60 * 60 * 1000).toISOString(),
+      amount: 8000,
+      fee: INSTANT_FEE,
+      net: 8000 - INSTANT_FEE,
+      method: 'bank',
+      methodLabel: 'NIBL Bank',
+      maskedAccount: '•••• 4521',
+      status: 'paid',
+      reference: 'TXN-48291',
+    },
+    {
+      id: 'wd-3',
+      requestedAt: new Date(now - 3 * 24 * 60 * 60 * 1000).toISOString(),
+      completedAt: new Date(now - 3 * 24 * 60 * 60 * 1000 + 2 * 60 * 60 * 1000).toISOString(),
+      amount: 12000,
+      fee: WEEKLY_FEE,
+      net: 12000,
+      method: 'esewa',
+      methodLabel: 'eSewa',
+      maskedAccount: '98••• 8899',
+      status: 'paid',
+      reference: 'ESW-77103',
+    },
+    {
+      id: 'wd-4',
+      requestedAt: new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString(),
+      completedAt: new Date(now - 7 * 24 * 60 * 60 * 1000 + 4 * 60 * 60 * 1000).toISOString(),
+      amount: 3000,
+      fee: INSTANT_FEE,
+      net: 3000 - INSTANT_FEE,
+      method: 'khalti',
+      methodLabel: 'Khalti',
+      maskedAccount: '98••• 4321',
+      status: 'failed',
+      failureReason: 'Khalti wallet number not verified. Please update and retry.',
+    },
+    {
+      id: 'wd-5',
+      requestedAt: new Date(now - 10 * 24 * 60 * 60 * 1000).toISOString(),
+      completedAt: new Date(now - 10 * 24 * 60 * 60 * 1000 + 2 * 60 * 60 * 1000).toISOString(),
+      amount: 6500,
+      fee: INSTANT_FEE,
+      net: 6500 - INSTANT_FEE,
+      method: 'bank',
+      methodLabel: 'NIBL Bank',
+      maskedAccount: '•••• 4521',
+      status: 'paid',
+      reference: 'TXN-45821',
+    },
+  ]
+}
+
+let PAYOUT_METHODS: RiderPayoutMethod[] = [...PAYOUT_METHOD_FIXTURES]
+let WITHDRAWALS: RiderWithdrawal[] = buildWithdrawals()
+
+export async function getRiderPayoutMethods(): Promise<RiderPayoutMethod[]> {
+  await new Promise(resolve => setTimeout(resolve, 180 + Math.random() * 220))
+  return [...PAYOUT_METHODS]
+}
+
+export async function addRiderPayoutMethod(
+  input: Omit<RiderPayoutMethod, 'id' | 'maskedAccount' | 'isDefault' | 'accentColor'>,
+): Promise<RiderPayoutMethod> {
+  await new Promise(resolve => setTimeout(resolve, 300 + Math.random() * 200))
+  const id = `pm-${input.kind}-${Date.now()}`
+  const maskedAccount = input.kind === 'bank'
+    ? `•••• ${input.accountNumber?.slice(-4) ?? '0000'}`
+    : `${input.walletPhone?.slice(0, 2) ?? '98'}••• ${input.walletPhone?.slice(-4) ?? '0000'}`
+  const accentMap: Record<PayoutMethodKind, string> = {
+    bank: '#4A6FA5',
+    esewa: '#60B246',
+    khalti: '#7C3AED',
+  }
+  const method: RiderPayoutMethod = {
+    ...input,
+    id,
+    maskedAccount,
+    isDefault: PAYOUT_METHODS.length === 0,
+    accentColor: accentMap[input.kind],
+  }
+  PAYOUT_METHODS = [...PAYOUT_METHODS, method]
+  return method
+}
+
+export async function setDefaultRiderPayoutMethod(methodId: string): Promise<void> {
+  await new Promise(resolve => setTimeout(resolve, 150 + Math.random() * 150))
+  PAYOUT_METHODS = PAYOUT_METHODS.map(m => ({ ...m, isDefault: m.id === methodId }))
+}
+
+export async function deleteRiderPayoutMethod(methodId: string): Promise<void> {
+  await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 150))
+  PAYOUT_METHODS = PAYOUT_METHODS.filter(m => m.id !== methodId)
+}
+
+export async function getRiderWithdrawals(): Promise<RiderWithdrawal[]> {
+  await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 250))
+  return [...WITHDRAWALS].sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))
+}
+
+export async function getRiderWithdrawalById(id: string): Promise<RiderWithdrawalDetail | null> {
+  await new Promise(resolve => setTimeout(resolve, 150 + Math.random() * 200))
+  const wd = WITHDRAWALS.find(w => w.id === id)
+  if (!wd) return null
+  const timeline: RiderWithdrawalDetail['timeline'] = []
+  if (wd.status === 'requested') {
+    timeline.push({ key: 'requested', label: 'Requested', status: 'current', timestamp: wd.requestedAt })
+    timeline.push({ key: 'processing', label: 'Processing', status: 'upcoming' })
+    timeline.push({ key: 'paid', label: 'Paid', status: 'upcoming' })
+  } else if (wd.status === 'processing') {
+    timeline.push({ key: 'requested', label: 'Requested', status: 'completed', timestamp: wd.requestedAt })
+    timeline.push({ key: 'processing', label: 'Processing', status: 'current', timestamp: wd.requestedAt, note: 'Funds being transferred' })
+    timeline.push({ key: 'paid', label: 'Paid', status: 'upcoming' })
+  } else if (wd.status === 'paid') {
+    timeline.push({ key: 'requested', label: 'Requested', status: 'completed', timestamp: wd.requestedAt })
+    timeline.push({ key: 'processing', label: 'Processing', status: 'completed', timestamp: wd.requestedAt })
+    timeline.push({ key: 'paid', label: 'Paid', status: 'completed', timestamp: wd.completedAt!, note: `NPR ${formatRiderNPRAmount(wd.net)} sent to ${wd.maskedAccount}` })
+  } else {
+    timeline.push({ key: 'requested', label: 'Requested', status: 'completed', timestamp: wd.requestedAt })
+    timeline.push({ key: 'processing', label: 'Processing', status: 'completed', timestamp: wd.requestedAt })
+    timeline.push({ key: 'failed', label: 'Failed', status: 'current', timestamp: wd.completedAt, note: wd.failureReason ?? 'Withdrawal failed' })
+  }
+  const breakdown: RiderWithdrawalDetail['breakdown'] = [
+    { label: 'Withdrawal amount', amount: wd.amount, direction: 'credit' },
+    { label: 'Processing fee', amount: -wd.fee, direction: 'debit' },
+    { label: 'Net payout', amount: wd.net, direction: 'credit' },
+  ]
+  return { ...wd, timeline, breakdown }
+}
+
+export async function requestRiderWithdrawal(input: {
+  amount: number
+  methodId: string
+  isInstant: boolean
+}): Promise<RiderWithdrawal> {
+  await new Promise(resolve => setTimeout(resolve, 400 + Math.random() * 300))
+  const method = PAYOUT_METHODS.find(m => m.id === input.methodId)
+  if (!method) throw new Error('Payout method not found')
+  const fee = input.isInstant ? INSTANT_FEE : WEEKLY_FEE
+  const wd: RiderWithdrawal = {
+    id: `wd-${Date.now()}`,
+    requestedAt: new Date().toISOString(),
+    completedAt: null,
+    amount: input.amount,
+    fee,
+    net: input.amount - fee,
+    method: method.kind,
+    methodLabel: method.label,
+    maskedAccount: method.maskedAccount,
+    status: 'requested',
+  }
+  WITHDRAWALS = [wd, ...WITHDRAWALS]
+  // Simulate processing → paid after a short delay (caller polls or refreshes).
+  setTimeout(() => {
+    WITHDRAWALS = WITHDRAWALS.map(w =>
+      w.id === wd.id
+        ? { ...w, status: 'processing' as WithdrawalStatus }
+        : w,
+    )
+  }, 1500)
+  setTimeout(() => {
+    WITHDRAWALS = WITHDRAWALS.map(w =>
+      w.id === wd.id
+        ? {
+            ...w,
+            status: 'paid' as WithdrawalStatus,
+            completedAt: new Date().toISOString(),
+            reference: `TXN-${Math.floor(Math.random() * 90000) + 10000}`,
+          }
+        : w,
+    )
+  }, 4000)
+  return wd
+}

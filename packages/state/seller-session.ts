@@ -47,6 +47,14 @@ export interface StoreDraft {
   docId: string
   docReg: string
   docPan: string
+  payoutMethod: 'bank' | 'esewa' | 'khalti'
+  bankName: string
+  accountName: string
+  accountNumber: string
+  accountConfirm: string
+  branch: string
+  walletNumber: string
+  payoutIsDefault: boolean
 }
 
 const defaultDraft: StoreDraft = {
@@ -68,6 +76,14 @@ const defaultDraft: StoreDraft = {
   docId: '',
   docReg: '',
   docPan: '',
+  payoutMethod: 'bank',
+  bankName: '',
+  accountName: '',
+  accountNumber: '',
+  accountConfirm: '',
+  branch: '',
+  walletNumber: '',
+  payoutIsDefault: true,
 }
 
 interface SellerSessionState {

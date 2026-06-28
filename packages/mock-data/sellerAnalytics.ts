@@ -63,6 +63,23 @@ export interface AnalyticsProductRow {
   deltaPct: number
 }
 
+export interface AnalyticsFunnelStage {
+  id: string
+  label: string
+  count: number
+  convFromPrev: number
+  dropOffPct: number
+  isBiggestLeak: boolean
+}
+
+export interface AnalyticsTrafficSource {
+  id: string
+  label: string
+  value: number
+  share: number
+  color: string
+}
+
 export interface AnalyticsCustomerRow {
   id: string
   name: string
@@ -88,6 +105,9 @@ export interface AnalyticsSectionData {
   insights?: AnalyticsInsight[]
   products?: AnalyticsProductRow[]
   customers?: AnalyticsCustomerRow[]
+  funnel?: AnalyticsFunnelStage[]
+  trafficSources?: AnalyticsTrafficSource[]
+  convTrend?: AnalyticsChartPoint[]
 }
 
 export const ANALYTICS_RANGES: { key: AnalyticsRangeKey; label: string; days: number }[] = [
@@ -109,10 +129,12 @@ const SALES_KPIS: KpiDef[] = [
 ]
 
 const TRAFFIC_KPIS: KpiDef[] = [
-  { key: 'views', label: 'Store views', base: 3120, hint: 'Unique visitors' },
+  { key: 'storeViews', label: 'Store views', base: 3120, hint: 'Storefront page views' },
+  { key: 'productViews', label: 'Product views', base: 8640, hint: 'Product detail views' },
   { key: 'visitors', label: 'Unique visitors', base: 2180, hint: 'Distinct sessions' },
-  { key: 'bounce', label: 'Bounce rate', base: 42, hint: 'Left after one page' },
-  { key: 'session', label: 'Avg. session', base: 184, hint: 'Seconds / session' },
+  { key: 'addToCart', label: 'Add to cart', base: 312, hint: 'Add-to-cart events' },
+  { key: 'checkouts', label: 'Checkouts', base: 96, hint: 'Checkout started' },
+  { key: 'convRate', label: 'Conversion rate', base: 4, hint: 'Purchases / views' },
 ]
 
 const CUSTOMER_KPIS: KpiDef[] = [
@@ -141,6 +163,22 @@ const TRAFFIC_BREAKDOWN = [
   { id: 'search', label: 'Search' },
   { id: 'social', label: 'Social' },
   { id: 'referral', label: 'Referral' },
+]
+
+const TRAFFIC_SOURCES = [
+  { id: 'search', label: 'Search' },
+  { id: 'categories', label: 'Categories' },
+  { id: 'deals', label: 'Deals' },
+  { id: 'direct', label: 'Direct' },
+  { id: 'share', label: 'Share' },
+]
+
+const FUNNEL_STAGES = [
+  { id: 'views', label: 'Store views', ratio: 1.0 },
+  { id: 'productViews', label: 'Product views', ratio: 0.72 },
+  { id: 'addToCart', label: 'Add to cart', ratio: 0.36 },
+  { id: 'checkout', label: 'Checkout', ratio: 0.12 },
+  { id: 'purchase', label: 'Purchase', ratio: 0.08 },
 ]
 
 const SALES_CATEGORY_BREAKDOWN = [
@@ -234,14 +272,24 @@ export function getAnalytics(
     const prevRaw = k.base * scale * (0.7 + seeded(i + 7, seedBase) * 0.4)
     const deltaPct = Math.round((seeded(i + 1, seedBase) - 0.42) * 44)
     const isMoney = k.money === true || k.key === 'aov' || k.key === 'ltv'
-    const isPct = k.key === 'bounce'
-    const value = isMoney ? fmtMoney(raw) : isPct ? fmtPct(Math.round(raw)) : fmtNum(raw)
-    const previousValue = compare
-      ? isMoney
-        ? fmtMoney(prevRaw)
+    const isPct = k.key === 'bounce' || k.key === 'convRate'
+    const isConvRate = k.key === 'convRate'
+    const displayValue = isConvRate
+      ? `${raw.toFixed(1)}%`
+      : isMoney
+        ? fmtMoney(raw)
         : isPct
-          ? fmtPct(Math.round(prevRaw))
-          : fmtNum(prevRaw)
+          ? fmtPct(Math.round(raw))
+          : fmtNum(raw)
+    const value = displayValue
+    const previousValue = compare
+      ? isConvRate
+        ? `${prevRaw.toFixed(1)}%`
+        : isMoney
+          ? fmtMoney(prevRaw)
+          : isPct
+            ? fmtPct(Math.round(prevRaw))
+            : fmtNum(prevRaw)
       : undefined
     return {
       key: k.key,
@@ -381,6 +429,71 @@ export function getAnalytics(
     })
   }
 
+  let funnel: AnalyticsFunnelStage[] | undefined
+  let trafficSources: AnalyticsTrafficSource[] | undefined
+  let convTrend: AnalyticsChartPoint[] | undefined
+
+  if (section === 'traffic') {
+    const baseCount = Math.round(3120 * scale * (0.8 + seeded(0, seedBase) * 0.4))
+    const counts = FUNNEL_STAGES.map((s, i) => {
+      const variance = 0.85 + seeded(i + 60, seedBase) * 0.3
+      return Math.round(baseCount * s.ratio * variance)
+    })
+
+    const dropOffs = FUNNEL_STAGES.map((_, i) => {
+      if (i === 0) return 0
+      const prev = counts[i - 1] || 1
+      const curr = counts[i] || 0
+      return Math.round(((prev - curr) / prev) * 100)
+    })
+
+    const biggestLeakIdx =
+      dropOffs.indexOf(Math.max(...dropOffs.slice(1)) + 0) === -1
+        ? dropOffs.reduce((best, d, i) => (i > 0 && d > dropOffs[best] ? i : best), 1)
+        : 1
+
+    funnel = FUNNEL_STAGES.map((s, i) => {
+      const prev = i === 0 ? counts[0] : counts[i - 1] || 1
+      const curr = counts[i] || 0
+      const convFromPrev = i === 0 ? 100 : Math.round((curr / prev) * 100)
+      return {
+        id: s.id,
+        label: s.label,
+        count: curr,
+        convFromPrev,
+        dropOffPct: dropOffs[i],
+        isBiggestLeak: i === biggestLeakIdx && i > 0,
+      }
+    })
+
+    const sourceTotal = TRAFFIC_SOURCES.reduce(
+      (acc, s, i) =>
+        acc + Math.round(baseCount * (0.3 - i * 0.04) * (0.8 + seeded(i + 80, seedBase) * 0.4)),
+      0,
+    )
+    trafficSources = TRAFFIC_SOURCES.map((s, i) => {
+      const value = Math.round(
+        baseCount * (0.3 - i * 0.04) * (0.8 + seeded(i + 80, seedBase) * 0.4),
+      )
+      return {
+        id: s.id,
+        label: s.label,
+        value,
+        share: sourceTotal > 0 ? Math.round((value / sourceTotal) * 100) : 0,
+        color: BREAKDOWN_PALETTE[i % BREAKDOWN_PALETTE.length],
+      }
+    })
+
+    const convLabels = CHART_LABELS[days] ?? CHART_LABELS[30]
+    convTrend = convLabels.map((label, i) => {
+      const current = Math.round((3 + seeded(i + 90, seedBase) * 3) * 10) / 10
+      const previous = compare
+        ? Math.round((2.5 + seeded(i + 100, seedBase + 1) * 3) * 10) / 10
+        : undefined
+      return { label, current, previous }
+    })
+  }
+
   return {
     section,
     range,
@@ -392,6 +505,9 @@ export function getAnalytics(
     insights,
     products,
     customers,
+    funnel,
+    trafficSources,
+    convTrend,
   }
 }
 
