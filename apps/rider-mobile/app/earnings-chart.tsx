@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   View,
   Text,
@@ -23,17 +23,14 @@ import Animated, {
   interpolateColor,
 } from 'react-native-reanimated'
 import { ChevronLeft, TrendingUp, TrendingDown, Minus, Flame, ListChecks } from 'lucide-react-native'
-import { colors, radii, spacing, fontFamily, fontSize, shadow } from '@chinooz/theme'
+import { colors, radii, spacing, fontFamily, fontSize, shadow, duration, easing } from '@chinooz/theme'
 import { useReducedMotion } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
+import { useRiderEarningsChart, useRiderEarningsBreakdown } from '@chinooz/hooks'
 import {
-  getRiderEarningsChart,
-  getRiderEarningsBreakdown,
   formatRiderNPRAmount,
   type RiderEarningsRange,
   type RiderEarningsRangeKey,
-  type RiderEarningsChart as RiderChart,
-  type RiderEarningsBreakdown,
   type RiderChartPoint,
 } from '@chinooz/mock-data'
 
@@ -59,12 +56,14 @@ export default function RiderEarningsChartScreen() {
   const reduced = useReducedMotion()
 
   const [rangeKey, setRangeKey] = useState<RangeKey>('7d')
-  const [chart, setChart] = useState<RiderChart | null>(null)
-  const [breakdown, setBreakdown] = useState<RiderEarningsBreakdown | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState(false)
   const [compare, setCompare] = useState(false)
+
+  const range = rangeFor(rangeKey)
+  const { data: chart, isLoading: chartLoading, isError: chartError, refetch: refetchChart, isRefetching: chartRefetching } = useRiderEarningsChart(range)
+  const { data: breakdown, isLoading: bdLoading, isError: bdError, refetch: refetchBd } = useRiderEarningsBreakdown(range)
+
+  const loading = chartLoading || bdLoading
+  const error = chartError || bdError
 
   // Chart morph: fade the chart area when range switches.
   const chartMorph = useSharedValue(1)
@@ -77,35 +76,12 @@ export default function RiderEarningsChartScreen() {
   }, [rangeKey, reduced])
 
   useEffect(() => {
-    analytics.screen({ name: 'rider-earnings-chart' })
-  }, [])
-
-  const load = useCallback(async () => {
-    setError(false)
-    const range = rangeFor(rangeKey)
-    try {
-      const [c, b] = await Promise.all([
-        getRiderEarningsChart(range),
-        getRiderEarningsBreakdown(range),
-      ])
-      setChart(c)
-      setBreakdown(b)
-    } catch {
-      setError(true)
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
+    analytics.screen({ name: 'rider-earnings-chart', properties: { range: rangeKey } })
   }, [rangeKey])
 
-  useEffect(() => {
-    setLoading(true)
-    load()
-  }, [load])
-
   const onRefresh = () => {
-    setRefreshing(true)
-    load()
+    refetchChart()
+    refetchBd()
   }
 
   const points = chart?.points ?? []
@@ -174,7 +150,7 @@ export default function RiderEarningsChartScreen() {
         contentContainerStyle={{ paddingBottom: insets.bottom + spacing[8] }}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
+          <RefreshControl refreshing={chartRefetching} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
         }
       >
         {loading ? (
@@ -513,7 +489,7 @@ function Bar({
       return
     }
     const id = setTimeout(() => {
-      grow.value = withTiming(1, { duration: 420, easing: Easing.out(Easing.cubic) })
+      grow.value = withTiming(1, { duration: duration.slow, easing: Easing.bezier(...easing.easeOut) })
     }, delay)
     return () => clearTimeout(id)
   }, [reduced, delay])

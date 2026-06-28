@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   View,
   Text,
@@ -20,7 +20,6 @@ import Animated, {
   withSpring,
   withTiming,
   Easing,
-  ReduceMotion,
   interpolateColor,
 } from 'react-native-reanimated'
 import {
@@ -40,10 +39,8 @@ import { colors, radii, spacing, fontFamily, fontSize, shadow, duration, easing 
 import { useReducedMotion } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
 import { useRiderEarningsStore } from '@chinooz/state'
+import { useRiderPayoutMethods, useRiderRequestWithdrawal, useRiderWithdrawalDetail } from '@chinooz/hooks'
 import {
-  getRiderPayoutMethods,
-  requestRiderWithdrawal,
-  getRiderWithdrawalById,
   formatRiderNPRAmount,
   MIN_WITHDRAWAL,
   INSTANT_FEE,
@@ -68,10 +65,8 @@ export default function CashOutScreen() {
   const completeCashout = useRiderEarningsStore(s => s.completeCashout)
   const clearLastWithdrawal = useRiderEarningsStore(s => s.clearLastWithdrawal)
 
-  const [methods, setMethods] = useState<RiderPayoutMethod[]>([])
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState(false)
+  const { data: methods, isLoading: loading, isError: error, refetch, isRefetching } = useRiderPayoutMethods()
+  const withdrawMutation = useRiderRequestWithdrawal()
 
   const [amount, setAmount] = useState('')
   const [isFull, setIsFull] = useState(true)
@@ -88,28 +83,16 @@ export default function CashOutScreen() {
     analytics.screen({ name: 'rider-cashout' })
   }, [])
 
-  const load = useCallback(async () => {
-    setError(false)
-    try {
-      const m = await getRiderPayoutMethods()
-      setMethods(m)
-      const def = m.find(x => x.isDefault) ?? m[0]
-      if (def) setSelectedMethodId(def.id)
-    } catch {
-      setError(true)
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }, [])
-
+  // Auto-select default payout method
   useEffect(() => {
-    load()
-  }, [load])
+    if (methods && methods.length > 0 && !selectedMethodId) {
+      const def = methods.find(x => x.isDefault) ?? methods[0]
+      if (def) setSelectedMethodId(def.id)
+    }
+  }, [methods, selectedMethodId])
 
   const onRefresh = () => {
-    setRefreshing(true)
-    load()
+    refetch()
   }
 
   // Auto-set full amount on first load
@@ -130,7 +113,7 @@ export default function CashOutScreen() {
     return { ok: true, msg: '' }
   }, [numericAmount, availableBalance, t])
 
-  const selectedMethod = methods.find(m => m.id === selectedMethodId) ?? null
+  const selectedMethod = (methods ?? []).find(m => m.id === selectedMethodId) ?? null
 
   const canSubmit =
     phase === 'form' &&
@@ -139,31 +122,27 @@ export default function CashOutScreen() {
     availableBalance > 0
 
   // Poll withdrawal status while pending
+  const { data: withdrawalDetail } = useRiderWithdrawalDetail(withdrawalId)
   useEffect(() => {
-    if (phase !== 'pending' || !withdrawalId) return
-    const interval = setInterval(async () => {
-      const wd = await getRiderWithdrawalById(withdrawalId)
-      if (!wd) return
-      setWithdrawalStatus(wd.status)
-      if (wd.status === 'paid') {
-        setPhase('paid')
-        setWithdrawalRef(wd.reference ?? null)
-        completeCashout(numericAmount)
-        try {
-          if (!reduced) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-        } catch {}
-        clearInterval(interval)
-      } else if (wd.status === 'failed') {
-        setPhase('failed')
-        setFailReason(wd.failureReason ?? '')
-        try {
-          if (!reduced) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
-        } catch {}
-        clearInterval(interval)
-      }
-    }, 1500)
-    return () => clearInterval(interval)
-  }, [phase, withdrawalId, numericAmount, reduced, setWithdrawalStatus, completeCashout])
+    if (phase !== 'pending' || !withdrawalDetail) return
+    setWithdrawalStatus(withdrawalDetail.status)
+    if (withdrawalDetail.status === 'paid') {
+      setPhase('paid')
+      setWithdrawalRef(withdrawalDetail.reference ?? null)
+      completeCashout(numericAmount)
+      analytics.track('rider_withdrawal_paid', { amountNpr: numericAmount })
+      try {
+        if (!reduced) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      } catch {}
+    } else if (withdrawalDetail.status === 'failed') {
+      setPhase('failed')
+      setFailReason(withdrawalDetail.failureReason ?? '')
+      analytics.track('rider_withdrawal_failed', { amountNpr: numericAmount })
+      try {
+        if (!reduced) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+      } catch {}
+    }
+  }, [withdrawalDetail, phase, numericAmount, reduced, setWithdrawalStatus, completeCashout])
 
   const onSubmit = async () => {
     if (!canSubmit || !selectedMethod) return
@@ -171,18 +150,27 @@ export default function CashOutScreen() {
       if (!reduced) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     } catch {}
     setPhase('submitting')
+    analytics.track('rider_withdrawal_submitted', { amountNpr: numericAmount, method: selectedMethod.kind, instant: isInstant })
     try {
-      const wd = await requestRiderWithdrawal({
-        amount: numericAmount,
-        methodId: selectedMethod.id,
-        isInstant,
+      const opRef = `withdraw-${Date.now()}-${numericAmount}`
+      const result = await withdrawMutation.mutateAsync({
+        amountNpr: numericAmount,
+        destination: selectedMethod.kind,
+        opRef,
       })
-      setWithdrawalId(wd.id)
-      setLastWithdrawal(wd.id, wd.status)
-      setPhase('pending')
-      try {
-        if (!reduced) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-      } catch {}
+      if (result.success) {
+        // Simulate: create a pending withdrawal entry and poll for status
+        const simId = `wd-${Date.now()}`
+        setWithdrawalId(simId)
+        setLastWithdrawal(simId, 'requested')
+        setPhase('pending')
+        try {
+          if (!reduced) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+        } catch {}
+      } else {
+        setPhase('failed')
+        setFailReason(result.error ?? 'Request failed')
+      }
     } catch {
       setPhase('failed')
       setFailReason('Request failed')
@@ -253,7 +241,7 @@ export default function CashOutScreen() {
   }
 
   // ── No payout methods ──
-  if (methods.length === 0) {
+  if ((methods ?? []).length === 0 && !loading) {
     return (
       <View style={styles.container}>
         <Header t={t} router={router} insets={insets} />
@@ -282,7 +270,7 @@ export default function CashOutScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: insets.bottom + spacing[8], paddingHorizontal: spacing[4], paddingTop: spacing[4], gap: spacing[3] }}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
+        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
       >
         {/* Balance card */}
         <View style={styles.balanceCard} accessibilityRole="header" accessible accessibilityLabel={t('rider.earnings.payout.cashout.balanceLabel')}>
@@ -341,7 +329,7 @@ export default function CashOutScreen() {
           <Text style={styles.sectionTitle}>{t('rider.earnings.payout.cashout.sectionMethod')}</Text>
         </View>
         <View style={styles.methodsCard}>
-          {methods.map((m, i) => (
+          {(methods ?? []).map((m, i) => (
             <MethodRadio
               key={m.id}
               method={m}
@@ -351,7 +339,7 @@ export default function CashOutScreen() {
                 try { if (!reduced) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light) } catch {}
               }}
               t={t}
-              isLast={i === methods.length - 1}
+              isLast={i === (methods ?? []).length - 1}
             />
           ))}
         </View>

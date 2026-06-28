@@ -45,14 +45,14 @@ import {
   type RiderSecurity,
   type RiderCashWallet,
 } from '@chinooz/mock-data'
-import type { RiderPerformanceRange, RiderEarningsRange, GeoPoint, RiderMetricId, PayoutMethodKind, RiderPayoutMethod, RiderWithdrawal, RiderWithdrawalDetail, RiderEarningsOverview } from '@chinooz/mock-data'
+import type { RiderPerformanceRange, RiderEarningsRange, GeoPoint, RiderMetricId, PayoutMethodKind, RiderPayoutMethod, RiderWithdrawal, RiderWithdrawalDetail, RiderEarningsOverview, RiderIncentives } from '@chinooz/mock-data'
 import type {
   RiderJob,
   ActiveDelivery,
   DeliveryStatus,
 } from '@chinooz/types'
 import { analytics } from '@chinooz/analytics'
-import { useRiderEarningsStore, useCODWalletStore } from '@chinooz/state'
+import { useRiderEarningsStore, useCODWalletStore, useOnlineStatusStore } from '@chinooz/state'
 
 // ---------------------------------------------------------------------------
 // StaleTime convention (seconds → ms)
@@ -89,6 +89,8 @@ const KEYS = {
   depositHistory: ['rider', 'deposit-history'] as const,
   depositReceipt: (id: string) => ['rider', 'deposit-receipt', id] as const,
   incentives: ['rider', 'incentives'] as const,
+  streaks: ['rider', 'streaks'] as const,
+  questDetail: (questId: string) => ['rider', 'quest', questId] as const,
   demand: ['rider', 'demand-zones'] as const,
   surge: ['rider', 'surge-zones'] as const,
   surgeDetail: ['rider', 'surge-detail'] as const,
@@ -160,9 +162,27 @@ export function useVerifyRiderPhoneOtp() {
 // ---------------------------------------------------------------------------
 
 export function useSetOnlineStatus() {
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: (status: 'online' | 'offline' | 'paused') =>
       riderApi.setOnlineStatus(status),
+    onMutate: async (next) => {
+      // Optimistic: update the shared store immediately.
+      const store = useOnlineStatusStore.getState()
+      const prev = store.status
+      store.setOnlineStatus(next)
+      analytics.track('rider_status_change', { from: prev, to: next })
+      return { prev }
+    },
+    onError: (_err, _next, ctx) => {
+      // Rollback to the previous status on failure.
+      if (ctx?.prev) {
+        useOnlineStatusStore.getState().setOnlineStatus(ctx.prev)
+      }
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: KEYS.jobs() })
+    },
   })
 }
 
@@ -171,11 +191,15 @@ export function useSetOnlineStatus() {
 // ---------------------------------------------------------------------------
 
 export function useAvailableJobs(limit?: number) {
+  const status = useOnlineStatusStore(s => s.status)
   return useQuery({
     queryKey: KEYS.jobs(limit),
     queryFn: () => riderApi.getAvailableJobs(limit),
     staleTime: STALE_JOBS,
     refetchOnWindowFocus: true,
+    // Mock realtime dispatch stream: poll every 15s while online.
+    // A real dispatch socket will replace this behind the same boundary.
+    refetchInterval: status === 'online' ? STALE_JOBS : false,
   })
 }
 
@@ -217,6 +241,7 @@ export function useAcceptJob() {
       if (data.activeDelivery) {
         qc.setQueryData(KEYS.active, data.activeDelivery)
       }
+      analytics.track('rider_job_accepted', { jobId: data.id })
       qc.invalidateQueries({ queryKey: ['rider', 'jobs'] })
     },
   })
@@ -240,6 +265,9 @@ export function useDeclineJob() {
     },
     onError: (_err, _vars, ctx) => {
       if (ctx?.prevJobs) qc.setQueryData(KEYS.jobs(), ctx.prevJobs)
+    },
+    onSuccess: (_data, vars) => {
+      analytics.track('rider_job_declined', { jobId: vars.jobId })
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ['rider', 'jobs'] })
@@ -468,7 +496,7 @@ export function useAddRiderPayoutMethod() {
       method,
       opRef,
     }: {
-      method: Omit<RiderPayoutMethod, 'id' | 'isDefault' | 'createdAt'>
+      method: Omit<RiderPayoutMethod, 'id' | 'maskedAccount' | 'isDefault' | 'accentColor'>
       opRef: string
     }) => riderApi.addRiderPayoutMethodApi(method, opRef),
     onSuccess: () => {
@@ -655,10 +683,50 @@ export function useClaimQuest() {
   return useMutation({
     mutationFn: ({ questId, opRef }: { questId: string; opRef: string }) =>
       riderApi.claimQuest(questId, opRef),
+    onMutate: async ({ questId }) => {
+      // Optimistic: mark quest as claimed in the incentives cache.
+      await qc.cancelQueries({ queryKey: KEYS.incentives })
+      const prev = qc.getQueryData<RiderIncentives>(KEYS.incentives)
+      if (prev) {
+        qc.setQueryData(KEYS.incentives, {
+          ...prev,
+          activeQuests: prev.activeQuests.map(q =>
+            q.id === questId ? { ...q, terms: { ...q.terms, claimed: true } } : q,
+          ),
+          completedQuests: prev.completedQuests.map(q =>
+            q.id === questId ? { ...q, terms: { ...q.terms, claimed: true } } : q,
+          ),
+        })
+      }
+      return { prev }
+    },
+    onError: (_err, _vars, ctx) => {
+      // Rollback on failure — no double-claim, no phantom credit.
+      if (ctx?.prev) qc.setQueryData(KEYS.incentives, ctx.prev)
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.incentives })
       qc.invalidateQueries({ queryKey: KEYS.earnings })
     },
+  })
+}
+
+/** Quest detail (RI3). 60s staleTime, same as incentives. */
+export function useQuestDetail(questId: string | null | undefined) {
+  return useQuery({
+    queryKey: KEYS.questDetail(questId ?? ''),
+    queryFn: () => riderApi.getQuestByIdApi(questId!),
+    enabled: !!questId,
+    staleTime: STALE_INCENTIVES,
+  })
+}
+
+/** Streaks & tiers (RI4). 60s staleTime — stable tier data, refetched on focus. */
+export function useRiderStreaks() {
+  return useQuery({
+    queryKey: KEYS.streaks,
+    queryFn: () => riderApi.getRiderStreaksApi(),
+    staleTime: STALE_INCENTIVES,
   })
 }
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo } from 'react'
 import {
   View,
   Text,
@@ -18,7 +18,6 @@ import Animated, {
   withTiming,
   withSpring,
   Easing,
-  ReduceMotion,
   interpolateColor,
 } from 'react-native-reanimated'
 import {
@@ -33,13 +32,13 @@ import {
   CheckCircle2,
   Target,
 } from 'lucide-react-native'
-import { colors, radii, spacing, fontFamily, fontSize, shadow } from '@chinooz/theme'
+import { colors, radii, spacing, fontFamily, fontSize, shadow, duration, easing } from '@chinooz/theme'
 import { useReducedMotion } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
 import { useRiderEarningsStore, useRiderIncentivesStore } from '@chinooz/state'
+import { useRiderEarnings, useRiderCashWallet } from '@chinooz/hooks'
+import { CountUp } from '../components/CountUp'
 import {
-  getRiderEarnings,
-  getRiderCashWallet,
   formatRiderNPRAmount,
   type RiderEarningsOverview,
   type RiderCashWallet,
@@ -47,29 +46,6 @@ import {
 } from '@chinooz/mock-data'
 
 const AnimatedPress = Animated.createAnimatedComponent(TouchableOpacity)
-
-function useCountUp(target: number, enabled: boolean, durationMs = 900): number {
-  const [value, setValue] = useState(0)
-  const raf = useRef<number | null>(null)
-  useEffect(() => {
-    if (!enabled) {
-      setValue(target)
-      return
-    }
-    const start = performance.now()
-    const tick = (now: number) => {
-      const t = Math.min(1, (now - start) / durationMs)
-      const eased = 1 - Math.pow(1 - t, 3)
-      setValue(Math.round(target * eased))
-      if (t < 1) raf.current = requestAnimationFrame(tick)
-    }
-    raf.current = requestAnimationFrame(tick)
-    return () => {
-      if (raf.current) cancelAnimationFrame(raf.current)
-    }
-  }, [target, enabled, durationMs])
-  return value
-}
 
 function periodRangeKey(p: RiderPeriodSummary): string {
   switch (p.range.key) {
@@ -91,11 +67,8 @@ export default function RiderEarningsScreen() {
   const insets = useSafeAreaInsets()
   const reduced = useReducedMotion()
 
-  const [overview, setOverview] = useState<RiderEarningsOverview | null>(null)
-  const [wallet, setWallet] = useState<RiderCashWallet | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState(false)
+  const { data: overview, isLoading, isError, refetch, isRefetching } = useRiderEarnings()
+  const { data: wallet } = useRiderCashWallet()
 
   const storeBalance = useRiderEarningsStore(s => s.withdrawableBalance)
   const cashoutInFlight = useRiderEarningsStore(s => s.cashoutInFlight)
@@ -103,7 +76,6 @@ export default function RiderEarningsScreen() {
   const beginCashout = useRiderEarningsStore(s => s.beginCashout)
   const completeCashout = useRiderEarningsStore(s => s.completeCashout)
   const cancelCashout = useRiderEarningsStore(s => s.cancelCashout)
-  const [cashoutDone, setCashoutDone] = useState(false)
 
   // Incentives earnings this week — read from the shared store so the
   // Earnings overview can surface a live "earned from incentives" figure
@@ -114,24 +86,10 @@ export default function RiderEarningsScreen() {
     analytics.screen({ name: 'rider-earnings' })
   }, [])
 
-  const load = React.useCallback(async () => {
-    setError(false)
-    try {
-      const [ov, w] = await Promise.all([getRiderEarnings(), getRiderCashWallet()])
-      setOverview(ov)
-      setWallet(w)
-      setStoreBalance(ov.withdrawableBalance)
-    } catch {
-      setError(true)
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }, [setStoreBalance])
-
+  // Seed the shared store with the server-side withdrawable balance once.
   useEffect(() => {
-    load()
-  }, [load])
+    if (overview) setStoreBalance(overview.withdrawableBalance)
+  }, [overview, setStoreBalance])
 
   // Hero balance: prefer the store (optimistic on cash-out), fall back to mock.
   const heroBalance = useMemo(() => {
@@ -139,8 +97,7 @@ export default function RiderEarningsScreen() {
     return overview?.withdrawableBalance ?? 0
   }, [storeBalance, overview])
 
-  const animatedBalance = useCountUp(heroBalance, !loading && !reduced)
-  const displayBalance = loading ? heroBalance : animatedBalance
+  const loading = isLoading
 
   const pendingClearance = overview?.pendingClearance ?? 0
   const nextPayoutDate = overview?.nextPayoutDate ?? null
@@ -150,12 +107,15 @@ export default function RiderEarningsScreen() {
     amount: formatRiderNPRAmount(heroBalance),
   })
 
+  const [cashoutDone, setCashoutDone] = React.useState(false)
+
   const onCashOut = () => {
     if (cashoutInFlight || heroBalance <= 0) return
     try {
       if (!reduced) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     } catch {}
     beginCashout()
+    analytics.track('rider_cashout_initiated', { amountNpr: heroBalance })
     // Simulate the RE5 cash-out round-trip.
     setTimeout(() => {
       try {
@@ -163,13 +123,13 @@ export default function RiderEarningsScreen() {
       } catch {}
       completeCashout(heroBalance)
       setCashoutDone(true)
+      analytics.track('rider_cashout_completed', { amountNpr: heroBalance })
       setTimeout(() => setCashoutDone(false), 2400)
     }, 900)
   }
 
   const onRefresh = () => {
-    setRefreshing(true)
-    load()
+    refetch()
   }
 
   const cashOutLabel = cashoutInFlight
@@ -206,7 +166,7 @@ export default function RiderEarningsScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
+            refreshing={isRefetching}
             onRefresh={onRefresh}
             tintColor={colors.primary}
             colors={[colors.primary]}
@@ -215,7 +175,7 @@ export default function RiderEarningsScreen() {
       >
         {loading ? (
           <EarningsSkeleton ariaLabel={t('rider.earnings.skeletonAria')} />
-        ) : error ? (
+        ) : isError ? (
           <ErrorState
             title={t('rider.earnings.errorTitle')}
             subtitle={t('rider.earnings.errorSubtitle')}
@@ -234,9 +194,13 @@ export default function RiderEarningsScreen() {
               <View style={styles.heroAccent} />
               <View style={styles.heroBody}>
                 <Text style={styles.heroLabel}>{t('rider.earnings.heroLabel')}</Text>
-                <Text style={styles.heroAmount} accessibilityElementsHidden>
-                  NPR {formatRiderNPRAmount(displayBalance)}
-                </Text>
+                <CountUp
+                  value={heroBalance}
+                  format={(v: number) => `NPR ${formatRiderNPRAmount(v)}`}
+                  style={styles.heroAmount}
+                  reduced={reduced || loading}
+                  dur={duration.slower}
+                />
                 <Text style={styles.heroCaption}>{t('rider.earnings.heroCaption')}</Text>
 
                 {pendingClearance > 0 && (
@@ -469,7 +433,7 @@ function CashOutButton({
   useEffect(() => {
     bg.value = reduced
       ? done ? 1 : 0
-      : withTiming(done ? 1 : 0, { duration: 240, easing: Easing.out(Easing.ease) })
+      : withTiming(done ? 1 : 0, { duration: duration.normal, easing: Easing.bezier(...easing.easeOut) })
   }, [done, reduced])
 
   const handlePressIn = () => {
@@ -557,11 +521,11 @@ function EntryRow({
   const chevronX = useSharedValue(0)
   const handlePressIn = () => {
     if (reduced) return
-    chevronX.value = withTiming(3, { duration: 120, easing: Easing.out(Easing.ease) })
+    chevronX.value = withTiming(3, { duration: duration.fast, easing: Easing.bezier(...easing.easeOut) })
   }
   const handlePressOut = () => {
     if (reduced) return
-    chevronX.value = withTiming(0, { duration: 120, easing: Easing.out(Easing.ease) })
+    chevronX.value = withTiming(0, { duration: duration.fast, easing: Easing.bezier(...easing.easeOut) })
   }
   const chevronStyle = useAnimatedStyle(() => ({ transform: [{ translateX: chevronX.value }] }))
 

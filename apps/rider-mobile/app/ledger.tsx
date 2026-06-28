@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { memo, useEffect, useMemo, useState } from 'react'
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   StyleSheet,
   RefreshControl,
   Pressable,
+  FlatList,
 } from 'react-native'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -33,11 +34,11 @@ import {
   Flame,
   ListChecks,
 } from 'lucide-react-native'
-import { colors, radii, spacing, fontFamily, fontSize, shadow } from '@chinooz/theme'
+import { colors, radii, spacing, fontFamily, fontSize, shadow, duration, easing } from '@chinooz/theme'
 import { useReducedMotion } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
+import { useRiderTripLedger } from '@chinooz/hooks'
 import {
-  getRiderTripLedger,
   formatRiderNPRAmount,
   type TripLedger,
   type TripLedgerDay,
@@ -75,10 +76,7 @@ export default function RiderLedgerScreen() {
   const reduced = useReducedMotion()
   const params = useLocalSearchParams<{ date?: string }>()
 
-  const [ledger, setLedger] = useState<TripLedger | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState(false)
+  const { data: ledger, isLoading: loading, isError: error, refetch, isRefetching } = useRiderTripLedger()
   const [dateFilter, setDateFilter] = useState<string | null>(params.date ?? null)
   const [earningFilter, setEarningFilter] = useState<EarningFilter>('all')
   const [dateRange, setDateRange] = useState<DateRange>('all')
@@ -88,26 +86,8 @@ export default function RiderLedgerScreen() {
     analytics.screen({ name: 'rider-earnings-ledger' })
   }, [])
 
-  const load = useCallback(async () => {
-    setError(false)
-    try {
-      const r = await getRiderTripLedger()
-      setLedger(r)
-    } catch {
-      setError(true)
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    load()
-  }, [load])
-
   const onRefresh = () => {
-    setRefreshing(true)
-    load()
+    refetch()
   }
 
   const filteredDays = useMemo(() => {
@@ -291,58 +271,58 @@ export default function RiderLedgerScreen() {
         )}
       </View>
 
-      <ScrollView
+      <FlatList
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: insets.bottom + spacing[8] }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
-        }
-      >
-        {loading ? (
-          <LedgerSkeleton ariaLabel={t('rider.earnings.ledger.skeletonAria')} />
-        ) : error ? (
-          <ErrorState
-            title={t('rider.earnings.ledger.errorTitle')}
-            subtitle={t('rider.earnings.ledger.errorSubtitle')}
-            retry={t('rider.earnings.ledger.retry')}
-            onRetry={onRefresh}
+        data={filteredDays}
+        keyExtractor={(item) => item.date}
+        renderItem={({ item }) => (
+          <MemoizedDayGroup
+            day={item}
+            reduced={reduced}
+            onRowTap={onRowTap}
+            t={t}
           />
-        ) : filteredDays.length === 0 ? (
-          <EmptyState
-            title={t('rider.earnings.ledger.trips.emptyFiltered')}
-            subtitle={t('rider.earnings.ledger.trips.emptyFilteredSubtitle')}
-          />
-        ) : (
-          <View style={styles.body}>
-            {/* Grand total summary */}
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>{t('rider.earnings.ledger.trips.grandTotal')}</Text>
-              <Text style={styles.summaryValue}>
-                NPR {formatRiderNPRAmount(totalShown)}
-              </Text>
-              <Text style={styles.summaryTrips}>
-                {tripsShown === 1
-                  ? t('rider.earnings.ledger.trips.totalTripsOne', { count: tripsShown })
-                  : t('rider.earnings.ledger.trips.totalTripsOther', { count: tripsShown })}
-              </Text>
-            </View>
-
-            {/* Day groups */}
-            {filteredDays.map(day => (
-              <DayGroup
-                key={day.date}
-                day={day}
-                reduced={reduced}
-                onRowTap={onRowTap}
-                t={t}
-              />
-            ))}
-            <View style={{ height: spacing[4] }} />
-          </View>
         )}
-      </ScrollView>
+        ListHeaderComponent={
+          loading ? (
+            <LedgerSkeleton ariaLabel={t('rider.earnings.ledger.skeletonAria')} />
+          ) : error ? (
+            <ErrorState
+              title={t('rider.earnings.ledger.errorTitle')}
+              subtitle={t('rider.earnings.ledger.errorSubtitle')}
+              retry={t('rider.earnings.ledger.retry')}
+              onRetry={onRefresh}
+            />
+          ) : filteredDays.length === 0 ? (
+            <EmptyState
+              title={t('rider.earnings.ledger.trips.emptyFiltered')}
+              subtitle={t('rider.earnings.ledger.trips.emptyFilteredSubtitle')}
+            />
+          ) : (
+            <View style={styles.body}>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>{t('rider.earnings.ledger.trips.grandTotal')}</Text>
+                <Text style={styles.summaryValue}>
+                  NPR {formatRiderNPRAmount(totalShown)}
+                </Text>
+                <Text style={styles.summaryTrips}>
+                  {tripsShown === 1
+                    ? t('rider.earnings.ledger.trips.totalTripsOne', { count: tripsShown })
+                    : t('rider.earnings.ledger.trips.totalTripsOther', { count: tripsShown })}
+                </Text>
+              </View>
+            </View>
+          )
+        }
+        ListEmptyComponent={null}
+        ItemSeparatorComponent={() => <View style={{ height: spacing[3] }} />}
+        refreshControl={
+          <RefreshControl refreshing={isRefetching} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
+        }
+      />
     </View>
   )
 }
@@ -358,6 +338,19 @@ function DayGroup({
   onRowTap: (e: TripLedgerEntry) => void
   t: (key: string, opts?: Record<string, unknown>) => string
 }) {
+  // Staggered enter: fade in + slight translateY.
+  const enterOpacity = useSharedValue(reduced ? 1 : 0)
+  const enterY = useSharedValue(reduced ? 0 : 8)
+  useEffect(() => {
+    if (reduced) return
+    enterOpacity.value = withTiming(1, { duration: duration.normal, easing: Easing.bezier(...easing.easeOut) })
+    enterY.value = withTiming(0, { duration: duration.normal, easing: Easing.bezier(...easing.easeOut) })
+  }, [reduced])
+  const enterStyle = useAnimatedStyle(() => ({
+    opacity: enterOpacity.value,
+    transform: [{ translateY: enterY.value }],
+  }))
+
   const incentiveAria =
     day.incentiveTotal > 0
       ? ' ' + t('rider.earnings.ledger.trips.rowIncentiveAria', { amount: formatRiderNPRAmount(day.incentiveTotal) })
@@ -370,7 +363,7 @@ function DayGroup({
   })
 
   return (
-    <View style={styles.dayGroup}>
+    <Animated.View style={[styles.dayGroup, enterStyle]}>
       <View style={styles.dayHeader} accessibilityRole="header" accessible accessibilityLabel={dayAria}>
         <View style={styles.dayHeaderLeft}>
           <Text style={styles.dayLabel}>{day.label}</Text>
@@ -406,9 +399,11 @@ function DayGroup({
           t={t}
         />
       ))}
-    </View>
+    </Animated.View>
   )
 }
+
+const MemoizedDayGroup = memo(DayGroup)
 
 function TripRow({
   entry,
@@ -427,12 +422,12 @@ function TripRow({
   const handlePressIn = () => {
     if (reduced) return
     scale.value = withSpring(0.98, { damping: 14, stiffness: 400, mass: 0.6 })
-    chevronX.value = withTiming(3, { duration: 120, easing: Easing.out(Easing.ease) })
+    chevronX.value = withTiming(3, { duration: duration.fast, easing: Easing.bezier(...easing.easeOut) })
   }
   const handlePressOut = () => {
     if (reduced) return
     scale.value = withSpring(1, { damping: 14, stiffness: 400, mass: 0.6 })
-    chevronX.value = withTiming(0, { duration: 120, easing: Easing.out(Easing.ease) })
+    chevronX.value = withTiming(0, { duration: duration.fast, easing: Easing.bezier(...easing.easeOut) })
   }
 
   const scaleStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }))

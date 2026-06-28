@@ -63,7 +63,7 @@ import {
   type WithdrawalStatus,
 } from './riderEarnings'
 import { getCODWallet, type CODWalletSnapshot } from './riderEarnings'
-import { getIncentives, type RiderIncentives } from './riderIncentives'
+import { getIncentives, getQuestById, getRiderStreaks, claimQuestReward, joinQuest, type RiderIncentives, type RiderQuest, type RiderStreaksDetail } from './riderIncentives'
 import {
   getDemandZones,
   getSurgeZones,
@@ -476,7 +476,7 @@ export async function getRiderPayoutMethodsApi(): Promise<RiderPayoutMethod[]> {
 
 /** Add a new payout method. Idempotent via `opRef`. */
 export async function addRiderPayoutMethodApi(
-  method: Omit<RiderPayoutMethod, 'id' | 'isDefault' | 'createdAt'>,
+  method: Omit<RiderPayoutMethod, 'id' | 'maskedAccount' | 'isDefault' | 'accentColor'>,
   opRef: string,
 ): Promise<{ success: boolean; method?: RiderPayoutMethod; error?: string }> {
   return runIdempotent(
@@ -554,7 +554,23 @@ export async function getRiderWithdrawalByIdApi(
 
 /** Get incentives/quests. */
 export async function getIncentivesApi(): Promise<RiderIncentives> {
+  await randomDelay(200, 400)
+  maybeThrow()
   return getIncentives()
+}
+
+/** Get quest detail by id (RI3). */
+export async function getQuestByIdApi(questId: string): Promise<RiderQuest | null> {
+  await randomDelay(150, 300)
+  maybeThrow(0.03)
+  return getQuestById(questId)
+}
+
+/** Get streaks & tiers (RI4). */
+export async function getRiderStreaksApi(): Promise<RiderStreaksDetail> {
+  await randomDelay(200, 400)
+  maybeThrow()
+  return getRiderStreaks()
 }
 
 /** Claim a quest reward. Idempotent via `opRef`. */
@@ -569,10 +585,18 @@ export async function claimQuest(
     async () => {
       await randomDelay(300, 600)
       maybeThrow(0.04)
-      void questId
-      return { success: true, rewardNpr: 150 }
+      const result = await claimQuestReward(questId)
+      if (!result) return { success: false, rewardNpr: 0, error: 'Quest not claimable' }
+      return { success: true, rewardNpr: result.rewardNpr }
     },
   )
+}
+
+/** Join an opt-in quest (RI3). */
+export async function joinQuestApi(questId: string): Promise<RiderQuest | null> {
+  await randomDelay(280, 500)
+  maybeThrow(0.03)
+  return joinQuest(questId)
 }
 
 /** Get demand zones (heat map). */

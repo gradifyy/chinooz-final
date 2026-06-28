@@ -155,6 +155,8 @@ export {
   useDepositCash,
   useIncentives,
   useClaimQuest,
+  useQuestDetail,
+  useRiderStreaks,
   useDemandZones,
   useSurgeZones,
   useSurgeDetail,
@@ -179,6 +181,14 @@ export {
   useDeactivateRiderAccount,
   useDeleteRiderAccount,
 } from './useRider'
+
+export {
+  useRiderRequestOtp,
+  useRiderVerifyOtp,
+  useSubmitRiderOnboarding,
+  useRiderApprovalStatus,
+  useGoOnlineChecklist,
+} from './useRiderOnboarding'
 
 export {
   useHelpArticles,

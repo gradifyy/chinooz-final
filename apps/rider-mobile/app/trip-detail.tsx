@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo } from 'react'
 import {
   View,
   Text,
@@ -23,8 +23,8 @@ import {
 import { colors, radii, spacing, fontFamily, fontSize, shadow } from '@chinooz/theme'
 import { useReducedMotion } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
+import { useRiderTripDetail } from '@chinooz/hooks'
 import {
-  getRiderTripDetail,
   formatRiderNPRAmount,
   type TripLedgerEntry,
   type TripLedgerLine,
@@ -52,35 +52,14 @@ export default function RiderTripDetailScreen() {
   const reduced = useReducedMotion()
   const params = useLocalSearchParams<{ id: string }>()
 
-  const [trip, setTrip] = useState<TripLedgerEntry | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState(false)
+  const { data: trip, isLoading: loading, isError: error, refetch, isRefetching } = useRiderTripDetail(params.id)
 
   useEffect(() => {
-    analytics.screen({ name: 'rider-trip-detail' })
-  }, [])
-
-  const load = useCallback(async () => {
-    setError(false)
-    try {
-      const r = await getRiderTripDetail(params.id)
-      setTrip(r)
-    } catch {
-      setError(true)
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
+    analytics.screen({ name: 'rider-trip-detail', properties: { tripId: params.id } })
   }, [params.id])
 
-  useEffect(() => {
-    load()
-  }, [load])
-
   const onRefresh = () => {
-    setRefreshing(true)
-    load()
+    refetch()
   }
 
   const lines = trip?.lines ?? []
@@ -127,7 +106,7 @@ export default function RiderTripDetailScreen() {
         contentContainerStyle={{ paddingBottom: insets.bottom + spacing[8] }}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
+          <RefreshControl refreshing={isRefetching} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
         }
       >
         {loading ? (

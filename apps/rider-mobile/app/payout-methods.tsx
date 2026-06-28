@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   View,
   Text,
@@ -29,10 +29,12 @@ import { colors, radii, spacing, fontFamily, fontSize, shadow } from '@chinooz/t
 import { useReducedMotion } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
 import {
-  getRiderPayoutMethods,
-  addRiderPayoutMethod,
-  setDefaultRiderPayoutMethod,
-  deleteRiderPayoutMethod,
+  useRiderPayoutMethods,
+  useAddRiderPayoutMethod,
+  useSetDefaultRiderPayoutMethod,
+  useDeleteRiderPayoutMethod,
+} from '@chinooz/hooks'
+import {
   formatRiderNPRAmount,
   type RiderPayoutMethod,
   type PayoutMethodKind,
@@ -44,10 +46,10 @@ export default function PayoutMethodsScreen() {
   const insets = useSafeAreaInsets()
   const reduced = useReducedMotion()
 
-  const [methods, setMethods] = useState<RiderPayoutMethod[]>([])
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState(false)
+  const { data: methods, isLoading: loading, isError: error, refetch, isRefetching } = useRiderPayoutMethods()
+  const addMutation = useAddRiderPayoutMethod()
+  const setDefaultMutation = useSetDefaultRiderPayoutMethod()
+  const deleteMutation = useDeleteRiderPayoutMethod()
   const [showAdd, setShowAdd] = useState(false)
   const [addKind, setAddKind] = useState<PayoutMethodKind>('bank')
   const [toast, setToast] = useState<string | null>(null)
@@ -56,26 +58,8 @@ export default function PayoutMethodsScreen() {
     analytics.screen({ name: 'rider-payout-methods' })
   }, [])
 
-  const load = useCallback(async () => {
-    setError(false)
-    try {
-      const m = await getRiderPayoutMethods()
-      setMethods(m)
-    } catch {
-      setError(true)
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    load()
-  }, [load])
-
   const onRefresh = () => {
-    setRefreshing(true)
-    load()
+    refetch()
   }
 
   const showToast = (msg: string) => {
@@ -86,8 +70,8 @@ export default function PayoutMethodsScreen() {
   const onSetDefault = async (method: RiderPayoutMethod) => {
     if (method.isDefault) return
     try { if (!reduced) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light) } catch {}
-    await setDefaultRiderPayoutMethod(method.id)
-    await load()
+    analytics.track('rider_payout_method_set_default', { methodId: method.id })
+    await setDefaultMutation.mutateAsync({ methodId: method.id, opRef: `set-default-${method.id}-${Date.now()}` })
     showToast(t('rider.earnings.payout.methods.defaultSetAria', { label: method.label }))
   }
 
@@ -102,8 +86,8 @@ export default function PayoutMethodsScreen() {
           style: 'destructive',
           onPress: async () => {
             try { if (!reduced) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium) } catch {}
-            await deleteRiderPayoutMethod(method.id)
-            await load()
+            analytics.track('rider_payout_method_deleted', { methodId: method.id })
+            await deleteMutation.mutateAsync({ methodId: method.id, opRef: `delete-${method.id}-${Date.now()}` })
             showToast(t('rider.earnings.payout.methods.removedAria', { label: method.label }))
           },
         },
@@ -111,8 +95,7 @@ export default function PayoutMethodsScreen() {
     )
   }
 
-  const onAdded = async () => {
-    await load()
+  const onAdded = () => {
     setShowAdd(false)
     showToast(t('rider.earnings.payout.methods.added'))
   }
@@ -135,7 +118,7 @@ export default function PayoutMethodsScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: insets.bottom + spacing[8], paddingHorizontal: spacing[4], paddingTop: spacing[4], gap: spacing[3] }}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
+        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
       >
         {loading ? (
           <Skeleton ariaLabel={t('rider.earnings.payout.methods.skeletonAria')} />
@@ -147,7 +130,7 @@ export default function PayoutMethodsScreen() {
               <Text style={styles.retryText}>{t('rider.earnings.payout.methods.retry')}</Text>
             </TouchableOpacity>
           </View>
-        ) : methods.length === 0 ? (
+        ) : (methods ?? []).length === 0 ? (
           <View style={styles.emptyWrap}>
             <Building2 size={32} color={colors.textTertiary} />
             <Text style={styles.emptyTitle}>{t('rider.earnings.payout.methods.noMethods')}</Text>
@@ -158,7 +141,7 @@ export default function PayoutMethodsScreen() {
             <View style={styles.sectionHead}>
               <Text style={styles.sectionTitle}>{t('rider.earnings.payout.methods.sectionLinked')}</Text>
             </View>
-            {methods.map(m => (
+            {(methods ?? []).map(m => (
               <MethodCard
                 key={m.id}
                 method={m}
@@ -217,6 +200,7 @@ export default function PayoutMethodsScreen() {
         onClose={() => setShowAdd(false)}
         onAdded={onAdded}
         reduced={reduced}
+        addMutation={addMutation}
       />
     </View>
   )
@@ -290,7 +274,7 @@ function AddButton({ icon, label, ariaLabel, onPress }: { icon: React.ReactNode;
   )
 }
 
-function AddMethodModal({ visible, kind, t, insets, onClose, onAdded, reduced }: {
+function AddMethodModal({ visible, kind, t, insets, onClose, onAdded, reduced, addMutation }: {
   visible: boolean
   kind: PayoutMethodKind
   t: ReturnType<typeof useTranslation>['t']
@@ -298,6 +282,7 @@ function AddMethodModal({ visible, kind, t, insets, onClose, onAdded, reduced }:
   onClose: () => void
   onAdded: () => void
   reduced: boolean
+  addMutation: ReturnType<typeof useAddRiderPayoutMethod>
 }) {
   const [label, setLabel] = useState('')
   const [bankName, setBankName] = useState('')
@@ -339,7 +324,7 @@ function AddMethodModal({ visible, kind, t, insets, onClose, onAdded, reduced }:
         kind === 'bank'
           ? { kind, label: label.trim(), bankName: bankName.trim(), accountNumber: accountNumber.replace(/\s/g, '') }
           : { kind, label: label.trim(), walletPhone: walletPhone.replace(/\s/g, '') }
-      await addRiderPayoutMethod(input)
+      await addMutation.mutateAsync({ method: input, opRef: `add-payout-${Date.now()}` })
       reset()
       onAdded()
       try { if (!reduced) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success) } catch {}

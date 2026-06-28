@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   View,
   Text,
@@ -29,9 +29,8 @@ import {
 import { colors, radii, spacing, fontFamily, fontSize, shadow } from '@chinooz/theme'
 import { useReducedMotion } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
+import { useRiderWithdrawals, useRiderWithdrawalDetail } from '@chinooz/hooks'
 import {
-  getRiderWithdrawals,
-  getRiderWithdrawalById,
   formatRiderNPRAmount,
   type RiderWithdrawal,
   type WithdrawalStatus,
@@ -55,53 +54,26 @@ export default function WithdrawalHistoryScreen() {
   const insets = useSafeAreaInsets()
   const reduced = useReducedMotion()
 
-  const [withdrawals, setWithdrawals] = useState<RiderWithdrawal[]>([])
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState(false)
+  const { data: withdrawals, isLoading: loading, isError: error, refetch, isRefetching } = useRiderWithdrawals()
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [detail, setDetail] = useState<RiderWithdrawalDetail | null>(null)
-  const [detailLoading, setDetailLoading] = useState(false)
+  const { data: detail, isLoading: detailLoading } = useRiderWithdrawalDetail(selectedId)
 
   useEffect(() => {
     analytics.screen({ name: 'rider-withdrawal-history' })
   }, [])
 
-  const load = useCallback(async () => {
-    setError(false)
-    try {
-      const w = await getRiderWithdrawals()
-      setWithdrawals(w)
-    } catch {
-      setError(true)
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    load()
-  }, [load])
-
   const onRefresh = () => {
-    setRefreshing(true)
-    load()
+    refetch()
   }
 
-  const openDetail = async (id: string) => {
+  const openDetail = (id: string) => {
     try { if (!reduced) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light) } catch {}
+    analytics.track('rider_withdrawal_detail_viewed', { withdrawalId: id })
     setSelectedId(id)
-    setDetailLoading(true)
-    setDetail(null)
-    const d = await getRiderWithdrawalById(id)
-    setDetail(d)
-    setDetailLoading(false)
   }
 
   const closeDetail = () => {
     setSelectedId(null)
-    setDetail(null)
   }
 
   const onExportReceipt = () => {
@@ -117,6 +89,7 @@ export default function WithdrawalHistoryScreen() {
       `Requested: ${formatDateTime(detail.requestedAt)}`,
       detail.completedAt ? `Completed: ${formatDateTime(detail.completedAt)}` : '',
     ].filter(Boolean).join('\n')
+    analytics.track('rider_withdrawal_receipt_exported', { withdrawalId: detail.id })
     Share.share({ message: summary }, { dialogTitle: t('rider.earnings.payout.receipt.exportReceipt') })
   }
 
@@ -153,7 +126,7 @@ export default function WithdrawalHistoryScreen() {
           t={t}
           insets={insets}
           loading={detailLoading}
-          detail={detail}
+          detail={detail ?? null}
           onBack={closeDetail}
           onExport={onExportReceipt}
           reduced={reduced}
@@ -163,9 +136,9 @@ export default function WithdrawalHistoryScreen() {
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingBottom: insets.bottom + spacing[8], paddingHorizontal: spacing[4], paddingTop: spacing[4], gap: spacing[3] }}
           showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
+          refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
         >
-          {withdrawals.length === 0 ? (
+          {(withdrawals ?? []).length === 0 ? (
             <View style={styles.emptyWrap}>
               <Banknote size={32} color={colors.textTertiary} />
               <Text style={styles.emptyTitle}>{t('rider.earnings.payout.history.empty')}</Text>
@@ -178,9 +151,9 @@ export default function WithdrawalHistoryScreen() {
           ) : (
             <>
               <Text style={styles.countText} accessibilityRole="summary">
-                {t('rider.earnings.payout.history.countOther', { count: withdrawals.length })}
+                {t('rider.earnings.payout.history.countOther', { count: (withdrawals ?? []).length })}
               </Text>
-              {withdrawals.map(w => {
+              {(withdrawals ?? []).map(w => {
                 const st = STATUS_CONFIG[w.status]
                 const icon = w.method === 'bank' ? <Building2 size={16} color={colors.primary} /> : <Smartphone size={16} color={colors.primary} />
                 return (
