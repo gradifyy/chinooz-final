@@ -126,22 +126,22 @@ export default function SellerReviews() {
   const trendDown = trendPct < 0
 
   const sortOptions: { key: SellerReviewSort; label: string }[] = [
-    { key: 'newest', label: t('sellerReviews.sortNewest') },
-    { key: 'oldest', label: t('sellerReviews.sortOldest') },
-    { key: 'lowest', label: t('sellerReviews.sortLowest') },
-    { key: 'highest', label: t('sellerReviews.sortHighest') },
+    { key: 'newest', label: t('seller.reviews.sortNewest') },
+    { key: 'oldest', label: t('seller.reviews.sortOldest') },
+    { key: 'lowest', label: t('seller.reviews.sortLowest') },
+    { key: 'highest', label: t('seller.reviews.sortHighest') },
   ]
   const activeSortLabel = sortOptions.find(s => s.key === sort)?.label ?? sortOptions[0].label
 
   const tabs: { key: SellerReviewStatus; label: string; count: number; warning?: boolean }[] = [
-    { key: 'all', label: t('sellerReviews.tabAll'), count: counts?.all ?? 0 },
-    { key: 'needs_response', label: t('sellerReviews.tabNeedsResponse'), count: counts?.needs_response ?? 0, warning: true },
-    { key: 'responded', label: t('sellerReviews.tabResponded'), count: counts?.responded ?? 0 },
-    { key: 'flagged', label: t('sellerReviews.tabFlagged'), count: counts?.flagged ?? 0 },
+    { key: 'all', label: t('seller.reviews.tabAll'), count: counts?.all ?? 0 },
+    { key: 'needs_response', label: t('seller.reviews.tabNeedsResponse'), count: counts?.needs_response ?? 0, warning: true },
+    { key: 'responded', label: t('seller.reviews.tabResponded'), count: counts?.responded ?? 0 },
+    { key: 'flagged', label: t('seller.reviews.tabFlagged'), count: counts?.flagged ?? 0 },
   ]
 
   const ratingChips: { key: RatingFilter; label: string }[] = [
-    { key: 'all', label: t('sellerReviews.filterRatingAll') },
+    { key: 'all', label: t('seller.reviews.filterRatingAll') },
     { key: 5, label: '5 ★' },
     { key: 4, label: '4 ★' },
     { key: 3, label: '3 ★' },
@@ -149,9 +149,9 @@ export default function SellerReviews() {
     { key: 1, label: '1 ★' },
   ]
   const responseChips: { key: SellerReviewResponseFilter; label: string }[] = [
-    { key: 'all', label: t('sellerReviews.filterResponseAll') },
-    { key: 'with', label: t('sellerReviews.filterResponseWith') },
-    { key: 'without', label: t('sellerReviews.filterResponseWithout') },
+    { key: 'all', label: t('seller.reviews.filterResponseAll') },
+    { key: 'with', label: t('seller.reviews.filterResponseWith') },
+    { key: 'without', label: t('seller.reviews.filterResponseWithout') },
   ]
 
   const hasActiveFilters =
@@ -213,7 +213,7 @@ export default function SellerReviews() {
           }
         },
         onError: () => {
-          setComposeError(t('sellerReviews.responseError'))
+          setComposeError(t('seller.reviews.responseError'))
         },
       },
     )
@@ -240,7 +240,7 @@ export default function SellerReviews() {
   }, [refetch])
 
   const selectedProductName =
-    productOptions.find(p => p.id === productId)?.name ?? t('sellerReviews.filterProductAll')
+    productOptions.find(p => p.id === productId)?.name ?? t('seller.reviews.filterProductAll')
 
   return (
     <View style={styles.container}>
@@ -248,7 +248,7 @@ export default function SellerReviews() {
       <View style={styles.topBar}>
         <TouchableOpacity
           accessibilityRole="button"
-          accessibilityLabel={t('sellerReviews.back')}
+          accessibilityLabel={t('seller.reviews.back')}
           onPress={() => router.push('/dashboard')}
           hitSlop={8}
           style={[styles.topBarIconBtn, { minWidth: minTouchTarget, minHeight: minTouchTarget }]}
@@ -257,15 +257,15 @@ export default function SellerReviews() {
         </TouchableOpacity>
         <View style={styles.topBarTitle}>
           <Text accessibilityRole="header" numberOfLines={1} style={styles.topBarTitleText}>
-            {t('sellerReviews.title')}
+            {t('seller.reviews.title')}
           </Text>
           <Text numberOfLines={1} style={styles.topBarSubtitle}>
-            {t('sellerReviews.subtitle')}
+            {t('seller.reviews.subtitle')}
           </Text>
         </View>
         <TouchableOpacity
           accessibilityRole="button"
-          accessibilityLabel={t('sellerReviews.refreshAria')}
+          accessibilityLabel={t('seller.reviews.refreshAria')}
           onPress={() => refetch()}
           hitSlop={8}
           style={[styles.topBarIconBtn, { minWidth: minTouchTarget, minHeight: minTouchTarget }]}
@@ -283,13 +283,13 @@ export default function SellerReviews() {
             onRefresh={onRefresh}
             tintColor={colors.primary}
             colors={[colors.primary]}
-            accessibilityLabel={t('sellerReviews.refreshAria')}
+            accessibilityLabel={t('seller.reviews.refreshAria')}
           />
         }
       >
         {/* Summary card (e1) */}
         <View
-          accessibilityLabel={t('sellerReviews.summaryAria', {
+          accessibilityLabel={t('seller.reviews.summaryAria', {
             average: average.toFixed(1),
             total: totalReviews,
           })}
@@ -299,7 +299,7 @@ export default function SellerReviews() {
             <View style={styles.summaryLeft}>
               <Text
                 style={styles.averageText}
-                accessibilityLabel={t('sellerReviews.averageLabel')}
+                accessibilityLabel={t('seller.reviews.averageLabel')}
               >
                 {average.toFixed(1)}
               </Text>
@@ -314,7 +314,7 @@ export default function SellerReviews() {
                 ))}
               </View>
               <Text style={styles.totalReviewsText}>
-                {totalReviews.toLocaleString()} {t('sellerReviews.totalReviews')}
+                {totalReviews.toLocaleString()} {t('seller.reviews.totalReviews')}
               </Text>
             </View>
 
@@ -327,13 +327,13 @@ export default function SellerReviews() {
               >
                 {trendUp ? `↑ ${trendPct}%` : trendDown ? `↓ ${Math.abs(trendPct)}%` : '—'}
               </Text>
-              <Text style={styles.trendLabel}>{t('sellerReviews.trend')}</Text>
+              <Text style={styles.trendLabel}>{t('seller.reviews.trend')}</Text>
             </View>
           </View>
 
           {/* Distribution */}
           <View
-            accessibilityLabel={t('sellerReviews.distributionAria')}
+            accessibilityLabel={t('seller.reviews.distributionAria')}
             style={styles.distribution}
           >
             {STARS.map((stars, idx) => {
@@ -343,7 +343,7 @@ export default function SellerReviews() {
                 <View
                   key={stars}
                   style={styles.distRow}
-                  accessibilityLabel={t('sellerReviews.rowAria', { stars, count, pct: p })}
+                  accessibilityLabel={t('seller.reviews.rowAria', { stars, count, pct: p })}
                 >
                   <Text style={styles.distStar}>{stars}</Text>
                   <View style={styles.distTrack}>
@@ -393,7 +393,7 @@ export default function SellerReviews() {
             ))}
             <View style={styles.chipDivider} />
             <FilterChip
-              label={t('sellerReviews.filterPhotos')}
+              label={t('seller.reviews.filterPhotos')}
               pressed={hasPhotos}
               onPress={() => setHasPhotos(v => !v)}
               icon={<ImageIcon size={14} color={hasPhotos ? colors.white : colors.text} />}
@@ -403,7 +403,7 @@ export default function SellerReviews() {
           <View style={styles.dropdownRow}>
             <TouchableOpacity
               accessibilityRole="button"
-              accessibilityLabel={t('sellerReviews.filterProduct')}
+              accessibilityLabel={t('seller.reviews.filterProduct')}
               onPress={() => setProductSheet(true)}
               style={styles.dropdownBtn}
             >
@@ -415,7 +415,7 @@ export default function SellerReviews() {
 
             <TouchableOpacity
               accessibilityRole="button"
-              accessibilityLabel={t('sellerReviews.sortAria')}
+              accessibilityLabel={t('seller.reviews.sortAria')}
               onPress={() => setSortSheet(true)}
               style={styles.dropdownBtn}
             >
@@ -436,7 +436,7 @@ export default function SellerReviews() {
         {/* Status tabs (segment control) */}
         <View
           accessibilityRole="tablist"
-          accessibilityLabel={t('sellerReviews.title')}
+          accessibilityLabel={t('seller.reviews.title')}
           style={styles.tabsTrack}
         >
           {tabs.map(tab => {
@@ -485,9 +485,44 @@ export default function SellerReviews() {
           })}
         </View>
 
-        <Text style={styles.resultCount}>
-          {t('sellerReviews.count', { count: data?.total ?? 0 })}
-        </Text>
+        <View style={styles.resultRow}>
+          <Text style={styles.resultCount}>
+            {t('seller.reviews.count', { count: data?.total ?? 0 })}
+          </Text>
+          {items.length > 0 && (
+            <TouchableOpacity
+              onPress={toggleSelectMode}
+              accessibilityRole="button"
+              accessibilityLabel={selectMode ? t('seller.reviews.exitSelectMode') : t('seller.reviews.selectModeAria')}
+              hitSlop={8}
+            >
+              <Text style={[styles.selectModeBtn, selectMode && { color: colors.primary }]}>
+                {selectMode ? t('seller.reviews.bulkDone') : t('seller.reviews.selectMode')}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Select-all (visible in select mode) */}
+        {selectMode && items.length > 0 && (
+          <View style={styles.selectAllRow}>
+            <TouchableOpacity
+              onPress={selectedIds.size === items.length && selectedIds.size > 0 ? deselectAll : selectAll}
+              accessibilityRole="button"
+              accessibilityLabel={t('seller.reviews.bulkSelectAllAria', { count: items.length })}
+              hitSlop={8}
+            >
+              <Text style={styles.selectAllText}>
+                {selectedIds.size === items.length && selectedIds.size > 0
+                  ? t('seller.reviews.bulkDeselectAll')
+                  : t('seller.reviews.bulkSelectAll')}
+              </Text>
+            </TouchableOpacity>
+            <Text style={styles.selectedCountText}>
+              {t('seller.reviews.bulkSelected', { count: selectedIds.size })}
+            </Text>
+          </View>
+        )}
 
         {/* List slot (SV2) */}
         <View style={styles.list}>
@@ -500,11 +535,11 @@ export default function SellerReviews() {
           ) : items.length === 0 ? (
             <EmptyState
               icon={<MessageSquare size={40} color={colors.textTertiary} />}
-              title={hasActiveFilters ? t('sellerReviews.noFilteredTitle') : t('sellerReviews.noReviewsTitle')}
-              subtitle={hasActiveFilters ? t('sellerReviews.noFilteredSubtitle') : t('sellerReviews.noReviewsSubtitle')}
+              title={status === 'flagged' ? t('seller.reviews.noFlaggedTitle') : hasActiveFilters ? t('seller.reviews.noFilteredTitle') : t('seller.reviews.noReviewsTitle')}
+              subtitle={status === 'flagged' ? t('seller.reviews.noFlaggedSubtitle') : hasActiveFilters ? t('seller.reviews.noFilteredSubtitle') : t('seller.reviews.noReviewsSubtitle')}
               action={
-                hasActiveFilters
-                  ? { label: t('seller.products.clearAll'), onPress: clearAll }
+                hasActiveFilters && status !== 'flagged'
+                  ? { label: t('seller.reviews.clearAll'), onPress: clearAll }
                   : undefined
               }
             />
@@ -528,7 +563,7 @@ export default function SellerReviews() {
       </ScrollView>
 
       {/* Sort sheet */}
-      <BottomSheet visible={sortSheet} onClose={() => setSortSheet(false)} title={t('sellerReviews.sort')}>
+      <BottomSheet visible={sortSheet} onClose={() => setSortSheet(false)} title={t('seller.reviews.sort')}>
         {sortOptions.map(opt => {
           const active = sort === opt.key
           return (
@@ -552,7 +587,7 @@ export default function SellerReviews() {
       </BottomSheet>
 
       {/* Product sheet */}
-      <BottomSheet visible={productSheet} onClose={() => setProductSheet(false)} title={t('sellerReviews.filterProduct')}>
+      <BottomSheet visible={productSheet} onClose={() => setProductSheet(false)} title={t('seller.reviews.filterProduct')}>
         <ScrollView style={{ maxHeight: Dimensions.get('window').height * 0.6 }}>
           <TouchableOpacity
             accessibilityRole="button"
@@ -564,7 +599,7 @@ export default function SellerReviews() {
             style={styles.sheetRow}
           >
             <Text style={[styles.sheetRowLabel, !productId && styles.sheetRowLabelActive]}>
-              {t('sellerReviews.filterProductAll')}
+              {t('seller.reviews.filterProductAll')}
             </Text>
             {!productId && <CheckCircle2 size={18} color={colors.primary} />}
           </TouchableOpacity>
@@ -595,24 +630,24 @@ export default function SellerReviews() {
       <BottomSheet
         visible={composeOpen}
         onClose={closeCompose}
-        title={composeMode === 'edit' ? t('reviewCard.editResponse') : t('sellerReviews.respond')}
+        title={composeMode === 'edit' ? t('reviewCard.editResponse') : t('seller.reviews.respond')}
       >
         {/* Tone hint for low ratings */}
         {composeReviewId && (items.find(r => r.id === composeReviewId)?.rating ?? 5) <= 2 && (
           <View style={composeStyles.toneHint}>
-            <Text style={composeStyles.toneHintText}>{t('sellerReviews.responseToneHint')}</Text>
+            <Text style={composeStyles.toneHintText}>{t('seller.reviews.responseToneHint')}</Text>
           </View>
         )}
 
         {/* Templates */}
-        <Text style={composeStyles.templatesLabel}>{t('sellerReviews.responseTemplates')}</Text>
+        <Text style={composeStyles.templatesLabel}>{t('seller.reviews.responseTemplates')}</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={composeStyles.templatesRow}>
           {REVIEW_RESPONSE_TEMPLATES.map(tpl => (
             <TouchableOpacity
               key={tpl.id}
               onPress={() => setComposeDraft(tpl.body)}
               style={composeStyles.templateChip}
-              accessibilityLabel={`${t('sellerReviews.responseTemplatesAria')}: ${t(tpl.labelKey)}`}
+              accessibilityLabel={`${t('seller.reviews.responseTemplatesAria')}: ${t(tpl.labelKey)}`}
             >
               <Text style={composeStyles.templateChipText}>{t(tpl.labelKey)}</Text>
             </TouchableOpacity>
@@ -623,17 +658,17 @@ export default function SellerReviews() {
         <TextInput
           value={composeDraft}
           onChangeText={(text) => setComposeDraft(text.slice(0, 1000))}
-          placeholder={t('sellerReviews.responsePlaceholder')}
+          placeholder={t('seller.reviews.responsePlaceholder')}
           placeholderTextColor={colors.textTertiary}
           multiline
           style={composeStyles.input}
-          accessibilityLabel={t('sellerReviews.responsePlaceholder')}
+          accessibilityLabel={t('seller.reviews.responsePlaceholder')}
         />
 
         {/* Character counter */}
         <View style={composeStyles.counterRow} accessibilityRole="text">
           <Text style={[composeStyles.counterText, composeDraft.length > 900 && { color: colors.warning }]}>
-            {t('sellerReviews.responseCounter', { count: composeDraft.length, max: 1000 })}
+            {t('seller.reviews.responseCounter', { count: composeDraft.length, max: 1000 })}
           </Text>
         </View>
 
@@ -647,7 +682,7 @@ export default function SellerReviews() {
           <View style={composeStyles.successBox} accessibilityLiveRegion="polite">
             <CheckCircle2 size={20} color={colors.success} />
             <Text style={composeStyles.successText}>
-              {composeMode === 'edit' ? t('sellerReviews.responseUpdated') : t('sellerReviews.responsePosted')}
+              {composeMode === 'edit' ? t('seller.reviews.responseUpdated') : t('seller.reviews.responsePosted')}
             </Text>
           </View>
         )}
@@ -655,7 +690,7 @@ export default function SellerReviews() {
         {/* Actions */}
         <View style={composeStyles.actions}>
           <TouchableOpacity onPress={closeCompose} style={composeStyles.cancelBtn}>
-            <Text style={composeStyles.cancelText}>{t('sellerReviews.back')}</Text>
+            <Text style={composeStyles.cancelText}>{t('seller.reviews.back')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={submitResponse}
@@ -672,10 +707,10 @@ export default function SellerReviews() {
             )}
             <Text style={composeStyles.sendText}>
               {composeSuccess
-                ? (composeMode === 'edit' ? t('sellerReviews.responseUpdated') : t('sellerReviews.responsePosted'))
+                ? (composeMode === 'edit' ? t('seller.reviews.responseUpdated') : t('seller.reviews.responsePosted'))
                 : composeMode === 'edit'
-                  ? (activeMutation.isPending ? t('sellerReviews.responseEditing') : t('sellerReviews.responseEdit'))
-                  : (activeMutation.isPending ? t('sellerReviews.responding') : t('sellerReviews.responseSend'))}
+                  ? (activeMutation.isPending ? t('seller.reviews.responseEditing') : t('seller.reviews.responseEdit'))
+                  : (activeMutation.isPending ? t('seller.reviews.responding') : t('seller.reviews.responseSend'))}
             </Text>
           </TouchableOpacity>
         </View>
@@ -685,22 +720,22 @@ export default function SellerReviews() {
       <BottomSheet
         visible={deleteConfirmOpen}
         onClose={() => { setDeleteConfirmOpen(false); setDeleteReviewId(null) }}
-        title={t('sellerReviews.responseDeleteConfirmTitle')}
+        title={t('seller.reviews.responseDeleteConfirmTitle')}
       >
-        <Text style={deleteStyles.confirmText}>{t('sellerReviews.responseDeleteConfirm')}</Text>
+        <Text style={deleteStyles.confirmText}>{t('seller.reviews.responseDeleteConfirm')}</Text>
         <View style={deleteStyles.actions}>
           <TouchableOpacity
             onPress={() => { setDeleteConfirmOpen(false); setDeleteReviewId(null) }}
             style={deleteStyles.cancelBtn}
           >
-            <Text style={deleteStyles.cancelText}>{t('sellerReviews.responseDeleteConfirmCancel')}</Text>
+            <Text style={deleteStyles.cancelText}>{t('seller.reviews.responseDeleteConfirmCancel')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={confirmDelete}
             disabled={deleteResponse.isPending}
             style={[deleteStyles.deleteBtn, deleteResponse.isPending && deleteStyles.deleteBtnDisabled]}
           >
-            <Text style={deleteStyles.deleteText}>{t('sellerReviews.responseDeleteConfirmAction')}</Text>
+            <Text style={deleteStyles.deleteText}>{t('seller.reviews.responseDeleteConfirmAction')}</Text>
           </TouchableOpacity>
         </View>
       </BottomSheet>
@@ -874,6 +909,135 @@ const deleteStyles = StyleSheet.create({
   deleteText: { fontSize: 14, fontWeight: '600', color: colors.white },
 })
 
+const flagStyles = StyleSheet.create({
+  subtitle: {
+    fontSize: 14,
+    color: colors.textMuted,
+    paddingHorizontal: spacing[4],
+    marginBottom: spacing[3],
+    lineHeight: 19,
+  },
+  reasonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[4],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  reasonRowActive: {
+    backgroundColor: colors.primary50,
+  },
+  radio: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary,
+  },
+  radioDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.white,
+  },
+  reasonLabel: {
+    fontSize: 15,
+    color: colors.text,
+    flex: 1,
+  },
+  reasonLabelActive: {
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  actions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing[2],
+    paddingHorizontal: spacing[4],
+    marginTop: spacing[3],
+  },
+  cancelBtn: {
+    paddingHorizontal: spacing[3],
+    height: 36,
+    justifyContent: 'center',
+  },
+  cancelText: { fontSize: 14, fontWeight: '600', color: colors.textMuted },
+  submitBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
+    backgroundColor: colors.warning,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing[4],
+    height: 36,
+  },
+  submitBtnDisabled: { opacity: 0.5 },
+  submitText: { fontSize: 14, fontWeight: '600', color: colors.white },
+})
+
+const bulkBarStyles = StyleSheet.create({
+  container: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    paddingBottom: spacing[5],
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  selectedCount: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: spacing[2],
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: spacing[2],
+    flexWrap: 'wrap',
+  },
+  notNeededBtn: {
+    backgroundColor: colors.background,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing[3],
+    height: 36,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  notNeededText: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
+  flagBtn: {
+    backgroundColor: colors.warning,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing[3],
+    height: 36,
+    justifyContent: 'center',
+  },
+  flagText: { fontSize: 13, fontWeight: '600', color: colors.white },
+  doneBtn: {
+    paddingHorizontal: spacing[2],
+    height: 36,
+    justifyContent: 'center',
+  },
+  doneText: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
+})
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   topBar: {
@@ -1006,7 +1170,22 @@ const styles = StyleSheet.create({
   },
   tabBadgeText: { fontSize: 11, fontWeight: '600' },
 
-  resultCount: { fontSize: 13, color: colors.textMuted, marginTop: -spacing[1] },
+  resultRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: -spacing[1],
+  },
+  resultCount: { fontSize: 13, color: colors.textMuted },
+  selectModeBtn: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
+  selectAllRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    marginTop: spacing[1],
+  },
+  selectAllText: { fontSize: 13, fontWeight: '600', color: colors.primary },
+  selectedCountText: { fontSize: 13, color: colors.textMuted },
 
   // List
   list: { gap: spacing[3] },

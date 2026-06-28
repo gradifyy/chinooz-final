@@ -48,3 +48,4 @@ export type {
   VehicleType,
 } from './rider-onboarding'
 export { ONBOARDING_STEPS } from './rider-onboarding'
+export { useRiderTripsStore, computeQuestProgress } from './rider-trips'

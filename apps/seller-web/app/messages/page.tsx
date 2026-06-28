@@ -317,7 +317,7 @@ function ThreadView({
   const isNe = i18n.language === 'ne'
   const router = useRouter()
   const sellerId = useSellerSessionStore(s => s.sellerId)
-  const { data: serverMessages, isLoading } = useSellerMessages(conversationId)
+  const { data: serverMessages, isLoading, isError: threadError, refetch: refetchThread } = useSellerMessages(conversationId)
   const sendMutation = useSendSellerMessage()
   const markRead = useMarkSellerConversationRead()
   const trackingMutation = useGenerateTracking()
@@ -342,6 +342,8 @@ function ThreadView({
   const [input, setInput] = useState('')
   const [localMessages, setLocalMessages] = useState<Message[]>([])
   const [typing, setTyping] = useState(false)
+  const [isOffline, setIsOffline] = useState(false)
+  const [failedIds, setFailedIds] = useState<Set<string>>(new Set())
   const [showTemplates, setShowTemplates] = useState(false)
   const [showTemplateManager, setShowTemplateManager] = useState(false)
   const [showAttachPicker, setShowAttachPicker] = useState(false)
@@ -359,6 +361,15 @@ function ThreadView({
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
   }, [localMessages, typing])
   useEffect(() => () => { if (replyTimer.current) clearTimeout(replyTimer.current) }, [])
+
+  useEffect(() => {
+    setIsOffline(typeof navigator !== 'undefined' && !navigator.onLine)
+    const off = () => setIsOffline(true)
+    const on = () => setIsOffline(false)
+    window.addEventListener('offline', off)
+    window.addEventListener('online', on)
+    return () => { window.removeEventListener('offline', off); window.removeEventListener('online', on) }
+  }, [])
 
   const grouped = useMemo(() => groupByDay(localMessages, t), [localMessages, t])
 
@@ -395,22 +406,53 @@ function ThreadView({
   const handleSend = useCallback((text?: string) => {
     const trimmed = (text ?? input).trim()
     if (!trimmed) return
+    const msgId = `smsg-opt-${Date.now()}`
     pushMessage({
-      id: `smsg-opt-${Date.now()}`,
+      id: msgId,
       conversationId,
       senderId: 'seller-1',
       senderName: 'You',
       body: trimmed,
       createdAt: new Date().toISOString(),
       read: false,
-      status: 'sent',
+      status: isOffline ? 'sending' : 'sent',
     })
     setInput('')
     setShowTemplates(false)
     if (textareaRef.current) textareaRef.current.style.height = '40px'
-    sendMutation.mutate({ conversationId, body: trimmed })
+
+    if (isOffline) {
+      try {
+        const queue = JSON.parse(localStorage.getItem('chinooz-seller-offline-queue') || '[]')
+        queue.push({ conversationId, body: trimmed, msgId, createdAt: new Date().toISOString() })
+        localStorage.setItem('chinooz-seller-offline-queue', JSON.stringify(queue))
+      } catch {}
+      return
+    }
+
+    sendMutation.mutate({ conversationId, body: trimmed }, {
+      onError: () => {
+        setFailedIds(prev => new Set(prev).add(msgId))
+      },
+    })
     triggerBuyerReply(trimmed)
-  }, [input, conversationId, sendMutation, pushMessage, triggerBuyerReply])
+  }, [input, conversationId, sendMutation, pushMessage, triggerBuyerReply, isOffline])
+
+  const handleRetrySend = useCallback((msgId: string) => {
+    const msg = localMessages.find(m => m.id === msgId)
+    if (!msg) return
+    setFailedIds(prev => { const s = new Set(prev); s.delete(msgId); return s })
+    setLocalMessages(prev => prev.map(m => m.id === msgId ? { ...m, status: 'sending' as const } : m))
+    sendMutation.mutate({ conversationId, body: msg.body }, {
+      onSuccess: () => {
+        setLocalMessages(prev => prev.map(m => m.id === msgId ? { ...m, status: 'sent' as const } : m))
+      },
+      onError: () => {
+        setFailedIds(prev => new Set(prev).add(msgId))
+        setLocalMessages(prev => prev.map(m => m.id === msgId ? { ...m, status: 'sent' as const } : m))
+      },
+    })
+  }, [localMessages, conversationId, sendMutation])
 
   const handleInsertTemplate = useCallback((body: string) => {
     const filled = fillTemplatePlaceholders(body, {
@@ -517,11 +559,28 @@ function ThreadView({
   if (isLoading) {
     return (
       <div className="flex-1 flex flex-col gap-3 p-4" aria-busy="true" aria-label={t('seller.messages.threadLoading')}>
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className={`flex ${i % 2 === 0 ? 'justify-start' : 'justify-end'}`}>
-            <Skeleton width="60%" height={36} borderRadius={18} />
-          </div>
-        ))}
+        <div className="flex justify-start"><Skeleton width="70%" height={36} borderRadius={18} /></div>
+        <div className="flex justify-end"><Skeleton width="50%" height={36} borderRadius={18} /></div>
+        <div className="flex justify-start"><Skeleton width="60%" height={36} borderRadius={18} /></div>
+        <div className="flex justify-end"><Skeleton width="65%" height={36} borderRadius={18} /></div>
+        <div className="flex justify-start"><Skeleton width="40%" height={36} borderRadius={18} /></div>
+      </div>
+    )
+  }
+
+  if (threadError && !isLoading) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center gap-2 p-6" role="alert" aria-label={t('seller.messages.errorThread')}>
+        <span className="text-5xl">{'\u{26A0}'}</span>
+        <h2 className="text-lg font-semibold text-text text-center">{t('seller.messages.errorThread')}</h2>
+        <p className="text-sm text-text-muted text-center">{t('seller.messages.errorThreadSubtitle')}</p>
+        <button
+          onClick={() => refetchThread()}
+          className="mt-2 rounded-lg border border-primary text-primary font-semibold px-5 py-2.5 hover:bg-primary-50 transition-colors"
+          aria-label={t('seller.messages.errorThreadRetry')}
+        >
+          {t('seller.messages.errorThreadRetry')}
+        </button>
       </div>
     )
   }
@@ -529,6 +588,12 @@ function ThreadView({
   return (
     <div className="flex flex-row flex-1 min-h-0">
       <div className="flex flex-col flex-1 min-w-0">
+        {isOffline && (
+          <div className="flex items-center gap-2 bg-warning-light px-4 py-2 border-b border-border-light" role="status" aria-label={t('seller.messages.offlineBanner')}>
+            <span className="w-2 h-2 rounded-full bg-warning" />
+            <span className="text-sm text-text">{t('seller.messages.offlineBanner')}</span>
+          </div>
+        )}
         <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
           {!isDesktop && (
             <button

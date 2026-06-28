@@ -753,7 +753,7 @@ function AttachPicker({
   )
 }
 
-function Bubble({ msg, isMine, reduced, t, onProductTap }: { msg: Message; isMine: boolean; reduced: boolean; t: (k: string, o?: any) => string; onProductTap: (id: string) => void }) {
+function Bubble({ msg, isMine, reduced, t, onProductTap, failed, onRetry }: { msg: Message; isMine: boolean; reduced: boolean; t: (k: string, o?: any) => string; onProductTap: (id: string) => void; failed?: boolean; onRetry?: (msgId: string) => void }) {
   const scale = useSharedValue(reduced ? 1 : 0.95)
   const opacity = useSharedValue(reduced ? 1 : 0)
   useEffect(() => {
