@@ -124,7 +124,7 @@ export default function ReviewCard({
       <article
         data-testid={testID}
         aria-label={cardAria}
-        className={`rounded-lg border ${cardCls} p-4 shadow-sm transition-colors hover:border-border ${selected ? 'ring-2 ring-primary border-primary' : ''} ${className}`}
+        className={`rounded-lg border ${cardCls} p-4 shadow-sm transition-all duration-200 hover:border-border hover:shadow-md active:scale-[0.99] ${selected ? 'ring-2 ring-primary border-primary' : ''} ${className}`}
       >
         {selectable && (
           <button

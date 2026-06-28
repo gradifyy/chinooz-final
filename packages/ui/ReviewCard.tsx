@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect, useRef } from 'react'
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   Modal as RNModal,
   Dimensions,
   Pressable,
+  Animated,
 } from 'react-native'
 import { useTranslation } from 'react-i18next'
 import {
@@ -75,6 +76,7 @@ export default function ReviewCard({
   testID,
 }: ReviewCardProps) {
   const { t } = useTranslation()
+  const reduced = useReducedMotion()
   const [kebabOpen, setKebabOpen] = useState(false)
   const [photoIndex, setPhotoIndex] = useState<number | null>(null)
 
@@ -91,6 +93,23 @@ export default function ReviewCard({
   const prevPhoto = useCallback(() => {
     setPhotoIndex(i => (i === null ? null : Math.max(i - 1, 0)))
   }, [])
+
+  const responseOpacity = useRef(new Animated.Value(0)).current
+  const responseTranslateY = useRef(new Animated.Value(8)).current
+
+  useEffect(() => {
+    if (hasResponse && !reduced) {
+      Animated.parallel([
+        Animated.timing(responseOpacity, { toValue: 1, duration: 250, useNativeDriver: true }),
+        Animated.timing(responseTranslateY, { toValue: 0, duration: 250, useNativeDriver: true }),
+      ]).start()
+    }
+  }, [hasResponse, reduced])
+
+  const responseAnimStyle = {
+    opacity: reduced ? 1 : responseOpacity,
+    transform: [{ translateY: reduced ? 0 : responseTranslateY }],
+  }
 
   const cardAria = t('reviewCard.cardAria', {
     name: review.userName,
@@ -208,7 +227,7 @@ export default function ReviewCard({
 
         {/* Existing seller response */}
         {hasResponse && review.response && (
-          <View style={styles.responseBlock}>
+          <Animated.View style={[styles.responseBlock, responseAnimStyle]} accessibilityLiveRegion="polite">
             <Text style={styles.responseLabel}>{t('reviewCard.sellerResponse')}</Text>
             <Text style={styles.responseText}>{review.response.text}</Text>
             {(onEditResponse || onDeleteResponse) && (
@@ -239,7 +258,7 @@ export default function ReviewCard({
                 )}
               </View>
             )}
-          </View>
+          </Animated.View>
         )}
 
         {/* Actions */}

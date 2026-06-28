@@ -39,6 +39,7 @@ import { analytics } from '@chinooz/analytics'
 import { useSellerSessionStore } from '@chinooz/state'
 import { reviewResponseSchema } from '@chinooz/validation'
 import { REVIEW_RESPONSE_TEMPLATES } from '@chinooz/mock-data'
+import { duration, easing } from '@chinooz/theme'
 import type {
   SellerReviewFilter,
   SellerReviewSort,
@@ -310,12 +311,14 @@ export default function ReviewsScreen() {
             <div className="flex flex-col md:flex-row md:items-start gap-6">
               {/* Average + stars */}
               <div className="flex flex-row md:flex-col items-center md:items-start gap-3 md:gap-1 md:min-w-[180px]">
-                <span
+                <CountUp
+                  value={average}
+                  display={(v) => v.toFixed(1)}
+                  duration={duration.slow}
+                  reduced={reduced}
                   className="text-[32px] leading-[42px] font-bold text-text tabular-nums"
                   aria-hidden="true"
-                >
-                  {average.toFixed(1)}
-                </span>
+                />
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center gap-[2px]" aria-hidden="true">
                     {STARS.slice()
@@ -357,7 +360,8 @@ export default function ReviewsScreen() {
                           className="h-full rounded-full bg-gold"
                           style={{
                             width: mounted ? `${p}%` : '0%',
-                            transition: reduced ? 'none' : 'width 700ms cubic-bezier(0.22,1,0.36,1)',
+                            transition: reduced ? 'none' : `width ${duration.slower}ms cubic-bezier(${easing.easeOut.join(',')})`,
+                            transitionDelay: reduced ? '0ms' : `${stars * 60}ms`,
                           }}
                         />
                       </div>
@@ -379,7 +383,7 @@ export default function ReviewsScreen() {
                     trendUp ? 'text-success' : trendDown ? 'text-error' : 'text-text-muted'
                   }`}
                 >
-                  {trendUp ? `↑ ${trendPct}%` : trendDown ? `↓ ${Math.abs(trendPct)}%` : '—'}
+                  {trendUp ? <span>↑ <CountUp value={trendPct} display={(v) => `${Math.round(v)}%`} duration={duration.slow} reduced={reduced} /></span> : trendDown ? <span>↓ <CountUp value={Math.abs(trendPct)} display={(v) => `${Math.round(v)}%`} duration={duration.slow} reduced={reduced} /></span> : '—'}
                 </span>
                 <span className="text-[12px] font-normal text-text-muted">
                   {t('seller.reviews.trend')}
@@ -471,7 +475,7 @@ export default function ReviewsScreen() {
                       initial={{ opacity: 0, y: -4 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -4 }}
-                      transition={{ duration: reduced ? 0 : 0.15 }}
+                      transition={{ duration: reduced ? 0 : 0.15, ease: [0.16, 1, 0.3, 1] }}
                       className="absolute right-0 mt-1 w-52 bg-surface border border-border rounded-md shadow-lg z-dropdown overflow-hidden"
                     >
                       {sortOptions.map(opt => (
@@ -588,7 +592,7 @@ export default function ReviewsScreen() {
                     initial={reduced ? false : { opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={reduced ? { opacity: 0 } : { opacity: 0, y: -8 }}
-                    transition={reduced ? { duration: 0 } : { duration: 0.2, delay: Math.min(i * 0.03, 0.2) }}
+                    transition={reduced ? { duration: 0 } : { duration: 0.25, delay: Math.min(i * 0.03, 0.2), ease: [0.16, 1, 0.3, 1] }}
                   >
                     <ReviewCard
                       review={review}
@@ -636,6 +640,29 @@ export default function ReviewsScreen() {
       />
     </Screen>
   )
+}
+
+function CountUp({ value, display, duration: dur, reduced, className }: { value: number; display: (v: number) => string; duration: number; reduced: boolean; className?: string }) {
+  const [displayed, setDisplayed] = useState(0)
+  const rafRef = useRef<number>(0)
+
+  useEffect(() => {
+    if (reduced) {
+      setDisplayed(value)
+      return
+    }
+    const start = performance.now()
+    const animate = (now: number) => {
+      const t = Math.min((now - start) / dur, 1)
+      const eased = 1 - Math.pow(1 - t, 3)
+      setDisplayed(value * eased)
+      if (t < 1) rafRef.current = requestAnimationFrame(animate)
+    }
+    rafRef.current = requestAnimationFrame(animate)
+    return () => cancelAnimationFrame(rafRef.current)
+  }, [value, dur, reduced])
+
+  return <span className={className}>{display(displayed)}</span>
 }
 
 function SummarySkeleton() {
@@ -865,10 +892,10 @@ function RespondComposer({
             <AnimatePresence>
               {success && !reduced && (
                 <motion.div
-                  initial={{ opacity: 0, scale: 0.8 }}
+                  initial={reduced ? false : { opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.3 }}
+                  exit={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.8 }}
+                  transition={reduced ? { duration: 0 } : { duration: 0.3, ease: [0.34, 1.56, 0.64, 1] }}
                   className="mt-3 flex items-center justify-center gap-2 py-3 rounded-md bg-success/10"
                   role="status"
                 >

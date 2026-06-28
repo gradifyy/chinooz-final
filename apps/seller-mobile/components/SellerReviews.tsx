@@ -24,7 +24,7 @@ import {
   Flag,
   ChevronDown,
 } from 'lucide-react-native'
-import { colors, spacing, radii, fontFamily } from '@chinooz/theme'
+import { colors, spacing, radii, fontFamily, duration, easing } from '@chinooz/theme'
 import { useA11y } from './A11yProvider'
 import {
   useSellerReviews,
@@ -103,11 +103,12 @@ export default function SellerReviews() {
       return
     }
     Animated.stagger(
-      80,
+      60,
       barAnims.current.map(a =>
         Animated.timing(a, {
           toValue: 1,
-          duration: 700,
+          duration: duration.slower,
+          easing: undefined,
           useNativeDriver: false,
         }),
       ),
@@ -329,7 +330,7 @@ export default function SellerReviews() {
   useEffect(() => {
     Animated.timing(bulkBarAnim, {
       toValue: selectMode && selectedIds.size > 0 ? 1 : 0,
-      duration: reducedMotion ? 0 : 250,
+      duration: reducedMotion ? 0 : duration.normal,
       useNativeDriver: true,
     }).start()
   }, [selectMode, selectedIds.size, reducedMotion, bulkBarAnim])
@@ -395,12 +396,14 @@ export default function SellerReviews() {
         >
           <View style={styles.summaryTop}>
             <View style={styles.summaryLeft}>
-              <Text
+              <CountUpText
+                value={average}
+                display={(v) => v.toFixed(1)}
+                dur={duration.slow}
+                reduced={reducedMotion}
                 style={styles.averageText}
                 accessibilityLabel={t('seller.reviews.averageLabel')}
-              >
-                {average.toFixed(1)}
-              </Text>
+              />
               <View style={styles.starRow}>
                 {[1, 2, 3, 4, 5].map(s => (
                   <Star
@@ -938,6 +941,29 @@ export default function SellerReviews() {
       )}
     </View>
   )
+}
+
+function CountUpText({ value, display, dur, reduced, style, accessibilityLabel }: { value: number; display: (v: number) => string; dur: number; reduced: boolean; style?: any; accessibilityLabel?: string }) {
+  const [displayed, setDisplayed] = useState(0)
+  const rafRef = useRef<any>(null)
+
+  useEffect(() => {
+    if (reduced) {
+      setDisplayed(value)
+      return
+    }
+    const start = Date.now()
+    const animate = () => {
+      const t = Math.min((Date.now() - start) / dur, 1)
+      const eased = 1 - Math.pow(1 - t, 3)
+      setDisplayed(value * eased)
+      if (t < 1) rafRef.current = requestAnimationFrame(animate)
+    }
+    rafRef.current = requestAnimationFrame(animate)
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
+  }, [value, dur, reduced])
+
+  return <Text style={style} accessibilityLabel={accessibilityLabel}>{display(displayed)}</Text>
 }
 
 function SummarySkeleton() {
