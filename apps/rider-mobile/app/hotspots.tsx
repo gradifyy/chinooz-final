@@ -30,6 +30,8 @@ import { analytics } from '@chinooz/analytics'
 import {
   getDemandZones,
   getSurgeZones,
+  getRiderRecommendations,
+  isInHotspot,
   RIDER_LOCATION,
   type DemandZone,
   type SurgeZone,
@@ -40,6 +42,7 @@ import { useA11y } from '../components/A11yProvider'
 import { useAppState } from '../components/AppStateProvider'
 import DemandHeatmap from '../components/DemandHeatmap'
 import ZoneDetailSheet from '../components/ZoneDetailSheet'
+import RecommendationsStrip from '../components/RecommendationsStrip'
 
 /**
  * RD1 — Demand / Hotspots heatmap.
@@ -78,6 +81,7 @@ export default function HotspotsScreen() {
   const [zoom, setZoom] = useState(1)
   const [selectedZone, setSelectedZone] = useState<DemandZone | null>(null)
   const [sheetVisible, setSheetVisible] = useState(false)
+  const [recNonce, setRecNonce] = useState(0)
 
   const status = useOnlineStatusStore(s => s.status)
   const setOnlineStatus = useOnlineStatusStore(s => s.setOnlineStatus)
@@ -218,6 +222,26 @@ export default function HotspotsScreen() {
     [selectedZone, surgeZones],
   )
 
+  // RD3 — rider-specific recommendations (distance + demand + surge).
+  // Recomputed when zones/surge/nonce change. Excludes the rider's current
+  // zone (that gets a reassurance state via hotspotZone).
+  const recommendations = useMemo(
+    () => getRiderRecommendations(zones, surgeZones, RIDER_LOCATION, { limit: 3 }),
+    [zones, surgeZones, recNonce],
+  )
+
+  // Reassurance: is the rider already in a hotspot?
+  const hotspotZone = useMemo(
+    () => (isOnline ? isInHotspot(zones, RIDER_LOCATION) : null),
+    [zones, isOnline],
+  )
+
+  const handleRefreshRecs = useCallback(() => {
+    load()
+    setRecNonce(n => n + 1)
+    AccessibilityInfo.announceForAccessibility(t('rider.hotspots.recRefreshed'))
+  }, [load, t])
+
   // Heat legend items (labeled, not color-only).
   const legendItems: { level: DemandLevel; labelKey: string; fill: string }[] = [
     { level: 'low', labelKey: 'rider.hotspots.legendLow', fill: '#F8EAF1' },
@@ -304,6 +328,35 @@ export default function HotspotsScreen() {
           whyHint: p.whyHint,
           bestTime: p.bestTime,
         }),
+    }),
+    [t],
+  )
+
+  const recLabels = useMemo(
+    () => ({
+      title: t('rider.hotspots.recTitle'),
+      sub: t('rider.hotspots.recSub'),
+      offline: t('rider.hotspots.recOffline'),
+      offlineSub: t('rider.hotspots.recOfflineSub'),
+      empty: t('rider.hotspots.recEmpty'),
+      emptySub: t('rider.hotspots.recEmptySub'),
+      moveHint: (km: number, name: string) =>
+        t('rider.hotspots.recMoveHint', { km, name }),
+      benefit: (b: string) => t('rider.hotspots.recBenefit', { benefit: b }),
+      why: (reason: string) => t('rider.hotspots.recWhy', { reason }),
+      cardAria: (rank: number, move: string, benefit: string, reason: string) =>
+        t('rider.hotspots.recCardAria', { rank, move, benefit, reason }),
+      navigate: t('rider.hotspots.recNavigate'),
+      navigateAria: (name: string) => t('rider.hotspots.recNavigateAria', { name }),
+      dismiss: t('rider.hotspots.recDismiss'),
+      dismissAria: (name: string) => t('rider.hotspots.recDismissAria', { name }),
+      refresh: t('rider.hotspots.recRefresh'),
+      refreshAria: t('rider.hotspots.recRefreshAria'),
+      dismissedAria: (name: string) => t('rider.hotspots.recDismissedAria', { name }),
+      reassureTitle: t('rider.hotspots.reassureTitle'),
+      reassureBody: (name: string) => t('rider.hotspots.reassureBody', { name }),
+      reassureAria: (name: string) => t('rider.hotspots.reassureAria', { name }),
+      reassureStayOnline: t('rider.hotspots.reassureStayOnline'),
     }),
     [t],
   )
@@ -491,6 +544,18 @@ export default function HotspotsScreen() {
               </View>
             </TouchableOpacity>
           ))}
+        </View>
+
+        {/* RD3 — Recommendations strip (distance + demand + surge) */}
+        <View style={styles.recSection}>
+          <RecommendationsStrip
+            recommendations={recommendations}
+            hotspotZone={hotspotZone}
+            isOnline={isOnline}
+            onNavigate={handleNavigate}
+            onRefresh={handleRefreshRecs}
+            labels={recLabels}
+          />
         </View>
       </ScrollView>
 
@@ -716,5 +781,12 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm[0],
     color: colors.textSecondary,
     textTransform: 'capitalize',
+  },
+  recSection: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    padding: spacing[4],
   },
 })

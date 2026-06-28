@@ -204,6 +204,12 @@ export default function ReviewsSection({
           <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[1], marginTop: spacing[1] }}>
             <Text style={{ fontSize: 12, color: colors.textMuted }}>👍 {t('product.helpful')} ({review.helpful})</Text>
           </TouchableOpacity>
+          {review.sellerResponse && (
+            <View style={{ marginTop: spacing[2], marginLeft: spacing[2], borderRadius: radii.md, borderWidth: 1, borderColor: colors.borderLight, borderLeftWidth: 3, borderLeftColor: colors.primary50, backgroundColor: colors.background, padding: spacing[3] }}>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: colors.primary, marginBottom: 2 }}>{t('reviewCard.sellerResponse')}</Text>
+              <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 18 }}>{review.sellerResponse.text}</Text>
+            </View>
+          )}
         </Animated.View>
       ))}
 

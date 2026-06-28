@@ -42,6 +42,8 @@ function timeAgo(iso: string): string {
 export interface ReviewCardProps {
   review: SellerReview
   onRespond?: () => void
+  onEditResponse?: () => void
+  onDeleteResponse?: () => void
   onFlag?: () => void
   onContactBuyer?: () => void
   responding?: boolean
@@ -52,6 +54,8 @@ export interface ReviewCardProps {
 export default function ReviewCard({
   review,
   onRespond,
+  onEditResponse,
+  onDeleteResponse,
   onFlag,
   onContactBuyer,
   responding = false,
@@ -207,6 +211,30 @@ export default function ReviewCard({
           <div className="mt-3 ml-2 rounded-md border border-border-light border-l-[3px] border-l-primary-50 bg-background p-3">
             <p className="text-[12px] font-semibold text-primary mb-0.5">{t('reviewCard.sellerResponse')}</p>
             <p className="text-[14px] text-text-secondary leading-5">{review.response.text}</p>
+            {(onEditResponse || onDeleteResponse) && (
+              <div className="flex items-center gap-3 mt-2">
+                {onEditResponse && (
+                  <button
+                    type="button"
+                    onClick={onEditResponse}
+                    aria-label={t('reviewCard.editResponseAria', { name: review.userName })}
+                    className="text-[12px] font-semibold text-primary hover:underline transition-colors"
+                  >
+                    {t('reviewCard.editResponse')}
+                  </button>
+                )}
+                {onDeleteResponse && (
+                  <button
+                    type="button"
+                    onClick={onDeleteResponse}
+                    aria-label={t('reviewCard.deleteResponseAria', { name: review.userName })}
+                    className="text-[12px] font-semibold text-error hover:underline transition-colors"
+                  >
+                    {t('reviewCard.deleteResponse')}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
 

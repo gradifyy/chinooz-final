@@ -203,7 +203,7 @@ export default function ReviewsSection({
               <div className="flex gap-2 overflow-x-auto scrollbar-none">
                 {review.photos.map((photo, pi) => (
                   <div key={pi} className="w-16 h-16 rounded-lg overflow-hidden bg-border shrink-0">
-                    <img src={photo} alt={`Review photo ${pi + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                    <img src={photo} alt={`Review ${pi + 1}`} className="w-full h-full object-cover" loading="lazy" />
                   </div>
                 ))}
               </div>
@@ -211,6 +211,12 @@ export default function ReviewsSection({
             <button className="text-xs text-text-muted hover:text-text transition-colors">
               👍 {t('product.helpful')} ({review.helpful})
             </button>
+            {review.sellerResponse && (
+              <div className="mt-2 ml-2 rounded-lg border border-border-light border-l-[3px] border-l-primary-50 bg-background p-3">
+                <p className="text-xs font-semibold text-primary mb-0.5">{t('reviewCard.sellerResponse')}</p>
+                <p className="text-sm text-text-secondary leading-relaxed">{review.sellerResponse.text}</p>
+              </div>
+            )}
           </motion.div>
         ))}
       </div>

@@ -15,6 +15,9 @@ import {
   RefreshCw,
   Image as ImageIcon,
   X,
+  CheckCircle2,
+  AlertTriangle,
+  Trash2,
 } from 'lucide-react'
 import {
   Screen,
@@ -28,16 +31,21 @@ import {
   useSellerReviews,
   useSellerProducts,
   useRespondToSellerReview,
+  useEditSellerReviewResponse,
+  useDeleteSellerReviewResponse,
   useToggleSellerReviewFlag,
 } from '@chinooz/hooks'
 import { analytics } from '@chinooz/analytics'
 import { useSellerSessionStore } from '@chinooz/state'
+import { reviewResponseSchema } from '@chinooz/validation'
+import { REVIEW_RESPONSE_TEMPLATES } from '@chinooz/mock-data'
 import type {
   SellerReviewFilter,
   SellerReviewSort,
   SellerReviewStatus,
   SellerReviewResponseFilter,
 } from '@chinooz/mock-data'
+import type { SellerReview } from '@chinooz/types'
 
 type RatingFilter = number | 'all'
 
@@ -48,7 +56,7 @@ function pct(count: number, total: number): number {
 }
 
 export default function ReviewsScreen() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const router = useRouter()
   const reduced = useReducedMotion()
   const isLoggedIn = useSellerSessionStore(s => s.isLoggedIn)
@@ -61,12 +69,15 @@ export default function ReviewsScreen() {
   const [sort, setSort] = useState<SellerReviewSort>('newest')
   const [sortOpen, setSortOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
-  const [composing, setComposing] = useState(false)
+  const [composeOpen, setComposeOpen] = useState(false)
   const [composeReviewId, setComposeReviewId] = useState<string | null>(null)
   const [composeDraft, setComposeDraft] = useState('')
+  const [composeMode, setComposeMode] = useState<'create' | 'edit'>('create')
+  const [composeError, setComposeError] = useState<string | null>(null)
+  const [composeSuccess, setComposeSuccess] = useState(false)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [deleteReviewId, setDeleteReviewId] = useState<string | null>(null)
   const sortRef = useRef<HTMLDivElement>(null)
-
-  const respondingTo = composeReviewId
 
   useEffect(() => {
     analytics.screen({ name: 'seller-reviews' })
@@ -107,7 +118,11 @@ export default function ReviewsScreen() {
   const { data: productsData } = useSellerProducts({ status: 'all', sort: 'best_selling' })
 
   const respond = useRespondToSellerReview()
+  const editResponse = useEditSellerReviewResponse()
+  const deleteResponse = useDeleteSellerReviewResponse()
   const toggleFlag = useToggleSellerReviewFlag()
+
+  const activeMutation = composeMode === 'edit' ? editResponse : respond
 
   const summary = data?.summary
   const counts = data?.counts
@@ -122,22 +137,22 @@ export default function ReviewsScreen() {
   const trendDown = trendPct < 0
 
   const sortOptions: { key: SellerReviewSort; label: string }[] = [
-    { key: 'newest', label: t('seller.reviews.sortNewest') },
-    { key: 'oldest', label: t('seller.reviews.sortOldest') },
-    { key: 'lowest', label: t('seller.reviews.sortLowest') },
-    { key: 'highest', label: t('seller.reviews.sortHighest') },
+    { key: 'newest', label: t('sellerReviews.sortNewest') },
+    { key: 'oldest', label: t('sellerReviews.sortOldest') },
+    { key: 'lowest', label: t('sellerReviews.sortLowest') },
+    { key: 'highest', label: t('sellerReviews.sortHighest') },
   ]
   const activeSortLabel = sortOptions.find(s => s.key === sort)?.label ?? sortOptions[0].label
 
   const tabs: { key: SellerReviewStatus; label: string; count: number; warning?: boolean }[] = [
-    { key: 'all', label: t('seller.reviews.tabAll'), count: counts?.all ?? 0 },
-    { key: 'needs_response', label: t('seller.reviews.tabNeedsResponse'), count: counts?.needs_response ?? 0, warning: true },
-    { key: 'responded', label: t('seller.reviews.tabResponded'), count: counts?.responded ?? 0 },
-    { key: 'flagged', label: t('seller.reviews.tabFlagged'), count: counts?.flagged ?? 0 },
+    { key: 'all', label: t('sellerReviews.tabAll'), count: counts?.all ?? 0 },
+    { key: 'needs_response', label: t('sellerReviews.tabNeedsResponse'), count: counts?.needs_response ?? 0, warning: true },
+    { key: 'responded', label: t('sellerReviews.tabResponded'), count: counts?.responded ?? 0 },
+    { key: 'flagged', label: t('sellerReviews.tabFlagged'), count: counts?.flagged ?? 0 },
   ]
 
   const ratingChips: { key: RatingFilter; label: string }[] = [
-    { key: 'all', label: t('seller.reviews.filterRatingAll') },
+    { key: 'all', label: t('sellerReviews.filterRatingAll') },
     { key: 5, label: '5 ★' },
     { key: 4, label: '4 ★' },
     { key: 3, label: '3 ★' },
@@ -146,9 +161,9 @@ export default function ReviewsScreen() {
   ]
 
   const responseChips: { key: SellerReviewResponseFilter; label: string }[] = [
-    { key: 'all', label: t('seller.reviews.filterResponseAll') },
-    { key: 'with', label: t('seller.reviews.filterResponseWith') },
-    { key: 'without', label: t('seller.reviews.filterResponseWithout') },
+    { key: 'all', label: t('sellerReviews.filterResponseAll') },
+    { key: 'with', label: t('sellerReviews.filterResponseWith') },
+    { key: 'without', label: t('sellerReviews.filterResponseWithout') },
   ]
 
   const hasActiveFilters =
@@ -169,21 +184,70 @@ export default function ReviewsScreen() {
   const openCompose = (reviewId: string) => {
     setComposeReviewId(reviewId)
     setComposeDraft('')
-    setComposing(true)
+    setComposeMode('create')
+    setComposeError(null)
+    setComposeSuccess(false)
+    setComposeOpen(true)
+  }
+
+  const openEdit = (reviewId: string) => {
+    const review = items.find(r => r.id === reviewId)
+    setComposeReviewId(reviewId)
+    setComposeDraft(review?.response?.text ?? '')
+    setComposeMode('edit')
+    setComposeError(null)
+    setComposeSuccess(false)
+    setComposeOpen(true)
   }
 
   const closeCompose = () => {
-    setComposing(false)
+    setComposeOpen(false)
     setComposeReviewId(null)
     setComposeDraft('')
+    setComposeError(null)
   }
 
   const submitResponse = () => {
-    if (!composeReviewId || !composeDraft.trim()) return
-    respond.mutate(
-      { reviewId: composeReviewId, text: composeDraft.trim() },
-      { onSuccess: closeCompose },
+    if (!composeReviewId) return
+    const trimmed = composeDraft.trim()
+    const result = reviewResponseSchema.safeParse({ text: trimmed })
+    if (!result.success) {
+      setComposeError(result.error.errors[0]?.message ?? 'Validation error')
+      return
+    }
+    setComposeError(null)
+    const mutation = composeMode === 'edit' ? editResponse : respond
+    mutation.mutate(
+      { reviewId: composeReviewId, text: trimmed },
+      {
+        onSuccess: () => {
+          if (!reduced) {
+            setComposeSuccess(true)
+            setTimeout(() => closeCompose(), reduced ? 0 : 1200)
+          } else {
+            closeCompose()
+          }
+        },
+        onError: () => {
+          setComposeError(t('sellerReviews.responseError'))
+        },
+      },
     )
+  }
+
+  const openDeleteConfirm = (reviewId: string) => {
+    setDeleteReviewId(reviewId)
+    setDeleteConfirmOpen(true)
+  }
+
+  const confirmDelete = () => {
+    if (!deleteReviewId) return
+    deleteResponse.mutate(deleteReviewId, {
+      onSuccess: () => {
+        setDeleteConfirmOpen(false)
+        setDeleteReviewId(null)
+      },
+    })
   }
 
   return (
@@ -195,20 +259,20 @@ export default function ReviewsScreen() {
             <Link
               href="/dashboard"
               className="inline-flex items-center justify-center rounded-md text-text-muted hover:text-text hover:bg-background transition-colors min-touch"
-              aria-label={t('seller.reviews.back')}
+              aria-label={t('sellerReviews.back')}
             >
               <ArrowLeft size={20} aria-hidden="true" />
             </Link>
             <div className="flex-1 min-w-0">
               <h1 className="text-lg font-bold text-text leading-tight truncate">
-                {t('seller.reviews.title')}
+                {t('sellerReviews.title')}
               </h1>
-              <p className="text-[12px] text-text-muted truncate">{t('seller.reviews.subtitle')}</p>
+              <p className="text-[12px] text-text-muted truncate">{t('sellerReviews.subtitle')}</p>
             </div>
             <button
               type="button"
               onClick={() => refetch()}
-              aria-label={t('seller.reviews.refreshAria')}
+              aria-label={t('sellerReviews.refreshAria')}
               className="inline-flex items-center justify-center rounded-md text-text-muted hover:text-text hover:bg-background transition-colors min-touch"
             >
               <RefreshCw
@@ -225,7 +289,7 @@ export default function ReviewsScreen() {
         <div className="py-6 flex flex-col gap-5">
           {/* Summary card (e1) */}
           <section
-            aria-label={t('seller.reviews.summaryAria', { average: average.toFixed(1), total: totalReviews })}
+            aria-label={t('sellerReviews.summaryAria', { average: average.toFixed(1), total: totalReviews })}
             className="rounded-lg border border-border-light bg-surface p-5 md:p-6 shadow-sm"
           >
             <div className="flex flex-col md:flex-row md:items-start gap-6">
@@ -250,7 +314,7 @@ export default function ReviewsScreen() {
                       ))}
                   </div>
                   <span className="text-[12px] font-normal text-text-muted tabular-nums">
-                    {totalReviews.toLocaleString()} {t('seller.reviews.totalReviews')}
+                    {totalReviews.toLocaleString()} {t('sellerReviews.totalReviews')}
                   </span>
                 </div>
               </div>
@@ -259,7 +323,7 @@ export default function ReviewsScreen() {
               <div
                 className="flex-1 flex flex-col gap-1.5"
                 role="img"
-                aria-label={t('seller.reviews.distributionAria')}
+                aria-label={t('sellerReviews.distributionAria')}
               >
                 {STARS.map(stars => {
                   const count = distribution[stars]
@@ -268,7 +332,7 @@ export default function ReviewsScreen() {
                     <div
                       key={stars}
                       className="flex items-center gap-3"
-                      aria-label={t('seller.reviews.rowAria', { stars, count, pct: p })}
+                      aria-label={t('sellerReviews.rowAria', { stars, count, pct: p })}
                     >
                       <span className="w-6 text-[13px] font-semibold text-text-secondary tabular-nums text-right">
                         {stars}
@@ -303,7 +367,7 @@ export default function ReviewsScreen() {
                   {trendUp ? `↑ ${trendPct}%` : trendDown ? `↓ ${Math.abs(trendPct)}%` : '—'}
                 </span>
                 <span className="text-[12px] font-normal text-text-muted">
-                  {t('seller.reviews.trend')}
+                  {t('sellerReviews.trend')}
                 </span>
               </div>
             </div>
@@ -313,7 +377,7 @@ export default function ReviewsScreen() {
           <div className="flex flex-col gap-3">
             <div className="flex items-start gap-2 flex-wrap">
               {/* Rating chips */}
-              <span className="sr-only">{t('seller.reviews.filterRating')}</span>
+              <span className="sr-only">{t('sellerReviews.filterRating')}</span>
               {ratingChips.map(c => (
                 <FilterChip
                   key={String(c.key)}
@@ -326,7 +390,7 @@ export default function ReviewsScreen() {
               <span className="w-px h-6 bg-border-light mx-1 self-center" aria-hidden="true" />
 
               {/* Response chips */}
-              <span className="sr-only">{t('seller.reviews.filterResponse')}</span>
+              <span className="sr-only">{t('sellerReviews.filterResponse')}</span>
               {responseChips.map(c => (
                 <FilterChip
                   key={c.key}
@@ -340,7 +404,7 @@ export default function ReviewsScreen() {
 
               {/* Photos chip */}
               <FilterChip
-                label={t('seller.reviews.filterPhotos')}
+                label={t('sellerReviews.filterPhotos')}
                 pressed={hasPhotos}
                 onClick={() => setHasPhotos(v => !v)}
                 icon={<ImageIcon size={14} aria-hidden="true" />}
@@ -348,12 +412,12 @@ export default function ReviewsScreen() {
 
               {/* Product select */}
               <select
-                aria-label={t('seller.reviews.filterProduct')}
+                aria-label={t('sellerReviews.filterProduct')}
                 value={productId ?? ''}
                 onChange={e => setProductId(e.target.value || undefined)}
                 className="h-9 rounded-full border border-border bg-background px-3 text-[13px] font-medium text-text outline-none focus:border-primary transition-colors min-h-[36px]"
               >
-                <option value="">{t('seller.reviews.filterProductAll')}</option>
+                <option value="">{t('sellerReviews.filterProductAll')}</option>
                 {productOptions.map(p => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
@@ -374,7 +438,7 @@ export default function ReviewsScreen() {
                 <button
                   type="button"
                   onClick={() => setSortOpen(o => !o)}
-                  aria-label={t('seller.reviews.sortAria')}
+                  aria-label={t('sellerReviews.sortAria')}
                   aria-haspopup="listbox"
                   aria-expanded={sortOpen}
                   className="h-9 px-3 rounded-full border border-border bg-background text-[13px] font-medium text-text flex items-center gap-1.5 hover:border-text-tertiary transition-colors"
@@ -422,7 +486,7 @@ export default function ReviewsScreen() {
           {/* Status tabs (segment control) */}
           <div
             role="tablist"
-            aria-label={t('seller.reviews.title')}
+            aria-label={t('sellerReviews.title')}
             className="flex items-center gap-1 p-1 bg-surface rounded-full h-10 w-full md:w-auto md:inline-flex overflow-x-auto scrollbar-none border border-border-light"
           >
             {tabs.map(tab => {
@@ -465,7 +529,7 @@ export default function ReviewsScreen() {
 
           {/* Result count */}
           <p className="text-[13px] text-text-muted -mt-1">
-            {t('seller.reviews.count', { count: data?.total ?? 0 })}
+            {t('sellerReviews.count', { count: data?.total ?? 0 })}
           </p>
 
           {/* List slot (SV2) */}
@@ -479,8 +543,8 @@ export default function ReviewsScreen() {
             ) : items.length === 0 ? (
               <EmptyState
                 icon={<MessageSquare size={40} className="text-text-tertiary" aria-hidden="true" />}
-                title={hasActiveFilters ? t('seller.reviews.noFilteredTitle') : t('seller.reviews.noReviewsTitle')}
-                subtitle={hasActiveFilters ? t('seller.reviews.noFilteredSubtitle') : t('seller.reviews.noReviewsSubtitle')}
+                title={hasActiveFilters ? t('sellerReviews.noFilteredTitle') : t('sellerReviews.noReviewsTitle')}
+                subtitle={hasActiveFilters ? t('sellerReviews.noFilteredSubtitle') : t('sellerReviews.noReviewsSubtitle')}
                 action={
                   hasActiveFilters
                     ? { label: t('seller.products.clearAll'), onPress: clearAll }
@@ -500,8 +564,10 @@ export default function ReviewsScreen() {
                   >
                     <ReviewCard
                       review={review}
-                      responding={respondingTo === review.id}
+                      responding={composeReviewId === review.id && activeMutation.isPending}
                       onRespond={() => openCompose(review.id)}
+                      onEditResponse={() => openEdit(review.id)}
+                      onDeleteResponse={() => openDeleteConfirm(review.id)}
                       onFlag={() => toggleFlag.mutate(review.id)}
                       onContactBuyer={() => router.push('/messages')}
                     />
@@ -513,12 +579,31 @@ export default function ReviewsScreen() {
         </div>
       </Container>
 
-      {/* Compose response modal */}
-      <ComposeModal
-        visible={composing}
+      {/* Compose / edit response modal */}
+      <RespondComposer
+        visible={composeOpen}
+        mode={composeMode}
+        review={items.find(r => r.id === composeReviewId) ?? null}
+        draft={composeDraft}
+        onDraftChange={setComposeDraft}
         onClose={closeCompose}
         onSubmit={submitResponse}
-        pending={respond.isPending}
+        pending={activeMutation.isPending}
+        error={composeError}
+        success={composeSuccess}
+        reduced={reduced}
+        language={i18n.language as 'en' | 'ne'}
+      />
+
+      {/* Delete confirm */}
+      <DeleteConfirm
+        open={deleteConfirmOpen}
+        pending={deleteResponse.isPending}
+        onConfirm={confirmDelete}
+        onCancel={() => {
+          setDeleteConfirmOpen(false)
+          setDeleteReviewId(null)
+        }}
         reduced={reduced}
       />
     </Screen>
@@ -551,25 +636,59 @@ function FilterChip({
   )
 }
 
-function ComposeModal({
+function RespondComposer({
   visible,
+  mode,
+  review,
+  draft,
+  onDraftChange,
   onClose,
   onSubmit,
   pending,
+  error,
+  success,
   reduced,
+  language,
 }: {
   visible: boolean
+  mode: 'create' | 'edit'
+  review: SellerReview | null
+  draft: string
+  onDraftChange: (text: string) => void
   onClose: () => void
   onSubmit: () => void
   pending: boolean
+  error: string | null
+  success: boolean
   reduced: boolean
+  language: 'en' | 'ne'
 }) {
   const { t } = useTranslation()
-  const [draft, setDraft] = useState('')
+  const MAX = 1000
+  const isLowRating = review ? review.rating <= 2 : false
+  const trimmed = draft.trim()
+  const charCount = draft.length
 
   useEffect(() => {
-    if (!visible) setDraft('')
-  }, [visible])
+    if (!visible) onDraftChange('')
+  }, [visible, onDraftChange])
+
+  useEffect(() => {
+    if (!visible) return
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [visible, onClose])
+
+  const templates = REVIEW_RESPONSE_TEMPLATES.map(tpl => ({
+    id: tpl.id,
+    label: language === 'ne' ? tpl.labelNe : t(tpl.labelKey),
+    body: language === 'ne' ? tpl.bodyNe : tpl.body,
+  }))
+
+  const submitLabel = mode === 'edit'
+    ? (pending ? t('sellerReviews.responseEditing') : t('sellerReviews.responseEdit'))
+    : (pending ? t('sellerReviews.responding') : t('sellerReviews.responseSend'))
 
   return (
     <AnimatePresence>
@@ -588,43 +707,178 @@ function ComposeModal({
             animate={{ opacity: 1, scale: 1 }}
             exit={reduced ? undefined : { opacity: 0, scale: 0.95 }}
             transition={{ duration: reduced ? 0 : 0.2 }}
-            className="relative bg-background rounded-2xl p-5 w-full max-w-[480px] shadow-xl"
+            className="relative bg-background rounded-2xl p-5 w-full max-w-[520px] shadow-xl max-h-[90vh] overflow-y-auto"
           >
+            {/* Header */}
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-[18px] font-semibold text-text">{t('seller.reviews.respond')}</h2>
-              <button onClick={onClose} className="text-text-muted p-1 hover:text-text" aria-label={t('seller.reviews.back')}>
+              <h2 className="text-[18px] font-semibold text-text">
+                {mode === 'edit' ? t('reviewCard.editResponse') : t('sellerReviews.respond')}
+              </h2>
+              <button onClick={onClose} className="text-text-muted p-1 hover:text-text" aria-label={t('sellerReviews.back')}>
                 <X size={18} aria-hidden="true" />
               </button>
             </div>
+
+            {/* Tone hint for low ratings */}
+            {isLowRating && (
+              <div className="mb-3 rounded-md bg-warning/10 px-3 py-2 flex items-start gap-2">
+                <AlertTriangle size={15} className="text-warning shrink-0 mt-0.5" aria-hidden="true" />
+                <p className="text-[12px] text-[#92400E] leading-4">{t('sellerReviews.responseToneHint')}</p>
+              </div>
+            )}
+
+            {/* Templates */}
+            <div className="mb-3">
+              <p className="text-[12px] font-semibold text-text-muted mb-1.5">{t('sellerReviews.responseTemplates')}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {templates.map(tpl => (
+                  <button
+                    key={tpl.id}
+                    type="button"
+                    onClick={() => onDraftChange(tpl.body)}
+                    aria-label={`${t('sellerReviews.responseTemplatesAria')}: ${tpl.label}`}
+                    className="rounded-full border border-border bg-background px-2.5 py-1 text-[12px] font-medium text-text hover:border-primary hover:text-primary transition-colors"
+                  >
+                    {tpl.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Textarea */}
             <textarea
               value={draft}
-              onChange={e => setDraft(e.target.value)}
-              placeholder={t('seller.reviews.responsePlaceholder')}
+              onChange={e => onDraftChange(e.target.value.slice(0, MAX))}
+              placeholder={t('sellerReviews.responsePlaceholder')}
               rows={4}
               className="w-full resize-none rounded-md border border-border bg-surface px-3 py-2 text-[14px] text-text outline-none focus:border-primary transition-colors"
-              aria-label={t('seller.reviews.responsePlaceholder')}
+              aria-label={t('sellerReviews.responsePlaceholder')}
+              aria-describedby="char-count"
             />
+
+            {/* Character counter */}
+            <div id="char-count" className="mt-1 text-right" role="status" aria-live="polite">
+              <span className={`text-[12px] ${charCount > MAX * 0.9 ? 'text-warning' : 'text-text-muted'}`}>
+                {t('sellerReviews.responseCounter', { count: charCount, max: MAX })}
+              </span>
+            </div>
+
+            {/* Error */}
+            {error && (
+              <p role="alert" className="mt-2 text-[13px] text-error">{error}</p>
+            )}
+
+            {/* Success state */}
+            <AnimatePresence>
+              {success && !reduced && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="mt-3 flex items-center justify-center gap-2 py-3 rounded-md bg-success/10"
+                  role="status"
+                >
+                  <CheckCircle2 size={20} className="text-success" aria-hidden="true" />
+                  <span className="text-[14px] font-semibold text-success">
+                    {mode === 'edit' ? t('sellerReviews.responseUpdated') : t('sellerReviews.responsePosted')}
+                  </span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Actions */}
             <div className="flex items-center justify-end gap-2 mt-3">
               <button
                 type="button"
                 onClick={onClose}
                 className="h-9 px-3 rounded-md text-[13px] font-semibold text-text-muted hover:text-text transition-colors"
               >
-                {t('seller.reviews.back')}
+                {t('sellerReviews.back')}
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  if (draft.trim()) {
-                    onSubmit()
-                    setDraft('')
-                  }
-                }}
-                disabled={!draft.trim() || pending}
-                className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-primary text-white text-[13px] font-semibold disabled:opacity-50 hover:bg-primary-dark transition-colors"
+                onClick={onSubmit}
+                disabled={!trimmed || pending || success}
+                className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-primary text-white text-[13px] font-semibold disabled:opacity-50 hover:bg-primary-dark transition-colors active:scale-[0.98]"
               >
-                <Send size={14} aria-hidden="true" />
-                {pending ? t('seller.reviews.responding') : t('seller.reviews.responseSend')}
+                {success ? <CheckCircle2 size={14} aria-hidden="true" /> : <Send size={14} aria-hidden="true" />}
+                {success
+                  ? (mode === 'edit' ? t('sellerReviews.responseUpdated') : t('sellerReviews.responsePosted'))
+                  : submitLabel}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  )
+}
+
+function DeleteConfirm({
+  open,
+  pending,
+  onConfirm,
+  onCancel,
+  reduced,
+}: {
+  open: boolean
+  pending: boolean
+  onConfirm: () => void
+  onCancel: () => void
+  reduced: boolean
+}) {
+  const { t } = useTranslation()
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [open, onCancel])
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: reduced ? 0 : 0.2 }}
+            className="fixed inset-0 bg-black/40"
+            onClick={onCancel}
+          />
+          <motion.div
+            initial={reduced ? false : { opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={reduced ? undefined : { opacity: 0, scale: 0.95 }}
+            transition={{ duration: reduced ? 0 : 0.2 }}
+            className="relative bg-background rounded-2xl p-5 w-full max-w-[400px] shadow-xl"
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-error/10">
+                <Trash2 size={20} className="text-error" aria-hidden="true" />
+              </span>
+              <h2 className="text-[18px] font-semibold text-text">{t('sellerReviews.responseDeleteConfirmTitle')}</h2>
+            </div>
+            <p className="text-[14px] text-text-muted leading-5 mb-5">{t('sellerReviews.responseDeleteConfirm')}</p>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={onCancel}
+                className="h-9 px-4 rounded-md text-[13px] font-semibold text-text-muted hover:text-text transition-colors"
+              >
+                {t('sellerReviews.responseDeleteConfirmCancel')}
+              </button>
+              <button
+                type="button"
+                onClick={onConfirm}
+                disabled={pending}
+                className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-error text-white text-[13px] font-semibold disabled:opacity-50 hover:bg-error/90 transition-colors active:scale-[0.98]"
+              >
+                <Trash2 size={14} aria-hidden="true" />
+                {t('sellerReviews.responseDeleteConfirmAction')}
               </button>
             </div>
           </motion.div>

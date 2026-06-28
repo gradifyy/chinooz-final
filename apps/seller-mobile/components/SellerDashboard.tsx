@@ -283,7 +283,7 @@ function SellerTopBar({ onSearch, onNotifications, onMore }: { onSearch: () => v
         </TouchableOpacity>
         <TouchableOpacity
           accessibilityRole="button"
-          accessibilityLabel={t('seller.reviews.moreAria')}
+          accessibilityLabel={t('sellerReviews.moreAria')}
           onPress={onMore}
           hitSlop={8}
           style={[styles.topBarIconBtn, { minWidth: minTouchTarget, minHeight: minTouchTarget }]}

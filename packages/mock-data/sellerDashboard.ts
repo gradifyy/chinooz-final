@@ -213,3 +213,51 @@ const CANNED_BUYER_REPLIES = [
 export function mockBuyerReply(_sellerText: string): string {
   return CANNED_BUYER_REPLIES[Math.floor(Math.random() * CANNED_BUYER_REPLIES.length)]
 }
+
+// --- Review Response Templates (SC4) ---
+
+export interface ReviewResponseTemplate {
+  id: string
+  labelKey: string
+  labelNe: string
+  body: string
+  bodyNe: string
+}
+
+export const REVIEW_RESPONSE_TEMPLATES: ReviewResponseTemplate[] = [
+  {
+    id: 'rt-thanks',
+    labelKey: 'sellerReviews.templateThanks',
+    labelNe: 'धन्यवाद',
+    body: 'Thank you so much for your review! We truly appreciate your feedback and support. 🙏',
+    bodyNe: 'तपाईंको समीक्षाको लागि धेरै धन्यवाद! हामी तपाईंको प्रतिक्रिया र सहयोगको कदर गर्छौं। 🙏',
+  },
+  {
+    id: 'rt-thanks-positive',
+    labelKey: 'sellerReviews.templateThanksPositive',
+    labelNe: 'राम्रो समीक्षाको लागि धन्यवाद',
+    body: 'We are thrilled you had a great experience! Thanks for taking the time to share it. We look forward to serving you again.',
+    bodyNe: 'तपाईंलाई राम्रो अनुभव भएकोमा हामी एकदमै खुशी छौं! साझा गर्न समय दिनुभएकोमा धन्यवाद। हामी फेरि सेवा गर्न उत्साहित छौं।',
+  },
+  {
+    id: 'rt-address-concern',
+    labelKey: 'sellerReviews.templateAddressConcern',
+    labelNe: 'चिन्ता सम्बोधन',
+    body: 'We are sorry to hear about your experience and would like to make it right. Please reach out to us via Messages and we will resolve this for you.',
+    bodyNe: 'तपाईंको अनुभवबारे सुन्न पाउँदा हामीलाई दुःख लागेको छ र हामी यसलाई सुधार्न चाहन्छौं। कृपया सन्देश मार्फत हामीलाई सम्पर्क गर्नुहोस्, हामी यस समस्याको समाधान गर्नेछौं।',
+  },
+  {
+    id: 'rt-followup',
+    labelKey: 'sellerReviews.templateFollowup',
+    labelNe: 'फलोअप',
+    body: 'Thank you for the feedback! We have noted your concerns and are working to improve. If there is anything else we can do, please let us know.',
+    bodyNe: 'तपाईंको प्रतिक्रियाको लागि धन्यवाद! हामीले तपाईंको चिन्ता अभिलेखित गरेका छौं र सुधार गर्दैछौं। यदि हामी अरू केही गर्न सक्छौं भने कृपया जानकारी गराउनुहोस्।',
+  },
+  {
+    id: 'rt-replacement',
+    labelKey: 'sellerReviews.templateReplacement',
+    labelNe: 'प्रतिस्थापन प्रस्ताव',
+    body: 'We apologize for the issue. We would be happy to send a replacement or arrange a return. Please message us and we will take care of it right away.',
+    bodyNe: 'यो समस्याको लागि हामी क्षमाप्रार्थी छौं। हामी प्रतिस्थापन पठाउन वा फिर्ता व्यवस्था गर्न खुशी हुनेछौं। कृपया हामीलाई सन्देश पठाउनुहोस्, हामी तुरुन्तै व्यवस्था गर्नेछौं।',
+  },
+]

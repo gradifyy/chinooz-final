@@ -159,7 +159,7 @@ export default function SellerDashboard() {
             {/* ☰ More */}
             <div ref={moreRef} className="relative">
               <button
-                aria-label={t('seller.reviews.moreAria')}
+                aria-label={t('sellerReviews.moreAria')}
                 aria-haspopup="menu"
                 aria-expanded={moreOpen}
                 onClick={() => setMoreOpen(o => !o)}
@@ -179,7 +179,7 @@ export default function SellerDashboard() {
                     className="flex items-center gap-2.5 px-3 py-2.5 text-sm font-medium text-text hover:bg-background transition-colors"
                   >
                     <span className="text-primary"><Star size={16} aria-hidden="true" /></span>
-                    {t('seller.reviews.moreReviews')}
+                    {t('sellerReviews.moreReviews')}
                   </Link>
                 </div>
               )}

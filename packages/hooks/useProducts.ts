@@ -4,6 +4,7 @@ import type {
   SellerProductFilter,
   SellerInventoryFilter,
   SellerReviewFilter,
+  SellerReviewResult,
 } from '@chinooz/mock-data'
 import type { Product, Category, CancelReason, SellerOrderStatusKey, SellerReview } from '@chinooz/types'
 
@@ -454,22 +455,156 @@ export function useSellerReviews(filter: SellerReviewFilter) {
   })
 }
 
+function optimisticUpdateReview(
+  qc: ReturnType<typeof useQueryClient>,
+  reviewId: string,
+  updater: (r: SellerReview) => SellerReview,
+) {
+  qc.setQueriesData<SellerReviewResult>({ queryKey: ['seller-reviews'] }, (old) => {
+    if (!old) return old
+    const updatedItems = old.items.map((r) => (r.id === reviewId ? updater(r) : r))
+    return {
+      ...old,
+      items: updatedItems,
+      counts: {
+        all: old.counts.all,
+        needs_response: updatedItems.filter((r) => (!r.response && !r.flagged)).length,
+        responded: updatedItems.filter((r) => (!!r.response)).length,
+        flagged: updatedItems.filter((r) => (!!r.flagged)).length,
+      },
+    }
+  })
+}
+
 export function useRespondToSellerReview() {
   const queryClient = useQueryClient()
+
   return useMutation({
     mutationFn: ({ reviewId, text }: { reviewId: string; text: string }) =>
       api.respondToSellerReview(reviewId, text),
-    onSuccess: () => {
+
+    onMutate: async ({ reviewId, text }) => {
+      await queryClient.cancelQueries({ queryKey: ['seller-reviews'] })
+      const snapshots = queryClient.getQueriesData<SellerReviewResult>({
+        queryKey: ['seller-reviews'],
+      })
+      optimisticUpdateReview(queryClient, reviewId, (r) => ({
+        ...r,
+        response: { text, at: new Date().toISOString() },
+        flagged: false,
+      }))
+      return { snapshots }
+    },
+
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.snapshots) {
+        for (const [key, data] of ctx.snapshots) {
+          queryClient.setQueryData(key, data)
+        }
+      }
+    },
+
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['seller-reviews'] })
+      queryClient.invalidateQueries({ queryKey: ['reviews'] })
+    },
+  })
+}
+
+export function useEditSellerReviewResponse() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ reviewId, text }: { reviewId: string; text: string }) =>
+      api.editSellerReviewResponse(reviewId, text),
+
+    onMutate: async ({ reviewId, text }) => {
+      await queryClient.cancelQueries({ queryKey: ['seller-reviews'] })
+      const snapshots = queryClient.getQueriesData<SellerReviewResult>({
+        queryKey: ['seller-reviews'],
+      })
+      optimisticUpdateReview(queryClient, reviewId, (r) => ({
+        ...r,
+        response: { text, at: new Date().toISOString() },
+      }))
+      return { snapshots }
+    },
+
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.snapshots) {
+        for (const [key, data] of ctx.snapshots) {
+          queryClient.setQueryData(key, data)
+        }
+      }
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['seller-reviews'] })
+      queryClient.invalidateQueries({ queryKey: ['reviews'] })
+    },
+  })
+}
+
+export function useDeleteSellerReviewResponse() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (reviewId: string) => api.deleteSellerReviewResponse(reviewId),
+
+    onMutate: async (reviewId) => {
+      await queryClient.cancelQueries({ queryKey: ['seller-reviews'] })
+      const snapshots = queryClient.getQueriesData<SellerReviewResult>({
+        queryKey: ['seller-reviews'],
+      })
+      optimisticUpdateReview(queryClient, reviewId, (r) => ({
+        ...r,
+        response: undefined,
+      }))
+      return { snapshots }
+    },
+
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.snapshots) {
+        for (const [key, data] of ctx.snapshots) {
+          queryClient.setQueryData(key, data)
+        }
+      }
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['seller-reviews'] })
+      queryClient.invalidateQueries({ queryKey: ['reviews'] })
     },
   })
 }
 
 export function useToggleSellerReviewFlag() {
   const queryClient = useQueryClient()
+
   return useMutation({
     mutationFn: (reviewId: string) => api.toggleSellerReviewFlag(reviewId),
-    onSuccess: () => {
+
+    onMutate: async (reviewId) => {
+      await queryClient.cancelQueries({ queryKey: ['seller-reviews'] })
+      const snapshots = queryClient.getQueriesData<SellerReviewResult>({
+        queryKey: ['seller-reviews'],
+      })
+      optimisticUpdateReview(queryClient, reviewId, (r) => ({
+        ...r,
+        flagged: !r.flagged,
+      }))
+      return { snapshots }
+    },
+
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.snapshots) {
+        for (const [key, data] of ctx.snapshots) {
+          queryClient.setQueryData(key, data)
+        }
+      }
+    },
+
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['seller-reviews'] })
     },
   })

@@ -50,6 +50,8 @@ function timeAgo(iso: string): string {
 export interface ReviewCardProps {
   review: SellerReview
   onRespond?: () => void
+  onEditResponse?: () => void
+  onDeleteResponse?: () => void
   onFlag?: () => void
   onContactBuyer?: () => void
   responding?: boolean
@@ -59,6 +61,8 @@ export interface ReviewCardProps {
 export default function ReviewCard({
   review,
   onRespond,
+  onEditResponse,
+  onDeleteResponse,
   onFlag,
   onContactBuyer,
   responding = false,
@@ -185,6 +189,34 @@ export default function ReviewCard({
           <View style={styles.responseBlock}>
             <Text style={styles.responseLabel}>{t('reviewCard.sellerResponse')}</Text>
             <Text style={styles.responseText}>{review.response.text}</Text>
+            {(onEditResponse || onDeleteResponse) && (
+              <View style={styles.responseActions}>
+                {onEditResponse && (
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel={t('reviewCard.editResponseAria', { name: review.userName })}
+                    onPress={onEditResponse}
+                    style={styles.responseActionBtn}
+                    activeOpacity={0.85}
+                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                  >
+                    <Text style={styles.responseActionText}>{t('reviewCard.editResponse')}</Text>
+                  </TouchableOpacity>
+                )}
+                {onDeleteResponse && (
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel={t('reviewCard.deleteResponseAria', { name: review.userName })}
+                    onPress={onDeleteResponse}
+                    style={styles.responseActionBtn}
+                    activeOpacity={0.85}
+                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                  >
+                    <Text style={[styles.responseActionText, { color: colors.error }]}>{t('reviewCard.deleteResponse')}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
           </View>
         )}
 
@@ -618,6 +650,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
     lineHeight: 20,
+  },
+  responseActions: {
+    flexDirection: 'row',
+    gap: spacing[2],
+    marginTop: spacing[1.5],
+  },
+  responseActionBtn: {
+    paddingVertical: 2,
+  },
+  responseActionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.primary,
   },
 
   actionsRow: {

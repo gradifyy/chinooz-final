@@ -352,3 +352,112 @@ export function getZoneRecommendations(
     return { zone, reason }
   })
 }
+
+/**
+ * RD3 — Rider-specific recommendations.
+ *
+ * A ranked list of suggested zones for THIS rider, balancing distance +
+ * demand + surge. Each suggestion carries a concrete, actionable move
+ * hint (distance + expected benefit) so the advice is decision-ready, not
+ * nagging.
+ *
+ * Scoring: score = demand * 0.5 + surgeBoost * 25 - distance * 6
+ *  - demand (0..100) is the primary driver.
+ *  - surgeBoost (multiplier above 1, e.g. 0.5 for 1.5x) adds a bonus.
+ *  - distance (km) penalizes far zones so a nearby high-demand zone wins
+ *    over a distant very-high one.
+ *  - the rider's current zone is excluded (it gets a reassurance state
+ *    instead, via `isInHotspot`).
+ */
+
+export interface RiderRecommendation {
+  zone: DemandZone
+  /** Haversine km from the rider's current location to the zone centroid. */
+  distanceKm: number
+  /** Surge multiplier for this zone (1 if no surge). */
+  surgeMultiplier: number
+  /** Composite score (higher = better). */
+  score: number
+  /** Concrete, actionable move hint, e.g. "Move 1.2km to Jhamsikhel". */
+  moveHint: string
+  /** Expected benefit, e.g. "High demand, 1.5x surge, ~4 min pickups". */
+  benefit: string
+  /** Short human reason for the why-hint. */
+  reason: string
+}
+
+/** Threshold (km) below which a zone is considered "where the rider is". */
+const HERE_RADIUS_KM = 1.0
+
+/**
+ * Determine whether the rider is already in a good zone (a hotspot).
+ * Returns the zone if the rider is within `HERE_RADIUS_KM` of a high/very-high
+ * demand zone, else null. Used for the reassurance state.
+ */
+export function isInHotspot(
+  zones: DemandZone[],
+  riderLocation: GeoPoint,
+): DemandZone | null {
+  let nearest: DemandZone | null = null
+  let nearestDist = Infinity
+  for (const z of zones) {
+    const d = distanceKm(riderLocation, z.center)
+    if (d < nearestDist) {
+      nearestDist = d
+      nearest = z
+    }
+  }
+  if (!nearest) return null
+  if (nearestDist > HERE_RADIUS_KM) return null
+  if (nearest.level !== 'high' && nearest.level !== 'very_high') return null
+  return nearest
+}
+
+/**
+ * Ranked rider recommendations. Excludes the rider's current zone (that gets
+ * a reassurance state via `isInHotspot`). Returns `limit` suggestions,
+ * best-first.
+ */
+export function getRiderRecommendations(
+  zones: DemandZone[],
+  surgeZones: SurgeZone[],
+  riderLocation: GeoPoint,
+  opts: { limit?: number; now?: number } = {},
+): RiderRecommendation[] {
+  const limit = opts.limit ?? 3
+  const surgeByZone = new Map<string, number>()
+  for (const s of surgeZones) surgeByZone.set(s.zoneId, s.multiplier)
+
+  const scored = zones
+    .filter(z => distanceKm(riderLocation, z.center) > HERE_RADIUS_KM)
+    .map(z => {
+      const dist = distanceKm(riderLocation, z.center)
+      const surgeMult = surgeByZone.get(z.id) ?? 1
+      const surgeBoost = Math.max(0, surgeMult - 1)
+      const score = z.demand * 0.5 + surgeBoost * 25 - dist * 6
+      const levelWord =
+        z.level === 'very_high'
+          ? 'very high demand'
+          : z.level === 'high'
+            ? 'high demand'
+            : z.level === 'medium'
+              ? 'steady demand'
+              : 'low demand'
+      const moveHint = `Move ${dist}km to ${z.name}`
+      const surgeStr = surgeMult > 1 ? `, ${surgeMult}x surge` : ''
+      const benefit = `${levelWord}${surgeStr}, ~${z.avgPickupEtaMin} min pickups, ${z.openRequests} open`
+      const reason = z.whyHint
+      return {
+        zone: z,
+        distanceKm: dist,
+        surgeMultiplier: surgeMult,
+        score,
+        moveHint,
+        benefit,
+        reason,
+      } satisfies RiderRecommendation
+    })
+    .sort((a, b) => b.score - a.score)
+
+  return scored.slice(0, limit)
+}

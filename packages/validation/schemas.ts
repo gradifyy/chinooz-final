@@ -70,6 +70,14 @@ export const reviewSchema = z.object({
   body: z.string().min(10, 'Review must be at least 10 characters').max(2000),
 })
 
+export const reviewResponseSchema = z.object({
+  text: z
+    .string()
+    .min(1, 'Response cannot be empty')
+    .max(1000, 'Response must be at most 1000 characters'),
+})
+export type ReviewResponseInput = z.infer<typeof reviewResponseSchema>
+
 export const riderPersonalSchema = z.object({
   name: z
     .string()
@@ -111,6 +119,62 @@ export const riderPersonalSchema = z.object({
     .min(2, 'Relation is required')
     .max(50, 'Relation is too long'),
 })
+
+/**
+ * RO3 step 1 — rider onboarding personal details.
+ * Extends the profile personal shape with date of birth, gender (optional),
+ * and a profile photo (uri or null). Used by the onboarding stepper's
+ * Personal step with resumable draft persistence.
+ */
+export const riderOnboardingPersonalSchema = z.object({
+  name: z
+    .string()
+    .min(2, 'Name must be at least 2 characters')
+    .max(100, 'Name is too long'),
+  photoUri: z
+    .string()
+    .max(500000, 'Photo is too large')
+    .optional()
+    .or(z.literal('')),
+  dateOfBirth: z
+    .string()
+    .min(1, 'Date of birth is required')
+    .refine(val => {
+      const d = new Date(val)
+      if (isNaN(d.getTime())) return false
+      const age = (Date.now() - d.getTime()) / (365.25 * 24 * 3600 * 1000)
+      return age >= 18 && age <= 80
+    }, { message: 'You must be at least 18 years old' }),
+  gender: z
+    .enum(['male', 'female', 'other', 'prefer_not_to_say'])
+    .optional()
+    .or(z.literal('')),
+  city: z
+    .string()
+    .min(2, 'City is required')
+    .max(100, 'City is too long'),
+  zone: z
+    .string()
+    .min(2, 'Zone is required')
+    .max(120, 'Zone is too long'),
+  emergencyName: z
+    .string()
+    .min(2, 'Emergency contact name is required')
+    .max(100, 'Name is too long'),
+  emergencyPhone: z
+    .string()
+    .min(1, 'Emergency contact phone is required')
+    .regex(/^\d{10}$/, 'Phone number must be 10 digits')
+    .refine(val => val.startsWith('97') || val.startsWith('98'), {
+      message: 'Please enter a mobile number starting with 97 or 98',
+    }),
+  emergencyRelation: z
+    .string()
+    .min(2, 'Relation is required')
+    .max(50, 'Relation is too long'),
+})
+
+export type RiderOnboardingPersonalInput = z.infer<typeof riderOnboardingPersonalSchema>
 
 export const createProfileSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').max(100),
@@ -211,6 +275,41 @@ export const businessKycSchema = z.object({
 })
 
 export type BusinessKycInput = z.infer<typeof businessKycSchema>
+
+export const payoutSchema = z.object({
+  payoutMethod: z.enum(['bank', 'esewa', 'khalti']),
+  bankName: z.string().optional().or(z.literal('')),
+  accountName: z.string().optional().or(z.literal('')),
+  accountNumber: z.string().optional().or(z.literal('')),
+  accountConfirm: z.string().optional().or(z.literal('')),
+  branch: z.string().optional().or(z.literal('')),
+  walletNumber: z.string().optional().or(z.literal('')),
+  isDefault: z.boolean(),
+}).superRefine((data, ctx) => {
+  if (data.payoutMethod === 'bank') {
+    if (!data.bankName || data.bankName.trim().length < 2) {
+      ctx.addIssue({ path: ['bankName'], message: 'Please select a bank', code: 'custom' })
+    }
+    if (!data.accountName || data.accountName.trim().length < 2) {
+      ctx.addIssue({ path: ['accountName'], message: 'Account holder name is required', code: 'custom' })
+    }
+    if (!data.accountNumber || data.accountNumber.trim().length < 3) {
+      ctx.addIssue({ path: ['accountNumber'], message: 'Account number is required', code: 'custom' })
+    }
+    if (!data.accountConfirm || data.accountConfirm !== data.accountNumber) {
+      ctx.addIssue({ path: ['accountConfirm'], message: 'Account numbers don\'t match', code: 'custom' })
+    }
+    if (!data.branch || data.branch.trim().length < 2) {
+      ctx.addIssue({ path: ['branch'], message: 'Branch is required', code: 'custom' })
+    }
+  } else {
+    if (!data.walletNumber || !/^\d{10}$/.test(data.walletNumber)) {
+      ctx.addIssue({ path: ['walletNumber'], message: 'Wallet number must be 10 digits', code: 'custom' })
+    }
+  }
+})
+
+export type PayoutInput = z.infer<typeof payoutSchema>
 
 // --- Seller Product Form ---
 

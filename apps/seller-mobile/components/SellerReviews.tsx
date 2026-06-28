@@ -28,9 +28,13 @@ import {
   useSellerReviews,
   useSellerProducts,
   useRespondToSellerReview,
+  useEditSellerReviewResponse,
+  useDeleteSellerReviewResponse,
   useToggleSellerReviewFlag,
 } from '@chinooz/hooks'
 import { analytics } from '@chinooz/analytics'
+import { reviewResponseSchema } from '@chinooz/validation'
+import { REVIEW_RESPONSE_TEMPLATES } from '@chinooz/mock-data'
 import type {
   SellerReviewFilter,
   SellerReviewSort,
@@ -65,6 +69,11 @@ export default function SellerReviews() {
   const [composeOpen, setComposeOpen] = useState(false)
   const [composeReviewId, setComposeReviewId] = useState<string | null>(null)
   const [composeDraft, setComposeDraft] = useState('')
+  const [composeMode, setComposeMode] = useState<'create' | 'edit'>('create')
+  const [composeError, setComposeError] = useState<string | null>(null)
+  const [composeSuccess, setComposeSuccess] = useState(false)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [deleteReviewId, setDeleteReviewId] = useState<string | null>(null)
   const barAnims = useRef<Animated.Value[]>(STARS.map(() => new Animated.Value(0)))
 
   useEffect(() => {
@@ -98,7 +107,11 @@ export default function SellerReviews() {
   const { data, isLoading, refetch } = useSellerReviews(filter)
   const { data: productsData } = useSellerProducts({ status: 'all', sort: 'best_selling' })
   const respond = useRespondToSellerReview()
+  const editResponse = useEditSellerReviewResponse()
+  const deleteResponse = useDeleteSellerReviewResponse()
   const toggleFlag = useToggleSellerReviewFlag()
+
+  const activeMutation = composeMode === 'edit' ? editResponse : respond
 
   const summary = data?.summary
   const counts = data?.counts
@@ -113,22 +126,22 @@ export default function SellerReviews() {
   const trendDown = trendPct < 0
 
   const sortOptions: { key: SellerReviewSort; label: string }[] = [
-    { key: 'newest', label: t('seller.reviews.sortNewest') },
-    { key: 'oldest', label: t('seller.reviews.sortOldest') },
-    { key: 'lowest', label: t('seller.reviews.sortLowest') },
-    { key: 'highest', label: t('seller.reviews.sortHighest') },
+    { key: 'newest', label: t('sellerReviews.sortNewest') },
+    { key: 'oldest', label: t('sellerReviews.sortOldest') },
+    { key: 'lowest', label: t('sellerReviews.sortLowest') },
+    { key: 'highest', label: t('sellerReviews.sortHighest') },
   ]
   const activeSortLabel = sortOptions.find(s => s.key === sort)?.label ?? sortOptions[0].label
 
   const tabs: { key: SellerReviewStatus; label: string; count: number; warning?: boolean }[] = [
-    { key: 'all', label: t('seller.reviews.tabAll'), count: counts?.all ?? 0 },
-    { key: 'needs_response', label: t('seller.reviews.tabNeedsResponse'), count: counts?.needs_response ?? 0, warning: true },
-    { key: 'responded', label: t('seller.reviews.tabResponded'), count: counts?.responded ?? 0 },
-    { key: 'flagged', label: t('seller.reviews.tabFlagged'), count: counts?.flagged ?? 0 },
+    { key: 'all', label: t('sellerReviews.tabAll'), count: counts?.all ?? 0 },
+    { key: 'needs_response', label: t('sellerReviews.tabNeedsResponse'), count: counts?.needs_response ?? 0, warning: true },
+    { key: 'responded', label: t('sellerReviews.tabResponded'), count: counts?.responded ?? 0 },
+    { key: 'flagged', label: t('sellerReviews.tabFlagged'), count: counts?.flagged ?? 0 },
   ]
 
   const ratingChips: { key: RatingFilter; label: string }[] = [
-    { key: 'all', label: t('seller.reviews.filterRatingAll') },
+    { key: 'all', label: t('sellerReviews.filterRatingAll') },
     { key: 5, label: '5 ★' },
     { key: 4, label: '4 ★' },
     { key: 3, label: '3 ★' },
@@ -136,9 +149,9 @@ export default function SellerReviews() {
     { key: 1, label: '1 ★' },
   ]
   const responseChips: { key: SellerReviewResponseFilter; label: string }[] = [
-    { key: 'all', label: t('seller.reviews.filterResponseAll') },
-    { key: 'with', label: t('seller.reviews.filterResponseWith') },
-    { key: 'without', label: t('seller.reviews.filterResponseWithout') },
+    { key: 'all', label: t('sellerReviews.filterResponseAll') },
+    { key: 'with', label: t('sellerReviews.filterResponseWith') },
+    { key: 'without', label: t('sellerReviews.filterResponseWithout') },
   ]
 
   const hasActiveFilters =
@@ -155,6 +168,19 @@ export default function SellerReviews() {
   const openCompose = (reviewId: string) => {
     setComposeReviewId(reviewId)
     setComposeDraft('')
+    setComposeMode('create')
+    setComposeError(null)
+    setComposeSuccess(false)
+    setComposeOpen(true)
+  }
+
+  const openEdit = (reviewId: string) => {
+    const review = items.find(r => r.id === reviewId)
+    setComposeReviewId(reviewId)
+    setComposeDraft(review?.response?.text ?? '')
+    setComposeMode('edit')
+    setComposeError(null)
+    setComposeSuccess(false)
     setComposeOpen(true)
   }
 
@@ -162,14 +188,50 @@ export default function SellerReviews() {
     setComposeOpen(false)
     setComposeReviewId(null)
     setComposeDraft('')
+    setComposeError(null)
   }
 
   const submitResponse = () => {
-    if (!composeReviewId || !composeDraft.trim()) return
-    respond.mutate(
-      { reviewId: composeReviewId, text: composeDraft.trim() },
-      { onSuccess: closeCompose },
+    if (!composeReviewId) return
+    const trimmed = composeDraft.trim()
+    const result = reviewResponseSchema.safeParse({ text: trimmed })
+    if (!result.success) {
+      setComposeError(result.error.errors[0]?.message ?? 'Validation error')
+      return
+    }
+    setComposeError(null)
+    const mutation = composeMode === 'edit' ? editResponse : respond
+    mutation.mutate(
+      { reviewId: composeReviewId, text: trimmed },
+      {
+        onSuccess: () => {
+          if (!reducedMotion) {
+            setComposeSuccess(true)
+            setTimeout(() => closeCompose(), 1200)
+          } else {
+            closeCompose()
+          }
+        },
+        onError: () => {
+          setComposeError(t('sellerReviews.responseError'))
+        },
+      },
     )
+  }
+
+  const openDeleteConfirm = (reviewId: string) => {
+    setDeleteReviewId(reviewId)
+    setDeleteConfirmOpen(true)
+  }
+
+  const confirmDelete = () => {
+    if (!deleteReviewId) return
+    deleteResponse.mutate(deleteReviewId, {
+      onSuccess: () => {
+        setDeleteConfirmOpen(false)
+        setDeleteReviewId(null)
+      },
+    })
   }
 
   const onRefresh = useCallback(() => {
@@ -178,7 +240,7 @@ export default function SellerReviews() {
   }, [refetch])
 
   const selectedProductName =
-    productOptions.find(p => p.id === productId)?.name ?? t('seller.reviews.filterProductAll')
+    productOptions.find(p => p.id === productId)?.name ?? t('sellerReviews.filterProductAll')
 
   return (
     <View style={styles.container}>
@@ -186,7 +248,7 @@ export default function SellerReviews() {
       <View style={styles.topBar}>
         <TouchableOpacity
           accessibilityRole="button"
-          accessibilityLabel={t('seller.reviews.back')}
+          accessibilityLabel={t('sellerReviews.back')}
           onPress={() => router.push('/dashboard')}
           hitSlop={8}
           style={[styles.topBarIconBtn, { minWidth: minTouchTarget, minHeight: minTouchTarget }]}
@@ -195,15 +257,15 @@ export default function SellerReviews() {
         </TouchableOpacity>
         <View style={styles.topBarTitle}>
           <Text accessibilityRole="header" numberOfLines={1} style={styles.topBarTitleText}>
-            {t('seller.reviews.title')}
+            {t('sellerReviews.title')}
           </Text>
           <Text numberOfLines={1} style={styles.topBarSubtitle}>
-            {t('seller.reviews.subtitle')}
+            {t('sellerReviews.subtitle')}
           </Text>
         </View>
         <TouchableOpacity
           accessibilityRole="button"
-          accessibilityLabel={t('seller.reviews.refreshAria')}
+          accessibilityLabel={t('sellerReviews.refreshAria')}
           onPress={() => refetch()}
           hitSlop={8}
           style={[styles.topBarIconBtn, { minWidth: minTouchTarget, minHeight: minTouchTarget }]}
@@ -221,13 +283,13 @@ export default function SellerReviews() {
             onRefresh={onRefresh}
             tintColor={colors.primary}
             colors={[colors.primary]}
-            accessibilityLabel={t('seller.reviews.refreshAria')}
+            accessibilityLabel={t('sellerReviews.refreshAria')}
           />
         }
       >
         {/* Summary card (e1) */}
         <View
-          accessibilityLabel={t('seller.reviews.summaryAria', {
+          accessibilityLabel={t('sellerReviews.summaryAria', {
             average: average.toFixed(1),
             total: totalReviews,
           })}
@@ -237,7 +299,7 @@ export default function SellerReviews() {
             <View style={styles.summaryLeft}>
               <Text
                 style={styles.averageText}
-                accessibilityLabel={t('seller.reviews.averageLabel')}
+                accessibilityLabel={t('sellerReviews.averageLabel')}
               >
                 {average.toFixed(1)}
               </Text>
@@ -252,7 +314,7 @@ export default function SellerReviews() {
                 ))}
               </View>
               <Text style={styles.totalReviewsText}>
-                {totalReviews.toLocaleString()} {t('seller.reviews.totalReviews')}
+                {totalReviews.toLocaleString()} {t('sellerReviews.totalReviews')}
               </Text>
             </View>
 
@@ -265,13 +327,13 @@ export default function SellerReviews() {
               >
                 {trendUp ? `↑ ${trendPct}%` : trendDown ? `↓ ${Math.abs(trendPct)}%` : '—'}
               </Text>
-              <Text style={styles.trendLabel}>{t('seller.reviews.trend')}</Text>
+              <Text style={styles.trendLabel}>{t('sellerReviews.trend')}</Text>
             </View>
           </View>
 
           {/* Distribution */}
           <View
-            accessibilityLabel={t('seller.reviews.distributionAria')}
+            accessibilityLabel={t('sellerReviews.distributionAria')}
             style={styles.distribution}
           >
             {STARS.map((stars, idx) => {
@@ -281,7 +343,7 @@ export default function SellerReviews() {
                 <View
                   key={stars}
                   style={styles.distRow}
-                  accessibilityLabel={t('seller.reviews.rowAria', { stars, count, pct: p })}
+                  accessibilityLabel={t('sellerReviews.rowAria', { stars, count, pct: p })}
                 >
                   <Text style={styles.distStar}>{stars}</Text>
                   <View style={styles.distTrack}>
@@ -331,7 +393,7 @@ export default function SellerReviews() {
             ))}
             <View style={styles.chipDivider} />
             <FilterChip
-              label={t('seller.reviews.filterPhotos')}
+              label={t('sellerReviews.filterPhotos')}
               pressed={hasPhotos}
               onPress={() => setHasPhotos(v => !v)}
               icon={<ImageIcon size={14} color={hasPhotos ? colors.white : colors.text} />}
@@ -341,7 +403,7 @@ export default function SellerReviews() {
           <View style={styles.dropdownRow}>
             <TouchableOpacity
               accessibilityRole="button"
-              accessibilityLabel={t('seller.reviews.filterProduct')}
+              accessibilityLabel={t('sellerReviews.filterProduct')}
               onPress={() => setProductSheet(true)}
               style={styles.dropdownBtn}
             >
@@ -353,7 +415,7 @@ export default function SellerReviews() {
 
             <TouchableOpacity
               accessibilityRole="button"
-              accessibilityLabel={t('seller.reviews.sortAria')}
+              accessibilityLabel={t('sellerReviews.sortAria')}
               onPress={() => setSortSheet(true)}
               style={styles.dropdownBtn}
             >
@@ -374,7 +436,7 @@ export default function SellerReviews() {
         {/* Status tabs (segment control) */}
         <View
           accessibilityRole="tablist"
-          accessibilityLabel={t('seller.reviews.title')}
+          accessibilityLabel={t('sellerReviews.title')}
           style={styles.tabsTrack}
         >
           {tabs.map(tab => {
@@ -424,7 +486,7 @@ export default function SellerReviews() {
         </View>
 
         <Text style={styles.resultCount}>
-          {t('seller.reviews.count', { count: data?.total ?? 0 })}
+          {t('sellerReviews.count', { count: data?.total ?? 0 })}
         </Text>
 
         {/* List slot (SV2) */}
@@ -438,8 +500,8 @@ export default function SellerReviews() {
           ) : items.length === 0 ? (
             <EmptyState
               icon={<MessageSquare size={40} color={colors.textTertiary} />}
-              title={hasActiveFilters ? t('seller.reviews.noFilteredTitle') : t('seller.reviews.noReviewsTitle')}
-              subtitle={hasActiveFilters ? t('seller.reviews.noFilteredSubtitle') : t('seller.reviews.noReviewsSubtitle')}
+              title={hasActiveFilters ? t('sellerReviews.noFilteredTitle') : t('sellerReviews.noReviewsTitle')}
+              subtitle={hasActiveFilters ? t('sellerReviews.noFilteredSubtitle') : t('sellerReviews.noReviewsSubtitle')}
               action={
                 hasActiveFilters
                   ? { label: t('seller.products.clearAll'), onPress: clearAll }
@@ -451,8 +513,10 @@ export default function SellerReviews() {
               <ReviewCard
                 key={review.id}
                 review={review}
-                responding={composeReviewId === review.id && respond.isPending}
+                responding={composeReviewId === review.id && activeMutation.isPending}
                 onRespond={() => openCompose(review.id)}
+                onEditResponse={() => openEdit(review.id)}
+                onDeleteResponse={() => openDeleteConfirm(review.id)}
                 onFlag={() => toggleFlag.mutate(review.id)}
                 onContactBuyer={() => router.push('/messages')}
               />
@@ -464,7 +528,7 @@ export default function SellerReviews() {
       </ScrollView>
 
       {/* Sort sheet */}
-      <BottomSheet visible={sortSheet} onClose={() => setSortSheet(false)} title={t('seller.reviews.sort')}>
+      <BottomSheet visible={sortSheet} onClose={() => setSortSheet(false)} title={t('sellerReviews.sort')}>
         {sortOptions.map(opt => {
           const active = sort === opt.key
           return (
@@ -488,7 +552,7 @@ export default function SellerReviews() {
       </BottomSheet>
 
       {/* Product sheet */}
-      <BottomSheet visible={productSheet} onClose={() => setProductSheet(false)} title={t('seller.reviews.filterProduct')}>
+      <BottomSheet visible={productSheet} onClose={() => setProductSheet(false)} title={t('sellerReviews.filterProduct')}>
         <ScrollView style={{ maxHeight: Dimensions.get('window').height * 0.6 }}>
           <TouchableOpacity
             accessibilityRole="button"
@@ -500,7 +564,7 @@ export default function SellerReviews() {
             style={styles.sheetRow}
           >
             <Text style={[styles.sheetRowLabel, !productId && styles.sheetRowLabelActive]}>
-              {t('seller.reviews.filterProductAll')}
+              {t('sellerReviews.filterProductAll')}
             </Text>
             {!productId && <CheckCircle2 size={18} color={colors.primary} />}
           </TouchableOpacity>
@@ -527,30 +591,116 @@ export default function SellerReviews() {
         </ScrollView>
       </BottomSheet>
 
-      {/* Compose response sheet */}
-      <BottomSheet visible={composeOpen} onClose={closeCompose} title={t('seller.reviews.respond')}>
+      {/* Compose / edit response sheet */}
+      <BottomSheet
+        visible={composeOpen}
+        onClose={closeCompose}
+        title={composeMode === 'edit' ? t('reviewCard.editResponse') : t('sellerReviews.respond')}
+      >
+        {/* Tone hint for low ratings */}
+        {composeReviewId && (items.find(r => r.id === composeReviewId)?.rating ?? 5) <= 2 && (
+          <View style={composeStyles.toneHint}>
+            <Text style={composeStyles.toneHintText}>{t('sellerReviews.responseToneHint')}</Text>
+          </View>
+        )}
+
+        {/* Templates */}
+        <Text style={composeStyles.templatesLabel}>{t('sellerReviews.responseTemplates')}</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={composeStyles.templatesRow}>
+          {REVIEW_RESPONSE_TEMPLATES.map(tpl => (
+            <TouchableOpacity
+              key={tpl.id}
+              onPress={() => setComposeDraft(tpl.body)}
+              style={composeStyles.templateChip}
+              accessibilityLabel={`${t('sellerReviews.responseTemplatesAria')}: ${t(tpl.labelKey)}`}
+            >
+              <Text style={composeStyles.templateChipText}>{t(tpl.labelKey)}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {/* Textarea */}
         <TextInput
           value={composeDraft}
-          onChangeText={setComposeDraft}
-          placeholder={t('seller.reviews.responsePlaceholder')}
+          onChangeText={(text) => setComposeDraft(text.slice(0, 1000))}
+          placeholder={t('sellerReviews.responsePlaceholder')}
           placeholderTextColor={colors.textTertiary}
           multiline
           style={composeStyles.input}
-          accessibilityLabel={t('seller.reviews.responsePlaceholder')}
+          accessibilityLabel={t('sellerReviews.responsePlaceholder')}
         />
+
+        {/* Character counter */}
+        <View style={composeStyles.counterRow} accessibilityRole="text">
+          <Text style={[composeStyles.counterText, composeDraft.length > 900 && { color: colors.warning }]}>
+            {t('sellerReviews.responseCounter', { count: composeDraft.length, max: 1000 })}
+          </Text>
+        </View>
+
+        {/* Error */}
+        {composeError && (
+          <Text style={composeStyles.errorText} accessibilityRole="alert">{composeError}</Text>
+        )}
+
+        {/* Success state */}
+        {composeSuccess && !reducedMotion && (
+          <View style={composeStyles.successBox} accessibilityLiveRegion="polite">
+            <CheckCircle2 size={20} color={colors.success} />
+            <Text style={composeStyles.successText}>
+              {composeMode === 'edit' ? t('sellerReviews.responseUpdated') : t('sellerReviews.responsePosted')}
+            </Text>
+          </View>
+        )}
+
+        {/* Actions */}
         <View style={composeStyles.actions}>
           <TouchableOpacity onPress={closeCompose} style={composeStyles.cancelBtn}>
-            <Text style={composeStyles.cancelText}>{t('seller.reviews.back')}</Text>
+            <Text style={composeStyles.cancelText}>{t('sellerReviews.back')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={submitResponse}
-            disabled={!composeDraft.trim() || respond.isPending}
-            style={[composeStyles.sendBtn, (!composeDraft.trim() || respond.isPending) && composeStyles.sendBtnDisabled]}
+            disabled={!composeDraft.trim() || activeMutation.isPending || composeSuccess}
+            style={[
+              composeStyles.sendBtn,
+              (!composeDraft.trim() || activeMutation.isPending || composeSuccess) && composeStyles.sendBtnDisabled,
+            ]}
           >
-            <Send size={14} color={colors.white} />
+            {composeSuccess ? (
+              <CheckCircle2 size={14} color={colors.white} />
+            ) : (
+              <Send size={14} color={colors.white} />
+            )}
             <Text style={composeStyles.sendText}>
-              {respond.isPending ? t('seller.reviews.responding') : t('seller.reviews.responseSend')}
+              {composeSuccess
+                ? (composeMode === 'edit' ? t('sellerReviews.responseUpdated') : t('sellerReviews.responsePosted'))
+                : composeMode === 'edit'
+                  ? (activeMutation.isPending ? t('sellerReviews.responseEditing') : t('sellerReviews.responseEdit'))
+                  : (activeMutation.isPending ? t('sellerReviews.responding') : t('sellerReviews.responseSend'))}
             </Text>
+          </TouchableOpacity>
+        </View>
+      </BottomSheet>
+
+      {/* Delete confirm sheet */}
+      <BottomSheet
+        visible={deleteConfirmOpen}
+        onClose={() => { setDeleteConfirmOpen(false); setDeleteReviewId(null) }}
+        title={t('sellerReviews.responseDeleteConfirmTitle')}
+      >
+        <Text style={deleteStyles.confirmText}>{t('sellerReviews.responseDeleteConfirm')}</Text>
+        <View style={deleteStyles.actions}>
+          <TouchableOpacity
+            onPress={() => { setDeleteConfirmOpen(false); setDeleteReviewId(null) }}
+            style={deleteStyles.cancelBtn}
+          >
+            <Text style={deleteStyles.cancelText}>{t('sellerReviews.responseDeleteConfirmCancel')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={confirmDelete}
+            disabled={deleteResponse.isPending}
+            style={[deleteStyles.deleteBtn, deleteResponse.isPending && deleteStyles.deleteBtnDisabled]}
+          >
+            <Text style={deleteStyles.deleteText}>{t('sellerReviews.responseDeleteConfirmAction')}</Text>
           </TouchableOpacity>
         </View>
       </BottomSheet>
@@ -584,6 +734,43 @@ function FilterChip({
 }
 
 const composeStyles = StyleSheet.create({
+  toneHint: {
+    backgroundColor: colors.warningLight,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    marginBottom: spacing[3],
+  },
+  toneHintText: {
+    fontSize: 12,
+    color: '#92400E',
+    lineHeight: 17,
+  },
+  templatesLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textMuted,
+    marginBottom: spacing[2],
+    paddingHorizontal: spacing[4],
+  },
+  templatesRow: {
+    gap: spacing[2],
+    paddingHorizontal: spacing[4],
+    marginBottom: spacing[3],
+  },
+  templateChip: {
+    backgroundColor: colors.background,
+    borderRadius: radii.full,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1.5],
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  templateChipText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: colors.text,
+  },
   input: {
     minHeight: 80,
     fontSize: 15,
@@ -595,7 +782,39 @@ const composeStyles = StyleSheet.create({
     borderRadius: radii.md,
     borderWidth: 1,
     borderColor: colors.border,
+    marginHorizontal: spacing[4],
+    marginBottom: spacing[1],
+  },
+  counterRow: {
+    paddingHorizontal: spacing[4],
+    alignItems: 'flex-end',
+    marginBottom: spacing[2],
+  },
+  counterText: {
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  errorText: {
+    fontSize: 13,
+    color: colors.error,
+    paddingHorizontal: spacing[4],
+    marginBottom: spacing[2],
+  },
+  successBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    backgroundColor: colors.successLight,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2.5],
+    marginHorizontal: spacing[4],
     marginBottom: spacing[3],
+  },
+  successText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.success,
   },
   actions: {
     flexDirection: 'row',
@@ -620,6 +839,39 @@ const composeStyles = StyleSheet.create({
   },
   sendBtnDisabled: { opacity: 0.5 },
   sendText: { fontSize: 14, fontWeight: '600', color: colors.white },
+})
+
+const deleteStyles = StyleSheet.create({
+  confirmText: {
+    fontSize: 15,
+    color: colors.textSecondary,
+    lineHeight: 21,
+    paddingHorizontal: spacing[4],
+    marginBottom: spacing[4],
+  },
+  actions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing[2],
+    paddingHorizontal: spacing[4],
+  },
+  cancelBtn: {
+    paddingHorizontal: spacing[3],
+    height: 36,
+    justifyContent: 'center',
+  },
+  cancelText: { fontSize: 14, fontWeight: '600', color: colors.textMuted },
+  deleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
+    backgroundColor: colors.error,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing[4],
+    height: 36,
+  },
+  deleteBtnDisabled: { opacity: 0.5 },
+  deleteText: { fontSize: 14, fontWeight: '600', color: colors.white },
 })
 
 const styles = StyleSheet.create({

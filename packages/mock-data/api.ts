@@ -1080,6 +1080,27 @@ export async function toggleSellerReviewFlag(
   return { success: true, review }
 }
 
+export async function editSellerReviewResponse(
+  reviewId: string,
+  text: string,
+): Promise<{ success: boolean; review?: SellerReview }> {
+  await randomDelay(300, 700)
+  const review = sellerReviewsCache.find(r => r.id === reviewId)
+  if (!review || !review.response) return { success: false }
+  review.response = { text, at: new Date().toISOString() }
+  return { success: true, review }
+}
+
+export async function deleteSellerReviewResponse(
+  reviewId: string,
+): Promise<{ success: boolean; review?: SellerReview }> {
+  await randomDelay(200, 500)
+  const review = sellerReviewsCache.find(r => r.id === reviewId)
+  if (!review) return { success: false }
+  review.response = undefined
+  return { success: true, review }
+}
+
 // --- Stock editing (SI5/SS3) ---
 
 const stockHistoryStore: StockHistoryEntry[] = []

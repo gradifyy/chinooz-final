@@ -26,7 +26,7 @@ export function SellerHeader() {
 
   const moreItems: { key: string; label: string; href: string; icon: React.ReactNode; badge?: number }[] = [
     { key: 'messages', label: t('seller.messages.tab'), href: '/messages', icon: <MessageSquare size={16} aria-hidden="true" />, badge: unread },
-    { key: 'reviews', label: t('seller.reviews.moreReviews'), href: '/reviews', icon: <Star size={16} aria-hidden="true" /> },
+    { key: 'reviews', label: t('sellerReviews.moreReviews'), href: '/reviews', icon: <Star size={16} aria-hidden="true" /> },
   ]
 
   return (
@@ -60,7 +60,7 @@ export function SellerHeader() {
                 <button
                   type="button"
                   onClick={() => setMoreOpen(o => !o)}
-                  aria-label={t('seller.reviews.moreAria')}
+                  aria-label={t('sellerReviews.moreAria')}
                   aria-haspopup="menu"
                   aria-expanded={moreOpen}
                   className="inline-flex items-center justify-center min-touch rounded-md hover:bg-primary-dark/40 transition-colors"

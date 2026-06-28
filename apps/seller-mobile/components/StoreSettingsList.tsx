@@ -131,7 +131,7 @@ export default function StoreSettingsList() {
           <TouchableOpacity
             onPress={() => router.push('/reviews')}
             accessibilityRole="button"
-            accessibilityLabel={t('seller.reviews.moreReviewsAria')}
+            accessibilityLabel={t('sellerReviews.moreReviewsAria')}
             activeOpacity={0.85}
             style={[styles.row, styles.rowBorder, { minHeight: 56 }]}
           >
@@ -140,12 +140,12 @@ export default function StoreSettingsList() {
             </View>
             <View style={styles.rowBody}>
               <Text style={styles.rowLabel} numberOfLines={1}>
-                {t('seller.reviews.moreReviews')}
+                {t('sellerReviews.moreReviews')}
               </Text>
               <View style={styles.statusRow}>
                 <View style={[styles.statusDot, { backgroundColor: colors.gold }]} />
                 <Text style={[styles.statusText, { color: colors.textMuted }]} numberOfLines={1}>
-                  {t('seller.reviews.subtitle')}
+                  {t('sellerReviews.subtitle')}
                 </Text>
               </View>
             </View>
