@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback, useEffect } from 'react'
+import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react'
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   RefreshControl,
   Animated,
   Pressable,
+  useWindowDimensions,
 } from 'react-native'
 import { useTranslation } from 'react-i18next'
 import { useRouter } from 'expo-router'
@@ -38,6 +39,7 @@ import {
   SELLER_GO_LIVE_TASKS,
   type SellerDateRange,
   type SellerDateRangeKey,
+  type SellerKpi,
 } from '@chinooz/mock-data'
 import { analytics } from '@chinooz/analytics'
 
@@ -211,7 +213,7 @@ export default function SellerDashboard() {
 
           <View style={styles.sections}>
             <SectionHeader title={t('seller.dashboard.sectionKpis')} />
-            <KpiCards kpis={metrics.kpis} />
+            <KpiCards kpis={metrics.kpis} loading={refreshing} onPress={(kpi) => router.push(kpi.route as any)} t={t} />
 
             <SectionHeader title={t('seller.dashboard.sectionSales')} />
             <SalesChart points={metrics.chart} />
@@ -379,34 +381,156 @@ function GoLiveChecklist({
   )
 }
 
-function KpiCards({ kpis }: { kpis: { key: string; label: string; value: string; deltaPct: number; trend: 'up' | 'down' | 'flat'; hint: string }[] }) {
+function KpiCards({ kpis, loading, onPress, t }: { kpis: SellerKpi[]; loading: boolean; onPress: (kpi: SellerKpi) => void; t: (k: string, o?: Record<string, unknown>) => string }) {
+  const { width } = useWindowDimensions()
+  const isTablet = width >= 768
+  const columns = isTablet ? 3 : 2
+  const cardWidth = (width - 16 * 2 - 8 * (columns - 1)) / columns
+
+  if (loading) {
+    return (
+      <View style={[styles.kpiGrid, { gap: spacing[2] }]}>
+        {Array.from({ length: 6 }).map((_, i) => (
+          <KpiCardSkeleton key={i} width={cardWidth} />
+        ))}
+      </View>
+    )
+  }
+
   return (
-    <View style={styles.kpiGrid}>
+    <View style={[styles.kpiGrid, { gap: spacing[2] }]}>
       {kpis.map(kpi => (
-        <View key={kpi.key} style={styles.kpiCard}>
-          <Text style={styles.kpiLabel}>{kpi.label}</Text>
-          <Text style={styles.kpiValue}>{kpi.value}</Text>
-          <View style={styles.kpiDeltaRow}>
-            {kpi.trend === 'up' ? (
-              <TrendingUp size={14} color={colors.success} />
-            ) : kpi.trend === 'down' ? (
-              <TrendingDown size={14} color={colors.error} />
-            ) : (
-              <Minus size={14} color={colors.textMuted} />
-            )}
-            <Text
-              style={[
-                styles.kpiDelta,
-                { color: kpi.trend === 'up' ? colors.success : kpi.trend === 'down' ? colors.error : colors.textMuted },
-              ]}
-            >
-              {kpi.deltaPct > 0 ? '+' : ''}
-              {kpi.deltaPct}%
-            </Text>
-            <Text style={styles.kpiHint}>{kpi.hint}</Text>
-          </View>
-        </View>
+        <KpiCard key={kpi.key} kpi={kpi} onPress={onPress} width={cardWidth} t={t} />
       ))}
+    </View>
+  )
+}
+
+function useCountUp(target: number, enabled: boolean, durationMs = 300): number {
+  const [value, setValue] = useState(0)
+  const raf = useRef<ReturnType<typeof requestAnimationFrame> | null>(null)
+  useEffect(() => {
+    if (!enabled) {
+      setValue(target)
+      return
+    }
+    const start = Date.now()
+    const tick = () => {
+      const t = Math.min(1, (Date.now() - start) / durationMs)
+      const eased = 1 - Math.pow(1 - t, 3)
+      setValue(target * eased)
+      if (t < 1) raf.current = requestAnimationFrame(tick)
+    }
+    raf.current = requestAnimationFrame(tick)
+    return () => {
+      if (raf.current) cancelAnimationFrame(raf.current)
+    }
+  }, [target, enabled, durationMs])
+  return value
+}
+
+function formatValue(kpi: SellerKpi, raw: number): string {
+  const v = kpi.decimals ? Math.round(raw * 10) / 10 : Math.round(raw)
+  if (kpi.prefix) return `${kpi.prefix} ${v.toLocaleString()}`
+  if (kpi.suffix) return `${v.toFixed(kpi.decimals ?? 0)}${kpi.suffix}`
+  return v.toLocaleString()
+}
+
+function KpiCard({ kpi, onPress, width, t }: { kpi: SellerKpi; onPress: (kpi: SellerKpi) => void; width: number; t: (k: string, o?: Record<string, unknown>) => string }) {
+  const { reducedMotion } = useA11y()
+  const scale = useRef(new Animated.Value(1)).current
+  const animatedValue = useCountUp(kpi.numericValue, !reducedMotion)
+  const displayValue = formatValue(kpi, animatedValue)
+
+  const direction = kpi.trend === 'up' ? t('seller.dashboard.kpiUp') : kpi.trend === 'down' ? t('seller.dashboard.kpiDown') : t('seller.dashboard.kpiFlat')
+  const ariaLabel = t('seller.dashboard.kpiAria', {
+    label: kpi.label,
+    value: kpi.value,
+    direction,
+    delta: Math.abs(kpi.deltaPct),
+    period: kpi.period,
+  })
+
+  const handlePressIn = () => {
+    Animated.timing(scale, { toValue: 0.98, duration: 100, useNativeDriver: true }).start()
+  }
+  const handlePressOut = () => {
+    Animated.timing(scale, { toValue: 1, duration: 150, useNativeDriver: true }).start()
+  }
+
+  const valueColor = kpi.accent === 'plum' ? colors.primary : colors.text
+  const deltaColor = kpi.trend === 'up' ? colors.success : kpi.trend === 'down' ? colors.error : colors.textMuted
+  const TrendIcon = kpi.trend === 'up' ? TrendingUp : kpi.trend === 'down' ? TrendingDown : Minus
+
+  return (
+    <Animated.View style={{ width, transform: [{ scale }] }}>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel={ariaLabel}
+        onPress={() => onPress(kpi)}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        activeOpacity={0.95}
+        style={styles.kpiCard}
+      >
+        <Text style={styles.kpiLabel}>{kpi.label}</Text>
+        <Text style={[styles.kpiValue, { color: valueColor }]} numberOfLines={1}>
+          {displayValue}
+        </Text>
+        <Sparkline data={kpi.sparkline} accent={kpi.accent} />
+        <Text style={styles.kpiPeriod}>{kpi.period}</Text>
+        <View style={styles.kpiDeltaRow}>
+          <TrendIcon size={12} color={deltaColor} />
+          <Text style={[styles.kpiDelta, { color: deltaColor }]}>
+            {kpi.deltaPct > 0 ? '+' : ''}
+            {kpi.deltaPct}%
+          </Text>
+          <Text style={styles.kpiVsPrev}>{t('seller.dashboard.kpiVsPrev')}</Text>
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  )
+}
+
+function Sparkline({ data, accent }: { data: number[]; accent: 'plum' | 'default' }) {
+  const max = Math.max(1, ...data)
+  const min = Math.min(...data)
+  const range = max - min || 1
+  const h = 32
+  const stroke = accent === 'plum' ? colors.primary : colors.primary
+
+  return (
+    <View style={styles.sparklineContainer} accessibilityElementsHidden importantForAccessibility="no">
+      <View style={[styles.sparklineTrack, { height: h }]}>
+        {data.map((v, i) => {
+          const barH = Math.max(2, ((v - min) / range) * h)
+          const isLast = i === data.length - 1
+          return (
+            <View
+              key={i}
+              style={{
+                flex: 1,
+                height: barH,
+                backgroundColor: isLast ? stroke : stroke + '50',
+                borderRadius: 1,
+                maxWidth: 4,
+              }}
+            />
+          )
+        })}
+      </View>
+    </View>
+  )
+}
+
+function KpiCardSkeleton({ width }: { width: number }) {
+  return (
+    <View style={[styles.kpiCard, { width }]} accessibilityRole="text" accessibilityLabel="Loading metric" aria-busy>
+      <View style={styles.skeletonLabel} />
+      <View style={styles.skeletonValue} />
+      <View style={styles.skeletonSpark} />
+      <View style={styles.skeletonPeriod} />
+      <View style={styles.skeletonDelta} />
     </View>
   )
 }
@@ -702,22 +826,29 @@ const styles = StyleSheet.create({
     marginTop: spacing[4],
   },
   goLiveContinueText: { color: colors.white, fontWeight: '700', fontSize: 14 },
-  kpiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
+  kpiGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   kpiCard: {
-    width: '48%',
     flexGrow: 1,
     backgroundColor: colors.surface,
     borderRadius: radii.lg,
     borderWidth: 1,
     borderColor: colors.borderLight,
-    padding: spacing[3.5],
+    padding: spacing[4],
     gap: 6,
   },
-  kpiLabel: { fontSize: 12, fontWeight: '600', color: colors.textMuted },
-  kpiValue: { fontSize: 20, fontWeight: '700', color: colors.text },
+  kpiLabel: { fontSize: 14, fontWeight: '500', color: colors.textMuted },
+  kpiValue: { fontSize: 28, fontWeight: '700', fontVariant: ['tabular-nums'], letterSpacing: -0.5 },
+  kpiPeriod: { fontSize: 12, fontWeight: '400', color: colors.textMuted },
   kpiDeltaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[1] },
-  kpiDelta: { fontSize: 12, fontWeight: '600' },
-  kpiHint: { fontSize: 11, color: colors.textTertiary, marginLeft: 'auto' },
+  kpiDelta: { fontSize: 12, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  kpiVsPrev: { fontSize: 12, fontWeight: '400', color: colors.textMuted },
+  sparklineContainer: { marginVertical: 2 },
+  sparklineTrack: { flexDirection: 'row', alignItems: 'flex-end', gap: 2, width: '100%' },
+  skeletonLabel: { width: 80, height: 14, borderRadius: radii.sm, backgroundColor: colors.shimmer },
+  skeletonValue: { width: 120, height: 28, borderRadius: radii.sm, backgroundColor: colors.shimmer, marginTop: 4 },
+  skeletonSpark: { width: '100%', height: 32, borderRadius: radii.sm, backgroundColor: colors.shimmer, marginTop: 4 },
+  skeletonPeriod: { width: 70, height: 12, borderRadius: radii.sm, backgroundColor: colors.shimmer, marginTop: 4 },
+  skeletonDelta: { width: 90, height: 12, borderRadius: radii.sm, backgroundColor: colors.shimmer, marginTop: 4 },
   chartArea: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', height: 140, gap: spacing[2] },
   chartBarCol: { flex: 1, alignItems: 'center', gap: spacing[1.5], height: '100%' },
   chartBarTrack: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'flex-end' },

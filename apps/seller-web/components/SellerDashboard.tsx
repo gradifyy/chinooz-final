@@ -33,6 +33,7 @@ import {
   SELLER_GO_LIVE_TASKS,
   type SellerDateRange,
   type SellerDateRangeKey,
+  type SellerKpi,
 } from '@chinooz/mock-data'
 import { analytics } from '@chinooz/analytics'
 
@@ -76,6 +77,7 @@ export default function SellerDashboard() {
   const [customRange, setCustomRange] = useState<{ start: string; end: string } | null>(null)
   const [customOpen, setCustomOpen] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const moreRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -279,10 +281,12 @@ export default function SellerDashboard() {
               <h3 id="sd-kpis" className="text-lg font-semibold text-text mb-3">
                 {t('seller.dashboard.sectionKpis')}
               </h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
-                {metrics.kpis.map(kpi => (
-                  <KpiCard key={kpi.key} kpi={kpi} />
-                ))}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+                {refreshing
+                  ? Array.from({ length: 6 }).map((_, i) => <KpiCardSkeleton key={i} />)
+                  : metrics.kpis.map(kpi => (
+                      <KpiCard key={kpi.key} kpi={kpi} onPress={(k) => router.push(k.route)} t={t} />
+                    ))}
               </div>
             </section>
 
@@ -401,21 +405,116 @@ function GoLiveChecklist({
   )
 }
 
-function KpiCard({ kpi }: { kpi: { key: string; label: string; value: string; deltaPct: number; trend: 'up' | 'down' | 'flat'; hint: string } }) {
+function useCountUp(target: number, enabled: boolean, durationMs = 300): number {
+  const [value, setValue] = useState(0)
+  const raf = useRef<ReturnType<typeof requestAnimationFrame> | null>(null)
+  useEffect(() => {
+    if (!enabled) {
+      setValue(target)
+      return
+    }
+    const start = Date.now()
+    const tick = () => {
+      const t = Math.min(1, (Date.now() - start) / durationMs)
+      const eased = 1 - Math.pow(1 - t, 3)
+      setValue(target * eased)
+      if (t < 1) raf.current = requestAnimationFrame(tick)
+    }
+    raf.current = requestAnimationFrame(tick)
+    return () => {
+      if (raf.current) cancelAnimationFrame(raf.current)
+    }
+  }, [target, enabled, durationMs])
+  return value
+}
+
+function formatValue(kpi: SellerKpi, raw: number): string {
+  const v = kpi.decimals ? Math.round(raw * 10) / 10 : Math.round(raw)
+  if (kpi.prefix) return `${kpi.prefix} ${v.toLocaleString()}`
+  if (kpi.suffix) return `${v.toFixed(kpi.decimals ?? 0)}${kpi.suffix}`
+  return v.toLocaleString()
+}
+
+function KpiCard({ kpi, onPress, t }: { kpi: SellerKpi; onPress: (kpi: SellerKpi) => void; t: (k: string, o?: Record<string, unknown>) => string }) {
+  const reduced = useReducedMotion()
+  const animatedValue = useCountUp(kpi.numericValue, !reduced)
+  const displayValue = formatValue(kpi, animatedValue)
+
+  const direction = kpi.trend === 'up' ? t('seller.dashboard.kpiUp') : kpi.trend === 'down' ? t('seller.dashboard.kpiDown') : t('seller.dashboard.kpiFlat')
+  const ariaLabel = t('seller.dashboard.kpiAria', {
+    label: kpi.label,
+    value: kpi.value,
+    direction,
+    delta: Math.abs(kpi.deltaPct),
+    period: kpi.period,
+  })
+
   const TrendIcon = kpi.trend === 'up' ? TrendingUp : kpi.trend === 'down' ? TrendingDown : Minus
   const trendColor = kpi.trend === 'up' ? 'text-success' : kpi.trend === 'down' ? 'text-error' : 'text-text-muted'
+  const valueColor = kpi.accent === 'plum' ? 'text-primary' : 'text-text'
+
   return (
-    <div className="rounded-lg border border-border-light bg-surface p-4 flex flex-col gap-1.5">
-      <span className="text-xs font-semibold text-text-muted">{kpi.label}</span>
-      <span className="text-xl font-bold text-text">{kpi.value}</span>
+    <motion.button
+      whileTap={{ scale: reduced ? 1 : 0.98 }}
+      onClick={() => onPress(kpi)}
+      aria-label={ariaLabel}
+      className="rounded-lg border border-border-light bg-surface p-4 flex flex-col gap-1.5 text-left cursor-pointer hover:border-primary/30 transition-colors min-touch"
+    >
+      <span className="text-sm font-medium text-text-muted">{kpi.label}</span>
+      <span className={`text-[28px] leading-tight font-bold tabular-nums ${valueColor}`}>
+        {displayValue}
+      </span>
+      <Sparkline data={kpi.sparkline} />
+      <span className="text-xs font-normal text-text-muted">{kpi.period}</span>
       <div className="flex items-center gap-1">
-        <TrendIcon size={14} className={trendColor} />
-        <span className={`text-xs font-semibold ${trendColor}`}>
+        <TrendIcon size={12} className={trendColor} />
+        <span className={`text-xs font-semibold tabular-nums ${trendColor}`}>
           {kpi.deltaPct > 0 ? '+' : ''}
           {kpi.deltaPct}%
         </span>
-        <span className="text-[11px] text-text-tertiary ml-auto">{kpi.hint}</span>
+        <span className="text-xs font-normal text-text-muted">{t('seller.dashboard.kpiVsPrev')}</span>
       </div>
+    </motion.button>
+  )
+}
+
+function Sparkline({ data }: { data: number[] }) {
+  const max = Math.max(1, ...data)
+  const min = Math.min(...data)
+  const range = max - min || 1
+  const w = 100
+  const h = 32
+  const pts = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * w
+    const y = h - ((v - min) / range) * h
+    return `${x},${y}`
+  })
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="overflow-visible" aria-hidden="true">
+      <polyline
+        points={pts.join(' ')}
+        fill="none"
+        stroke="#8A1B57"
+        strokeWidth={1.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function KpiCardSkeleton() {
+  return (
+    <div
+      className="rounded-lg border border-border-light bg-surface p-4 flex flex-col gap-1.5"
+      aria-busy="true"
+      aria-label="Loading metric"
+    >
+      <div className="w-20 h-3.5 rounded bg-shimmer" />
+      <div className="w-28 h-7 rounded bg-shimmer" />
+      <div className="w-full h-8 rounded bg-shimmer" />
+      <div className="w-16 h-3 rounded bg-shimmer" />
+      <div className="w-20 h-3 rounded bg-shimmer" />
     </div>
   )
 }

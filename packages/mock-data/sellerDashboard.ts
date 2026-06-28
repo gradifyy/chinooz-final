@@ -7,13 +7,23 @@ export interface SellerDateRange {
   custom?: { start: string; end: string }
 }
 
+export type SellerKpiKey = 'revenue' | 'orders' | 'units' | 'aov' | 'conversion' | 'payouts'
+
 export interface SellerKpi {
-  key: string
+  key: SellerKpiKey
   label: string
   value: string
+  numericValue: number
+  prefix?: string
+  suffix?: string
+  decimals?: number
   deltaPct: number
   trend: 'up' | 'down' | 'flat'
   hint: string
+  period: string
+  sparkline: number[]
+  route: string
+  accent: 'plum' | 'default'
 }
 
 export interface SellerChartPoint {
@@ -74,11 +84,13 @@ export const SELLER_GO_LIVE_TASKS: SellerGoLiveTask[] = [
   { id: 'policies', label: 'Add return & shipping policies', done: false },
 ]
 
-const KPIS: { key: string; label: string; base: number; suffix: string; hint: string }[] = [
-  { key: 'revenue', label: 'Revenue', base: 18450, suffix: 'NPR', hint: 'Gross sales' },
-  { key: 'orders', label: 'Orders', base: 64, suffix: '', hint: 'Confirmed orders' },
-  { key: 'aov', label: 'Avg. order value', base: 288, suffix: 'NPR', hint: 'Revenue / orders' },
-  { key: 'views', label: 'Store views', base: 3120, suffix: '', hint: 'Unique visitors' },
+const KPIS: { key: SellerKpiKey; label: string; base: number; prefix?: string; suffix?: string; decimals?: number; hint: string; route: string; accent: 'plum' | 'default' }[] = [
+  { key: 'revenue', label: 'Revenue', base: 18450, prefix: 'NPR', hint: 'Gross sales', route: '/finance', accent: 'plum' },
+  { key: 'orders', label: 'Orders', base: 64, hint: 'Confirmed orders', route: '/orders', accent: 'default' },
+  { key: 'units', label: 'Units sold', base: 128, hint: 'Total units', route: '/products', accent: 'default' },
+  { key: 'aov', label: 'Avg order value', base: 288, prefix: 'NPR', hint: 'Revenue / orders', route: '/finance', accent: 'default' },
+  { key: 'conversion', label: 'Conversion', base: 3.2, suffix: '%', decimals: 1, hint: 'Orders / views', route: '/analytics', accent: 'default' },
+  { key: 'payouts', label: 'Pending payouts', base: 12400, prefix: 'NPR', hint: 'Awaiting settlement', route: '/finance', accent: 'default' },
 ]
 
 const CHART_LABELS: Record<number, string[]> = {
@@ -138,20 +150,44 @@ function seeded(n: number, seed: number): number {
   return x - Math.floor(x)
 }
 
+function periodLabel(days: number): string {
+  if (days === 1) return 'Today'
+  if (days === 7) return 'Last 7 days'
+  if (days === 30) return 'Last 30 days'
+  return 'Custom range'
+}
+
 export function getSellerDashboardMetrics(range: SellerDateRange): SellerDashboardMetrics {
   const days = range.days
   const scale = days === 1 ? 0.08 : days === 7 ? 0.55 : 1
+  const period = periodLabel(days)
 
   const kpis: SellerKpi[] = KPIS.map((k, i) => {
-    const value = Math.round(k.base * scale * (0.85 + seeded(i, days) * 0.3))
+    const raw = k.base * scale * (0.85 + seeded(i, days) * 0.3)
+    const numericValue = k.decimals ? Math.round(raw * 10) / 10 : Math.round(raw)
     const deltaPct = Math.round((seeded(i + 1, days) - 0.4) * 40)
+    const spark = Array.from({ length: 8 }, (_, j) =>
+      Math.round(numericValue * (0.6 + seeded(i * 10 + j, days) * 0.5)),
+    )
+    let value: string
+    if (k.prefix) value = `${k.prefix} ${numericValue.toLocaleString()}`
+    else if (k.suffix) value = `${numericValue.toFixed(k.decimals ?? 0)}${k.suffix}`
+    else value = numericValue.toLocaleString()
     return {
       key: k.key,
       label: k.label,
-      value: k.suffix === 'NPR' ? `${k.suffix} ${value.toLocaleString()}` : value.toLocaleString(),
+      value,
+      numericValue,
+      prefix: k.prefix,
+      suffix: k.suffix,
+      decimals: k.decimals,
       deltaPct,
       trend: deltaPct > 3 ? 'up' : deltaPct < -3 ? 'down' : 'flat',
       hint: k.hint,
+      period,
+      sparkline: spark,
+      route: k.route,
+      accent: k.accent,
     }
   })
 
