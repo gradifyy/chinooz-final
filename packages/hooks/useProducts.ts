@@ -5,7 +5,7 @@ import type {
   SellerInventoryFilter,
   SellerReviewFilter,
 } from '@chinooz/mock-data'
-import type { Product, Category, CancelReason, SellerOrderStatusKey } from '@chinooz/types'
+import type { Product, Category, CancelReason, SellerOrderStatusKey, SellerReview } from '@chinooz/types'
 
 const STALE_PRODUCTS = 1000 * 30
 
@@ -519,6 +519,41 @@ export function useMarkSellerConversationRead() {
     mutationFn: (conversationId: string) => api.markSellerConversationRead(conversationId),
     onSuccess: (_data, conversationId) => {
       queryClient.invalidateQueries({ queryKey: ['seller-messages', conversationId] })
+      queryClient.invalidateQueries({ queryKey: ['seller-conversations'] })
+    },
+  })
+}
+
+export function useChatOrderContext(sellerId: string | null, orderId?: string) {
+  return useQuery({
+    queryKey: ['chat-order-context', sellerId, orderId],
+    queryFn: () => api.getChatOrderContext(sellerId as string, orderId as string),
+    enabled: !!sellerId && !!orderId,
+    staleTime: 1000 * 30,
+  })
+}
+
+export function useChatProductContext(productId?: string) {
+  return useQuery({
+    queryKey: ['chat-product-context', productId],
+    queryFn: () => api.getChatProductContext(productId as string),
+    enabled: !!productId,
+    staleTime: 1000 * 30,
+  })
+}
+
+export function useGenerateTracking() {
+  return useMutation({
+    mutationFn: (orderId: string) => api.generateTrackingInfo(orderId),
+  })
+}
+
+export function useAttachConversationContext() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ conversationId, context }: { conversationId: string; context: { type: 'order' | 'product'; id: string } }) =>
+      api.attachConversationContext(conversationId, context),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['seller-conversations'] })
     },
   })

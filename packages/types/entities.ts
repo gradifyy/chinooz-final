@@ -67,6 +67,11 @@ export interface Banner {
   active: boolean
 }
 
+export interface SellerReviewResponse {
+  text: string
+  at: string
+}
+
 export interface Review {
   id: string
   productId: string
@@ -78,11 +83,7 @@ export interface Review {
   photos?: string[]
   createdAt: string
   helpful: number
-}
-
-export interface SellerReviewResponse {
-  text: string
-  at: string
+  sellerResponse?: SellerReviewResponse
 }
 
 export interface SellerReview extends Review {
@@ -159,6 +160,29 @@ export interface Notification {
 
 export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read'
 
+export type RichMessageType = 'product' | 'order' | 'tracking'
+
+export interface RichProductPayload {
+  productId: string
+  name: string
+  image: string
+  price: number
+}
+
+export interface RichOrderPayload {
+  orderId: string
+  orderRef: string
+  status: string
+  total: number
+  itemCount: number
+}
+
+export interface RichTrackingPayload {
+  carrier: string
+  trackingNumber: string
+  url: string
+}
+
 export interface Message {
   id: string
   conversationId: string
@@ -172,6 +196,10 @@ export interface Message {
   productName?: string
   productImage?: string
   productPrice?: number
+  richType?: RichMessageType
+  richProduct?: RichProductPayload
+  richOrder?: RichOrderPayload
+  richTracking?: RichTrackingPayload
 }
 
 export interface Conversation {
@@ -330,6 +358,23 @@ export interface SellerInventoryProduct {
   variantCount: number
   salesCount: number
   variants: SellerInventoryVariant[]
+}
+
+export type StockEditReason = 'restock' | 'correction' | 'damage' | 'loss' | 'return' | 'other'
+
+export type StockEditMode = 'set' | 'adjust'
+
+export interface StockHistoryEntry {
+  id: string
+  variantId: string
+  sku: string
+  previousStock: number
+  newStock: number
+  delta: number
+  mode: StockEditMode
+  reason: StockEditReason
+  note?: string
+  createdAt: string
 }
 
 // ---- RS3 map / trip simulator + rider delivery ----
@@ -509,6 +554,12 @@ export interface RouteStop extends GeoPoint {
   address: string
   contactName: string
   contactPhone: string
+  /** Items to collect at this stop (pickup only); empty for drop-off. */
+  items?: string[]
+  /** Optional prep note from the seller (pickup only). */
+  prepNote?: string
+  /** Optional area / locality label shown under the stop name. */
+  area?: string
 }
 
 export interface DeliveryLeg {

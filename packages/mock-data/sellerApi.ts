@@ -12,6 +12,9 @@ import type {
   SellerOrderStatusKey,
   SellerProduct,
   StockStatus,
+  StockEditMode,
+  StockEditReason,
+  StockHistoryEntry,
   Promotion,
   ExportReportType,
   ExportReportResult,
@@ -151,12 +154,30 @@ export async function updateStock(
   productId: string,
   variantId: string | undefined,
   newCount: number,
+  mode: StockEditMode = 'set',
+  reason: StockEditReason = 'restock',
+  note?: string,
 ): Promise<{ productId: string; variantId?: string; stockCount: number; stock: StockStatus }> {
   await randomDelay(200, 500)
   maybeError()
   const stock: StockStatus =
     newCount <= 0 ? 'out_of_stock' : newCount < 10 ? 'low_stock' : 'in_stock'
+
+  // Record to stock history (SI5).
+  if (variantId) {
+    const { recordStockHistoryEntry } = await import('./api')
+    recordStockHistoryEntry(variantId, mode, reason, note, newCount)
+  }
+
   return { productId, variantId, stockCount: newCount, stock }
+}
+
+export async function getStockHistoryApi(
+  variantId?: string,
+  limit = 50,
+): Promise<StockHistoryEntry[]> {
+  const { getStockHistory } = await import('./api')
+  return getStockHistory(variantId, limit)
 }
 
 // --- Orders ---
@@ -370,5 +391,107 @@ export async function checkHandleAvailability(handle: string): Promise<boolean> 
   await delay(300 + Math.random() * 200)
   if (!handle || handle.length < 3) return false
   return !TAKEN_HANDLES.has(handle.toLowerCase())
+}
+
+// --- Chat context panel (SC3) ---
+
+export interface ChatOrderContext {
+  orderId: string
+  orderRef: string
+  status: string
+  statusKey: SellerOrderStatusKey
+  items: { id: string; name: string; image: string; price: number; quantity: number }[]
+  total: number
+  currency: 'NPR'
+  paymentType: 'cod' | 'prepaid'
+  estimatedDelivery?: string
+}
+
+export async function getChatOrderContext(
+  sellerId: string,
+  orderId: string,
+): Promise<ChatOrderContext | null> {
+  await randomDelay(200, 400)
+  maybeError()
+  const all = await getSellerOrders(sellerId)
+  const norm = orderId.replace('#', '').toUpperCase()
+  const match = all.find(o => o.orderId.toUpperCase() === norm || o.subOrderId.toUpperCase() === norm)
+  if (!match) return null
+  return {
+    orderId: match.orderId,
+    orderRef: `#${match.orderId}`,
+    status: match.status,
+    statusKey: match.statusKey,
+    items: match.items.map(it => ({
+      id: it.id,
+      name: it.name,
+      image: it.image,
+      price: it.price,
+      quantity: it.quantity,
+    })),
+    total: match.total,
+    currency: match.currency,
+    paymentType: match.paymentType,
+    estimatedDelivery: match.estimatedDelivery,
+  }
+}
+
+export interface ChatProductContext {
+  id: string
+  name: string
+  image: string
+  price: number
+  compareAtPrice?: number
+  currency: 'NPR'
+  stock: StockStatus
+  status: SellerProduct['status']
+}
+
+export async function getChatProductContext(
+  productId: string,
+): Promise<ChatProductContext | null> {
+  await randomDelay(200, 400)
+  maybeError()
+  const res = await getSellerProducts()
+  const p = res.items.find(sp => sp.id === productId)
+  if (!p) return null
+  return {
+    id: p.id,
+    name: p.name,
+    image: p.image,
+    price: p.price,
+    compareAtPrice: p.compareAtPrice,
+    currency: p.currency,
+    stock: p.stock,
+    status: p.status,
+  }
+}
+
+export interface TrackingInfo {
+  carrier: string
+  trackingNumber: string
+  url: string
+}
+
+export async function generateTrackingInfo(
+  orderId: string,
+): Promise<TrackingInfo> {
+  await randomDelay(300, 600)
+  maybeError()
+  const num = Math.floor(100000 + Math.random() * 900000)
+  return {
+    carrier: 'Pathao Express',
+    trackingNumber: `PH-${num}`,
+    url: `https://pathao.com/track/${num}`,
+  }
+}
+
+export async function attachConversationContext(
+  conversationId: string,
+  context: { type: 'order' | 'product'; id: string },
+): Promise<{ success: boolean }> {
+  await randomDelay(200, 400)
+  maybeError()
+  return { success: true }
 }
 
