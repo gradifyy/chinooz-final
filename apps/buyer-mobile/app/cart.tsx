@@ -1,27 +1,27 @@
 import React, { useState, useCallback, useMemo } from 'react'
-import { View, Text, ScrollView, TouchableOpacity, Image } from 'react-native'
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  FadeIn,
-  FadeInDown,
-} from 'react-native-reanimated'
+import { View, Text, ScrollView, TouchableOpacity } from 'react-native'
+import Animated, { FadeInDown } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
 import * as Haptics from 'expo-haptics'
-import { colors, spacing, radii } from '@chinooz/theme'
-import { formatNPR } from '@chinooz/utils'
-import { useCartStore, useUIStore } from '@chinooz/state'
-import { EmptyState } from '@chinooz/ui'
+import { spacing, radii, fontSz, duration } from '@chinooz/theme'
+import { useAppTheme } from '../components/ThemeProvider'
+import { formatNPR, calcCartTotals } from '@chinooz/utils'
+import { useCartStore, useCheckoutStore } from '@chinooz/state'
+import { CartSummary, Button } from '@chinooz/ui'
 import EmptyCart from '../components/EmptyCart'
+import ScreenHeader from '../components/ScreenHeader'
+import Icon from '../components/Icon'
 import type { CartItem } from '@chinooz/types'
 
-const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity)
-
 function getInitials(name: string): string {
-  return name.split(' ').map(s => s[0]).join('').toUpperCase().slice(0, 2)
+  return name
+    .split(' ')
+    .map(s => s[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
 }
 
 function groupBySeller(items: CartItem[]): Map<string, CartItem[]> {
@@ -39,17 +39,24 @@ export default function CartScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { t } = useTranslation()
+  const { colors } = useAppTheme()
   const items = useCartStore(s => s.items)
   const updateQuantity = useCartStore(s => s.updateQuantity)
   const removeItem = useCartStore(s => s.removeItem)
 
   const [selected, setSelected] = useState<Set<string>>(new Set(items.map(i => i.id)))
-  const [expandedSellers, setExpandedSellers] = useState<Set<string>>(new Set())
+  // Promo lives in the checkout store so it survives the cart → checkout → order
+  // flow and the discount is actually applied to the placed order.
+  const promo = useCheckoutStore(s => s.coupon)
+  const setPromo = useCheckoutStore(s => s.setCoupon)
+  const setSelectedIds = useCheckoutStore(s => s.setSelectedIds)
 
   const sellerGroups = useMemo(() => groupBySeller(items), [items])
   const count = items.reduce((sum, i) => sum + i.quantity, 0)
   const selectedItems = items.filter(i => selected.has(i.id))
-  const selectedTotal = selectedItems.reduce((sum, i) => sum + i.price * i.quantity, 0)
+  // Single source of truth for money — same calcCartTotals the checkout review
+  // uses, so the cart total never diverges from the checkout grand total.
+  const totals = useMemo(() => calcCartTotals(selectedItems, promo), [selectedItems, promo])
   const allSelected = items.length > 0 && items.every(i => selected.has(i.id))
 
   const toggleItem = useCallback((id: string) => {
@@ -59,13 +66,13 @@ export default function CartScreen() {
       else next.add(id)
       return next
     })
-    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light) } catch {}
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
   }, [])
 
   const toggleAll = useCallback(() => {
     if (allSelected) setSelected(new Set())
     else setSelected(new Set(items.map(i => i.id)))
-    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light) } catch {}
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
   }, [allSelected, items])
 
   const toggleSeller = useCallback((sellerItems: CartItem[]) => {
@@ -78,19 +85,30 @@ export default function CartScreen() {
       }
       return next
     })
-    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light) } catch {}
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
   }, [])
 
   const handleCheckout = useCallback(() => {
     if (selectedItems.length === 0) return
+    setSelectedIds(selectedItems.map(i => i.id))
     router.push('/checkout')
-  }, [selectedItems, router])
+  }, [selectedItems, setSelectedIds, router])
 
   if (items.length === 0) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>
-        <View style={{ paddingHorizontal: spacing[4], paddingVertical: spacing[3], borderBottomWidth: 1, borderBottomColor: colors.borderLight, backgroundColor: colors.surface }}>
-          <Text style={{ fontSize: 18, fontWeight: '600', color: colors.text }}>{t('cart.title')}</Text>
+        <View
+          style={{
+            paddingHorizontal: spacing[4],
+            paddingVertical: spacing[3],
+            borderBottomWidth: 1,
+            borderBottomColor: colors.borderLight,
+            backgroundColor: colors.surface,
+          }}
+        >
+          <Text style={{ fontSize: fontSz('lg')[0], fontWeight: '600', color: colors.text }}>
+            {t('cart.title')}
+          </Text>
         </View>
         <EmptyCart />
       </View>
@@ -100,22 +118,12 @@ export default function CartScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Header */}
-      <View style={{ paddingTop: insets.top, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.borderLight }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing[4], paddingVertical: spacing[3] }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[2] }}>
-            <TouchableOpacity onPress={() => router.back()}>
-              <Text style={{ fontSize: 18, color: colors.primary, fontWeight: '600' }}>←</Text>
-            </TouchableOpacity>
-            <Text style={{ fontSize: 18, fontWeight: '600', color: colors.text }}>{t('cart.title')}</Text>
-            <Text style={{ fontSize: 14, color: colors.textMuted }}>({count})</Text>
-          </View>
-          <TouchableOpacity onPress={toggleAll} activeOpacity={0.7}>
-            <Text style={{ fontSize: 13, fontWeight: '600', color: allSelected ? colors.primary : colors.textMuted }}>
-              {allSelected ? '✓ ' : ''}{t('cart.selectAll')}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      <ScreenHeader
+        title={`${t('cart.title')} (${count})`}
+        rightLabel={t('cart.selectAll')}
+        onRightPress={toggleAll}
+        rightAccessibilityLabel={t('cart.selectAll')}
+      />
 
       <ScrollView
         style={{ flex: 1 }}
@@ -127,13 +135,22 @@ export default function CartScreen() {
           return (
             <View key={seller}>
               {/* Seller header */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[2], paddingHorizontal: spacing[4], paddingVertical: spacing[2], backgroundColor: colors.background }}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: spacing[2],
+                  paddingHorizontal: spacing[4],
+                  paddingVertical: spacing[2],
+                  backgroundColor: colors.background,
+                }}
+              >
                 <TouchableOpacity
                   onPress={() => toggleSeller(sellerItems)}
                   style={{
                     width: 20,
                     height: 20,
-                    borderRadius: 4,
+                    borderRadius: radii.sm,
                     borderWidth: 1.5,
                     borderColor: allSellerSelected ? colors.primary : colors.border,
                     backgroundColor: allSellerSelected ? colors.primary : 'transparent',
@@ -142,27 +159,50 @@ export default function CartScreen() {
                   }}
                   accessibilityLabel={t('cart.selectFromSeller', { seller })}
                 >
-                  {allSellerSelected && <Text style={{ color: colors.white, fontSize: 12, fontWeight: '700' }}>✓</Text>}
+                  {allSellerSelected && <Icon name="checkmark" size={12} color={colors.white} />}
                 </TouchableOpacity>
-                <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary50, alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ fontSize: 10, fontWeight: '700', color: colors.primary }}>{getInitials(seller)}</Text>
+                <View
+                  style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: radii.lg,
+                    backgroundColor: colors.primary50,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text
+                    style={{ fontSize: fontSz('xs')[0], fontWeight: '700', color: colors.primary }}
+                  >
+                    {getInitials(seller)}
+                  </Text>
                 </View>
-                <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>{seller}</Text>
+                <Text style={{ fontSize: fontSz('sm')[0], fontWeight: '600', color: colors.text }}>
+                  {seller}
+                </Text>
               </View>
 
               {/* Items */}
               {sellerItems.map((item, i) => (
                 <Animated.View
                   key={item.id}
-                  entering={FadeInDown.delay(i * 50).duration(250)}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[3], paddingHorizontal: spacing[4], paddingVertical: spacing[3], borderBottomWidth: 1, borderBottomColor: colors.borderLight }}
+                  entering={FadeInDown.delay(i * 50).duration(duration.normal)}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: spacing[3],
+                    paddingHorizontal: spacing[4],
+                    paddingVertical: spacing[3],
+                    borderBottomWidth: 1,
+                    borderBottomColor: colors.borderLight,
+                  }}
                 >
                   <TouchableOpacity
                     onPress={() => toggleItem(item.id)}
                     style={{
                       width: 20,
                       height: 20,
-                      borderRadius: 4,
+                      borderRadius: radii.sm,
                       borderWidth: 1.5,
                       borderColor: selected.has(item.id) ? colors.primary : colors.border,
                       backgroundColor: selected.has(item.id) ? colors.primary : 'transparent',
@@ -171,36 +211,113 @@ export default function CartScreen() {
                     }}
                     accessibilityLabel={t('cart.selectItem', { name: item.name })}
                   >
-                    {selected.has(item.id) && <Text style={{ color: colors.white, fontSize: 12, fontWeight: '700' }}>✓</Text>}
+                    {selected.has(item.id) && (
+                      <Icon name="checkmark" size={12} color={colors.white} />
+                    )}
                   </TouchableOpacity>
 
-                  <View style={{ width: 64, height: 64, borderRadius: radii.md, backgroundColor: colors.border, overflow: 'hidden' }}>
+                  <View
+                    style={{
+                      width: 64,
+                      height: 64,
+                      borderRadius: radii.md,
+                      backgroundColor: colors.border,
+                      overflow: 'hidden',
+                    }}
+                  >
                     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                      <Text style={{ fontSize: 24 }}>📦</Text>
+                      <Icon name="cube-outline" size={24} color={colors.textMuted} />
                     </View>
                   </View>
 
                   <View style={{ flex: 1, gap: 4 }}>
-                    <Text style={{ fontSize: 13, fontWeight: '500', color: colors.text }} numberOfLines={2}>{item.name}</Text>
-                    <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] }}>{formatNPR(item.price)}</Text>
+                    <Text
+                      style={{ fontSize: fontSz('sm')[0], fontWeight: '500', color: colors.text }}
+                      numberOfLines={2}
+                    >
+                      {item.name}
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: fontSz('base')[0],
+                        fontWeight: '700',
+                        color: colors.text,
+                        fontVariant: ['tabular-nums'],
+                      }}
+                    >
+                      {formatNPR(item.price)}
+                    </Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[2] }}>
                       <TouchableOpacity
                         onPress={() => updateQuantity(item.id, item.quantity - 1)}
                         disabled={item.quantity <= 1}
-                        style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: colors.border, alignItems: 'center', justifyContent: 'center', opacity: item.quantity <= 1 ? 0.4 : 1 }}
+                        style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: radii.lg,
+                          backgroundColor: colors.border,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          opacity: item.quantity <= 1 ? 0.4 : 1,
+                        }}
                       >
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>−</Text>
+                        <Text
+                          style={{
+                            fontSize: fontSz('base')[0],
+                            fontWeight: '600',
+                            color: colors.text,
+                          }}
+                        >
+                          −
+                        </Text>
                       </TouchableOpacity>
-                      <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text, minWidth: 24, textAlign: 'center' }}>{item.quantity}</Text>
+                      <Text
+                        style={{
+                          fontSize: fontSz('base')[0],
+                          fontWeight: '600',
+                          color: colors.text,
+                          minWidth: 24,
+                          textAlign: 'center',
+                        }}
+                      >
+                        {item.quantity}
+                      </Text>
                       <TouchableOpacity
                         onPress={() => updateQuantity(item.id, item.quantity + 1)}
                         disabled={item.quantity >= item.maxQuantity}
-                        style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: colors.border, alignItems: 'center', justifyContent: 'center', opacity: item.quantity >= item.maxQuantity ? 0.4 : 1 }}
+                        style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: radii.lg,
+                          backgroundColor: colors.border,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          opacity: item.quantity >= item.maxQuantity ? 0.4 : 1,
+                        }}
                       >
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>+</Text>
+                        <Text
+                          style={{
+                            fontSize: fontSz('base')[0],
+                            fontWeight: '600',
+                            color: colors.text,
+                          }}
+                        >
+                          +
+                        </Text>
                       </TouchableOpacity>
-                      <TouchableOpacity onPress={() => removeItem(item.id)} style={{ marginLeft: 'auto' }}>
-                        <Text style={{ fontSize: 12, color: colors.error, fontWeight: '500' }}>{t('cart.remove')}</Text>
+                      <TouchableOpacity
+                        onPress={() => removeItem(item.id)}
+                        style={{ marginLeft: 'auto' }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: fontSz('sm')[0],
+                            color: colors.error,
+                            fontWeight: '500',
+                          }}
+                        >
+                          {t('cart.remove')}
+                        </Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -209,6 +326,30 @@ export default function CartScreen() {
             </View>
           )
         })}
+
+        {/* Summary: promo / VAT / free-shipping / seller breakdown / grand total */}
+        <View style={{ paddingHorizontal: spacing[4], paddingTop: spacing[4] }}>
+          <View
+            style={{
+              backgroundColor: colors.surface,
+              borderRadius: radii.lg,
+              padding: spacing[4],
+              borderWidth: 1,
+              borderColor: colors.borderLight,
+              gap: spacing[2],
+            }}
+          >
+            <Text style={{ fontSize: fontSz('md')[0], fontWeight: '700', color: colors.text }}>
+              {t('cart.summary')}
+            </Text>
+            <CartSummary
+              items={selectedItems}
+              sellerGroups={sellerGroups}
+              promo={promo}
+              onPromoChange={setPromo}
+            />
+          </View>
+        </View>
       </ScrollView>
 
       {/* Sticky bottom bar */}
@@ -231,29 +372,38 @@ export default function CartScreen() {
           elevation: 4,
         }}
       >
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing[2] }}>
-          <Text style={{ fontSize: 13, color: colors.textMuted }}>{t('cart.selectedCount', { count: selectedItems.length })}</Text>
-          <Text style={{ fontSize: 20, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] }}>{formatNPR(selectedTotal)}</Text>
-        </View>
-        <TouchableOpacity
-          onPress={handleCheckout}
-          disabled={selectedItems.length === 0}
+        <View
           style={{
-            backgroundColor: selectedItems.length === 0 ? colors.border : colors.primary,
-            height: 48,
-            borderRadius: radii.lg,
-            alignItems: 'center',
-            justifyContent: 'center',
-            opacity: selectedItems.length === 0 ? 0.5 : 1,
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            marginBottom: spacing[2],
           }}
-          activeOpacity={0.85}
-          accessibilityLabel={t('cart.checkout')}
-          accessibilityState={{ disabled: selectedItems.length === 0 }}
         >
-          <Text style={{ fontSize: 15, fontWeight: '700', color: selectedItems.length === 0 ? colors.textMuted : colors.white }}>
-            {selectedItems.length === 0 ? t('cart.selectAtLeastOne') : t('cart.checkout')}
+          <Text style={{ fontSize: fontSz('sm')[0], color: colors.textMuted }}>
+            {t('cart.selectedCount', { count: selectedItems.length })}
           </Text>
-        </TouchableOpacity>
+          <Text
+            style={{
+              fontSize: fontSz('xl')[0],
+              fontWeight: '700',
+              color: colors.text,
+              fontVariant: ['tabular-nums'],
+            }}
+          >
+            {formatNPR(totals.grandTotal)}
+          </Text>
+        </View>
+        <Button
+          variant="primary"
+          size="lg"
+          fullWidth
+          haptic="medium"
+          disabled={selectedItems.length === 0}
+          onPress={handleCheckout}
+          accessibilityLabel={t('cart.checkout')}
+        >
+          {selectedItems.length === 0 ? t('cart.selectAtLeastOne') : t('cart.checkout')}
+        </Button>
       </View>
     </View>
   )

@@ -1,13 +1,13 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react'
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
   Keyboard,
+  type NativeSyntheticEvent,
+  type TextInputKeyPressEventData,
 } from 'react-native'
 import Animated, {
   useSharedValue,
@@ -17,25 +17,28 @@ import Animated, {
   withSequence,
 } from 'react-native-reanimated'
 import { useRouter, useLocalSearchParams } from 'expo-router'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
 import * as Haptics from 'expo-haptics'
-import { colors, spacing, radii } from '@chinooz/theme'
+import { colors as lightColors, spacing, radii, fontSz, springs } from '@chinooz/theme'
 import { verifyOtp, requestOtp, __IS_DEV__ } from '@chinooz/mock-data'
 import { useSessionStore } from '@chinooz/state'
-import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
-import { SlideUp } from '@chinooz/ui/Animate'
+import { useReducedMotion, Button, SlideUp } from '@chinooz/ui'
+import { AuthShell } from '../components/AuthShell'
+import { useAppTheme } from '../components/ThemeProvider'
+import Icon from '../components/Icon'
 
 const OTP_LENGTH = 6
 const RESEND_SECONDS = 30
 
 export default function OtpScreen() {
+  const { colors } = useAppTheme()
+  const styles = useMemo(() => makeStyles(colors), [colors])
   const { t } = useTranslation()
   const router = useRouter()
   const { phone } = useLocalSearchParams<{ phone: string }>()
-  const insets = useSafeAreaInsets()
   const reduced = useReducedMotion()
   const login = useSessionStore(s => s.login)
+  const updateProfile = useSessionStore(s => s.updateProfile)
 
   const [digits, setDigits] = useState<string[]>(Array(OTP_LENGTH).fill(''))
   const [error, setError] = useState('')
@@ -47,7 +50,6 @@ export default function OtpScreen() {
   const inputRefs = useRef<(TextInput | null)[]>([])
 
   const shakeX = useSharedValue(0)
-  const boxScales = useRef(Array.from({ length: OTP_LENGTH }, () => useSharedValue(1))).current
 
   useEffect(() => {
     if (resendIn <= 0) return
@@ -63,88 +65,71 @@ export default function OtpScreen() {
       withTiming(6, { duration: 50 }),
       withTiming(0, { duration: 50 }),
     )
-  }, [])
+  }, [shakeX])
 
-  const handleVerify = useCallback(async (code: string, isAutoSubmit: boolean) => {
-    if (loading) return
-    Keyboard.dismiss()
-    setLoading(true)
-    setError('')
-
-    try {
-      const result = await verifyOtp(phone || '', code)
-      if (result.success) {
-        setSuccess(true)
-        try {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-        } catch {}
-        login(result.userId || 'user-1', 'Ayush Chaudhary')
-        setTimeout(() => router.replace('/create-profile'), 800)
-      } else {
-        setError(result.error || t('otp.invalidCode'))
+  const handleVerify = useCallback(
+    async (code: string) => {
+      if (loading) return
+      Keyboard.dismiss()
+      setLoading(true)
+      setError('')
+      try {
+        const result = await verifyOtp(phone || '', code)
+        if (result.success) {
+          setSuccess(true)
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+          login(result.userId || 'user-1', '')
+          updateProfile({ phone: phone || '' })
+          setTimeout(() => router.replace('/create-profile'), 800)
+        } else {
+          setError(result.error || t('otp.invalidCode'))
+          setAutoSubmitFailed(true)
+          setShowVerifyButton(true)
+          triggerShake()
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {})
+        }
+      } catch {
+        setError(t('otp.invalidCode'))
         setAutoSubmitFailed(true)
         setShowVerifyButton(true)
         triggerShake()
-        try {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
-        } catch {}
+      } finally {
+        setLoading(false)
       }
-    } catch {
-      setError(t('otp.invalidCode'))
-      setAutoSubmitFailed(true)
-      setShowVerifyButton(true)
-      triggerShake()
-    } finally {
-      setLoading(false)
-    }
-  }, [phone, login, router, t, loading, triggerShake])
+    },
+    [phone, login, updateProfile, router, t, loading, triggerShake],
+  )
 
-  const handleChange = useCallback((text: string, index: number) => {
-    const digit = text.replace(/\D/g, '').slice(-1)
-    const next = [...digits]
-    next[index] = digit
-    setDigits(next)
-    setError('')
-
-    if (digit) {
-      boxScales[index].value = withSequence(
-        withSpring(1.05, { damping: 12, stiffness: 400 }),
-        withSpring(1, { damping: 15, stiffness: 300 }),
-      )
-
-      if (index < OTP_LENGTH - 1) {
-        inputRefs.current[index + 1]?.focus()
-      }
-    }
-
-    const code = next.join('')
-    if (code.length === OTP_LENGTH && next.every(d => d.length === 1)) {
-      if (!autoSubmitFailed) {
-        handleVerify(code, true)
-      }
-    }
-  }, [digits, autoSubmitFailed, handleVerify])
-
-  const handleKeyPress = useCallback((e: any, index: number) => {
-    if (e.nativeEvent.key === 'Backspace' && !digits[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus()
-      setAutoSubmitFailed(false)
-      setShowVerifyButton(false)
-    }
-  }, [digits])
-
-  const handlePaste = useCallback((e: any) => {
-    const pasted = (e?.nativeEvent?.text || '').replace(/\D/g, '').slice(0, OTP_LENGTH)
-    if (pasted.length === OTP_LENGTH) {
-      const next = pasted.split('')
+  const handleChange = useCallback(
+    (text: string, index: number) => {
+      const digit = text.replace(/\D/g, '').slice(-1)
+      const next = [...digits]
+      next[index] = digit
       setDigits(next)
       setError('')
-      Keyboard.dismiss()
-      if (!autoSubmitFailed) {
-        handleVerify(pasted, true)
+
+      if (digit && index < OTP_LENGTH - 1) {
+        inputRefs.current[index + 1]?.focus()
       }
-    }
-  }, [autoSubmitFailed, handleVerify])
+
+      const code = next.join('')
+      if (code.length === OTP_LENGTH && next.every(d => d.length === 1) && !autoSubmitFailed) {
+        handleVerify(code)
+      }
+    },
+    [digits, autoSubmitFailed, handleVerify],
+  )
+
+  const handleKeyPress = useCallback(
+    (e: NativeSyntheticEvent<TextInputKeyPressEventData>, index: number) => {
+      if (e.nativeEvent.key === 'Backspace' && !digits[index] && index > 0) {
+        inputRefs.current[index - 1]?.focus()
+        setAutoSubmitFailed(false)
+        setShowVerifyButton(false)
+      }
+    },
+    [digits],
+  )
 
   const handleResend = useCallback(async () => {
     if (resendIn > 0) return
@@ -156,127 +141,91 @@ export default function OtpScreen() {
       setAutoSubmitFailed(false)
       setShowVerifyButton(false)
       inputRefs.current[0]?.focus()
-      try {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-      } catch {}
-    } catch {}
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+    } catch (err) {
+      console.error('resend otp failed', err)
+    }
   }, [resendIn, phone])
 
-  const handleChangeNumber = useCallback(() => {
-    router.back()
-  }, [router])
+  const handleChangeNumber = useCallback(() => router.back(), [router])
 
-  const containerStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: shakeX.value }],
-  }))
-
+  const shakeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shakeX.value }] }))
   const allFilled = digits.every(d => d.length === 1)
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <Animated.View
-        style={[styles.container, { paddingTop: insets.top }, containerStyle]}
-      >
-        {__IS_DEV__ && (
-          <View style={styles.devBanner}>
-            <Text style={styles.devBannerText}>{t('otp.devBanner')}</Text>
-          </View>
-        )}
+    <AuthShell step={1}>
+      <View style={styles.col}>
+        <View style={styles.body}>
+          {__DEV__ && __IS_DEV__ && (
+            <View style={styles.devBanner}>
+              <Text style={styles.devBannerText}>{t('otp.devBanner')}</Text>
+            </View>
+          )}
 
-        <View style={styles.content}>
           <SlideUp delay={reduced ? 0 : 100} distance={reduced ? 0 : 16}>
-            <TouchableOpacity onPress={handleChangeNumber} style={styles.changeNumber}>
-              <Text style={styles.changeNumberText}>← {t('otp.changeNumber')}</Text>
-            </TouchableOpacity>
             <Text style={styles.title}>{t('otp.title')}</Text>
-            <TouchableOpacity onPress={handleChangeNumber}>
-              <Text style={styles.subtitle}>
-                {t('otp.subtitle')}{' '}
-                <Text style={styles.phoneText}>+977 {phone}</Text>
-              </Text>
+            <Text style={styles.subtitle}>
+              {t('otp.subtitle')} <Text style={styles.phoneText}>+977 {phone}</Text>
+            </Text>
+            <TouchableOpacity onPress={handleChangeNumber} hitSlop={8}>
+              <Text style={styles.changeNumber}>{t('otp.changeNumber')}</Text>
             </TouchableOpacity>
           </SlideUp>
 
           <SlideUp delay={reduced ? 0 : 200} distance={reduced ? 0 : 12}>
-            <View style={styles.otpRow}>
-              {digits.map((digit, i) => {
-                const boxStyle = useAnimatedStyle(() => ({
-                  transform: [{ scale: boxScales[i].value }],
-                }))
-                return (
-                  <Animated.View key={i} style={[styles.otpBox, boxStyle]}>
-                    <TextInput
-                      ref={ref => { inputRefs.current[i] = ref }}
-                      style={[
-                        styles.otpInput,
-                        digit ? styles.otpInputFilled : null,
-                        error ? styles.otpInputError : null,
-                      ]}
-                      value={digit}
-                      onChangeText={text => handleChange(text, i)}
-                      onKeyPress={e => handleKeyPress(e, i)}
-                      keyboardType="number-pad"
-                      maxLength={1}
-                      textAlign="center"
-                      autoFocus={i === 0}
-                      selectTextOnFocus
-                      editable={!success}
-                      accessibilityLabel={`OTP digit ${i + 1}`}
-                    />
-                    <View style={[
-                      styles.otpUnderline,
-                      digit ? styles.otpUnderlineFilled : null,
-                      error ? styles.otpUnderlineError : null,
-                    ]} />
-                  </Animated.View>
-                )
-              })}
-            </View>
+            <Animated.View style={[styles.otpRow, shakeStyle]}>
+              {digits.map((digit, i) => (
+                <OtpCell
+                  key={i}
+                  value={digit}
+                  isError={!!error}
+                  editable={!success}
+                  reduced={reduced}
+                  // eslint-disable-next-line jsx-a11y/no-autofocus
+                  autoFocus={i === 0}
+                  inputRef={ref => {
+                    inputRefs.current[i] = ref
+                  }}
+                  onChangeText={text => handleChange(text, i)}
+                  onKeyPress={e => handleKeyPress(e, i)}
+                  accessibilityLabel={t('a11y.otpDigit', { number: i + 1 })}
+                />
+              ))}
+            </Animated.View>
 
-            {error ? (
-              <Animated.View>
-                <Text style={styles.error}>{error}</Text>
-              </Animated.View>
-            ) : null}
-
+            {error ? <Text style={styles.error}>{error}</Text> : null}
             {success ? (
               <View style={styles.successRow}>
-                <Text style={styles.successCheck}>✓</Text>
+                <View style={styles.successCheck}>
+                  <Icon name="checkmark" size={12} color={colors.white} />
+                </View>
                 <Text style={styles.successText}>{t('otp.successTitle')}</Text>
               </View>
             ) : null}
           </SlideUp>
         </View>
 
-        <View style={[styles.footer, { paddingBottom: insets.bottom + spacing[4] }]}>
+        <View style={styles.footer}>
           <SlideUp delay={reduced ? 0 : 300} distance={reduced ? 0 : 10}>
             {(showVerifyButton || (allFilled && !autoSubmitFailed)) && !success ? (
-              <TouchableOpacity
-                onPress={() => handleVerify(digits.join(''), false)}
+              <Button
+                variant="primary"
+                size="lg"
+                shape="pill"
+                fullWidth
+                haptic="medium"
+                loading={loading}
                 disabled={loading}
-                style={[styles.verifyButton, loading && styles.verifyButtonLoading]}
-                activeOpacity={0.85}
+                onPress={() => handleVerify(digits.join(''))}
+                accessibilityLabel={t('otp.verify')}
               >
-                {loading ? (
-                  <View style={styles.loadingDots}>
-                    <View style={styles.loadingDot} />
-                    <View style={[styles.loadingDot, { marginLeft: 6 }]} />
-                    <View style={[styles.loadingDot, { marginLeft: 6 }]} />
-                  </View>
-                ) : (
-                  <Text style={styles.verifyText}>{t('otp.verify')}</Text>
-                )}
-              </TouchableOpacity>
+                {t('otp.verify')}
+              </Button>
             ) : null}
 
             <View style={styles.resendRow}>
               {resendIn > 0 ? (
-                <Text style={styles.resendIn}>
-                  {t('otp.resendIn', { seconds: resendIn })}
-                </Text>
+                <Text style={styles.resendIn}>{t('otp.resendIn', { seconds: resendIn })}</Text>
               ) : (
                 <TouchableOpacity onPress={handleResend} activeOpacity={0.7}>
                   <Text style={styles.resend}>{t('otp.resend')}</Text>
@@ -285,147 +234,217 @@ export default function OtpScreen() {
             </View>
           </SlideUp>
         </View>
-      </Animated.View>
-    </KeyboardAvoidingView>
+      </View>
+    </AuthShell>
   )
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  devBanner: {
-    backgroundColor: '#FEF3C7',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F59E0B',
-  },
-  devBannerText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#92400E',
-    textAlign: 'center',
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: spacing[6],
-    paddingTop: spacing[6],
-    gap: spacing[6],
-  },
-  changeNumber: { marginBottom: spacing[3] },
-  changeNumberText: { fontSize: 14, color: colors.primary, fontWeight: '600' },
-  title: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: colors.text,
-    letterSpacing: -0.3,
-    marginBottom: spacing[2],
-  },
-  subtitle: { fontSize: 15, color: colors.textMuted, lineHeight: 22 },
-  phoneText: { fontWeight: '600', color: colors.text },
-  otpRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: spacing[5],
-    justifyContent: 'center',
-  },
-  otpBox: {
-    alignItems: 'center',
-  },
-  otpInput: {
-    width: 48,
-    height: 52,
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.text,
-    paddingHorizontal: 0,
-    paddingVertical: 0,
-    backgroundColor: 'transparent',
-    textAlign: 'center',
-  },
-  otpInputFilled: {
-    color: colors.primary,
-  },
-  otpInputError: {
-    color: colors.error,
-  },
-  otpUnderline: {
-    width: 48,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: colors.border,
-    marginTop: 4,
-  },
-  otpUnderlineFilled: {
-    backgroundColor: colors.primary,
-  },
-  otpUnderlineError: {
-    backgroundColor: colors.error,
-  },
-  error: {
-    fontSize: 14,
-    color: colors.error,
-    textAlign: 'center',
-    marginTop: spacing[3],
-    fontWeight: '500',
-  },
-  successRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing[2],
-    marginTop: spacing[3],
-  },
-  successCheck: {
-    fontSize: 20,
-    color: colors.success,
-    fontWeight: '700',
-  },
-  successText: {
-    fontSize: 16,
-    color: colors.success,
-    fontWeight: '600',
-  },
-  footer: {
-    paddingHorizontal: spacing[6],
-    gap: spacing[3],
-  },
-  verifyButton: {
-    backgroundColor: colors.primary,
-    height: 52,
-    borderRadius: radii.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  verifyButtonLoading: {
-    opacity: 0.8,
-  },
-  verifyText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.white,
-  },
-  loadingDots: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  loadingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.6)',
-  },
-  resendRow: {
-    alignItems: 'center',
-    paddingVertical: spacing[2],
-  },
-  resendIn: {
-    fontSize: 14,
-    color: colors.textTertiary,
-  },
-  resend: {
-    fontSize: 14,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-})
+interface OtpCellProps {
+  value: string
+  isError: boolean
+  editable: boolean
+  reduced: boolean
+  autoFocus: boolean
+  inputRef: (ref: TextInput | null) => void
+  onChangeText: (text: string) => void
+  onKeyPress: (e: NativeSyntheticEvent<TextInputKeyPressEventData>) => void
+  accessibilityLabel: string
+}
+
+function OtpCell({
+  value,
+  isError,
+  editable,
+  reduced,
+  autoFocus,
+  inputRef,
+  onChangeText,
+  onKeyPress,
+  accessibilityLabel,
+}: OtpCellProps) {
+  const { colors } = useAppTheme()
+  const styles = useMemo(() => makeStyles(colors), [colors])
+  const scale = useSharedValue(1)
+  const [focused, setFocused] = useState(false)
+
+  useEffect(() => {
+    if (value && !reduced) {
+      scale.value = withSequence(withSpring(1.06, springs.bounce), withSpring(1, springs.press))
+    }
+  }, [value, reduced, scale])
+
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }))
+
+  return (
+    <Animated.View
+      style={[
+        styles.cell,
+        value ? styles.cellFilled : null,
+        focused ? styles.cellFocused : null,
+        isError ? styles.cellError : null,
+        style,
+      ]}
+    >
+      <TextInput
+        ref={inputRef}
+        style={styles.cellInput}
+        value={value}
+        onChangeText={onChangeText}
+        onKeyPress={onKeyPress}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        keyboardType="number-pad"
+        textContentType="oneTimeCode"
+        maxLength={1}
+        textAlign="center"
+        // eslint-disable-next-line jsx-a11y/no-autofocus
+        autoFocus={autoFocus}
+        selectTextOnFocus
+        editable={editable}
+        accessibilityLabel={accessibilityLabel}
+      />
+    </Animated.View>
+  )
+}
+
+const makeStyles = (c: typeof lightColors) =>
+  StyleSheet.create({
+    col: { flex: 1 },
+    body: { flex: 1, gap: spacing[6], paddingTop: spacing[2] },
+    devBanner: {
+      backgroundColor: c.warningLight,
+      paddingVertical: spacing[2],
+      paddingHorizontal: spacing[4],
+      borderRadius: radii.md,
+      alignSelf: 'flex-start',
+    },
+    devBannerText: {
+      fontFamily: 'Inter',
+      fontSize: fontSz('sm')[0],
+      fontWeight: '600',
+      color: c.warningText,
+    },
+    title: {
+      fontFamily: 'Fraunces',
+      fontSize: fontSz('3xl')[0],
+      lineHeight: fontSz('3xl')[1],
+      color: c.text,
+      letterSpacing: -0.4,
+      marginBottom: spacing[2],
+    },
+    subtitle: {
+      fontFamily: 'Inter',
+      fontSize: fontSz('base')[0],
+      color: c.textMuted,
+      lineHeight: 22,
+    },
+    phoneText: { fontFamily: 'Inter', fontWeight: '700', color: c.text },
+    changeNumber: {
+      fontFamily: 'Inter',
+      fontSize: fontSz('base')[0],
+      color: c.primary,
+      fontWeight: '600',
+      marginTop: spacing[2],
+    },
+    otpRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginTop: spacing[4],
+    },
+    cell: {
+      width: 49,
+      height: 58,
+      borderRadius: radii.md,
+      backgroundColor: c.surface,
+      borderWidth: 1.5,
+      borderColor: c.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    cellFilled: { borderColor: c.primary },
+    cellFocused: {
+      borderColor: c.primary,
+      shadowColor: c.primary,
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.15,
+      shadowRadius: 6,
+      elevation: 2,
+    },
+    cellError: { borderColor: c.error },
+    cellInput: {
+      width: '100%',
+      height: '100%',
+      fontFamily: 'Inter',
+      fontSize: fontSz('2xl')[0],
+      fontWeight: '700',
+      color: c.primary,
+      textAlign: 'center',
+      paddingVertical: 0,
+    },
+    error: {
+      fontFamily: 'Inter',
+      fontSize: fontSz('base')[0],
+      color: c.error,
+      textAlign: 'center',
+      marginTop: spacing[3],
+      fontWeight: '500',
+    },
+    successRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing[2],
+      marginTop: spacing[3],
+    },
+    successCheck: {
+      width: 24,
+      height: 24,
+      borderRadius: radii.full,
+      backgroundColor: c.success,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    successCheckMark: { color: c.white, fontSize: fontSz('sm')[0], fontWeight: '700' },
+    successText: {
+      fontFamily: 'Inter',
+      fontSize: fontSz('md')[0],
+      color: c.success,
+      fontWeight: '600',
+    },
+    footer: { gap: spacing[3] },
+    cta: {
+      backgroundColor: c.primary,
+      height: 56,
+      borderRadius: radii.full,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: c.primary,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.3,
+      shadowRadius: 14,
+      elevation: 8,
+    },
+    ctaLoading: { opacity: 0.8 },
+    ctaText: {
+      fontFamily: 'Inter',
+      fontSize: fontSz('md')[0],
+      fontWeight: '700',
+      color: c.white,
+      letterSpacing: 0.2,
+    },
+    loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    loadingDot: {
+      width: 8,
+      height: 8,
+      borderRadius: radii.sm,
+      backgroundColor: 'rgba(255,255,255,0.6)',
+    },
+    resendRow: { alignItems: 'center', paddingVertical: spacing[2] },
+    resendIn: { fontFamily: 'Inter', fontSize: fontSz('base')[0], color: c.textTertiary },
+    resend: {
+      fontFamily: 'Inter',
+      fontSize: fontSz('base')[0],
+      color: c.primary,
+      fontWeight: '600',
+    },
+  })

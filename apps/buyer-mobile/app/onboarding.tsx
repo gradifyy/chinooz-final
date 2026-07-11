@@ -1,229 +1,345 @@
-import React, { useState, useRef, useCallback } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native'
-import PagerView from 'react-native-pager-view'
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-} from 'react-native-reanimated'
+/**
+ * Premium onboarding — Phase A storytelling carousel.
+ * Brand-aligned plum/cream tokens, i18n, reduced motion, session persistence.
+ */
+
+import React, { useCallback, useState, useRef } from 'react'
+import {
+  View,
+  Text,
+  Image,
+  StyleSheet,
+  Dimensions,
+  ScrollView,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native'
+import { LinearGradient } from 'expo-linear-gradient'
+import { StatusBar } from 'expo-status-bar'
 import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  interpolate,
+  Extrapolation,
+  type SharedValue,
+} from 'react-native-reanimated'
 import * as Haptics from 'expo-haptics'
-import { colors, spacing, radii } from '@chinooz/theme'
 import { useSessionStore } from '@chinooz/state'
-import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
-import OnboardingIllustration from '../components/OnboardingIllustration'
+import { useReducedMotion } from '@chinooz/ui'
+import { OnboardingButton, OnboardingTextButton } from '../components/onboarding/OnboardingButton'
+import { PaginationDots } from '../components/onboarding/PaginationDots'
+import {
+  onboardingColors,
+  onboardingSpacing,
+  onboardingTypography,
+  onboardingGradients,
+  onboardingAnimations,
+  onboardingLayout,
+  onboardingSlides,
+} from '../lib/onboardingTheme'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
-const ILLUSTRATION_HEIGHT = SCREEN_HEIGHT * 0.45
-const SLIDE_COUNT = 3
+const SLIDE_COUNT = onboardingSlides.length
 
-const SLIDES = [
-  { key: 'slide1', variant: 'shop' as const, titleKey: 'onboarding.slide1Title', subtitleKey: 'onboarding.slide1Subtitle' },
-  { key: 'slide2', variant: 'delivery' as const, titleKey: 'onboarding.slide2Title', subtitleKey: 'onboarding.slide2Subtitle' },
-  { key: 'slide3', variant: 'payment' as const, titleKey: 'onboarding.slide3Title', subtitleKey: 'onboarding.slide3Subtitle' },
-]
-
-export default function OnboardingScreen() {
-  const { t } = useTranslation()
+export default function OnboardingPhaseAScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const { t } = useTranslation()
   const reduced = useReducedMotion()
   const markOnboardingSeen = useSessionStore(s => s.markOnboardingSeen)
+  const scrollViewRef = useRef<ScrollView>(null)
+
   const [currentPage, setCurrentPage] = useState(0)
-  const pagerRef = useRef<PagerView>(null)
+  const scrollX = useSharedValue(0)
 
-  const dotScale = useSharedValue(1)
+  const finishOnboarding = useCallback(() => {
+    markOnboardingSeen()
+    router.replace('/phone-entry')
+  }, [markOnboardingSeen, router])
 
-  const handlePageSelected = useCallback((e: any) => {
-    const page = e.nativeEvent.position
-    setCurrentPage(page)
-    try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    } catch {}
-  }, [])
+  const handleScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const offsetX = event.nativeEvent.contentOffset.x
+      scrollX.value = offsetX
+      const page = Math.round(offsetX / SCREEN_WIDTH)
+      if (page !== currentPage && page >= 0 && page < SLIDE_COUNT) {
+        setCurrentPage(page)
+        if (!reduced) {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
+        }
+      }
+    },
+    [currentPage, scrollX, reduced],
+  )
+
+  const handleSkip = useCallback(() => {
+    finishOnboarding()
+  }, [finishOnboarding])
 
   const handleNext = useCallback(() => {
     if (currentPage < SLIDE_COUNT - 1) {
-      pagerRef.current?.setPage(currentPage + 1)
+      scrollViewRef.current?.scrollTo({
+        x: (currentPage + 1) * SCREEN_WIDTH,
+        animated: !reduced,
+      })
+    } else {
+      finishOnboarding()
     }
-  }, [currentPage])
+  }, [currentPage, finishOnboarding, reduced])
 
-  const handleSkip = useCallback(() => {
-    markOnboardingSeen()
-    router.replace('/phone-entry')
-  }, [markOnboardingSeen, router])
-
-  const handleGetStarted = useCallback(() => {
-    markOnboardingSeen()
-    router.replace('/phone-entry')
-  }, [markOnboardingSeen, router])
-
-  const isLast = currentPage === SLIDE_COUNT - 1
+  const isLastSlide = currentPage === SLIDE_COUNT - 1
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <PagerView
-        ref={pagerRef}
-        style={styles.pager}
-        initialPage={0}
-        onPageSelected={handlePageSelected}
-        overdrag={true}
-        overScrollMode="never"
+    <View style={styles.root}>
+      <StatusBar style="light" />
+
+      <ScrollView
+        ref={scrollViewRef}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        bounces={false}
+        decelerationRate="fast"
+        accessibilityLabel={t('onboarding.carouselA11y')}
       >
-        {SLIDES.map((slide, index) => (
-          <View key={slide.key} style={styles.slide}>
-            <View style={styles.illustrationArea}>
-              <OnboardingIllustration variant={slide.variant} />
-            </View>
-            <View style={styles.textArea}>
-              <Text style={styles.title}>{t(slide.titleKey)}</Text>
-              <Text style={styles.subtitle}>{t(slide.subtitleKey)}</Text>
-            </View>
-          </View>
+        {onboardingSlides.map((slide, index) => (
+          <HeroSlide
+            key={slide.id}
+            title={t(slide.titleKey)}
+            subtext={t(slide.subtitleKey)}
+            image={slide.image}
+            index={index}
+            scrollX={scrollX}
+            reduced={reduced}
+          />
         ))}
-      </PagerView>
+      </ScrollView>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + spacing[4] }]}>
-        <View style={styles.dots}>
-          {SLIDES.map((_, i) => (
-            <Dot key={i} active={i === currentPage} reduced={reduced} />
-          ))}
-        </View>
+      <View style={[styles.topBar, { paddingTop: insets.top + onboardingSpacing.lg }]}>
+        <Text style={styles.wordmark} accessibilityRole="header">
+          {t('common.appName')}
+        </Text>
+        {!isLastSlide ? (
+          <OnboardingTextButton
+            onPress={handleSkip}
+            textStyle={styles.skipText}
+            accessibilityLabel={t('onboarding.skip')}
+          >
+            {t('onboarding.skip')}
+          </OnboardingTextButton>
+        ) : (
+          <View style={styles.skipPlaceholder} />
+        )}
+      </View>
 
-        <View style={styles.actions}>
-          {!isLast ? (
-            <>
-              <TouchableOpacity onPress={handleSkip} style={styles.skipButton} activeOpacity={0.7}>
-                <Text style={styles.skipText}>{t('onboarding.skip')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={handleNext} style={styles.nextButton} activeOpacity={0.8}>
-                <Text style={styles.nextText}>{t('onboarding.next')}</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <TouchableOpacity onPress={handleGetStarted} style={styles.getStartedButton} activeOpacity={0.85}>
-              <Text style={styles.getStartedText}>{t('onboarding.getStarted')}</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+      <View style={[styles.footer, { paddingBottom: insets.bottom + onboardingSpacing.xxxl }]}>
+        <PaginationDots count={SLIDE_COUNT} activeIndex={currentPage} reducedMotion={reduced} />
+
+        <OnboardingButton
+          onPress={handleNext}
+          accessibilityLabel={
+            isLastSlide ? t('onboarding.createAccount') : t('onboarding.continue')
+          }
+        >
+          {isLastSlide ? t('onboarding.createAccount') : t('onboarding.continue')}
+        </OnboardingButton>
       </View>
     </View>
   )
 }
 
-function Dot({ active, reduced }: { active: boolean; reduced: boolean }) {
-  const width = useSharedValue(active ? 24 : 8)
+interface HeroSlideProps {
+  title: string
+  subtext: string
+  image: number
+  index: number
+  scrollX: SharedValue<number>
+  reduced: boolean
+}
 
-  React.useEffect(() => {
-    width.value = withSpring(active ? 24 : 8, {
-      damping: 20,
-      stiffness: 300,
-      mass: 0.5,
-    })
-  }, [active])
+function HeroSlide({ title, subtext, image, index, scrollX, reduced }: HeroSlideProps) {
+  const insets = useSafeAreaInsets()
 
-  const style = useAnimatedStyle(() => ({
-    width: width.value,
-    backgroundColor: active ? colors.primary : colors.border,
-  }))
+  const imageAnimatedStyle = useAnimatedStyle(() => {
+    if (reduced) return {}
+    const inputRange = [
+      (index - 1) * SCREEN_WIDTH,
+      index * SCREEN_WIDTH,
+      (index + 1) * SCREEN_WIDTH,
+    ]
+    return {
+      transform: [
+        {
+          translateX: interpolate(
+            scrollX.value,
+            inputRange,
+            [
+              -SCREEN_WIDTH * onboardingAnimations.parallaxFactor,
+              0,
+              SCREEN_WIDTH * onboardingAnimations.parallaxFactor,
+            ],
+            Extrapolation.CLAMP,
+          ),
+        },
+      ],
+    }
+  })
 
-  return <Animated.View style={[styles.dot, style]} />
+  const textAnimatedStyle = useAnimatedStyle(() => {
+    if (reduced) return { opacity: 1 }
+    const inputRange = [
+      (index - 1) * SCREEN_WIDTH,
+      index * SCREEN_WIDTH,
+      (index + 1) * SCREEN_WIDTH,
+    ]
+    return {
+      opacity: interpolate(scrollX.value, inputRange, [0, 1, 0], Extrapolation.CLAMP),
+      transform: [
+        {
+          translateY: interpolate(scrollX.value, inputRange, [24, 0, 24], Extrapolation.CLAMP),
+        },
+      ],
+    }
+  })
+
+  const heroHeight = SCREEN_HEIGHT * onboardingLayout.heroTopPercentage
+  const contentHeight = SCREEN_HEIGHT * onboardingLayout.heroBottomPercentage
+  const footerHeight = insets.bottom + 180
+
+  return (
+    <View style={styles.slide}>
+      <View style={[styles.heroSection, { height: heroHeight }]}>
+        <LinearGradient
+          colors={[...onboardingGradients.hero.colors]}
+          locations={[...onboardingGradients.hero.locations]}
+          start={onboardingGradients.hero.start}
+          end={onboardingGradients.hero.end}
+          style={StyleSheet.absoluteFill}
+        />
+
+        <Animated.View style={[styles.imageContainer, imageAnimatedStyle]}>
+          <Image
+            source={image}
+            style={styles.heroImage}
+            resizeMode="cover"
+            accessibilityLabel={title}
+          />
+        </Animated.View>
+
+        <LinearGradient
+          colors={[...onboardingGradients.heroOverlay.colors]}
+          locations={[...onboardingGradients.heroOverlay.locations]}
+          start={onboardingGradients.heroOverlay.start}
+          end={onboardingGradients.heroOverlay.end}
+          style={styles.overlay}
+          pointerEvents="none"
+        />
+      </View>
+
+      <Animated.View
+        style={[
+          styles.contentSection,
+          { minHeight: contentHeight - footerHeight },
+          textAnimatedStyle,
+        ]}
+      >
+        <View style={styles.textContent}>
+          <Text style={styles.headline}>{title}</Text>
+          <Text style={styles.subtext}>{subtext}</Text>
+        </View>
+      </Animated.View>
+    </View>
+  )
 }
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
-  pager: {
-    flex: 1,
+    backgroundColor: onboardingColors.creamLight,
   },
   slide: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing[6],
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
   },
-  illustrationArea: {
-    height: ILLUSTRATION_HEIGHT,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing[6],
+  heroSection: {
+    width: SCREEN_WIDTH,
+    overflow: 'hidden',
   },
-  textArea: {
-    alignItems: 'center',
-    gap: spacing[3],
-    paddingHorizontal: spacing[4],
+  imageContainer: {
+    width: SCREEN_WIDTH * 1.15,
+    height: '100%',
+    marginLeft: -SCREEN_WIDTH * 0.075,
   },
-  title: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: colors.text,
+  heroImage: {
+    width: '100%',
+    height: '100%',
+  },
+  overlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '50%',
+  },
+  contentSection: {
+    paddingHorizontal: onboardingSpacing.screenPaddingH,
+    paddingTop: onboardingSpacing.xxxl,
+    backgroundColor: onboardingColors.creamLight,
+  },
+  textContent: {
+    alignItems: 'center',
+  },
+  headline: {
+    ...onboardingTypography.displayLarge,
+    color: onboardingColors.textPrimary,
     textAlign: 'center',
+    marginBottom: onboardingSpacing.md,
+  },
+  subtext: {
+    ...onboardingTypography.bodyMedium,
+    color: onboardingColors.textSecondary,
+    textAlign: 'center',
+    maxWidth: 320,
+    lineHeight: 22,
+  },
+  topBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: onboardingSpacing.screenPaddingH,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    zIndex: 10,
+  },
+  wordmark: {
+    fontFamily: 'SpaceGrotesk',
+    fontSize: 20,
+    fontWeight: '700',
+    color: onboardingColors.white,
     letterSpacing: -0.3,
   },
-  subtitle: {
-    fontSize: 15,
-    color: colors.textMuted,
-    textAlign: 'center',
-    lineHeight: 22,
-    maxWidth: 320,
+  skipText: {
+    color: 'rgba(255,255,255,0.92)',
+    fontWeight: '600',
+  },
+  skipPlaceholder: {
+    minWidth: 44,
+    minHeight: 44,
   },
   footer: {
-    paddingHorizontal: spacing[6],
-    gap: spacing[4],
-  },
-  dots: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  dot: {
-    height: 8,
-    borderRadius: 4,
-  },
-  actions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing[3],
-  },
-  skipButton: {
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[5],
-  },
-  skipText: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: colors.textMuted,
-  },
-  nextButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[6],
-    borderRadius: radii.lg,
-    minWidth: 120,
-    alignItems: 'center',
-  },
-  nextText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.white,
-  },
-  getStartedButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing[3.5],
-    paddingHorizontal: spacing[8],
-    borderRadius: radii.lg,
-    minWidth: 200,
-    alignItems: 'center',
-  },
-  getStartedText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.white,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: onboardingSpacing.screenPaddingH,
+    gap: onboardingSpacing.xl,
+    zIndex: 10,
   },
 })

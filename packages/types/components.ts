@@ -1,12 +1,23 @@
 import type { ReactNode } from 'react'
-import type { Product, Order, OrderStatus, SellerInventoryVariant, StockEditMode, StockEditReason, SellerSubOrder } from './entities'
+import type {
+  Product,
+  Order,
+  OrderStatus,
+  SellerInventoryVariant,
+  StockEditMode,
+  StockEditReason,
+  SellerSubOrder,
+} from './entities'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'destructive'
 export type ButtonSize = 'sm' | 'md' | 'lg'
 export type TextVariant = 'h1' | 'h2' | 'h3' | 'h4' | 'body' | 'caption' | 'label'
+export type FontWeight = 'normal' | 'medium' | 'semibold' | 'bold'
 export type BadgeVariant = 'primary' | 'success' | 'warning' | 'error' | 'info' | 'neutral' | 'deal'
 export type BadgeSize = 'sm' | 'md'
 export type AvatarSize = 'sm' | 'md' | 'lg' | 'xl'
+export type RatingSize = 'sm' | 'md' | 'lg'
+export type PriceTextSize = 'sm' | 'md' | 'lg'
 export type ChipVariant = 'default' | 'active' | 'removable'
 export type DividerOrientation = 'horizontal' | 'vertical'
 
@@ -15,9 +26,16 @@ export interface BaseProps {
   testID?: string
 }
 
+export type ButtonHaptic = 'none' | 'selection' | 'light' | 'medium'
+export type ButtonShape = 'rounded' | 'pill'
+
 export interface ButtonProps extends BaseProps {
   variant?: ButtonVariant
   size?: ButtonSize
+  /** `pill` = full-radius CTAs (auth/onboarding). Default `rounded` = radii.lg */
+  shape?: ButtonShape
+  /** Haptic on press. Default `light` for primary actions; use `none` for dense toolbars. */
+  haptic?: ButtonHaptic
   disabled?: boolean
   loading?: boolean
   fullWidth?: boolean
@@ -25,11 +43,12 @@ export interface ButtonProps extends BaseProps {
   children: ReactNode
   leftIcon?: ReactNode
   rightIcon?: ReactNode
+  accessibilityLabel?: string
 }
 
 export interface TextProps extends BaseProps {
   variant?: TextVariant
-  weight?: 'normal' | 'medium' | 'semibold' | 'bold'
+  weight?: FontWeight
   color?: string
   align?: 'left' | 'center' | 'right'
   numberOfLines?: number
@@ -61,6 +80,16 @@ export interface InputProps extends BaseProps {
   onSubmitEditing?: () => void
   multiline?: boolean
   maxLength?: number
+  /** HTML autocomplete token (e.g. 'name', 'tel', 'email', 'one-time-code', 'street-address'). */
+  autoComplete?: string
+  /** Marks the field as required: sets `aria-required` and a visual asterisk. */
+  required?: boolean
+  /** Native form field name (lets `<form>` submit + browser autofill heuristics work). */
+  name?: string
+  /** Explicit id; when omitted a stable generated id is used. */
+  id?: string
+  /** Numeric keypad hint for OTP/codes without coercing to type=number. */
+  inputModeOverride?: 'numeric' | 'text' | 'tel' | 'email'
 }
 
 export interface SearchBarProps extends BaseProps {
@@ -105,7 +134,7 @@ export interface DividerProps extends BaseProps {
 
 export interface SkeletonProps extends BaseProps {
   width?: number | string
-  height?: number
+  height?: number | string
   borderRadius?: number | string
   circle?: boolean
 }
@@ -122,11 +151,60 @@ export interface BottomSheetProps extends BaseProps {
   children: ReactNode
 }
 
+// Shared used by both packages/ui (RN) and packages/ui-web (Tailwind).
+// Maps to RN `flex-start`/`flex-end` and Tailwind `start`/`end` internally.
+export type AlignValue = 'start' | 'center' | 'end' | 'stretch'
+export type JustifyValue = 'start' | 'center' | 'end' | 'between' | 'around' | 'evenly'
+
+export interface StackProps {
+  children: ReactNode
+  gap?: number
+  align?: AlignValue
+  className?: string
+}
+
+export interface RowProps {
+  children: ReactNode
+  gap?: number
+  align?: AlignValue
+  justify?: JustifyValue
+  className?: string
+}
+
 export interface ModalProps extends BaseProps {
   visible: boolean
   onClose: () => void
   title?: string
   children: ReactNode
+}
+
+/** Unified SafeImage prop name — `src` is canonical; `source` accepts the RN alias. */
+export interface SafeImageProps {
+  src?: string | null
+  source?: string | null
+  fallback?: string
+  className?: string
+  testID?: string
+  alt?: string
+}
+
+export interface AccordionProps extends BaseProps {
+  title: string
+  defaultOpen?: boolean
+  children: ReactNode
+}
+
+export interface SortOption {
+  key: string
+  labelKey: string
+}
+export interface SortDropdownProps {
+  visible: boolean
+  onClose: () => void
+  options: SortOption[]
+  activeKey: string
+  onSelect: (key: string) => void
+  t?: (k: string) => string
 }
 
 export interface ToastProps extends BaseProps {
@@ -148,12 +226,14 @@ export interface SegmentedControlProps extends BaseProps {
   segments: { key: string; label: string; badge?: number }[]
   activeKey: string
   onChange: (key: string) => void
+  /** Tighter labels/badges + more track width for 3+ tabs. Defaults to false. */
+  compact?: boolean
 }
 
 export interface RatingProps extends BaseProps {
   rating: number
   maxStars?: number
-  size?: 'sm' | 'md' | 'lg'
+  size?: RatingSize
   showValue?: boolean
   interactive?: boolean
   onChange?: (rating: number) => void
@@ -162,7 +242,7 @@ export interface RatingProps extends BaseProps {
 export interface PriceTextProps extends BaseProps {
   price: number
   compareAtPrice?: number
-  size?: 'sm' | 'md' | 'lg'
+  size?: PriceTextSize
   variant?: 'default' | 'deal' | 'muted'
 }
 
@@ -234,6 +314,8 @@ export interface OrderStatusTimelineProps extends BaseProps {
   isCod?: boolean
   trackingNumber?: string
   onCopyTracking?: (trackingNumber: string) => void
+  /** When false, render the final state with no entrance/pulse/line animations. Defaults to true. */
+  animate?: boolean
 }
 
 export interface InventoryRowProps extends BaseProps {

@@ -1,53 +1,51 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react'
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   Keyboard,
+  Image,
 } from 'react-native'
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-  Easing,
-} from 'react-native-reanimated'
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
 import * as Haptics from 'expo-haptics'
-import { colors, spacing, radii } from '@chinooz/theme'
+import * as ImagePicker from 'expo-image-picker'
+import { colors as lightColors, spacing, radii, fontSz, springs } from '@chinooz/theme'
 import { createProfileSchema } from '@chinooz/validation'
-import { useSessionStore } from '@chinooz/state'
-import { useUIStore } from '@chinooz/state'
-import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
-import { SlideUp } from '@chinooz/ui/Animate'
+import { useSessionStore, useUIStore } from '@chinooz/state'
+import { useReducedMotion, Button, SlideUp, PressScale } from '@chinooz/ui'
 import { getInitials } from '@chinooz/utils'
+import { AuthShell } from '../components/AuthShell'
+import { useAppTheme } from '../components/ThemeProvider'
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity)
+const LANGUAGES: ('en' | 'ne')[] = ['en', 'ne']
 
 export default function CreateProfileScreen() {
+  const { colors } = useAppTheme()
+  const styles = useMemo(() => makeStyles(colors), [colors])
   const { t, i18n } = useTranslation()
   const router = useRouter()
-  const insets = useSafeAreaInsets()
   const reduced = useReducedMotion()
 
   const profile = useSessionStore(s => s.profile)
   const updateProfile = useSessionStore(s => s.updateProfile)
   const markProfileComplete = useSessionStore(s => s.markProfileComplete)
   const setLocale = useUIStore(s => s.setLocale)
-  const isReturning = useSessionStore(s => s.isLoggedIn) && !useSessionStore(s => s.profileComplete)
+  const isLoggedIn = useSessionStore(s => s.isLoggedIn)
+  const profileComplete = useSessionStore(s => s.profileComplete)
+  const isReturning = isLoggedIn && !profileComplete
 
   const [name, setName] = useState(profile.name || '')
   const [email, setEmail] = useState(profile.email || '')
   const [language, setLanguage] = useState<'en' | 'ne'>(profile.language || 'en')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
+  const [avatarUri, setAvatarUri] = useState<string | null>(profile.avatarUri ?? null)
 
   const avatarScale = useSharedValue(1)
   const nameInputRef = useRef<TextInput>(null)
@@ -69,35 +67,69 @@ export default function CreateProfileScreen() {
 
   useEffect(() => {
     validate()
-  }, [name, email, language])
+  }, [validate])
 
   const isValid = name.trim().length >= 2
 
+  // Apply the language choice immediately so the selector visibly "works".
+  const handleLanguage = useCallback(
+    (lang: 'en' | 'ne') => {
+      setLanguage(lang)
+      setLocale(lang)
+      if (i18n.isInitialized) i18n.changeLanguage(lang)
+      Haptics.selectionAsync().catch(() => {})
+    },
+    [setLocale, i18n],
+  )
+
+  const handlePickAvatar = useCallback(async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+      if (!perm.granted) return
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      })
+      if (!result.canceled && result.assets.length > 0) {
+        setAvatarUri(result.assets[0].uri)
+        updateProfile({ avatarUri: result.assets[0].uri })
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
+      }
+    } catch (err) {
+      console.error('pick avatar failed', err)
+    }
+  }, [updateProfile])
+
   const handleSave = useCallback(async () => {
     if (!validate()) {
-      try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error) } catch {}
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {})
       return
     }
 
     Keyboard.dismiss()
     setLoading(true)
-
     try {
       await new Promise(r => setTimeout(r, 400))
       updateProfile({ name: name.trim(), email: email.trim(), language })
       markProfileComplete()
       setLocale(language)
       if (i18n.isInitialized) i18n.changeLanguage(language)
-
-      try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success) } catch {}
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
       router.replace('/(tabs)')
-    } catch {
+    } catch (err) {
+      console.error('save profile failed', err)
     } finally {
       setLoading(false)
     }
-  }, [name, email, language, validate, updateProfile, markProfileComplete, setLocale, router])
+  }, [name, email, language, validate, updateProfile, markProfileComplete, setLocale, router, i18n])
 
   const handleSkip = useCallback(() => {
+    // Mirror web create-profile: if a usable name is present, persist it and
+    // mark the profile complete; otherwise just proceed (the user can finish
+    // later via the returning-user prompt). Web also drops a cookie here — that
+    // is web-route-guard specific and has no mobile equivalent.
     if (name.trim().length >= 2) {
       updateProfile({ name: name.trim(), language })
       markProfileComplete()
@@ -105,22 +137,20 @@ export default function CreateProfileScreen() {
       if (i18n.isInitialized) i18n.changeLanguage(language)
     }
     router.replace('/(tabs)')
-  }, [name, language, updateProfile, markProfileComplete, setLocale, router])
+  }, [name, language, updateProfile, markProfileComplete, setLocale, router, i18n])
 
+  const avatarStyle = useAnimatedStyle(() => ({ transform: [{ scale: avatarScale.value }] }))
   const initials = getInitials(name || '?')
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView
-        style={{ flex: 1, backgroundColor: colors.background }}
-        contentContainerStyle={{ paddingTop: insets.top, paddingBottom: insets.bottom + spacing[4] }}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.content}>
+    <AuthShell step={2}>
+      <View style={styles.col}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           {isReturning && (
             <SlideUp delay={reduced ? 0 : 50} distance={reduced ? 0 : 12}>
               <View style={styles.promptBanner}>
@@ -136,17 +166,30 @@ export default function CreateProfileScreen() {
 
           <SlideUp delay={reduced ? 0 : 200} distance={reduced ? 0 : 12}>
             <AnimatedTouchable
-              onPressIn={() => { avatarScale.value = withSpring(0.95, { damping: 15, stiffness: 400 }) }}
-              onPressOut={() => { avatarScale.value = withSpring(1, { damping: 15, stiffness: 300 }) }}
-              activeOpacity={0.8}
-              style={[styles.avatarButton, useAnimatedStyle(() => ({ transform: [{ scale: avatarScale.value }] }))]}
+              onPress={handlePickAvatar}
+              onPressIn={() => {
+                avatarScale.value = withSpring(0.95, springs.press)
+              }}
+              onPressOut={() => {
+                avatarScale.value = withSpring(1, springs.press)
+              }}
+              activeOpacity={0.85}
+              style={[styles.avatarWrap, avatarStyle]}
             >
               <View style={[styles.avatar, name.trim() ? styles.avatarActive : null]}>
-                <Text style={styles.avatarInitials}>{initials}</Text>
+                {avatarUri ? (
+                  <Image
+                    source={{ uri: avatarUri }}
+                    style={styles.avatarImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <Text style={styles.avatarInitials}>{initials}</Text>
+                )}
               </View>
-              <Text style={styles.avatarLabel}>
-                {t('createProfile.addPhoto')}
-              </Text>
+              <View style={styles.cam}>
+                <Text style={styles.camPlus}>+</Text>
+              </View>
             </AnimatedTouchable>
           </SlideUp>
 
@@ -163,7 +206,6 @@ export default function CreateProfileScreen() {
                 maxLength={100}
                 returnKeyType="next"
                 accessibilityLabel={t('createProfile.fullName')}
-                autoFocus
               />
               {errors.name ? <Text style={styles.error}>{errors.name}</Text> : null}
             </View>
@@ -186,15 +228,19 @@ export default function CreateProfileScreen() {
 
             <View style={styles.fieldGroup}>
               <Text style={styles.label}>{t('createProfile.language')}</Text>
-              <View style={styles.languageRow}>
-                {(['en', 'ne'] as const).map(lang => (
+              <View style={styles.langRow}>
+                {LANGUAGES.map(lang => (
                   <TouchableOpacity
                     key={lang}
-                    onPress={() => setLanguage(lang)}
+                    onPress={() => handleLanguage(lang)}
                     style={[styles.langButton, language === lang ? styles.langButtonActive : null]}
-                    activeOpacity={0.7}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: language === lang }}
                   >
-                    <Text style={[styles.langText, language === lang ? styles.langTextActive : null]}>
+                    <Text
+                      style={[styles.langText, language === lang ? styles.langTextActive : null]}
+                    >
                       {lang === 'en' ? 'English' : 'नेपाली'}
                     </Text>
                   </TouchableOpacity>
@@ -202,184 +248,197 @@ export default function CreateProfileScreen() {
               </View>
             </View>
           </SlideUp>
-        </View>
+        </ScrollView>
 
-        <View style={[styles.footer, { paddingBottom: insets.bottom + spacing[4] }]}>
+        <View style={styles.footer}>
           <SlideUp delay={reduced ? 0 : 350} distance={reduced ? 0 : 10}>
-            <AnimatedTouchable
-              onPress={handleSave}
+            <Button
+              variant="primary"
+              size="lg"
+              shape="pill"
+              fullWidth
+              haptic="medium"
               disabled={!isValid || loading}
-              activeOpacity={0.85}
-              style={[styles.saveButton, { opacity: isValid && !loading ? 1 : 0.5 }]}
+              loading={loading}
+              onPress={handleSave}
+              accessibilityLabel={t('createProfile.save')}
             >
-              {loading ? (
-                <View style={styles.loadingDots}>
-                  <View style={styles.loadingDot} />
-                  <View style={[styles.loadingDot, { marginLeft: 6 }]} />
-                  <View style={[styles.loadingDot, { marginLeft: 6 }]} />
-                </View>
-              ) : (
-                <Text style={styles.saveText}>{t('createProfile.save')}</Text>
-              )}
-            </AnimatedTouchable>
+              {t('createProfile.save')}
+            </Button>
 
-            <TouchableOpacity onPress={handleSkip} style={styles.skipButton} activeOpacity={0.7}>
+            <PressScale
+              onPress={handleSkip}
+              style={styles.skipBtn}
+              haptic="selection"
+              accessibilityRole="button"
+              accessibilityLabel={t('createProfile.skip')}
+            >
               <Text style={styles.skipText}>{t('createProfile.skip')}</Text>
-            </TouchableOpacity>
+            </PressScale>
           </SlideUp>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </View>
+    </AuthShell>
   )
 }
 
-const styles = StyleSheet.create({
-  content: {
-    paddingHorizontal: spacing[6],
-    paddingTop: spacing[6],
-    gap: spacing[5],
-  },
-  promptBanner: {
-    backgroundColor: colors.primary50,
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[4],
-    borderRadius: radii.lg,
-    marginBottom: spacing[2],
-  },
-  promptText: {
-    fontSize: 14,
-    color: colors.primary,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: colors.text,
-    letterSpacing: -0.3,
-    marginBottom: spacing[1],
-  },
-  subtitle: {
-    fontSize: 15,
-    color: colors.textMuted,
-    lineHeight: 22,
-  },
-  avatarButton: {
-    alignItems: 'center',
-    gap: spacing[2],
-    marginTop: spacing[2],
-  },
-  avatar: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: colors.primary50,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: 'transparent',
-  },
-  avatarActive: {
-    borderColor: colors.primary,
-  },
-  avatarInitials: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  avatarLabel: {
-    fontSize: 13,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  fieldGroup: {
-    gap: spacing[1.5],
-    marginTop: spacing[3],
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  input: {
-    height: 52,
-    backgroundColor: colors.surface,
-    borderRadius: radii.lg,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    paddingHorizontal: spacing[4],
-    fontSize: 15,
-    color: colors.text,
-  },
-  inputError: {
-    borderColor: colors.error,
-  },
-  error: {
-    fontSize: 12,
-    color: colors.error,
-    marginTop: spacing[0.5],
-  },
-  languageRow: {
-    flexDirection: 'row',
-    gap: spacing[2],
-  },
-  langButton: {
-    flex: 1,
-    height: 48,
-    borderRadius: radii.lg,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  langButtonActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primary50,
-  },
-  langText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textMuted,
-  },
-  langTextActive: {
-    color: colors.primary,
-  },
-  footer: {
-    paddingHorizontal: spacing[6],
-    paddingTop: spacing[4],
-    gap: spacing[3],
-  },
-  saveButton: {
-    backgroundColor: colors.primary,
-    height: 52,
-    borderRadius: radii.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saveText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.white,
-  },
-  loadingDots: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  loadingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.6)',
-  },
-  skipButton: {
-    alignItems: 'center',
-    paddingVertical: spacing[2],
-  },
-  skipText: {
-    fontSize: 14,
-    color: colors.textMuted,
-    fontWeight: '500',
-  },
-})
+const makeStyles = (c: typeof lightColors) =>
+  StyleSheet.create({
+    col: { flex: 1 },
+    scroll: { flex: 1 },
+    scrollContent: { paddingTop: spacing[2], paddingBottom: spacing[4], gap: spacing[5] },
+    promptBanner: {
+      backgroundColor: c.primary50,
+      paddingVertical: spacing[3],
+      paddingHorizontal: spacing[4],
+      borderRadius: radii.lg,
+    },
+    promptText: {
+      fontFamily: 'Inter',
+      fontSize: fontSz('base')[0],
+      color: c.primary,
+      fontWeight: '600',
+      textAlign: 'center',
+    },
+    title: {
+      fontFamily: 'Fraunces',
+      fontSize: fontSz('3xl')[0],
+      lineHeight: fontSz('3xl')[1],
+      color: c.text,
+      letterSpacing: -0.4,
+      marginBottom: spacing[1],
+    },
+    subtitle: {
+      fontFamily: 'Inter',
+      fontSize: fontSz('base')[0],
+      color: c.textMuted,
+      lineHeight: 22,
+    },
+    avatarWrap: {
+      alignSelf: 'center',
+      width: 100,
+      height: 100,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    avatar: {
+      width: 100,
+      height: 100,
+      borderRadius: radii.full,
+      backgroundColor: c.primary50,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 3,
+      borderColor: 'transparent',
+      overflow: 'hidden',
+    },
+    avatarActive: { borderColor: c.primary },
+    avatarImage: { width: '100%', height: '100%' },
+    avatarInitials: {
+      fontFamily: 'Fraunces',
+      fontSize: fontSz('4xl')[0],
+      color: c.primary,
+    },
+    cam: {
+      position: 'absolute',
+      right: 0,
+      bottom: 0,
+      width: 32,
+      height: 32,
+      borderRadius: radii.full,
+      backgroundColor: c.gold,
+      borderWidth: 3,
+      borderColor: c.cream,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    camPlus: {
+      color: c.white,
+      fontSize: fontSz('lg')[0],
+      fontWeight: '700',
+      marginTop: -2,
+    },
+    fieldGroup: { gap: spacing[1.5] },
+    label: {
+      fontFamily: 'Inter',
+      fontSize: fontSz('sm')[0],
+      fontWeight: '600',
+      color: c.primary,
+    },
+    input: {
+      height: 54,
+      backgroundColor: c.surface,
+      borderRadius: radii.lg,
+      borderWidth: 1.5,
+      borderColor: c.border,
+      paddingHorizontal: spacing[4],
+      fontFamily: 'Inter',
+      fontSize: fontSz('md')[0],
+      color: c.text,
+    },
+    inputError: { borderColor: c.error },
+    error: {
+      fontFamily: 'Inter',
+      fontSize: fontSz('sm')[0],
+      color: c.error,
+      marginTop: spacing[0.5],
+    },
+    langRow: { flexDirection: 'row', gap: spacing[2] },
+    langButton: {
+      flex: 1,
+      height: 50,
+      borderRadius: radii.lg,
+      borderWidth: 1.5,
+      borderColor: c.border,
+      backgroundColor: c.surface,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    langButtonActive: { borderColor: c.primary, backgroundColor: c.primary50 },
+    langText: {
+      fontFamily: 'Inter',
+      fontSize: fontSz('base')[0],
+      fontWeight: '600',
+      color: c.textMuted,
+    },
+    langTextActive: { color: c.primary },
+    footer: { paddingTop: spacing[3] },
+    skipBtn: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: spacing[2.5],
+      marginTop: spacing[2],
+    },
+    skipText: {
+      fontFamily: 'Inter',
+      fontSize: fontSz('base')[0],
+      fontWeight: '500',
+      color: c.textMuted,
+    },
+    cta: {
+      backgroundColor: c.primary,
+      height: 56,
+      borderRadius: radii.full,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: c.primary,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.3,
+      shadowRadius: 14,
+      elevation: 8,
+    },
+    ctaText: {
+      fontFamily: 'Inter',
+      fontSize: fontSz('md')[0],
+      fontWeight: '700',
+      color: c.white,
+      letterSpacing: 0.2,
+    },
+    loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    loadingDot: {
+      width: 8,
+      height: 8,
+      borderRadius: radii.sm,
+      backgroundColor: 'rgba(255,255,255,0.6)',
+    },
+  })

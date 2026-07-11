@@ -1,313 +1,278 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react'
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  Keyboard,
-} from 'react-native'
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-  withSequence,
-  Easing,
-} from 'react-native-reanimated'
-import { useRouter } from 'expo-router'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useTranslation } from 'react-i18next'
-import * as Haptics from 'expo-haptics'
-import { colors, spacing, radii } from '@chinooz/theme'
-import { nepaliPhoneSchema } from '@chinooz/validation'
-import { requestOtp } from '@chinooz/mock-data'
-import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
-import { SlideUp } from '@chinooz/ui/Animate'
+/**
+ * Auth step 0 — phone number entry (AuthShell + design-system Button / BottomSheet).
+ */
 
-const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity)
+import React, { useState, useCallback, useEffect, useMemo } from 'react'
+import { View, Text, StyleSheet, ScrollView } from 'react-native'
+import { useRouter } from 'expo-router'
+import { useTranslation } from 'react-i18next'
+import { Ionicons } from '@expo/vector-icons'
+import { spacing, radii, fontSz, colors as lightColors } from '@chinooz/theme'
+import { useSessionStore } from '@chinooz/state'
+import { Button, BottomSheet, PressScale } from '@chinooz/ui'
+import { AuthShell } from '../components/AuthShell'
+import { OnboardingInput } from '../components/onboarding/OnboardingInput'
+import { useAppTheme } from '../components/ThemeProvider'
+
+const COUNTRY_CODES = [
+  { code: '+977', countryKey: 'phoneEntry.countryNP', iso: 'NP' },
+  { code: '+91', countryKey: 'phoneEntry.countryIN', iso: 'IN' },
+  { code: '+1', countryKey: 'phoneEntry.countryUS', iso: 'US' },
+  { code: '+44', countryKey: 'phoneEntry.countryGB', iso: 'GB' },
+  { code: '+86', countryKey: 'phoneEntry.countryCN', iso: 'CN' },
+] as const
 
 export default function PhoneEntryScreen() {
-  const { t } = useTranslation()
   const router = useRouter()
-  const insets = useSafeAreaInsets()
-  const reduced = useReducedMotion()
-  const inputRef = useRef<TextInput>(null)
+  const { t } = useTranslation()
+  const { colors } = useAppTheme()
+  const styles = useMemo(() => makeStyles(colors), [colors])
+  const markOnboardingSeen = useSessionStore(s => s.markOnboardingSeen)
 
-  const [phone, setPhone] = useState('')
-  const [error, setError] = useState('')
+  const [selectedCountry, setSelectedCountry] = useState<(typeof COUNTRY_CODES)[number]>(
+    COUNTRY_CODES[0],
+  )
+  const [phoneNumber, setPhoneNumber] = useState('')
+  const [showCountryPicker, setShowCountryPicker] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [alreadySent, setAlreadySent] = useState(false)
-  const [focused, setFocused] = useState(false)
 
-  const borderScale = useSharedValue(0)
-  const shakeX = useSharedValue(0)
-  const buttonScale = useSharedValue(1)
+  // Ensure storytelling is never re-shown after the user reaches auth.
+  useEffect(() => {
+    markOnboardingSeen()
+  }, [markOnboardingSeen])
 
-  const validate = useCallback((value: string) => {
-    const result = nepaliPhoneSchema.safeParse({ phone: value })
-    if (!result.success) {
-      return result.error.issues[0]?.message || 'Invalid phone number'
-    }
-    return ''
-  }, [])
-
-  const handleChange = useCallback((text: string) => {
-    const digits = text.replace(/\D/g, '').slice(0, 10)
-    setPhone(digits)
-    setError('')
-    setAlreadySent(false)
-  }, [])
-
-  const handleFocus = useCallback(() => {
-    setFocused(true)
-    borderScale.value = withTiming(1, { duration: 200, easing: Easing.out(Easing.cubic) })
-  }, [])
-
-  const handleBlur = useCallback(() => {
-    setFocused(false)
-    if (!phone) {
-      borderScale.value = withTiming(0, { duration: 150 })
-    }
-  }, [phone])
-
-  const isValid = phone.length === 10 && (phone.startsWith('97') || phone.startsWith('98'))
-
-  const handleSubmit = useCallback(async () => {
-    const validationError = validate(phone)
-    if (validationError) {
-      setError(validationError)
-      shakeX.value = withSequence(
-        withTiming(-8, { duration: 50 }),
-        withTiming(8, { duration: 50 }),
-        withTiming(-4, { duration: 50 }),
-        withTiming(4, { duration: 50 }),
-        withTiming(0, { duration: 50 }),
-      )
-      try {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
-      } catch {}
-      return
-    }
-
-    Keyboard.dismiss()
+  const handleSendCode = useCallback(async () => {
+    if (phoneNumber.length < 10) return
     setLoading(true)
-    setError('')
-    setAlreadySent(false)
-
     try {
-      const result = await requestOtp(phone)
-      if (result.message.includes('already sent')) {
-        setAlreadySent(true)
-      } else {
-        router.push({ pathname: '/otp', params: { phone } })
-      }
-    } catch {
-      setError('Something went wrong. Please try again.')
+      await new Promise(resolve => setTimeout(resolve, 600))
+      router.push({
+        pathname: '/otp',
+        params: { phone: phoneNumber },
+      })
     } finally {
       setLoading(false)
     }
-  }, [phone, validate, router])
+  }, [phoneNumber, router])
 
-  const containerStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: shakeX.value }],
-  }))
+  const selectCountry = useCallback((country: (typeof COUNTRY_CODES)[number]) => {
+    setSelectedCountry(country)
+    setShowCountryPicker(false)
+  }, [])
 
-  const borderStyle = useAnimatedStyle(() => ({
-    borderColor: focused
-      ? colors.primary
-      : error
-      ? colors.error
-      : colors.border,
-    borderWidth: 1.5,
-  }))
+  const isValid = phoneNumber.length >= 10
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={0}
-    >
-      <Animated.View
-        style={[styles.container, { paddingTop: insets.top }, containerStyle]}
+    <AuthShell step={0}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <View style={styles.content}>
-          <SlideUp delay={reduced ? 0 : 100} distance={reduced ? 0 : 20}>
-            <Text style={styles.title}>{t('phoneEntry.title')}</Text>
-            <Text style={styles.subtitle}>{t('phoneEntry.subtitle')}</Text>
-          </SlideUp>
-
-          <SlideUp delay={reduced ? 0 : 200} distance={reduced ? 0 : 16}>
-            <Animated.View style={[styles.inputRow, borderStyle]}>
-              <View style={styles.prefix}>
-                <Text style={styles.prefixText}>🇳🇵</Text>
-                <Text style={styles.prefixNumber}>+977</Text>
-              </View>
-              <TextInput
-                ref={inputRef}
-                style={styles.input}
-                value={phone}
-                onChangeText={handleChange}
-                onFocus={handleFocus}
-                onBlur={handleBlur}
-                placeholder="98XXXXXXXX"
-                placeholderTextColor={colors.textTertiary}
-                keyboardType="phone-pad"
-                maxLength={10}
-                autoFocus
-                returnKeyType="done"
-                onSubmitEditing={handleSubmit}
-                accessibilityLabel="Phone number"
-              />
-            </Animated.View>
-
-            {error ? (
-              <Text style={styles.error}>{error}</Text>
-            ) : alreadySent ? (
-              <Text style={styles.alreadySent}>{t('phoneEntry.alreadySent')}</Text>
-            ) : null}
-          </SlideUp>
+        <View style={styles.iconContainer}>
+          <Ionicons name="phone-portrait-outline" size={40} color={colors.primary} />
         </View>
 
-        <View style={[styles.footer, { paddingBottom: insets.bottom + spacing[4] }]}>
-          <SlideUp delay={reduced ? 0 : 300} distance={reduced ? 0 : 12}>
-            <AnimatedTouchable
-              onPress={handleSubmit}
-              disabled={!isValid || loading}
-              activeOpacity={0.85}
-              style={[
-                styles.button,
-                { opacity: isValid && !loading ? 1 : 0.5 },
-              ]}
+        <Text style={styles.headline}>{t('phoneEntry.title')}</Text>
+        <Text style={styles.subtext}>{t('phoneEntry.subtitle')}</Text>
+
+        <View style={styles.form}>
+          <View style={styles.phoneRow}>
+            <PressScale
+              style={styles.countryButton}
+              onPress={() => setShowCountryPicker(true)}
+              haptic="selection"
+              accessibilityRole="button"
+              accessibilityLabel={t('phoneEntry.selectCountry')}
             >
-              {loading ? (
-                <View style={styles.loadingRow}>
-                  <View style={styles.loadingDot} />
-                  <View style={[styles.loadingDot, { marginLeft: 6 }]} />
-                  <View style={[styles.loadingDot, { marginLeft: 6 }]} />
-                </View>
-              ) : (
-                <Text style={styles.buttonText}>{t('phoneEntry.continue')}</Text>
-              )}
-            </AnimatedTouchable>
+              <Text style={styles.countryIso}>{selectedCountry.iso}</Text>
+              <Text style={styles.countryCode}>{selectedCountry.code}</Text>
+              <Ionicons name="chevron-down" size={18} color={colors.textSecondary} />
+            </PressScale>
 
-            <Text style={styles.terms}>
-              {t('phoneEntry.termsPrefix')}{' '}
-              <Text style={styles.link}>{t('phoneEntry.terms')}</Text>
-              {' '}{t('phoneEntry.and')}{' '}
-              <Text style={styles.link}>{t('phoneEntry.privacy')}</Text>
-            </Text>
-          </SlideUp>
+            <View style={styles.phoneInputContainer}>
+              <OnboardingInput
+                placeholder={t('phoneEntry.placeholder')}
+                value={phoneNumber}
+                onChangeText={setPhoneNumber}
+                keyboardType="phone-pad"
+                maxLength={15}
+                containerStyle={styles.phoneInput}
+                accessibilityLabel={t('phoneEntry.inputLabel')}
+              />
+            </View>
+          </View>
+
+          <Button
+            variant="primary"
+            size="lg"
+            shape="pill"
+            fullWidth
+            haptic="light"
+            disabled={!isValid}
+            loading={loading}
+            onPress={handleSendCode}
+            accessibilityLabel={t('phoneEntry.continue')}
+          >
+            {loading ? t('phoneEntry.sending') : t('phoneEntry.continue')}
+          </Button>
         </View>
-      </Animated.View>
-    </KeyboardAvoidingView>
+      </ScrollView>
+
+      <BottomSheet
+        visible={showCountryPicker}
+        onClose={() => setShowCountryPicker(false)}
+        title={t('phoneEntry.selectCountry')}
+      >
+        <ScrollView style={styles.countryList}>
+          {COUNTRY_CODES.map(country => {
+            const selected = selectedCountry.code === country.code
+            return (
+              <PressScale
+                key={country.code}
+                style={[styles.countryItem, selected ? styles.countryItemSelected : null]}
+                onPress={() => selectCountry(country)}
+                haptic="selection"
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+                accessibilityLabel={`${t(country.countryKey)}, ${country.code}`}
+              >
+                <View style={styles.isoBadge}>
+                  <Text style={styles.isoBadgeText}>{country.iso}</Text>
+                </View>
+                <Text style={styles.countryName}>{t(country.countryKey)}</Text>
+                <Text style={styles.countryCodeInList}>{country.code}</Text>
+                {selected ? (
+                  <Ionicons name="checkmark" size={22} color={colors.primary} />
+                ) : (
+                  <View style={styles.checkPlaceholder} />
+                )}
+              </PressScale>
+            )
+          })}
+        </ScrollView>
+      </BottomSheet>
+    </AuthShell>
   )
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: spacing[6],
-    paddingTop: spacing[10],
-    gap: spacing[6],
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: colors.text,
-    letterSpacing: -0.3,
-    marginBottom: spacing[2],
-  },
-  subtitle: {
-    fontSize: 15,
-    color: colors.textMuted,
-    lineHeight: 22,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: radii.lg,
-    paddingHorizontal: spacing[4],
-    height: 56,
-    marginTop: spacing[4],
-  },
-  prefix: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-    paddingRight: spacing[3],
-    borderRightWidth: 1,
-    borderRightColor: colors.border,
-    marginRight: spacing[3],
-  },
-  prefixText: {
-    fontSize: 18,
-  },
-  prefixNumber: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: colors.text,
-    fontWeight: '500',
-    letterSpacing: 1,
-    paddingVertical: 0,
-  },
-  error: {
-    fontSize: 13,
-    color: colors.error,
-    marginTop: spacing[2],
-  },
-  alreadySent: {
-    fontSize: 13,
-    color: colors.primary,
-    marginTop: spacing[2],
-  },
-  footer: {
-    paddingHorizontal: spacing[6],
-    gap: spacing[4],
-  },
-  button: {
-    backgroundColor: colors.primary,
-    height: 52,
-    borderRadius: radii.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  buttonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.white,
-  },
-  loadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  loadingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.6)',
-  },
-  terms: {
-    fontSize: 12,
-    color: colors.textTertiary,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  link: {
-    color: colors.primary,
-    fontWeight: '500',
-  },
-})
+const makeStyles = (c: typeof lightColors) =>
+  StyleSheet.create({
+    content: {
+      alignItems: 'center',
+      paddingBottom: spacing[8],
+    },
+    iconContainer: {
+      width: 64,
+      height: 64,
+      borderRadius: radii.xl,
+      backgroundColor: c.primary50,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: spacing[6],
+    },
+    headline: {
+      fontFamily: 'Fraunces-SemiBold',
+      fontSize: fontSz('2xl')[0],
+      fontWeight: '600',
+      color: c.text,
+      textAlign: 'center',
+      marginBottom: spacing[2],
+    },
+    subtext: {
+      fontFamily: 'Inter',
+      fontSize: 15,
+      lineHeight: 22,
+      color: c.textSecondary,
+      textAlign: 'center',
+      marginBottom: spacing[8],
+      maxWidth: 300,
+    },
+    form: {
+      width: '100%',
+      gap: spacing[5],
+    },
+    phoneRow: {
+      flexDirection: 'row',
+      gap: spacing[3],
+      alignItems: 'flex-start',
+    },
+    countryButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing[2],
+      height: 52,
+      minWidth: 108,
+      paddingHorizontal: spacing[3],
+      borderRadius: radii.lg,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.surface,
+    },
+    countryIso: {
+      fontFamily: 'Inter-SemiBold',
+      fontSize: fontSz('sm')[0],
+      fontWeight: '700',
+      color: c.primary,
+    },
+    countryCode: {
+      fontFamily: 'Inter',
+      fontSize: fontSz('md')[0],
+      fontWeight: '600',
+      color: c.text,
+    },
+    phoneInputContainer: {
+      flex: 1,
+    },
+    phoneInput: {
+      marginBottom: 0,
+    },
+    countryList: {
+      maxHeight: 360,
+      paddingHorizontal: spacing[4],
+    },
+    countryItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing[3],
+      minHeight: 52,
+      paddingVertical: spacing[3],
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.border,
+    },
+    countryItemSelected: {
+      backgroundColor: c.primary50,
+      marginHorizontal: -spacing[2],
+      paddingHorizontal: spacing[2],
+      borderRadius: radii.md,
+    },
+    isoBadge: {
+      width: 36,
+      height: 36,
+      borderRadius: radii.md,
+      backgroundColor: c.background,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    isoBadgeText: {
+      fontFamily: 'Inter-SemiBold',
+      fontSize: fontSz('xs')[0],
+      fontWeight: '700',
+      color: c.primary,
+    },
+    countryName: {
+      fontFamily: 'Inter',
+      fontSize: fontSz('md')[0],
+      color: c.text,
+      flex: 1,
+    },
+    countryCodeInList: {
+      fontFamily: 'Inter',
+      fontSize: fontSz('base')[0],
+      color: c.textSecondary,
+      marginRight: spacing[2],
+    },
+    checkPlaceholder: {
+      width: 22,
+    },
+  })
