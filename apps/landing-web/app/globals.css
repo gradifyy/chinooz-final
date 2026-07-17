@@ -4,19 +4,22 @@
 
 /* ─── Design Tokens as CSS Variables ─────────────────────────────────────── */
 :root {
-  /* Colors */
+  /* Colors — sourced from @chinooz/theme/tokens.js so landing-web stays in
+     lockstep with the shared brand palette. (Marketing-only canvas tints
+     --color-ink-* / --color-cream-* below are intentionally landing-specific.) */
   --color-primary: #8A1B57;
   --color-primary-dark: #6E1545;
   --color-primary-light: #B23C7E;
   --color-primary-50: #F8EAF1;
-  --color-gold: #E0A93B;
+  --color-gold: #B4790E;
+  --color-gold-text: #8A5A10;
   --color-background: #FAFAFA;
   --color-surface: #FFFFFF;
   --color-border: #E5E5E5;
   --color-text: #1F2937;
-  --color-text-muted: #6B7280;
-  --color-success: #16A34A;
-  --color-warning: #F59E0B;
+  --color-text-muted: #5B6470;
+  --color-success: #15803D;
+  --color-warning: #B45309;
   --color-error: #DC2626;
   --color-info: #2563EB;
 
@@ -33,6 +36,16 @@
   --duration-slow: 400ms;
   --duration-cinematic: 700ms;
   --ease-main: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Ink canvas — deep near-black for cinematic sections */
+  --color-ink-900: #0a0010;
+  --color-ink-800: #14001f;
+  --color-ink-700: #0f0018;
+
+  /* Cream canvas — warm muted, easier on the eyes (warm/deep are landing-specific tints) */
+  --color-cream: #FCFBF9;
+  --color-cream-warm: #E8E0D4;
+  --color-cream-deep: #DDD3C5;
 }
 
 /* ─── Base Styles ─────────────────────────────────────────────────────────── */
@@ -40,19 +53,19 @@
   html {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    scroll-behavior: smooth;
+    scroll-behavior: auto;
   }
 
   body {
     @apply bg-background text-text;
-    font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+    font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "ss01" 1, "cv11" 1;
   }
 
   /* Focus ring — plum colored */
   :focus-visible {
     outline: 2px solid var(--color-primary);
     outline-offset: 2px;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
   }
 
   /* Tabular figures for prices and stats */
@@ -62,7 +75,7 @@
 
   /* Devanagari font class */
   .font-devanagari {
-    font-family: var(--font-noto-devanagari), sans-serif;
+    font-family: var(--font-noto-devanagari), var(--font-inter), system-ui, sans-serif;
   }
 }
 
@@ -88,6 +101,211 @@
     opacity: 0.03;
     pointer-events: none;
   }
+
+  /* ─── Canvas backgrounds ──────────────────────────────────────────── */
+  .canvas-ink {
+    background-color: var(--color-ink-900);
+    background-image: linear-gradient(
+      180deg,
+      var(--color-ink-900) 0%,
+      var(--color-ink-800) 45%,
+      var(--color-ink-700) 75%,
+      var(--color-ink-900) 100%
+    );
+  }
+  .canvas-paper {
+    background-color: var(--color-background);
+    background-image: linear-gradient(180deg, #fbfbfb 0%, #f5f5f7 100%);
+  }
+  .canvas-cream {
+    background-color: var(--color-cream);
+    background-image: linear-gradient(180deg, #F0EBE3 0%, #E8E0D4 55%, #DDD3C5 100%);
+  }
+  .canvas-plum {
+    background-color: var(--color-primary-dark);
+    background-image: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 50%, var(--color-ink-800) 100%);
+  }
+
+  /* ─── Glass surfaces ──────────────────────────────────────────────── */
+  .glass-dark {
+    background: rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  .glass-light {
+    background: rgba(255, 252, 248, 0.65);
+    backdrop-filter: blur(20px) saturate(150%);
+    -webkit-backdrop-filter: blur(20px) saturate(150%);
+    border: 1px solid rgba(0, 0, 0, 0.04);
+  }
+  .glass-navbar {
+    background: rgba(240, 235, 227, 0.75);
+    backdrop-filter: blur(24px) saturate(150%);
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+  }
+  .glass-navbar-dark {
+    background: rgba(10, 0, 16, 0.6);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  /* ─── Layered soft shadows (Apple-style depth) ────────────────────── */
+  .shadow-soft {
+    box-shadow:
+      0 1px 1px rgba(45, 38, 50, 0.03),
+      0 2px 4px rgba(45, 38, 50, 0.04),
+      0 8px 24px rgba(45, 38, 50, 0.04);
+  }
+  .shadow-soft-lg {
+    box-shadow:
+      0 2px 4px rgba(45, 38, 50, 0.03),
+      0 8px 16px rgba(45, 38, 50, 0.05),
+      0 24px 48px rgba(45, 38, 50, 0.07);
+  }
+  .shadow-ink {
+    box-shadow:
+      0 4px 12px rgba(0, 0, 0, 0.4),
+      0 16px 40px rgba(0, 0, 0, 0.5);
+  }
+  .shadow-glow-plum {
+    box-shadow:
+      0 0 0 1px rgba(122, 46, 90, 0.2),
+      0 8px 32px rgba(122, 46, 90, 0.2),
+      0 2px 8px rgba(122, 46, 90, 0.1);
+  }
+  .shadow-glow-gold {
+    box-shadow:
+      0 0 0 1px rgba(201, 154, 82, 0.2),
+      0 8px 32px rgba(201, 154, 82, 0.15);
+  }
+
+  /* ─── Vignette ────────────────────────────────────────────────────── */
+  .vignette::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 120% 80% at center, transparent 45%, rgba(0, 0, 0, 0.45) 100%);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* ─── Marquee fade masks ──────────────────────────────────────────── */
+  .mask-fade-x {
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%);
+    mask-image: linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%);
+  }
+
+  /* ─── Gradient text ───────────────────────────────────────────────── */
+  .text-gradient-plum {
+    background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-gold) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  /* ─── Hero bottom fade (dark to cream) ────────────────────────────── */
+  .fade-ink-to-cream {
+    background: linear-gradient(180deg, transparent 0%, rgba(240, 235, 227, 0.15) 40%, #E8E0D4 100%);
+  }
+  .fade-cream-to-ink {
+    background: linear-gradient(180deg, #E8E0D4 0%, rgba(10, 0, 16, 0.5) 50%, var(--color-ink-900) 100%);
+  }
+
+  /* ─── Gradient mesh — ambient light fields ─────────────────────────── */
+  .mesh-plum {
+    background-image:
+      radial-gradient(ellipse 50% 40% at 20% 20%, rgba(122, 46, 90, 0.22) 0%, transparent 60%),
+      radial-gradient(ellipse 45% 35% at 80% 30%, rgba(160, 84, 128, 0.15) 0%, transparent 55%),
+      radial-gradient(ellipse 40% 30% at 60% 80%, rgba(201, 154, 82, 0.08) 0%, transparent 60%);
+  }
+  .mesh-cream {
+    background-image:
+      radial-gradient(ellipse 55% 45% at 50% 0%, rgba(122, 46, 90, 0.07) 0%, transparent 65%),
+      radial-gradient(ellipse 40% 35% at 15% 60%, rgba(201, 154, 82, 0.05) 0%, transparent 60%),
+      radial-gradient(ellipse 35% 30% at 85% 50%, rgba(160, 84, 128, 0.04) 0%, transparent 55%);
+  }
+
+  /* ─── Dot grid — subtle spatial texture ────────────────────────────── */
+  .dot-grid {
+    background-image: radial-gradient(circle, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+  .dot-grid-dark {
+    background-image: radial-gradient(circle, rgba(45, 38, 50, 0.06) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+
+  /* ─── Glass — frosted, layered surfaces ────────────────────────────── */
+  .glass-frost {
+    background: rgba(255, 252, 248, 0.55);
+    backdrop-filter: blur(28px) saturate(160%);
+    -webkit-backdrop-filter: blur(28px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    box-shadow:
+      0 1px 1px rgba(45, 38, 50, 0.03),
+      0 4px 16px rgba(45, 38, 50, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  }
+  .glass-ink {
+    background: rgba(10, 0, 16, 0.45);
+    backdrop-filter: blur(24px) saturate(140%);
+    -webkit-backdrop-filter: blur(24px) saturate(140%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow:
+      0 4px 24px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+  .glass-card {
+    background: rgba(255, 252, 248, 0.7);
+    backdrop-filter: blur(20px) saturate(150%);
+    -webkit-backdrop-filter: blur(20px) saturate(150%);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    box-shadow:
+      0 2px 4px rgba(45, 38, 50, 0.03),
+      0 12px 32px rgba(45, 38, 50, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  }
+
+  /* ─── Edge highlight — premium card border glow ────────────────────── */
+  .edge-light {
+    position: relative;
+  }
+  .edge-light::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.4) 0%, transparent 30%, transparent 70%, rgba(255, 255, 255, 0.15) 100%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+  .edge-light-dark::before {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, transparent 30%, transparent 70%, rgba(255, 255, 255, 0.06) 100%);
+  }
+
+  /* ─── Text balance — premium headline wrapping ─────────────────────── */
+  .text-balance {
+    text-wrap: balance;
+  }
+  .text-pretty {
+    text-wrap: pretty;
+  }
+
+  /* ─── Conic glow ring ──────────────────────────────────────────────── */
+  .conic-glow {
+    background: conic-gradient(from 0deg, transparent 0%, rgba(122, 46, 90, 0.3) 25%, transparent 50%, rgba(201, 154, 82, 0.2) 75%, transparent 100%);
+  }
+
+  /* ─── Mask reveal — wipe in from bottom ────────────────────────────── */
+  .mask-reveal-y {
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 20%, black 100%);
+    mask-image: linear-gradient(to bottom, transparent 0%, black 20%, black 100%);
+  }
 }
 
 /* ─── Reduced Motion ─────────────────────────────────────────────────────── */
@@ -101,11 +319,17 @@
     scroll-behavior: auto !important;
   }
 
-  .animate-marquee {
+  .animate-marquee,
+  .animate-marquee-reverse {
     animation: none !important;
   }
 
-  .animate-float {
+  .animate-float,
+  .animate-drift,
+  .animate-drift-slow,
+  .animate-pulse-glow,
+  .animate-orbit,
+  .animate-gradient-shift {
     animation: none !important;
   }
 }
@@ -114,6 +338,11 @@
 @keyframes marquee {
   0% { transform: translateX(0); }
   100% { transform: translateX(-50%); }
+}
+
+@keyframes marquee-reverse {
+  0% { transform: translateX(-50%); }
+  100% { transform: translateX(0); }
 }
 
 @keyframes float {
@@ -126,8 +355,54 @@
   100% { background-position: 200% 0; }
 }
 
+@keyframes drift {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  33% { transform: translate(20px, -16px) rotate(2deg); }
+  66% { transform: translate(-12px, 12px) rotate(-1deg); }
+}
+
+@keyframes drift-slow {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-24px, 20px) scale(1.06); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+
+@keyframes orbit {
+  from { transform: rotate(0deg) translateX(var(--orbit-radius, 120px)) rotate(0deg); }
+  to { transform: rotate(360deg) translateX(var(--orbit-radius, 120px)) rotate(-360deg); }
+}
+
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.94); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes ticker-up {
+  0% { transform: translateY(100%); opacity: 0; }
+  10%, 90% { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(-100%); opacity: 0; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* ─── Selection Color ─────────────────────────────────────────────────────── */
 ::selection {
   background-color: var(--color-primary);
-  color: white;
+  color: #F0EBE3;
 }
