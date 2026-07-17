@@ -7,7 +7,11 @@
     "zod": "^3.22.0"
   },
   "scripts": {
-    "lint": "echo ok",
-    "type-check": "tsc --noEmit"
+    "lint": "eslint . --ext .ts,.tsx,.js",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.9"
   }
 }

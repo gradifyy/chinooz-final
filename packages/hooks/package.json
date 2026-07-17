@@ -7,12 +7,25 @@
     "react": "*"
   },
   "dependencies": {
+    "@chinooz/api": "workspace:*",
     "@chinooz/mock-data": "workspace:*",
     "@chinooz/types": "workspace:*",
-    "@tanstack/react-query": "^5.50.0"
+    "@chinooz/state": "workspace:*",
+    "@chinooz/validation": "workspace:*",
+    "@chinooz/utils": "workspace:*",
+    "@tanstack/react-query": "^5.50.0",
+    "react-i18next": "^14.1.0"
   },
   "scripts": {
-    "lint": "echo ok",
-    "type-check": "tsc --noEmit"
+    "lint": "eslint . --ext .ts,.tsx,.js",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.0.0",
+    "@vitejs/plugin-react": "^6.0.3",
+    "jsdom": "^29.1.1",
+    "react": "19.1.0",
+    "vitest": "^4.1.9"
   }
 }

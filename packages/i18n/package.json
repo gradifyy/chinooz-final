@@ -3,9 +3,14 @@
   "version": "1.0.0",
   "main": "index.ts",
   "types": "index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./locales/*": "./locales/*"
+  },
   "scripts": {
-    "lint": "echo ok",
-    "type-check": "tsc --noEmit"
+    "lint": "eslint . --ext .ts,.tsx,.js",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "i18next": "^23.11.0",
@@ -16,6 +21,7 @@
     "react": "*"
   },
   "devDependencies": {
-    "react": "19.1.0"
+    "react": "19.1.0",
+    "vitest": "^4.1.9"
   }
 }
