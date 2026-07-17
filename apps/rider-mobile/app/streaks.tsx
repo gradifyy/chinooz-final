@@ -40,17 +40,22 @@ import { colors, spacing, radii, fontFamily, fontSize, shadow } from '@chinooz/t
 import { useReducedMotion } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
 import { useRiderStreaks } from '@chinooz/hooks'
-import { type RiderTierRung, type RiderMilestone, type RiderStreaksDetail } from '@chinooz/mock-data'
 import {
-  StreaksSkeleton,
-  ErrorState,
-  OfflineBanner,
-} from '../components/IncentiveStates'
+  type RiderTierRung,
+  type RiderMilestone,
+  type RiderStreaksDetail,
+} from '@chinooz/mock-data'
+import { StreaksSkeleton, ErrorState, OfflineBanner } from '../components/IncentiveStates'
 import { StreakFlame, ListEnter } from '../components/IncentiveMotion'
 import { useAppState } from '../components/AppStateProvider'
 
 const AnimatedPressable = Animated.createAnimatedComponent(TouchableOpacity)
 
+// Gamification tier accent colors — bronze/silver/gold/platinum are
+// product-domain data colors for the streaks feature, intentionally distinct
+// from the @chinooz/theme brand palette. The `gold` tier value equals
+// colors.gold but is kept inline here so the four tiers read as one set.
+// eslint-disable-next-line no-restricted-syntax
 const TIER_ACCENT: Record<string, { primary: string; light: string; dark: string }> = {
   bronze: { primary: '#B87333', light: '#FDF0E6', dark: '#8B5A2B' },
   silver: { primary: '#9CA3AF', light: '#F3F4F6', dark: '#6B7280' },
@@ -114,10 +119,18 @@ export default function StreaksScreen() {
   if (isLoading) {
     return (
       <View style={[styles.root, { paddingTop: insets.top }]}>
-        <StreaksHeader title={t('rider.streaks.title')} subtitle={t('rider.streaks.subtitle')} onBack={() => router.back()} backLabel={t('rider.streaks.back')} />
+        <StreaksHeader
+          title={t('rider.streaks.title')}
+          subtitle={t('rider.streaks.subtitle')}
+          onBack={() => router.back()}
+          backLabel={t('rider.streaks.back')}
+        />
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + spacing[8] }]}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: insets.bottom + spacing[8] },
+          ]}
           showsVerticalScrollIndicator={false}
         >
           <StreaksSkeleton ariaLabel={t('rider.streaks.skeletonAria')} />
@@ -129,7 +142,12 @@ export default function StreaksScreen() {
   if (isError || !data) {
     return (
       <View style={[styles.root, { paddingTop: insets.top }]}>
-        <StreaksHeader title={t('rider.streaks.title')} subtitle={t('rider.streaks.subtitle')} onBack={() => router.back()} backLabel={t('rider.streaks.back')} />
+        <StreaksHeader
+          title={t('rider.streaks.title')}
+          subtitle={t('rider.streaks.subtitle')}
+          onBack={() => router.back()}
+          backLabel={t('rider.streaks.back')}
+        />
         <ErrorState
           title={t('rider.streaks.errorTitle')}
           subtitle={t('rider.streaks.errorSubtitle')}
@@ -143,7 +161,16 @@ export default function StreaksScreen() {
 
   const showNudge = !nudgeDismissed && !data.nudge.dismissed && data.currentStreak > 0
   const currentTierRung = data.tierLadder.find(r => r.isCurrent)
-  const nextTierRung = data.tierLadder.find(r => r.tier === data.nextTierLabelKey?.replace('rider.profile.tier', '').replace('Bronze', 'bronze').replace('Silver', 'silver').replace('Gold', 'gold').replace('Platinum', 'platinum'))
+  const nextTierRung = data.tierLadder.find(
+    r =>
+      r.tier ===
+      data.nextTierLabelKey
+        ?.replace('rider.profile.tier', '')
+        .replace('Bronze', 'bronze')
+        .replace('Silver', 'silver')
+        .replace('Gold', 'gold')
+        .replace('Platinum', 'platinum'),
+  )
   const pctLabel = `${Math.round(data.progressToNext * 100)}%`
   const currentTierLabel = t(data.currentTierLabelKey)
   const nextTierLabel = data.nextTierLabelKey ? t(data.nextTierLabelKey) : null
@@ -155,13 +182,25 @@ export default function StreaksScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <StreaksHeader title={t('rider.streaks.title')} subtitle={t('rider.streaks.subtitle')} onBack={() => router.back()} backLabel={t('rider.streaks.back')} />
+      <StreaksHeader
+        title={t('rider.streaks.title')}
+        subtitle={t('rider.streaks.subtitle')}
+        onBack={() => router.back()}
+        backLabel={t('rider.streaks.back')}
+      />
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + spacing[8] }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + spacing[8] },
+        ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={() => refetch()} tintColor={colors.primary} />
+          <RefreshControl
+            refreshing={isRefetching}
+            onRefresh={() => refetch()}
+            tintColor={colors.primary}
+          />
         }
       >
         {/* Offline banner */}
@@ -177,8 +216,14 @@ export default function StreaksScreen() {
         {showNudge ? (
           <NudgeCard
             nudgeTitleText={t('rider.streaks.nudgeTitle')}
-            message={t('rider.streaks.nudgeMessage', { count: data.currentStreak, reward: data.nudge.keepRewardNpr.toLocaleString('en-IN') })}
-            ariaLabel={t('rider.streaks.nudgeAria', { count: data.currentStreak, reward: data.nudge.keepRewardNpr.toLocaleString('en-IN') })}
+            message={t('rider.streaks.nudgeMessage', {
+              count: data.currentStreak,
+              reward: data.nudge.keepRewardNpr.toLocaleString('en-IN'),
+            })}
+            ariaLabel={t('rider.streaks.nudgeAria', {
+              count: data.currentStreak,
+              reward: data.nudge.keepRewardNpr.toLocaleString('en-IN'),
+            })}
             dismissLabel={t('rider.streaks.nudgeDismiss')}
             dismissAria={t('rider.streaks.nudgeDismissAria')}
             onDismiss={dismissNudge}
@@ -193,110 +238,128 @@ export default function StreaksScreen() {
 
         {/* Tier ladder */}
         <ListEnter index={1}>
-        <View style={styles.section}>
-          <Text style={styles.sectionHeading} accessibilityRole="header">
-            {t('rider.streaks.tierLadderTitle')}
-          </Text>
-          <View
-            style={styles.tierLadderCard}
-            accessibilityRole="summary"
-            accessibilityLabel={tierLadderAria}
-          >
-            {data.tierLadder.map((rung, i) => (
-              <TierRungRow
-                key={rung.tier}
-                rung={rung}
-                isLast={i === data.tierLadder.length - 1}
-                t={t}
-              />
-            ))}
-          </View>
+          <View style={styles.section}>
+            <Text style={styles.sectionHeading} accessibilityRole="header">
+              {t('rider.streaks.tierLadderTitle')}
+            </Text>
+            <View
+              style={styles.tierLadderCard}
+              accessibilityRole="summary"
+              accessibilityLabel={tierLadderAria}
+            >
+              {data.tierLadder.map((rung, i) => (
+                <TierRungRow
+                  key={rung.tier}
+                  rung={rung}
+                  isLast={i === data.tierLadder.length - 1}
+                  t={t}
+                />
+              ))}
+            </View>
 
-          {/* Progress to next */}
-          {nextTierRung ? (
-            <View style={styles.progressCard}>
-              <Text
-                style={styles.progressLabel}
-                accessibilityRole="header"
-              >
-                {t('rider.streaks.tierProgressLabel', { tier: nextTierLabel })}
-              </Text>
-              <View
-                style={styles.progressWrap}
-                accessibilityRole="progressbar"
-                accessibilityLabel={t('rider.streaks.tierProgressAria', {
-                  tier: nextTierLabel,
-                  pct: Math.round(data.progressToNext * 100),
-                  caption: t(data.progressCaptionKey, { count: 3000 - 1284, tier: nextTierLabel }),
-                })}
-                accessibilityValue={{ min: 0, max: 100, now: Math.round(data.progressToNext * 100), text: pctLabel }}
-              >
-                <View style={styles.progressTrack} accessibilityElementsHidden importantForAccessibility="no">
-                  <View style={[styles.progressFill, { width: `${data.progressToNext * 100}%` }]} />
+            {/* Progress to next */}
+            {nextTierRung ? (
+              <View style={styles.progressCard}>
+                <Text style={styles.progressLabel} accessibilityRole="header">
+                  {t('rider.streaks.tierProgressLabel', { tier: nextTierLabel })}
+                </Text>
+                <View
+                  style={styles.progressWrap}
+                  accessibilityRole="progressbar"
+                  accessibilityLabel={t('rider.streaks.tierProgressAria', {
+                    tier: nextTierLabel,
+                    pct: Math.round(data.progressToNext * 100),
+                    caption: t(data.progressCaptionKey, {
+                      count: 3000 - 1284,
+                      tier: nextTierLabel,
+                    }),
+                  })}
+                  accessibilityValue={{
+                    min: 0,
+                    max: 100,
+                    now: Math.round(data.progressToNext * 100),
+                    text: pctLabel,
+                  }}
+                >
+                  <View
+                    style={styles.progressTrack}
+                    accessibilityElementsHidden
+                    importantForAccessibility="no"
+                  >
+                    <View
+                      style={[styles.progressFill, { width: `${data.progressToNext * 100}%` }]}
+                    />
+                  </View>
+                  <Text style={styles.progressPct}>{pctLabel}</Text>
                 </View>
-                <Text style={styles.progressPct}>{pctLabel}</Text>
+                <Text style={styles.progressCaption}>
+                  {t(data.progressCaptionKey, { count: 3000 - 1284, tier: nextTierLabel })}
+                </Text>
               </View>
-              <Text style={styles.progressCaption}>
-                {t(data.progressCaptionKey, { count: 3000 - 1284, tier: nextTierLabel })}
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.progressCard}>
-              <Text style={styles.progressComplete}>{t('rider.streaks.tierProgressComplete')}</Text>
-            </View>
-          )}
-        </View>
+            ) : (
+              <View style={styles.progressCard}>
+                <Text style={styles.progressComplete}>
+                  {t('rider.streaks.tierProgressComplete')}
+                </Text>
+              </View>
+            )}
+          </View>
         </ListEnter>
 
         {/* Current tier perks */}
         {data.currentPerks.length > 0 ? (
           <ListEnter index={2}>
-          <View style={styles.section}>
-            <Text
-              style={styles.sectionHeading}
-              accessibilityRole="header"
-              accessibilityLabel={t('rider.streaks.perksTitleAria', { tier: currentTierLabel })}
-            >
-              {t('rider.streaks.perksTitle', { tier: currentTierLabel })}
-            </Text>
-            <View style={styles.perksCard} accessibilityRole="list">
-              {data.currentPerks.map((perk, i) => (
-                <View
-                  key={perk.id}
-                  style={[styles.perkRow, i < data.currentPerks.length - 1 ? styles.perkRowBorder : null]}
-                  accessibilityLabel={t('rider.streaks.perkAria', {
-                    label: t(perk.labelKey),
-                    desc: t(perk.descKey),
-                  })}
-                >
-                  <View style={styles.perkIcon}>{PERK_ICONS[perk.icon] ?? <Zap size={18} color={colors.gold} />}</View>
-                  <View style={styles.perkText}>
-                    <Text style={styles.perkLabel}>{t(perk.labelKey)}</Text>
-                    <Text style={styles.perkDesc}>{t(perk.descKey)}</Text>
+            <View style={styles.section}>
+              <Text
+                style={styles.sectionHeading}
+                accessibilityRole="header"
+                accessibilityLabel={t('rider.streaks.perksTitleAria', { tier: currentTierLabel })}
+              >
+                {t('rider.streaks.perksTitle', { tier: currentTierLabel })}
+              </Text>
+              <View style={styles.perksCard} accessibilityRole="list">
+                {data.currentPerks.map((perk, i) => (
+                  <View
+                    key={perk.id}
+                    style={[
+                      styles.perkRow,
+                      i < data.currentPerks.length - 1 ? styles.perkRowBorder : null,
+                    ]}
+                    accessibilityLabel={t('rider.streaks.perkAria', {
+                      label: t(perk.labelKey),
+                      desc: t(perk.descKey),
+                    })}
+                  >
+                    <View style={styles.perkIcon}>
+                      {PERK_ICONS[perk.icon] ?? <Zap size={18} color={colors.gold} />}
+                    </View>
+                    <View style={styles.perkText}>
+                      <Text style={styles.perkLabel}>{t(perk.labelKey)}</Text>
+                      <Text style={styles.perkDesc}>{t(perk.descKey)}</Text>
+                    </View>
                   </View>
-                </View>
-              ))}
+                ))}
+              </View>
             </View>
-          </View>
           </ListEnter>
         ) : null}
 
         {/* Milestones / badges */}
         <ListEnter index={3}>
-        <View style={styles.section}>
-          <Text
-            style={styles.sectionHeading}
-            accessibilityRole="header"
-            accessibilityLabel={t('rider.streaks.milestonesTitleAria')}
-          >
-            {t('rider.streaks.milestonesTitle')}
-          </Text>
-          <View style={styles.milestonesGrid}>
-            {data.milestones.map(ms => (
-              <MilestoneCard key={ms.id} milestone={ms} t={t} />
-            ))}
+          <View style={styles.section}>
+            <Text
+              style={styles.sectionHeading}
+              accessibilityRole="header"
+              accessibilityLabel={t('rider.streaks.milestonesTitleAria')}
+            >
+              {t('rider.streaks.milestonesTitle')}
+            </Text>
+            <View style={styles.milestonesGrid}>
+              {data.milestones.map(ms => (
+                <MilestoneCard key={ms.id} milestone={ms} t={t} />
+              ))}
+            </View>
           </View>
-        </View>
         </ListEnter>
 
         {/* Performance tie — how tier is calculated */}
@@ -343,7 +406,9 @@ function StreaksHeader({
       </TouchableOpacity>
       <View style={styles.headerTitles}>
         <Text style={styles.headerTitle}>{title}</Text>
-        <Text style={styles.headerSub} numberOfLines={1}>{subtitle}</Text>
+        <Text style={styles.headerSub} numberOfLines={1}>
+          {subtitle}
+        </Text>
       </View>
       <View style={styles.headerSpacer} />
     </View>
@@ -452,14 +517,29 @@ function StreakTracker({
         <View style={styles.streakRewardChip}>
           <Text style={styles.streakRewardLabel}>{t('rider.streaks.streakReward')}</Text>
           <Text style={styles.streakRewardValue}>
-            {t('rider.streaks.streakRewardValue', { amount: data.streakRewardNpr.toLocaleString('en-IN') })}
+            {t('rider.streaks.streakRewardValue', {
+              amount: data.streakRewardNpr.toLocaleString('en-IN'),
+            })}
           </Text>
         </View>
       </View>
 
       {/* Day tracker */}
-      <View style={styles.streakDaysRow} accessibilityRole="progressbar" accessibilityLabel={cycleAria} accessibilityValue={{ min: 0, max: data.streakCycleDays, now: data.currentStreak, text: t('rider.streaks.streakCycleLabel', { current: data.currentStreak, cycle: data.streakCycleDays }) }}>
-        {data.days.map((day) => (
+      <View
+        style={styles.streakDaysRow}
+        accessibilityRole="progressbar"
+        accessibilityLabel={cycleAria}
+        accessibilityValue={{
+          min: 0,
+          max: data.streakCycleDays,
+          now: data.currentStreak,
+          text: t('rider.streaks.streakCycleLabel', {
+            current: data.currentStreak,
+            cycle: data.streakCycleDays,
+          }),
+        }}
+      >
+        {data.days.map(day => (
           <View key={day.index} style={styles.streakDayCell}>
             <View
               style={[
@@ -488,7 +568,10 @@ function StreakTracker({
       </View>
 
       <Text style={styles.streakCycleCaption}>
-        {t('rider.streaks.streakCycleLabel', { current: data.currentStreak, cycle: data.streakCycleDays })}
+        {t('rider.streaks.streakCycleLabel', {
+          current: data.currentStreak,
+          cycle: data.streakCycleDays,
+        })}
       </Text>
     </View>
   )
@@ -513,7 +596,12 @@ function TierRungRow({
       style={[styles.tierRung, !isLast && styles.tierRungBorder]}
       accessibilityLabel={`${tierLabel}. ${rung.isCurrent ? t('rider.streaks.tierCurrent') : rung.isReached ? t('rider.streaks.tierReached') : t('rider.streaks.tierLocked')}. ${t('rider.streaks.tierMinDeliveries', { count: rung.minDeliveries })}. ${t('rider.streaks.tierEarningsBoost', { pct: rung.earningsBoostPct })}`}
     >
-      <View style={[styles.tierRungBadge, { backgroundColor: accent.light, borderColor: accent.primary }]}>
+      <View
+        style={[
+          styles.tierRungBadge,
+          { backgroundColor: accent.light, borderColor: accent.primary },
+        ]}
+      >
         {rung.isReached ? (
           <Crown size={16} color={accent.primary} />
         ) : (
@@ -522,7 +610,12 @@ function TierRungRow({
       </View>
       <View style={styles.tierRungInfo}>
         <View style={styles.tierRungNameRow}>
-          <Text style={[styles.tierRungName, { color: rung.isReached ? colors.text : colors.textMuted }]}>
+          <Text
+            style={[
+              styles.tierRungName,
+              { color: rung.isReached ? colors.text : colors.textMuted },
+            ]}
+          >
             {tierLabel}
           </Text>
           {rung.isCurrent ? (
@@ -532,7 +625,9 @@ function TierRungRow({
           ) : null}
         </View>
         <Text style={styles.tierRungMeta}>
-          {t('rider.streaks.tierMinDeliveries', { count: rung.minDeliveries.toLocaleString('en-IN') })}
+          {t('rider.streaks.tierMinDeliveries', {
+            count: rung.minDeliveries.toLocaleString('en-IN'),
+          })}
           {'  ·  '}
           {t('rider.streaks.tierEarningsBoost', { pct: rung.earningsBoostPct })}
         </Text>
@@ -570,16 +665,28 @@ function MilestoneCard({
       <View style={[styles.milestoneIcon, milestone.earned && styles.milestoneIconEarned]}>
         {MILESTONE_ICONS[milestone.icon] ?? <Award size={22} color={colors.textTertiary} />}
       </View>
-      <Text style={[styles.milestoneLabel, !milestone.earned && styles.milestoneLabelLocked]} numberOfLines={1}>
+      <Text
+        style={[styles.milestoneLabel, !milestone.earned && styles.milestoneLabelLocked]}
+        numberOfLines={1}
+      >
         {label}
       </Text>
       <Text style={styles.milestoneStatus} numberOfLines={1}>
         {statusText}
       </Text>
       {!milestone.earned && milestone.progress != null ? (
-        <View style={styles.milestoneProgress} accessibilityElementsHidden importantForAccessibility="no">
+        <View
+          style={styles.milestoneProgress}
+          accessibilityElementsHidden
+          importantForAccessibility="no"
+        >
           <View style={styles.milestoneProgressTrack}>
-            <View style={[styles.milestoneProgressFill, { width: `${(milestone.progress ?? 0) * 100}%` }]} />
+            <View
+              style={[
+                styles.milestoneProgressFill,
+                { width: `${(milestone.progress ?? 0) * 100}%` },
+              ]}
+            />
           </View>
         </View>
       ) : null}

@@ -10,24 +10,25 @@ import Skeleton from './Skeleton'
 import type { OrderCardProps, Order, OrderStatus } from '@chinooz/types'
 
 const STATUS_COLORS: Record<OrderStatus, { bg: string; text: string }> = {
-  pending: { bg: 'bg-[#FEF3C7]', text: 'text-[#F59E0B]' },
-  confirmed: { bg: 'bg-[#FEF3C7]', text: 'text-[#F59E0B]' },
-  processing: { bg: 'bg-[#DBEAFE]', text: 'text-[#2563EB]' },
-  shipped: { bg: 'bg-[#DBEAFE]', text: 'text-[#2563EB]' },
-  delivered: { bg: 'bg-[#DCFCE7]', text: 'text-[#16A34A]' },
-  cancelled: { bg: 'bg-[#FEE2E2]', text: 'text-[#DC2626]' },
-  returned: { bg: 'bg-[#FEE2E2]', text: 'text-[#DC2626]' },
+  pending: { bg: 'bg-warning-light', text: 'text-warning' },
+  confirmed: { bg: 'bg-warning-light', text: 'text-warning' },
+  processing: { bg: 'bg-info-light', text: 'text-info' },
+  shipped: { bg: 'bg-info-light', text: 'text-info' },
+  delivered: { bg: 'bg-success-light', text: 'text-success' },
+  cancelled: { bg: 'bg-error-light', text: 'text-error' },
+  returned: { bg: 'bg-error-light', text: 'text-error' },
 }
 
-const ACTION_CONFIG: Record<string, { labelKey: string; variant: 'primary' | 'outline' | 'text' }> = {
-  pending: { labelKey: 'orderCard.payNow', variant: 'primary' },
-  confirmed: { labelKey: 'orderCard.payNow', variant: 'primary' },
-  processing: { labelKey: 'orderCard.viewDetails', variant: 'text' },
-  shipped: { labelKey: 'orderCard.track', variant: 'outline' },
-  delivered: { labelKey: 'orderCard.buyAgain', variant: 'outline' },
-  cancelled: { labelKey: 'orderCard.viewDetails', variant: 'text' },
-  returned: { labelKey: 'orderCard.viewDetails', variant: 'text' },
-}
+const ACTION_CONFIG: Record<string, { labelKey: string; variant: 'primary' | 'outline' | 'text' }> =
+  {
+    pending: { labelKey: 'orderCard.payNow', variant: 'primary' },
+    confirmed: { labelKey: 'orderCard.payNow', variant: 'primary' },
+    processing: { labelKey: 'orderCard.viewDetails', variant: 'text' },
+    shipped: { labelKey: 'orderCard.track', variant: 'outline' },
+    delivered: { labelKey: 'orderCard.buyAgain', variant: 'outline' },
+    cancelled: { labelKey: 'orderCard.viewDetails', variant: 'text' },
+    returned: { labelKey: 'orderCard.viewDetails', variant: 'text' },
+  }
 
 const MAX_VISIBLE_THUMBS = 4
 const THUMB_SIZE = 48
@@ -71,11 +72,7 @@ function ThumbStack({ items, firstThumbId }: { items: Order['items']; firstThumb
             zIndex: MAX_VISIBLE_THUMBS - i,
           }}
         >
-          <SafeImage
-            src={item.image}
-            alt={item.name}
-            className="w-full h-full object-cover"
-          />
+          <SafeImage src={item.image} alt={item.name} className="w-full h-full object-cover" />
         </motion.div>
       ))}
       {overflow > 0 && (
@@ -95,13 +92,7 @@ function ThumbStack({ items, firstThumbId }: { items: Order['items']; firstThumb
   )
 }
 
-function ActionButton({
-  order,
-  onAction,
-}: {
-  order: Order
-  onAction?: (order: Order) => void
-}) {
+function ActionButton({ order, onAction }: { order: Order; onAction?: (order: Order) => void }) {
   const { t } = useTranslation()
   const reduced = useReducedMotion()
   const config = ACTION_CONFIG[order.status] ?? ACTION_CONFIG.cancelled!

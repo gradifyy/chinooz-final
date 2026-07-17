@@ -2,11 +2,7 @@ import React from 'react'
 import { View, Text, StyleSheet, Image } from 'react-native'
 import { Star, ShieldCheck, ShieldAlert, Clock, MapPin } from 'lucide-react-native'
 import { colors, spacing, radii, fontFamily, fontSize } from '@chinooz/theme'
-import type {
-  RiderProfileHub,
-  RiderTier,
-  RiderVerificationStatus,
-} from '@chinooz/mock-data'
+import type { RiderProfileHub, RiderTier, RiderVerificationStatus } from '@chinooz/mock-data'
 
 interface ProfileHeaderProps {
   profile: RiderProfileHub
@@ -20,6 +16,10 @@ interface ProfileHeaderProps {
   verificationAria: string
 }
 
+// Gamification tier colors for the rider profile header — bronze/silver/
+// gold/platinum are product-domain data colors for the streaks/tier feature,
+// intentionally distinct from the @chinooz/theme brand palette.
+// eslint-disable-next-line no-restricted-syntax
 const TIER_COLORS: Record<RiderTier, { bg: string; fg: string; ring: string }> = {
   bronze: { bg: '#FBE9D0', fg: '#9A5A1E', ring: '#E0A93B' },
   silver: { bg: '#EDEEF1', fg: '#5B6470', ring: '#9CA3AF' },
@@ -49,12 +49,32 @@ function formatMemberSince(iso: string, locale: 'en' | 'ne' = 'en'): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
   const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ]
   const monthsNe = [
-    'जन', 'फेब', 'मार्च', 'अप्र', 'मे', 'जुन',
-    'जुल', 'अग', 'सेप', 'अक्ट', 'नोभ', 'डिस',
+    'जन',
+    'फेब',
+    'मार्च',
+    'अप्र',
+    'मे',
+    'जुन',
+    'जुल',
+    'अग',
+    'सेप',
+    'अक्ट',
+    'नोभ',
+    'डिस',
   ]
   const m = locale === 'ne' ? monthsNe : months
   return `${m[d.getMonth()]} ${d.getFullYear()}`
@@ -76,11 +96,7 @@ function ProfileHeaderInner({
   const VerifIcon = verif.icon === 'check' ? ShieldCheck : ShieldAlert
 
   return (
-    <View
-      style={styles.card}
-      accessibilityRole="header"
-      accessibilityLabel={headerAria}
-    >
+    <View style={styles.card} accessibilityRole="header" accessibilityLabel={headerAria}>
       <View style={styles.topRow}>
         {/* Avatar */}
         <View style={styles.avatarWrap}>
@@ -91,10 +107,7 @@ function ProfileHeaderInner({
               <Text style={styles.avatarInitials}>{initials(profile.name)}</Text>
             </View>
           )}
-          <View
-            style={[styles.tierRing, { borderColor: tierColor.ring }]}
-            pointerEvents="none"
-          />
+          <View style={[styles.tierRing, { borderColor: tierColor.ring }]} pointerEvents="none" />
         </View>
 
         {/* Name + zone + rating + tier */}
@@ -117,9 +130,7 @@ function ProfileHeaderInner({
               accessibilityLabel={ratingAria}
             >
               <Star size={13} color={colors.gold} fill={colors.gold} />
-              <Text style={styles.ratingValue}>
-                {profile.rating.toFixed(1)}
-              </Text>
+              <Text style={styles.ratingValue}>{profile.rating.toFixed(1)}</Text>
               <Text style={styles.ratingCount}>
                 ({profile.ratingCount.toLocaleString('en-IN')})
               </Text>
@@ -135,9 +146,7 @@ function ProfileHeaderInner({
               accessibilityLabel={tierAria}
             >
               <View style={[styles.tierDot, { backgroundColor: tierColor.fg }]} />
-              <Text style={[styles.tierText, { color: tierColor.fg }]}>
-                {tierLabel}
-              </Text>
+              <Text style={[styles.tierText, { color: tierColor.fg }]}>{tierLabel}</Text>
             </View>
           </View>
         </View>
@@ -158,9 +167,7 @@ function ProfileHeaderInner({
           accessibilityLabel={verificationAria}
         >
           <VerifIcon size={13} color={verif.fg} />
-          <Text style={[styles.verificationText, { color: verif.fg }]}>
-            {verificationLabel}
-          </Text>
+          <Text style={[styles.verificationText, { color: verif.fg }]}>{verificationLabel}</Text>
         </View>
       </View>
     </View>

@@ -5,7 +5,7 @@ import { motion } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { Check, AlertTriangle, Clock, Printer, Eye, Package, Truck } from 'lucide-react'
 import { formatNPR, getLocale } from '@chinooz/utils'
-import { duration } from '@chinooz/theme'
+import { colors, duration } from '@chinooz/theme'
 import { useReducedMotion } from './hooks/useReducedMotion'
 import SafeImage from './SafeImage'
 import Skeleton from './Skeleton'
@@ -409,7 +409,7 @@ const SellerOrderRow = memo(function SellerOrderRow({
       initial={reduced ? false : { opacity: 0 }}
       animate={{
         opacity: 1,
-        backgroundColor: isNew ? 'rgba(124, 58, 237, 0.06)' : 'rgba(255, 255, 255, 1)',
+        backgroundColor: isNew ? colors.primaryLight : colors.surface,
       }}
       transition={
         reduced
@@ -421,7 +421,7 @@ const SellerOrderRow = memo(function SellerOrderRow({
             }
       }
       onClick={handleRowClick}
-      className={`group h-[72px] cursor-pointer border-b border-[#E5E5E5] transition-colors duration-200 hover:bg-primary/[0.03] ${
+      className={`group h-[72px] cursor-pointer border-b border-border-light transition-colors duration-200 hover:bg-primary/[0.03] ${
         isNew ? 'bg-primary/[0.06]' : 'bg-surface'
       }`}
     >

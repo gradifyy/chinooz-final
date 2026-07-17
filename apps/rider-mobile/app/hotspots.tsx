@@ -23,16 +23,17 @@ import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
 import * as Haptics from 'expo-haptics'
+import { ChevronLeft, LocateFixed, Plus, Minus, Zap, Flame, ListOrdered } from 'lucide-react-native'
 import {
-  ChevronLeft,
-  LocateFixed,
-  Plus,
-  Minus,
-  Zap,
-  Flame,
-  ListOrdered,
-} from 'lucide-react-native'
-import { colors, radii, spacing, fontFamily, fontSize, shadow, duration, easing } from '@chinooz/theme'
+  colors,
+  radii,
+  spacing,
+  fontFamily,
+  fontSize,
+  shadow,
+  duration,
+  easing,
+} from '@chinooz/theme'
 import { BottomSheet } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
 import { useDemandZones, useSurgeZones, useDemandForecast } from '@chinooz/hooks'
@@ -129,8 +130,9 @@ export default function HotspotsScreen() {
   const onRefresh = useCallback(() => {
     setRefreshing(true)
     AccessibilityInfo.announceForAccessibility(t('rider.hotspots.loading'))
-    Promise.all([demandQuery.refetch(), surgeQuery.refetch(), forecastQuery.refetch()])
-      .finally(() => setRefreshing(false))
+    Promise.all([demandQuery.refetch(), surgeQuery.refetch(), forecastQuery.refetch()]).finally(
+      () => setRefreshing(false),
+    )
   }, [demandQuery, surgeQuery, forecastQuery, t])
 
   const handleZonePress = useCallback(
@@ -270,6 +272,10 @@ export default function HotspotsScreen() {
   }, [demandQuery, surgeQuery, t])
 
   // Heat legend items (labeled, not color-only).
+  // The 4-stop demand heatmap scale is a feature-domain data palette (low →
+  // very_high), intentionally a distinct ramp from the @chinooz/theme brand
+  // tokens so demand intensity reads on its own axis.
+  // eslint-disable-next-line no-restricted-syntax
   const legendItems: { level: DemandLevel; labelKey: string; fill: string }[] = [
     { level: 'low', labelKey: 'rider.hotspots.legendLow', fill: '#F8EAF1' },
     { level: 'medium', labelKey: 'rider.hotspots.legendMedium', fill: '#E0A93B' },
@@ -285,7 +291,9 @@ export default function HotspotsScreen() {
         t('rider.hotspots.zoneTapAria', {
           name: z.name,
           demand: z.demand,
-          level: t(`rider.hotspots.level${z.level.charAt(0).toUpperCase()}${z.level.slice(1)}` as never),
+          level: t(
+            `rider.hotspots.level${z.level.charAt(0).toUpperCase()}${z.level.slice(1)}` as never,
+          ),
           requests: t('rider.hotspots.requestsCount', { count: z.openRequests }),
           eta: z.avgPickupEtaMin,
         }),
@@ -321,8 +329,7 @@ export default function HotspotsScreen() {
       navigateAria: (name: string) => t('rider.hotspots.sheetNavigateAria', { name }),
       goOnline: t('rider.hotspots.sheetGoOnline'),
       goOnlineAria: (name: string) => t('rider.hotspots.sheetGoOnlineAria', { name }),
-      goOnlineDone: (name: string) =>
-        t('rider.hotspots.sheetGoOnlineDone', { name }),
+      goOnlineDone: (name: string) => t('rider.hotspots.sheetGoOnlineDone', { name }),
       recommendTitle: t('rider.hotspots.sheetRecommendTitle'),
       recommendSub: t('rider.hotspots.sheetRecommendSub'),
       recommendRowAria: (name: string, reason: string) =>
@@ -367,8 +374,7 @@ export default function HotspotsScreen() {
       offlineSub: t('rider.hotspots.recOfflineSub'),
       empty: t('rider.hotspots.recEmpty'),
       emptySub: t('rider.hotspots.recEmptySub'),
-      moveHint: (km: number, name: string) =>
-        t('rider.hotspots.recMoveHint', { km, name }),
+      moveHint: (km: number, name: string) => t('rider.hotspots.recMoveHint', { km, name }),
       benefit: (b: string) => t('rider.hotspots.recBenefit', { benefit: b }),
       why: (reason: string) => t('rider.hotspots.recWhy', { reason }),
       cardAria: (rank: number, move: string, benefit: string, reason: string) =>
@@ -425,8 +431,7 @@ export default function HotspotsScreen() {
         t('rider.hotspots.forecastBarAria', { label, demand, peak, surge }),
       hoursShort: (hours: number, minutes: number) =>
         t('rider.hotspots.forecastHoursShort', { hours, minutes }),
-      minutesShort: (minutes: number) =>
-        t('rider.hotspots.forecastMinutesShort', { minutes }),
+      minutesShort: (minutes: number) => t('rider.hotspots.forecastMinutesShort', { minutes }),
     }),
     [t],
   )
@@ -486,7 +491,9 @@ export default function HotspotsScreen() {
   const cachedTimeStr = useMemo(() => {
     if (!lastUpdated) return ''
     const d = new Date(lastUpdated)
-    return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0')
+    return (
+      d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0')
+    )
   }, [lastUpdated])
   const nextPeakLabel = useMemo(() => {
     if (!forecast?.nextPeak) return ''
@@ -511,7 +518,7 @@ export default function HotspotsScreen() {
     AccessibilityInfo.announceForAccessibility(t('rider.hotspots.stateStaleRefresh'))
   }, [demandQuery, surgeQuery, forecastQuery, t])
 
-    const topZone = zones[0]
+  const topZone = zones[0]
   const mapAria = topZone
     ? t('rider.hotspots.mapAria', {
         count: zones.length,
@@ -543,7 +550,11 @@ export default function HotspotsScreen() {
           accessibilityRole="switch"
           accessibilityLabel={t('rider.hotspots.surgeToggleAria')}
           accessibilityState={{ checked: showSurge }}
-          accessibilityValue={{ text: showSurge ? t('rider.hotspots.surgeToggleOn') : t('rider.hotspots.surgeToggleOff') }}
+          accessibilityValue={{
+            text: showSurge
+              ? t('rider.hotspots.surgeToggleOn')
+              : t('rider.hotspots.surgeToggleOff'),
+          }}
           onPress={handleSurgeToggle}
           style={[styles.surgeToggle, showSurge && styles.surgeToggleOn]}
           testID="hotspots-surge-toggle"
@@ -561,7 +572,10 @@ export default function HotspotsScreen() {
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + spacing[6] }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + spacing[6] },
+        ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -581,178 +595,178 @@ export default function HotspotsScreen() {
           <NoDataState labels={stateLabels} onPickArea={handleRetry} />
         ) : (
           <>
-          {/* Offline banner (cached data + timestamp) */}
-          {isOffline ? (
-            <OfflineState cachedTime={cachedTimeStr} labels={stateLabels} />
-          ) : null}
+            {/* Offline banner (cached data + timestamp) */}
+            {isOffline ? <OfflineState cachedTime={cachedTimeStr} labels={stateLabels} /> : null}
 
-          {/* Stale data indicator (>5 min old) */}
-          {isStale && !isOffline ? (
-            <StaleIndicator
-              minutes={staleMinutes}
-              labels={stateLabels}
-              onRefresh={handleStaleRefresh}
-            />
-          ) : null}
+            {/* Stale data indicator (>5 min old) */}
+            {isStale && !isOffline ? (
+              <StaleIndicator
+                minutes={staleMinutes}
+                labels={stateLabels}
+                onRefresh={handleStaleRefresh}
+              />
+            ) : null}
 
-          {/* Quiet demand: honest state, no fabricated hotspots */}
-          {quiet ? (
-            <QuietDemandState
-              nextPeakTime={nextPeakLabel || t('rider.hotspots.forecastNoPeak')}
-              labels={stateLabels}
-            />
-          ) : null}
+            {/* Quiet demand: honest state, no fabricated hotspots */}
+            {quiet ? (
+              <QuietDemandState
+                nextPeakTime={nextPeakLabel || t('rider.hotspots.forecastNoPeak')}
+                labels={stateLabels}
+              />
+            ) : null}
 
-        {/* Map */}
-        <View style={styles.mapWrap}>
-          <Animated.View
-            style={{
-              width: mapW,
-              height: mapH,
-              transform: [{ scale: zoom }],
-              alignSelf: 'center',
-            } as ViewStyle}
-          >
-            <Animated.View style={[{ width: mapW, height: mapH } as ViewStyle, recenterStyle]}>
-            <DemandHeatmap
-              zones={zones}
-              surgeZones={surgeZones}
-              showSurge={showSurge}
-              onZonePress={handleZonePress}
-              accessibilitySummary={mapAria}
-              labels={mapLabels}
-              width={mapW}
-              height={mapH}
-              selectedZoneId={selectedZone?.id}
-              reducedMotion={reducedMotion}
-            />
-            </Animated.View>
-          </Animated.View>
+            {/* Map */}
+            <View style={styles.mapWrap}>
+              <Animated.View
+                style={
+                  {
+                    width: mapW,
+                    height: mapH,
+                    transform: [{ scale: zoom }],
+                    alignSelf: 'center',
+                  } as ViewStyle
+                }
+              >
+                <Animated.View style={[{ width: mapW, height: mapH } as ViewStyle, recenterStyle]}>
+                  <DemandHeatmap
+                    zones={zones}
+                    surgeZones={surgeZones}
+                    showSurge={showSurge}
+                    onZonePress={handleZonePress}
+                    accessibilitySummary={mapAria}
+                    labels={mapLabels}
+                    width={mapW}
+                    height={mapH}
+                    selectedZoneId={selectedZone?.id}
+                    reducedMotion={reducedMotion}
+                  />
+                </Animated.View>
+              </Animated.View>
 
-          {/* Floating controls: recenter + zoom (e2) */}
-          <View style={[styles.floatingControls, { top: spacing[2], right: spacing[2] }]}>
-            <FloatingBtn
-              ariaLabel={t('rider.hotspots.zoomInAria')}
-              onPress={handleZoomIn}
-              testID="hotspots-zoom-in"
-            >
-              <Plus size={20} color={colors.text} />
-            </FloatingBtn>
-            <FloatingBtn
-              ariaLabel={t('rider.hotspots.zoomOutAria')}
-              onPress={handleZoomOut}
-              testID="hotspots-zoom-out"
-            >
-              <Minus size={20} color={colors.text} />
-            </FloatingBtn>
-            <FloatingBtn
-              ariaLabel={t('rider.hotspots.recenterAria')}
-              onPress={handleRecenter}
-              testID="hotspots-recenter"
-              highlight
-            >
-              <LocateFixed size={20} color={colors.primary} />
-            </FloatingBtn>
-          </View>
+              {/* Floating controls: recenter + zoom (e2) */}
+              <View style={[styles.floatingControls, { top: spacing[2], right: spacing[2] }]}>
+                <FloatingBtn
+                  ariaLabel={t('rider.hotspots.zoomInAria')}
+                  onPress={handleZoomIn}
+                  testID="hotspots-zoom-in"
+                >
+                  <Plus size={20} color={colors.text} />
+                </FloatingBtn>
+                <FloatingBtn
+                  ariaLabel={t('rider.hotspots.zoomOutAria')}
+                  onPress={handleZoomOut}
+                  testID="hotspots-zoom-out"
+                >
+                  <Minus size={20} color={colors.text} />
+                </FloatingBtn>
+                <FloatingBtn
+                  ariaLabel={t('rider.hotspots.recenterAria')}
+                  onPress={handleRecenter}
+                  testID="hotspots-recenter"
+                  highlight
+                >
+                  <LocateFixed size={20} color={colors.primary} />
+                </FloatingBtn>
+              </View>
 
-          {/* Legend (labeled, not color-only) */}
-          <View
-            style={styles.legend}
-            accessibilityRole="summary"
-            accessibilityLabel={t('rider.hotspots.legendAria')}
-          >
-            <View style={styles.legendHeader}>
-              <Flame size={13} color={colors.primary} />
-              <Text style={styles.legendTitle}>{t('rider.hotspots.legendTitle')}</Text>
-            </View>
-            <View style={styles.legendRow}>
-              {legendItems.map(item => (
-                <View key={item.level} style={styles.legendItem}>
-                  <View style={[styles.legendSwatch, { backgroundColor: item.fill }]} />
-                  <Text style={styles.legendLabel}>{t(item.labelKey)}</Text>
+              {/* Legend (labeled, not color-only) */}
+              <View
+                style={styles.legend}
+                accessibilityRole="summary"
+                accessibilityLabel={t('rider.hotspots.legendAria')}
+              >
+                <View style={styles.legendHeader}>
+                  <Flame size={13} color={colors.primary} />
+                  <Text style={styles.legendTitle}>{t('rider.hotspots.legendTitle')}</Text>
                 </View>
-              ))}
+                <View style={styles.legendRow}>
+                  {legendItems.map(item => (
+                    <View key={item.level} style={styles.legendItem}>
+                      <View style={[styles.legendSwatch, { backgroundColor: item.fill }]} />
+                      <Text style={styles.legendLabel}>{t(item.labelKey)}</Text>
+                    </View>
+                  ))}
+                </View>
+                {showSurge && surgeZones.length > 0 ? (
+                  <View style={styles.legendSurge}>
+                    <View style={styles.legendSurgeSwatch} />
+                    <Text style={styles.legendSurgeLabel}>
+                      {t('rider.hotspots.surgePill', { mult: surgeZones[0].multiplier })}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
             </View>
-            {showSurge && surgeZones.length > 0 ? (
-              <View style={styles.legendSurge}>
-                <View style={styles.legendSurgeSwatch} />
-                <Text style={styles.legendSurgeLabel}>
-                  {t('rider.hotspots.surgePill', { mult: surgeZones[0].multiplier })}
-                </Text>
+
+            {/* RD4 — Demand forecast / peak timeline */}
+            {forecast ? (
+              <View style={styles.forecastSection}>
+                <DemandForecastChart
+                  forecast={forecast}
+                  labels={forecastLabels}
+                  reducedMotion={reducedMotion}
+                />
               </View>
             ) : null}
-          </View>
-        </View>
 
-        {/* RD4 — Demand forecast / peak timeline */}
-        {forecast ? (
-          <View style={styles.forecastSection}>
-            <DemandForecastChart
-              forecast={forecast}
-              labels={forecastLabels}
-              reducedMotion={reducedMotion}
-            />
-          </View>
-        ) : null}
-
-        {/* Ranked fallback list (the map is not the only way in) */}
-        <View
-          style={styles.rankedSection}
-          accessibilityRole="summary"
-          accessibilityLabel={t('rider.hotspots.rankedListTitle')}
-        >
-          <View style={styles.rankedHeader}>
-            <ListOrdered size={16} color={colors.primary} />
-            <View style={styles.rankedHeaderText}>
-              <Text style={styles.rankedTitle}>{t('rider.hotspots.rankedListTitle')}</Text>
-              <Text style={styles.rankedSub}>{t('rider.hotspots.rankedListSub')}</Text>
-            </View>
-          </View>
-          {zones.map((zone, idx) => (
-            <TouchableOpacity
-              key={zone.id}
-              accessibilityRole="button"
-              accessibilityLabel={t('rider.hotspots.rankedRowAria', {
-                rank: idx + 1,
-                name: zone.name,
-                demand: zone.demand,
-                level: mapLabels.levelLabel(zone.level),
-                requests: zone.openRequests,
-              })}
-              onPress={() => handleZonePress(zone)}
-              style={styles.rankedRow}
+            {/* Ranked fallback list (the map is not the only way in) */}
+            <View
+              style={styles.rankedSection}
+              accessibilityRole="summary"
+              accessibilityLabel={t('rider.hotspots.rankedListTitle')}
             >
-              <Text style={styles.rankedRank}>{idx + 1}</Text>
-              <View style={styles.rankedBody}>
-                <Text style={styles.rankedName}>{zone.name}</Text>
-                <Text style={styles.rankedDemand}>
-                  {t('rider.hotspots.rankedRow', {
+              <View style={styles.rankedHeader}>
+                <ListOrdered size={16} color={colors.primary} />
+                <View style={styles.rankedHeaderText}>
+                  <Text style={styles.rankedTitle}>{t('rider.hotspots.rankedListTitle')}</Text>
+                  <Text style={styles.rankedSub}>{t('rider.hotspots.rankedListSub')}</Text>
+                </View>
+              </View>
+              {zones.map((zone, idx) => (
+                <TouchableOpacity
+                  key={zone.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('rider.hotspots.rankedRowAria', {
                     rank: idx + 1,
                     name: zone.name,
                     demand: zone.demand,
+                    level: mapLabels.levelLabel(zone.level),
+                    requests: zone.openRequests,
                   })}
-                </Text>
-              </View>
-              <View style={styles.rankedRight}>
-                <View style={[styles.rankedDot, { backgroundColor: HEAT_DOT[zone.level] }]} />
-                <Text style={styles.rankedLevel}>{mapLabels.levelLabel(zone.level)}</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
+                  onPress={() => handleZonePress(zone)}
+                  style={styles.rankedRow}
+                >
+                  <Text style={styles.rankedRank}>{idx + 1}</Text>
+                  <View style={styles.rankedBody}>
+                    <Text style={styles.rankedName}>{zone.name}</Text>
+                    <Text style={styles.rankedDemand}>
+                      {t('rider.hotspots.rankedRow', {
+                        rank: idx + 1,
+                        name: zone.name,
+                        demand: zone.demand,
+                      })}
+                    </Text>
+                  </View>
+                  <View style={styles.rankedRight}>
+                    <View style={[styles.rankedDot, { backgroundColor: HEAT_DOT[zone.level] }]} />
+                    <Text style={styles.rankedLevel}>{mapLabels.levelLabel(zone.level)}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
 
-        {/* RD3 — Recommendations strip (distance + demand + surge) */}
-        <View style={styles.recSection}>
-          <RecommendationsStrip
-            recommendations={recommendations}
-            hotspotZone={hotspotZone}
-            isOnline={isOnline}
-            onNavigate={handleNavigate}
-            onRefresh={handleRefreshRecs}
-            labels={recLabels}
-            reducedMotion={reducedMotion}
-          />
-        </View>
+            {/* RD3 — Recommendations strip (distance + demand + surge) */}
+            <View style={styles.recSection}>
+              <RecommendationsStrip
+                recommendations={recommendations}
+                hotspotZone={hotspotZone}
+                isOnline={isOnline}
+                onNavigate={handleNavigate}
+                onRefresh={handleRefreshRecs}
+                labels={recLabels}
+                reducedMotion={reducedMotion}
+              />
+            </View>
           </>
         )}
       </ScrollView>
@@ -839,7 +853,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerText: { flex: 1 },
-  title: { fontSize: fontSize.lg[0], fontFamily: fontFamily.sansBold[0], fontWeight: '700', color: colors.text },
+  title: {
+    fontSize: fontSize.lg[0],
+    fontFamily: fontFamily.sansBold[0],
+    fontWeight: '700',
+    color: colors.text,
+  },
   subtitle: { fontSize: fontSize.sm[0], color: colors.textMuted, marginTop: 2 },
   surgeToggle: {
     flexDirection: 'row',
@@ -936,7 +955,12 @@ const styles = StyleSheet.create({
   rankedSection: {
     gap: spacing[2],
   },
-  rankedHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], marginBottom: spacing[1] },
+  rankedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    marginBottom: spacing[1],
+  },
   rankedHeaderText: { gap: 2 },
   rankedTitle: {
     fontSize: fontSize.md[0],

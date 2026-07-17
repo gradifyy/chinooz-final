@@ -4,13 +4,11 @@
   "private": true,
   "files": [
     "eslint-preset.js",
-    "tsconfig.base.json",
-    "tsconfig.nextjs.json",
-    "tsconfig.expo.json",
-    "tailwind-preset.js"
+    "token-scan.mjs",
+    "tsconfig.base.json"
   ],
   "scripts": {
-    "lint": "echo ok",
+    "lint": "eslint . --ext .ts,.tsx,.js",
     "type-check": "tsc --noEmit"
   }
 }

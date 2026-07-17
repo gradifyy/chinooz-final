@@ -21,7 +21,7 @@ import {
   ChevronRight,
   AlertTriangle,
 } from 'lucide-react-native'
-import { colors, spacing, radii } from '@chinooz/theme'
+import { colors, spacing, radii, fontSz } from '@chinooz/theme'
 import type { SellerReview } from '@chinooz/types'
 import SafeImage from './SafeImage'
 import BottomSheet from './BottomSheet'
@@ -118,9 +118,7 @@ function ReviewCard({
   })
   const starAria = t('reviewCard.starRatingAria', { rating: review.rating })
 
-  const cardStyle = lowRating
-    ? [styles.card, styles.cardLowRating]
-    : styles.card
+  const cardStyle = lowRating ? [styles.card, styles.cardLowRating] : styles.card
 
   return (
     <>
@@ -154,7 +152,9 @@ function ReviewCard({
 
           <View style={styles.headerBody}>
             <View style={styles.nameRow}>
-              <Text style={styles.name} numberOfLines={1}>{review.userName}</Text>
+              <Text style={styles.name} numberOfLines={1}>
+                {review.userName}
+              </Text>
               {review.verifiedPurchase && (
                 <View
                   style={styles.verifiedBadge}
@@ -197,7 +197,9 @@ function ReviewCard({
             style={styles.productThumb}
             accessibilityLabel={review.productName}
           />
-          <Text style={styles.productName} numberOfLines={1}>{review.productName}</Text>
+          <Text style={styles.productName} numberOfLines={1}>
+            {review.productName}
+          </Text>
         </View>
 
         {/* Review text */}
@@ -213,12 +215,18 @@ function ReviewCard({
                 onPress={() => openPhoto(i)}
                 activeOpacity={0.85}
                 accessibilityRole="imagebutton"
-                accessibilityLabel={t('reviewCard.photoAlt', { index: i + 1, name: review.userName })}
+                accessibilityLabel={t('reviewCard.photoAlt', {
+                  index: i + 1,
+                  name: review.userName,
+                })}
               >
                 <SafeImage
                   source={src}
                   style={styles.photo}
-                  accessibilityLabel={t('reviewCard.photoAlt', { index: i + 1, name: review.userName })}
+                  accessibilityLabel={t('reviewCard.photoAlt', {
+                    index: i + 1,
+                    name: review.userName,
+                  })}
                 />
               </TouchableOpacity>
             ))}
@@ -227,7 +235,10 @@ function ReviewCard({
 
         {/* Existing seller response */}
         {hasResponse && review.response && (
-          <Animated.View style={[styles.responseBlock, responseAnimStyle]} accessibilityLiveRegion="polite">
+          <Animated.View
+            style={[styles.responseBlock, responseAnimStyle]}
+            accessibilityLiveRegion="polite"
+          >
             <Text style={styles.responseLabel}>{t('reviewCard.sellerResponse')}</Text>
             <Text style={styles.responseText}>{review.response.text}</Text>
             {(onEditResponse || onDeleteResponse) && (
@@ -247,13 +258,17 @@ function ReviewCard({
                 {onDeleteResponse && (
                   <TouchableOpacity
                     accessibilityRole="button"
-                    accessibilityLabel={t('reviewCard.deleteResponseAria', { name: review.userName })}
+                    accessibilityLabel={t('reviewCard.deleteResponseAria', {
+                      name: review.userName,
+                    })}
                     onPress={onDeleteResponse}
                     style={styles.responseActionBtn}
                     activeOpacity={0.85}
                     hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                   >
-                    <Text style={[styles.responseActionText, { color: colors.error }]}>{t('reviewCard.deleteResponse')}</Text>
+                    <Text style={[styles.responseActionText, { color: colors.error }]}>
+                      {t('reviewCard.deleteResponse')}
+                    </Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -383,7 +398,9 @@ function StatusPill({ review }: { review: SellerReview }) {
       return (
         <View style={[styles.statusPill, { backgroundColor: colors.warningLight }]}>
           <Flag size={10} color={colors.warning} />
-          <Text style={[styles.statusPillText, { color: '#92400E' }]}>{t('seller.reviews.statusPending')}</Text>
+          <Text style={[styles.statusPillText, { color: colors.warningText }]}>
+            {t('seller.reviews.statusPending')}
+          </Text>
         </View>
       )
     }
@@ -391,14 +408,18 @@ function StatusPill({ review }: { review: SellerReview }) {
       return (
         <View style={[styles.statusPill, { backgroundColor: colors.errorLight }]}>
           <Flag size={10} color={colors.error} />
-          <Text style={[styles.statusPillText, { color: colors.error }]}>{t('seller.reviews.statusRemoved')}</Text>
+          <Text style={[styles.statusPillText, { color: colors.error }]}>
+            {t('seller.reviews.statusRemoved')}
+          </Text>
         </View>
       )
     }
     return (
       <View style={[styles.statusPill, { backgroundColor: colors.border }]}>
         <Flag size={10} color={colors.textMuted} />
-        <Text style={[styles.statusPillText, { color: colors.textMuted }]}>{t('seller.reviews.statusDismissed')}</Text>
+        <Text style={[styles.statusPillText, { color: colors.textMuted }]}>
+          {t('seller.reviews.statusDismissed')}
+        </Text>
       </View>
     )
   }
@@ -406,14 +427,18 @@ function StatusPill({ review }: { review: SellerReview }) {
     return (
       <View style={[styles.statusPill, { backgroundColor: colors.successLight }]}>
         <CheckCircle2 size={10} color={colors.success} />
-        <Text style={[styles.statusPillText, { color: colors.success }]}>{t('reviewCard.responded')}</Text>
+        <Text style={[styles.statusPillText, { color: colors.success }]}>
+          {t('reviewCard.responded')}
+        </Text>
       </View>
     )
   }
   return (
     <View style={[styles.statusPill, { backgroundColor: colors.warningLight }]}>
-      <AlertTriangle size={10} color="#92400E" />
-      <Text style={[styles.statusPillText, { color: '#92400E' }]}>{t('reviewCard.needsResponse')}</Text>
+      <AlertTriangle size={10} color={colors.warningText} />
+      <Text style={[styles.statusPillText, { color: colors.warningText }]}>
+        {t('reviewCard.needsResponse')}
+      </Text>
     </View>
   )
 }
@@ -466,7 +491,10 @@ function PhotoViewer({
           </TouchableOpacity>
         </View>
 
-        <Pressable style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }} onPress={(e) => e.stopPropagation()}>
+        <Pressable
+          style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}
+          onPress={e => e.stopPropagation()}
+        >
           <SafeImage
             source={photos[index]}
             style={{ width: screen.width * 0.9, height: screen.height * 0.6 }}
@@ -491,7 +519,10 @@ function PhotoViewer({
                 style={[photoViewerStyles.navBtn, photoViewerStyles.navNext]}
                 disabled={index === photos.length - 1}
               >
-                <ChevronRight size={28} color={index === photos.length - 1 ? colors.textTertiary : colors.white} />
+                <ChevronRight
+                  size={28}
+                  color={index === photos.length - 1 ? colors.textTertiary : colors.white}
+                />
               </TouchableOpacity>
             </>
           )}
@@ -571,7 +602,7 @@ const styles = StyleSheet.create({
   checkboxBox: {
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: radii.lg,
     borderWidth: 2,
     borderColor: colors.border,
     alignItems: 'center',
@@ -596,7 +627,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarText: {
-    fontSize: 16,
+    fontSize: fontSz('md')[0],
     fontWeight: '600',
     color: colors.primary,
   },
@@ -608,7 +639,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   name: {
-    fontSize: 15,
+    fontSize: fontSz('base')[0],
     fontWeight: '600',
     color: colors.text,
   },
@@ -622,7 +653,7 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
   },
   verifiedText: {
-    fontSize: 10,
+    fontSize: fontSz('xs')[0],
     fontWeight: '600',
     color: colors.success,
   },
@@ -632,7 +663,7 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   date: {
-    fontSize: 12,
+    fontSize: fontSz('sm')[0],
     fontWeight: '400',
     color: colors.textMuted,
     marginLeft: spacing[1.5],
@@ -648,7 +679,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   statusPillText: {
-    fontSize: 10,
+    fontSize: fontSz('xs')[0],
     fontWeight: '700',
     letterSpacing: 0.3,
     textTransform: 'uppercase',
@@ -665,9 +696,9 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   lowRatingText: {
-    fontSize: 11,
+    fontSize: fontSz('xs')[0],
     fontWeight: '600',
-    color: '#92400E',
+    color: colors.warningText,
   },
 
   productRow: {
@@ -683,18 +714,18 @@ const styles = StyleSheet.create({
   },
   productName: {
     flex: 1,
-    fontSize: 14,
+    fontSize: fontSz('base')[0],
     fontWeight: '500',
     color: colors.textSecondary,
   },
 
   reviewTitle: {
-    fontSize: 16,
+    fontSize: fontSz('md')[0],
     fontWeight: '600',
     color: colors.text,
   },
   reviewBody: {
-    fontSize: 16,
+    fontSize: fontSz('md')[0],
     fontWeight: '400',
     color: colors.textSecondary,
     lineHeight: 22,
@@ -723,12 +754,12 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   responseLabel: {
-    fontSize: 12,
+    fontSize: fontSz('sm')[0],
     fontWeight: '600',
     color: colors.primary,
   },
   responseText: {
-    fontSize: 14,
+    fontSize: fontSz('base')[0],
     color: colors.textSecondary,
     lineHeight: 20,
   },
@@ -741,7 +772,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   responseActionText: {
-    fontSize: 12,
+    fontSize: fontSz('sm')[0],
     fontWeight: '600',
     color: colors.primary,
   },
@@ -763,7 +794,7 @@ const styles = StyleSheet.create({
     height: 34,
   },
   respondBtnText: {
-    fontSize: 13,
+    fontSize: fontSz('sm')[0],
     fontWeight: '600',
     color: colors.white,
   },
@@ -783,7 +814,7 @@ const styles = StyleSheet.create({
     borderColor: colors.errorLight,
   },
   flagBtnText: {
-    fontSize: 13,
+    fontSize: fontSz('sm')[0],
     fontWeight: '600',
     color: colors.textMuted,
   },
@@ -798,7 +829,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.full,
   },
   helpfulText: {
-    fontSize: 12,
+    fontSize: fontSz('sm')[0],
     fontWeight: '400',
     color: colors.textTertiary,
     marginLeft: 'auto',
@@ -814,7 +845,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.borderLight,
   },
   sheetRowLabel: {
-    fontSize: 15,
+    fontSize: fontSz('base')[0],
     color: colors.text,
   },
 })
@@ -836,7 +867,7 @@ const photoViewerStyles = StyleSheet.create({
     marginTop: -24,
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: radii['3xl'],
     backgroundColor: 'rgba(0,0,0,0.4)',
     alignItems: 'center',
     justifyContent: 'center',

@@ -6,11 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { duration, easing } from '@chinooz/theme'
 import { getLocale } from '@chinooz/utils'
 import { useReducedMotion } from './hooks/useReducedMotion'
-import type {
-  OrderStatusTimelineProps,
-  TimelineStep,
-  ShipmentTimeline,
-} from '@chinooz/types'
+import type { OrderStatusTimelineProps, TimelineStep, ShipmentTimeline } from '@chinooz/types'
 
 function formatTimestamp(iso?: string, lang?: string): string {
   if (!iso) return ''
@@ -83,11 +79,7 @@ function TimelineNode({ step, index, totalSteps, isLast, reduced, lang }: Timeli
         {/* Node circle */}
         <motion.div
           initial={reduced ? false : { scale: 0 }}
-          animate={
-            isCurrent && !reduced
-              ? { scale: [1, 1.1, 1] }
-              : { scale: 1 }
-          }
+          animate={isCurrent && !reduced ? { scale: [1, 1.1, 1] } : { scale: 1 }}
           transition={
             isCurrent && !reduced
               ? { duration: 1.5, repeat: Infinity, ease: 'easeInOut' }
@@ -95,19 +87,17 @@ function TimelineNode({ step, index, totalSteps, isLast, reduced, lang }: Timeli
                 ? { duration: 0 }
                 : { type: 'spring', damping: 18, stiffness: 200, duration: 0.6 }
           }
-            className={`
+          className={`
             w-6 h-6 rounded-full flex items-center justify-center
             border-2 ${getNodeBg()} ${getNodeBorder()}
           `}
-            aria-label={`${step.label}, ${step.status}${step.timestamp ? `, ${formatTimestamp(step.timestamp, lang)}` : ''}`}
+          aria-label={`${step.label}, ${step.status}${step.timestamp ? `, ${formatTimestamp(step.timestamp, lang)}` : ''}`}
         >
           {(isCompleted || isCurrent) && !isCancelled && (
             <span className="text-xs text-white">✓</span>
           )}
           {isCancelled && (
-            <span className="text-xs text-error">
-              {step.key === 'returned' ? '↩' : '✕'}
-            </span>
+            <span className="text-xs text-error">{step.key === 'returned' ? '↩' : '✕'}</span>
           )}
         </motion.div>
 
@@ -131,17 +121,11 @@ function TimelineNode({ step, index, totalSteps, isLast, reduced, lang }: Timeli
 
       {/* Content */}
       <div className={`flex-1 ${isLast ? 'pb-0' : 'pb-2'}`}>
-        <p className={`${getLabelSize()} ${getLabelClasses()} leading-snug`}>
-          {step.label}
-        </p>
+        <p className={`${getLabelSize()} ${getLabelClasses()} leading-snug`}>{step.label}</p>
         {step.timestamp && (
-          <p className="text-xs text-text-muted mt-0.5">
-            {formatTimestamp(step.timestamp, lang)}
-          </p>
+          <p className="text-xs text-text-muted mt-0.5">{formatTimestamp(step.timestamp, lang)}</p>
         )}
-        {step.note && (
-          <p className="text-xs text-text-tertiary mt-0.5">{step.note}</p>
-        )}
+        {step.note && <p className="text-xs text-text-tertiary mt-0.5">{step.note}</p>}
       </div>
     </motion.div>
   )
@@ -173,7 +157,10 @@ function TrackingChip({
       className="inline-flex items-center gap-2 bg-background rounded-md border border-border px-3 py-2 hover:bg-border-light transition-colors cursor-pointer"
       aria-label={`Tracking number: ${trackingNumber}. Click to copy.`}
     >
-      <span className="text-xs font-medium text-text-secondary tabular-nums" style={{ fontFamily: 'monospace' }}>
+      <span
+        className="text-xs font-medium text-text-secondary tabular-nums"
+        style={{ fontFamily: 'monospace' }}
+      >
         {trackingNumber}
       </span>
       <span className={`text-xs font-semibold ${copied ? 'text-success' : 'text-primary'}`}>
@@ -185,7 +172,7 @@ function TrackingChip({
 
 function CodBadge() {
   return (
-    <span className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold bg-[rgba(245,158,11,0.1)] text-[#F59E0B]">
+    <span className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold bg-warning-light text-warning">
       Cash on delivery
     </span>
   )
@@ -218,7 +205,10 @@ function ShipmentCard({
         {shipment.estimatedDelivery && (
           <span className="text-xs font-medium text-primary">
             {t('orders.estimatedDelivery')}:{' '}
-            {new Date(shipment.estimatedDelivery).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            {new Date(shipment.estimatedDelivery).toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+            })}
           </span>
         )}
       </div>
@@ -227,9 +217,7 @@ function ShipmentCard({
       {shipment.isCod && <CodBadge />}
 
       {/* Tracking chip */}
-      {shipment.trackingNumber && (
-        <TrackingChip trackingNumber={shipment.trackingNumber} />
-      )}
+      {shipment.trackingNumber && <TrackingChip trackingNumber={shipment.trackingNumber} />}
 
       {/* Timeline steps */}
       <div className="space-y-0">
@@ -323,7 +311,7 @@ export default function OrderStatusTimeline({
       ) : (
         /* Multi-seller: each shipment in its own card */
         <div className="space-y-3">
-          {shipments!.map((shipment) => (
+          {shipments!.map(shipment => (
             <ShipmentCard
               key={shipment.sellerName}
               shipment={shipment}

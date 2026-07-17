@@ -6,7 +6,7 @@ import type { ToastProps } from '@chinooz/types/components'
 const variantClasses: Record<string, string> = {
   success: 'bg-success',
   error: 'bg-error',
-  warning: 'bg-[#F59E0B]',
+  warning: 'bg-warning',
   info: 'bg-info',
 }
 
@@ -20,7 +20,8 @@ export default function Toast({
 }: ToastProps) {
   if (!visible) return null
 
-  const base = 'fixed top-[60px] left-4 right-4 z-[9999] rounded-lg px-[14px] py-[14px] flex items-center justify-between shadow-lg animate-in slide-in-from-top-2'
+  const base =
+    'fixed top-[60px] left-4 right-4 z-[9999] rounded-lg px-[14px] py-[14px] flex items-center justify-between shadow-lg animate-in slide-in-from-top-2'
 
   return (
     <div
