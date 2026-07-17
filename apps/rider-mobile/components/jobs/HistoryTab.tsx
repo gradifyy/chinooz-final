@@ -11,14 +11,7 @@ import {
 } from 'react-native'
 import { useTranslation } from 'react-i18next'
 import * as Haptics from 'expo-haptics'
-import {
-  Search,
-  X,
-  ChevronRight,
-  Banknote,
-  Star,
-  SlidersHorizontal,
-} from 'lucide-react-native'
+import { Search, X, ChevronRight, Banknote, Star, SlidersHorizontal } from 'lucide-react-native'
 import { colors, spacing, radii, fontFamily, fontSize, shadow } from '@chinooz/theme'
 import { useReducedMotion } from '@chinooz/ui'
 import { useRiderTripLedger } from '@chinooz/hooks'
@@ -27,7 +20,9 @@ import { formatNpr, formatNprTabular } from './format'
 import { ErrorStateView, NoResultsView, HistoryEmptyView, ShimmerBlock } from './JobStateViews'
 
 /** Translate with an inline English fallback. */
-function useTt() {
+type Tt = (key: string, vars?: Record<string, string | number>, fallback?: string) => string
+
+function useTt(): Tt {
   const { t } = useTranslation()
   return useCallback(
     (key: string, vars?: Record<string, string | number>, fallback?: string) => {
@@ -62,7 +57,16 @@ const PAGE_SIZE = 8
 function generateSyntheticPage(pageNum: number): TripLedgerEntry[] {
   const baseDate = new Date('2025-06-25')
   baseDate.setDate(baseDate.getDate() - (pageNum - 1) * 2)
-  const areas = ['Thamel', 'Patan', 'Baneshwor', 'Boudha', 'Koteshwor', 'Kalanki', 'Chabahil', 'Naxal']
+  const areas = [
+    'Thamel',
+    'Patan',
+    'Baneshwor',
+    'Boudha',
+    'Koteshwor',
+    'Kalanki',
+    'Chabahil',
+    'Naxal',
+  ]
   const entries: TripLedgerEntry[] = []
   for (let i = 0; i < PAGE_SIZE; i++) {
     const d = new Date(baseDate)
@@ -91,7 +95,12 @@ function generateSyntheticPage(pageNum: number): TripLedgerEntry[] {
       rating: 3 + ((i + pageNum) % 3),
       lines: [
         { id: `s${pageNum}${i}l1`, kind: 'trip', label: 'Base pay', amount: basePay },
-        { id: `s${pageNum}${i}l2`, kind: 'trip', label: 'Distance pay', amount: Math.max(0, distPay) },
+        {
+          id: `s${pageNum}${i}l2`,
+          kind: 'trip',
+          label: 'Distance pay',
+          amount: Math.max(0, distPay),
+        },
         { id: `s${pageNum}${i}l3`, kind: 'adjustment', label: 'Platform fee', amount: -18 },
       ],
     })
@@ -122,7 +131,9 @@ export default function HistoryTab({ onView }: HistoryTabProps) {
   const synthEntries = useRef<TripLedgerEntry[]>([])
 
   const tick = useCallback(() => {
-    try { if (!reduced) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light) } catch {}
+    try {
+      if (!reduced) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    } catch {}
   }, [reduced])
 
   useEffect(() => {
@@ -153,16 +164,20 @@ export default function HistoryTab({ onView }: HistoryTabProps) {
     }
     if (search.trim()) {
       const q = search.trim().toLowerCase()
-      list = list.filter(e =>
-        e.orderRef.toLowerCase().includes(q) ||
-        e.pickupArea.toLowerCase().includes(q) ||
-        e.dropoffArea.toLowerCase().includes(q),
+      list = list.filter(
+        e =>
+          e.orderRef.toLowerCase().includes(q) ||
+          e.pickupArea.toLowerCase().includes(q) ||
+          e.dropoffArea.toLowerCase().includes(q),
       )
     }
     return list
   }, [allEntries, dateRange, earningsFilter, search])
 
-  const visibleEntries = useMemo(() => filteredEntries.slice(0, page * PAGE_SIZE), [filteredEntries, page])
+  const visibleEntries = useMemo(
+    () => filteredEntries.slice(0, page * PAGE_SIZE),
+    [filteredEntries, page],
+  )
 
   const flatItems = useMemo(() => {
     const byDate = new Map<string, TripLedgerEntry[]>()
@@ -187,7 +202,9 @@ export default function HistoryTab({ onView }: HistoryTabProps) {
   const loadMore = useCallback(() => {
     if (loadingMore || !hasMore) return
     setLoadingMore(true)
-    AccessibilityInfo.announceForAccessibility(tt('rider.jobs.history.loadingMore', undefined, 'Loading more trips…'))
+    AccessibilityInfo.announceForAccessibility(
+      tt('rider.jobs.history.loadingMore', undefined, 'Loading more trips…'),
+    )
     setTimeout(() => {
       const nextPage = Math.ceil(synthEntries.current.length / PAGE_SIZE) + 1
       if (nextPage > 5) {
@@ -201,10 +218,13 @@ export default function HistoryTab({ onView }: HistoryTabProps) {
     }, 600)
   }, [loadingMore, hasMore, tt])
 
-  const handleEntryPress = useCallback((entry: TripLedgerEntry) => {
-    tick()
-    onView?.(entry)
-  }, [onView, tick])
+  const handleEntryPress = useCallback(
+    (entry: TripLedgerEntry) => {
+      tick()
+      onView?.(entry)
+    },
+    [onView, tick],
+  )
 
   const hasActiveFilters = dateRange !== 'all' || earningsFilter !== 'all' || search.trim() !== ''
 
@@ -221,7 +241,11 @@ export default function HistoryTab({ onView }: HistoryTabProps) {
         style={styles.list}
         testID="jobs-history-loading"
         accessibilityRole="progressbar"
-        accessibilityLabel={tt('rider.jobs.states.loadingAria', undefined, 'Loading delivery history, please wait')}
+        accessibilityLabel={tt(
+          'rider.jobs.states.loadingAria',
+          undefined,
+          'Loading delivery history, please wait',
+        )}
         accessibilityState={{ busy: true }}
         accessible
       >
@@ -241,7 +265,11 @@ export default function HistoryTab({ onView }: HistoryTabProps) {
         testID="jobs-history-error"
         onRetry={() => refetch()}
         title={tt('rider.jobs.states.errorTitle', undefined, 'Could not load history')}
-        subtitle={tt('rider.jobs.states.errorSubtitle', undefined, 'Something went wrong. Please try again.')}
+        subtitle={tt(
+          'rider.jobs.states.errorSubtitle',
+          undefined,
+          'Something went wrong. Please try again.',
+        )}
       />
     )
   }
@@ -286,7 +314,9 @@ export default function HistoryTab({ onView }: HistoryTabProps) {
         >
           <Text style={styles.dayHeaderText}>{item.label}</Text>
           <View style={styles.dayHeaderMeta}>
-            <Text style={styles.dayHeaderCount}>{item.tripCount} {tt('rider.jobs.history.trips', undefined, 'trips')}</Text>
+            <Text style={styles.dayHeaderCount}>
+              {item.tripCount} {tt('rider.jobs.history.trips', undefined, 'trips')}
+            </Text>
             <Text style={styles.dayHeaderTotal}>{formatNpr(item.dayTotal)}</Text>
           </View>
         </View>
@@ -298,16 +328,28 @@ export default function HistoryTab({ onView }: HistoryTabProps) {
   const ListFooter = () => {
     if (loadingMore) {
       return (
-        <View style={styles.footerLoading} accessibilityRole="progressbar" accessibilityLabel={tt('rider.jobs.history.loadingMore', undefined, 'Loading more trips…')}>
+        <View
+          style={styles.footerLoading}
+          accessibilityRole="progressbar"
+          accessibilityLabel={tt(
+            'rider.jobs.history.loadingMore',
+            undefined,
+            'Loading more trips…',
+          )}
+        >
           <ActivityIndicator size="small" color={colors.primary} />
-          <Text style={styles.footerText}>{tt('rider.jobs.history.loadingMore', undefined, 'Loading more trips…')}</Text>
+          <Text style={styles.footerText}>
+            {tt('rider.jobs.history.loadingMore', undefined, 'Loading more trips…')}
+          </Text>
         </View>
       )
     }
     if (!hasMore && filteredEntries.length > PAGE_SIZE) {
       return (
         <View style={styles.footerEnd}>
-          <Text style={styles.footerEndText}>{tt('rider.jobs.history.endOfList', undefined, 'No more trips')}</Text>
+          <Text style={styles.footerEndText}>
+            {tt('rider.jobs.history.endOfList', undefined, 'No more trips')}
+          </Text>
         </View>
       )
     }
@@ -330,11 +372,17 @@ export default function HistoryTab({ onView }: HistoryTabProps) {
       <Text style={styles.resultsCount}>
         {filteredEntries.length === 1
           ? tt('rider.jobs.history.resultsOne', undefined, '1 trip')
-          : tt('rider.jobs.history.results', { count: filteredEntries.length }, `${filteredEntries.length} trips`)}
+          : tt(
+              'rider.jobs.history.results',
+              { count: filteredEntries.length },
+              `${filteredEntries.length} trips`,
+            )}
       </Text>
       <FlatList
         data={flatItems}
-        keyExtractor={(item, idx) => item.type === 'header' ? `h-${item.date}` : `t-${item.entry.id}-${idx}`}
+        keyExtractor={(item, idx) =>
+          item.type === 'header' ? `h-${item.date}` : `t-${item.entry.id}-${idx}`
+        }
         renderItem={renderItem}
         ListFooterComponent={ListFooter}
         onEndReached={loadMore}
@@ -354,7 +402,17 @@ export default function HistoryTab({ onView }: HistoryTabProps) {
 
 /* --------------------------- sub-components --------------------------- */
 
-function SearchBar({ search, onSearch, onClear, tt }: { search: string; onSearch: (v: string) => void; onClear: () => void; tt: any }) {
+function SearchBar({
+  search,
+  onSearch,
+  onClear,
+  tt,
+}: {
+  search: string
+  onSearch: (v: string) => void
+  onClear: () => void
+  tt: Tt
+}) {
   return (
     <View style={styles.searchBar}>
       <Search size={16} color={colors.textTertiary} />
@@ -362,14 +420,26 @@ function SearchBar({ search, onSearch, onClear, tt }: { search: string; onSearch
         style={styles.searchInput}
         value={search}
         onChangeText={onSearch}
-        placeholder={tt('rider.jobs.history.searchPlaceholder', undefined, 'Search by order ref or area')}
+        placeholder={tt(
+          'rider.jobs.history.searchPlaceholder',
+          undefined,
+          'Search by order ref or area',
+        )}
         placeholderTextColor={colors.textTertiary}
         accessibilityRole="search"
-        accessibilityLabel={tt('rider.jobs.history.searchAria', undefined, 'Search delivery history')}
+        accessibilityLabel={tt(
+          'rider.jobs.history.searchAria',
+          undefined,
+          'Search delivery history',
+        )}
         testID="jobs-history-search"
       />
       {search.length > 0 && (
-        <TouchableOpacity onPress={onClear} accessibilityRole="button" accessibilityLabel={tt('common.clear', undefined, 'Clear')}>
+        <TouchableOpacity
+          onPress={onClear}
+          accessibilityRole="button"
+          accessibilityLabel={tt('common.clear', undefined, 'Clear')}
+        >
           <X size={16} color={colors.textTertiary} />
         </TouchableOpacity>
       )}
@@ -377,7 +447,25 @@ function SearchBar({ search, onSearch, onClear, tt }: { search: string; onSearch
   )
 }
 
-function FilterChips({ dateRange, earningsFilter, onDateRangeChange, onEarningsChange, showFilters, onToggleFilters, hasActiveFilters, tt }: any) {
+function FilterChips({
+  dateRange,
+  earningsFilter,
+  onDateRangeChange,
+  onEarningsChange,
+  showFilters,
+  onToggleFilters,
+  hasActiveFilters,
+  tt,
+}: {
+  dateRange: DateRangeFilter
+  earningsFilter: EarningsFilter
+  onDateRangeChange: (v: DateRangeFilter) => void
+  onEarningsChange: (v: EarningsFilter) => void
+  showFilters: boolean
+  onToggleFilters: () => void
+  hasActiveFilters: boolean
+  tt: Tt
+}) {
   return (
     <View>
       <TouchableOpacity
@@ -388,21 +476,39 @@ function FilterChips({ dateRange, earningsFilter, onDateRangeChange, onEarningsC
         testID="jobs-history-filter-toggle"
       >
         <SlidersHorizontal size={14} color={hasActiveFilters ? colors.primary : colors.textMuted} />
-        <Text style={[styles.filterToggleText, hasActiveFilters && styles.filterToggleTextActive]}>{tt('rider.jobs.history.filters', undefined, 'Filters')}</Text>
+        <Text style={[styles.filterToggleText, hasActiveFilters && styles.filterToggleTextActive]}>
+          {tt('rider.jobs.history.filters', undefined, 'Filters')}
+        </Text>
         {hasActiveFilters && <View style={styles.filterDot} />}
       </TouchableOpacity>
       {showFilters && (
         <View style={styles.filtersPanel}>
-          <Text style={styles.filterLabel}>{tt('rider.jobs.history.dateRange', undefined, 'Date range')}</Text>
+          <Text style={styles.filterLabel}>
+            {tt('rider.jobs.history.dateRange', undefined, 'Date range')}
+          </Text>
           <View style={styles.chipsRow}>
             {DATE_RANGE_OPTIONS.map(opt => (
-              <FilterChip key={opt.key} label={tt(opt.label, undefined, opt.fallback)} active={dateRange === opt.key} onPress={() => onDateRangeChange(opt.key)} testID={`jobs-history-filter-date-${opt.key}`} />
+              <FilterChip
+                key={opt.key}
+                label={tt(opt.label, undefined, opt.fallback)}
+                active={dateRange === opt.key}
+                onPress={() => onDateRangeChange(opt.key)}
+                testID={`jobs-history-filter-date-${opt.key}`}
+              />
             ))}
           </View>
-          <Text style={styles.filterLabel}>{tt('rider.jobs.history.minEarnings', undefined, 'Min earnings')}</Text>
+          <Text style={styles.filterLabel}>
+            {tt('rider.jobs.history.minEarnings', undefined, 'Min earnings')}
+          </Text>
           <View style={styles.chipsRow}>
             {EARNINGS_OPTIONS.map(opt => (
-              <FilterChip key={opt.key} label={tt(opt.label, undefined, opt.fallback)} active={earningsFilter === opt.key} onPress={() => onEarningsChange(opt.key)} testID={`jobs-history-filter-earn-${opt.key}`} />
+              <FilterChip
+                key={opt.key}
+                label={tt(opt.label, undefined, opt.fallback)}
+                active={earningsFilter === opt.key}
+                onPress={() => onEarningsChange(opt.key)}
+                testID={`jobs-history-filter-earn-${opt.key}`}
+              />
             ))}
           </View>
         </View>
@@ -411,37 +517,99 @@ function FilterChips({ dateRange, earningsFilter, onDateRangeChange, onEarningsC
   )
 }
 
-function FilterChip({ label, active, onPress, testID }: { label: string; active: boolean; onPress: () => void; testID?: string }) {
+function FilterChip({
+  label,
+  active,
+  onPress,
+  testID,
+}: {
+  label: string
+  active: boolean
+  onPress: () => void
+  testID?: string
+}) {
   return (
-    <TouchableOpacity onPress={onPress} style={[styles.chip, active && styles.chipActive]} accessibilityRole="button" accessibilityState={{ selected: active }} accessibilityLabel={label} testID={testID}>
+    <TouchableOpacity
+      onPress={onPress}
+      style={[styles.chip, active && styles.chipActive]}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={label}
+      testID={testID}
+    >
       <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
     </TouchableOpacity>
   )
 }
 
-function HistoryRow({ entry, onPress, tt }: { entry: TripLedgerEntry; onPress: () => void; tt: any }) {
-  const completedClock = new Date(entry.completedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+function HistoryRow({
+  entry,
+  onPress,
+  tt,
+}: {
+  entry: TripLedgerEntry
+  onPress: () => void
+  tt: Tt
+}) {
+  const completedClock = new Date(entry.completedAt).toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
   return (
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.92}
       style={styles.rowCard}
       accessibilityRole="button"
-      accessibilityLabel={tt('rider.jobs.history.rowAria', { ref: entry.orderRef, pickup: entry.pickupArea, dropoff: entry.dropoffArea, amount: formatNpr(entry.netEarning), time: completedClock }, `Trip ${entry.orderRef}. ${entry.pickupArea} to ${entry.dropoffArea}. Earned ${formatNpr(entry.netEarning)}. Completed at ${completedClock}.`)}
+      accessibilityLabel={tt(
+        'rider.jobs.history.rowAria',
+        {
+          ref: entry.orderRef,
+          pickup: entry.pickupArea,
+          dropoff: entry.dropoffArea,
+          amount: formatNpr(entry.netEarning),
+          time: completedClock,
+        },
+        `Trip ${entry.orderRef}. ${entry.pickupArea} to ${entry.dropoffArea}. Earned ${formatNpr(entry.netEarning)}. Completed at ${completedClock}.`,
+      )}
       testID={`jobs-history-item-${entry.id}`}
     >
       <View style={styles.rowLeft}>
         <Text style={styles.rowTime}>{completedClock}</Text>
-        <View style={styles.rowRoute}><View style={styles.routeDotSmall} /><Text style={styles.rowArea} numberOfLines={1}>{entry.pickupArea}</Text></View>
+        <View style={styles.rowRoute}>
+          <View style={styles.routeDotSmall} />
+          <Text style={styles.rowArea} numberOfLines={1}>
+            {entry.pickupArea}
+          </Text>
+        </View>
         <View style={styles.rowConnector} />
-        <View style={styles.rowRoute}><View style={[styles.routeDotSmall, styles.routeDotDropoffSmall]} /><Text style={styles.rowArea} numberOfLines={1}>{entry.dropoffArea}</Text></View>
+        <View style={styles.rowRoute}>
+          <View style={[styles.routeDotSmall, styles.routeDotDropoffSmall]} />
+          <Text style={styles.rowArea} numberOfLines={1}>
+            {entry.dropoffArea}
+          </Text>
+        </View>
       </View>
       <View style={styles.rowRight}>
         <Text style={styles.rowAmount}>{formatNprTabular(entry.netEarning)}</Text>
         <View style={styles.rowBadges}>
-          {entry.isCod && entry.codAmount > 0 && (<View style={styles.rowCodBadge}><Banknote size={10} color={colors.info} /><Text style={styles.rowCodText}>COD</Text></View>)}
-          {entry.hasIncentive && (<View style={styles.rowIncentiveBadge}><Star size={10} color={colors.warning} /></View>)}
-          {entry.rating > 0 && (<View style={styles.rowRating}><Star size={10} color={colors.gold} fill={colors.gold} /><Text style={styles.rowRatingText}>{entry.rating}</Text></View>)}
+          {entry.isCod && entry.codAmount > 0 && (
+            <View style={styles.rowCodBadge}>
+              <Banknote size={10} color={colors.info} />
+              <Text style={styles.rowCodText}>COD</Text>
+            </View>
+          )}
+          {entry.hasIncentive && (
+            <View style={styles.rowIncentiveBadge}>
+              <Star size={10} color={colors.warning} />
+            </View>
+          )}
+          {entry.rating > 0 && (
+            <View style={styles.rowRating}>
+              <Star size={10} color={colors.gold} fill={colors.gold} />
+              <Text style={styles.rowRatingText}>{entry.rating}</Text>
+            </View>
+          )}
         </View>
       </View>
       <ChevronRight size={16} color={colors.textTertiary} />
@@ -449,9 +617,10 @@ function HistoryRow({ entry, onPress, tt }: { entry: TripLedgerEntry; onPress: (
   )
 }
 
-function formatDayLabel(date: string, tt: any): string {
+function formatDayLabel(date: string, tt: Tt): string {
   const today = new Date().toISOString().slice(0, 10)
-  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1)
+  const yesterday = new Date()
+  yesterday.setDate(yesterday.getDate() - 1)
   const yesterdayStr = yesterday.toISOString().slice(0, 10)
   if (date === today) return tt('rider.jobs.history.today', undefined, 'Today')
   if (date === yesterdayStr) return tt('rider.jobs.history.yesterday', undefined, 'Yesterday')
@@ -461,45 +630,211 @@ function formatDayLabel(date: string, tt: any): string {
 
 const styles = StyleSheet.create({
   list: { paddingHorizontal: spacing[4], paddingTop: spacing[3], gap: spacing[3] },
-  searchBar: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], backgroundColor: colors.surface, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.borderLight, paddingHorizontal: spacing[3], paddingVertical: spacing[2.5] },
-  searchInput: { flex: 1, fontSize: fontSize.base[0], color: colors.text, fontFamily: fontFamily.sans[0], paddingVertical: 0 },
-  filterToggle: { flexDirection: 'row', alignItems: 'center', gap: spacing[1.5], alignSelf: 'flex-start', paddingHorizontal: spacing[3], paddingVertical: spacing[2], borderRadius: radii.full, borderWidth: 1, borderColor: colors.borderLight, backgroundColor: colors.surface, minHeight: 36 },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2.5],
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: fontSize.base[0],
+    color: colors.text,
+    fontFamily: fontFamily.sans[0],
+    paddingVertical: 0,
+  },
+  filterToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1.5],
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    borderRadius: radii.full,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    backgroundColor: colors.surface,
+    minHeight: 36,
+  },
   filterToggleActive: { borderColor: colors.primary, backgroundColor: colors.primary50 },
-  filterToggleText: { fontSize: fontSize.sm[0], fontWeight: '600', color: colors.textMuted, fontFamily: fontFamily.sansSemiBold[0] },
+  filterToggleText: {
+    fontSize: fontSize.sm[0],
+    fontWeight: '600',
+    color: colors.textMuted,
+    fontFamily: fontFamily.sansSemiBold[0],
+  },
   filterToggleTextActive: { color: colors.primary },
   filterDot: { width: 6, height: 6, borderRadius: radii.full, backgroundColor: colors.primary },
-  filtersPanel: { backgroundColor: colors.surface, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.borderLight, padding: spacing[4], gap: spacing[2] },
-  filterLabel: { fontSize: fontSize.xs[0], fontWeight: '600', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.4, fontFamily: fontFamily.sansSemiBold[0], marginTop: spacing[1] },
+  filtersPanel: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    padding: spacing[4],
+    gap: spacing[2],
+  },
+  filterLabel: {
+    fontSize: fontSize.xs[0],
+    fontWeight: '600',
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    fontFamily: fontFamily.sansSemiBold[0],
+    marginTop: spacing[1],
+  },
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
-  chip: { paddingHorizontal: spacing[3], paddingVertical: spacing[1.5], borderRadius: radii.full, borderWidth: 1, borderColor: colors.borderLight, backgroundColor: colors.background, minHeight: 32 },
+  chip: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1.5],
+    borderRadius: radii.full,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    backgroundColor: colors.background,
+    minHeight: 32,
+  },
   chipActive: { borderColor: colors.primary, backgroundColor: colors.primary50 },
-  chipText: { fontSize: fontSize.sm[0], fontWeight: '500', color: colors.textSecondary, fontFamily: fontFamily.sans[0] },
-  chipTextActive: { color: colors.primary, fontWeight: '700', fontFamily: fontFamily.sansSemiBold[0] },
-  resultsCount: { fontSize: fontSize.sm[0], color: colors.textMuted, fontWeight: '500', fontFamily: fontFamily.sans[0] },
+  chipText: {
+    fontSize: fontSize.sm[0],
+    fontWeight: '500',
+    color: colors.textSecondary,
+    fontFamily: fontFamily.sans[0],
+  },
+  chipTextActive: {
+    color: colors.primary,
+    fontWeight: '700',
+    fontFamily: fontFamily.sansSemiBold[0],
+  },
+  resultsCount: {
+    fontSize: fontSize.sm[0],
+    color: colors.textMuted,
+    fontWeight: '500',
+    fontFamily: fontFamily.sans[0],
+  },
   flatListContent: { gap: spacing[2], paddingBottom: spacing[4] },
-  dayHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing[2], paddingHorizontal: spacing[1], marginTop: spacing[2] },
-  dayHeaderText: { fontSize: fontSize.sm[0], fontWeight: '700', color: colors.text, fontFamily: fontFamily.sansBold[0], textTransform: 'uppercase', letterSpacing: 0.3 },
+  dayHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[1],
+    marginTop: spacing[2],
+  },
+  dayHeaderText: {
+    fontSize: fontSize.sm[0],
+    fontWeight: '700',
+    color: colors.text,
+    fontFamily: fontFamily.sansBold[0],
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
   dayHeaderMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
-  dayHeaderCount: { fontSize: fontSize.xs[0], color: colors.textMuted, fontFamily: fontFamily.sans[0] },
-  dayHeaderTotal: { fontSize: fontSize.sm[0], fontWeight: '700', color: colors.primary, fontVariant: ['tabular-nums'], fontFamily: fontFamily.sansBold[0] },
-  rowCard: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], backgroundColor: colors.surface, borderRadius: radii.md, borderWidth: 1, borderColor: colors.borderLight, padding: spacing[3], ...shadow('sm') },
+  dayHeaderCount: {
+    fontSize: fontSize.xs[0],
+    color: colors.textMuted,
+    fontFamily: fontFamily.sans[0],
+  },
+  dayHeaderTotal: {
+    fontSize: fontSize.sm[0],
+    fontWeight: '700',
+    color: colors.primary,
+    fontVariant: ['tabular-nums'],
+    fontFamily: fontFamily.sansBold[0],
+  },
+  rowCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    backgroundColor: colors.surface,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    padding: spacing[3],
+    ...shadow('sm'),
+  },
   rowLeft: { flex: 1, minWidth: 0, gap: 2 },
-  rowTime: { fontSize: fontSize.xs[0], color: colors.textTertiary, fontVariant: ['tabular-nums'], fontFamily: fontFamily.sans[0] },
+  rowTime: {
+    fontSize: fontSize.xs[0],
+    color: colors.textTertiary,
+    fontVariant: ['tabular-nums'],
+    fontFamily: fontFamily.sans[0],
+  },
   rowRoute: { flexDirection: 'row', alignItems: 'center', gap: spacing[1.5] },
   routeDotSmall: { width: 6, height: 6, borderRadius: radii.full, backgroundColor: colors.primary },
   routeDotDropoffSmall: { backgroundColor: colors.textTertiary },
-  rowArea: { fontSize: fontSize.sm[0], fontWeight: '500', color: colors.text, fontFamily: fontFamily.sans[0], flex: 1, minWidth: 0 },
+  rowArea: {
+    fontSize: fontSize.sm[0],
+    fontWeight: '500',
+    color: colors.text,
+    fontFamily: fontFamily.sans[0],
+    flex: 1,
+    minWidth: 0,
+  },
   rowConnector: { marginLeft: 2.5, width: 1.5, height: 6, backgroundColor: colors.border },
   rowRight: { alignItems: 'flex-end', gap: spacing[1] },
-  rowAmount: { fontSize: fontSize.base[0], fontWeight: '700', color: colors.primary, fontVariant: ['tabular-nums'], fontFamily: fontFamily.sansBold[0] },
+  rowAmount: {
+    fontSize: fontSize.base[0],
+    fontWeight: '700',
+    color: colors.primary,
+    fontVariant: ['tabular-nums'],
+    fontFamily: fontFamily.sansBold[0],
+  },
   rowBadges: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  rowCodBadge: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: colors.infoLight, paddingHorizontal: spacing[1.5], paddingVertical: 2, borderRadius: radii.full },
-  rowCodText: { fontSize: 9, fontWeight: '700', color: colors.info, fontFamily: fontFamily.sansBold[0] },
-  rowIncentiveBadge: { width: 18, height: 18, borderRadius: radii.full, backgroundColor: colors.warningLight, alignItems: 'center', justifyContent: 'center' },
-  rowRating: { flexDirection: 'row', alignItems: 'center', gap: 1, backgroundColor: colors.background, paddingHorizontal: spacing[1.5], paddingVertical: 2, borderRadius: radii.full },
-  rowRatingText: { fontSize: 9, fontWeight: '700', color: colors.gold, fontVariant: ['tabular-nums'], fontFamily: fontFamily.sansBold[0] },
-  footerLoading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[2], paddingVertical: spacing[4] },
+  rowCodBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: colors.infoLight,
+    paddingHorizontal: spacing[1.5],
+    paddingVertical: 2,
+    borderRadius: radii.full,
+  },
+  rowCodText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: colors.info,
+    fontFamily: fontFamily.sansBold[0],
+  },
+  rowIncentiveBadge: {
+    width: 18,
+    height: 18,
+    borderRadius: radii.full,
+    backgroundColor: colors.warningLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowRating: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 1,
+    backgroundColor: colors.background,
+    paddingHorizontal: spacing[1.5],
+    paddingVertical: 2,
+    borderRadius: radii.full,
+  },
+  rowRatingText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: colors.gold,
+    fontVariant: ['tabular-nums'],
+    fontFamily: fontFamily.sansBold[0],
+  },
+  footerLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    paddingVertical: spacing[4],
+  },
   footerText: { fontSize: fontSize.sm[0], color: colors.textMuted, fontFamily: fontFamily.sans[0] },
   footerEnd: { alignItems: 'center', paddingVertical: spacing[4] },
-  footerEndText: { fontSize: fontSize.sm[0], color: colors.textTertiary, fontFamily: fontFamily.sans[0] },
+  footerEndText: {
+    fontSize: fontSize.sm[0],
+    color: colors.textTertiary,
+    fontFamily: fontFamily.sans[0],
+  },
 })

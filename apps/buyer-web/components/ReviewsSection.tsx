@@ -1,9 +1,12 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import React, { useState, useMemo, useCallback } from 'react'
+import Image from 'next/image'
+import { motion } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { useReducedMotion } from '@chinooz/ui-web'
+import { useVoteHelpful, useHelpfulVotes } from '@chinooz/hooks'
+import { getInitials } from '@chinooz/utils'
 import type { Review } from '@chinooz/types'
 
 type SortMode = 'recent' | 'highest' | 'photos'
@@ -12,7 +15,11 @@ function StarRating({ rating, size = 14 }: { rating: number; size?: number }) {
   return (
     <div className="flex gap-0.5">
       {Array.from({ length: 5 }).map((_, i) => (
-        <span key={i} style={{ fontSize: size }} className={i < Math.round(rating) ? 'text-gold' : 'text-border'}>
+        <span
+          key={i}
+          style={{ fontSize: size }}
+          className={i < Math.round(rating) ? 'text-gold' : 'text-border'}
+        >
           ★
         </span>
       ))}
@@ -29,10 +36,6 @@ function formatDate(dateStr: string): string {
   if (diff < 7) return `${diff} days ago`
   if (diff < 30) return `${Math.floor(diff / 7)} weeks ago`
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-}
-
-function getInitials(name: string): string {
-  return name.split(' ').map(s => s[0]).join('').toUpperCase().slice(0, 2)
 }
 
 interface ReviewsSectionProps {
@@ -53,10 +56,24 @@ export default function ReviewsSection({
   const [sort, setSort] = useState<SortMode>('recent')
   const [expanded, setExpanded] = useState(false)
 
+  const productId = reviews?.[0]?.productId ?? ''
+  const voteHelpful = useVoteHelpful(productId)
+  const { data: votedIds } = useHelpfulVotes()
+  const votedSet = useMemo(() => new Set(votedIds ?? []), [votedIds])
+
+  const handleVote = useCallback(
+    (reviewId: string) => {
+      voteHelpful.mutate({ reviewId, voted: votedSet.has(reviewId) })
+    },
+    [voteHelpful, votedSet],
+  )
+
   const distribution = useMemo(() => {
     if (!reviews?.length) return Array(5).fill(0)
     const dist = Array(5).fill(0)
-    reviews.forEach(r => { dist[Math.min(4, Math.max(0, Math.round(r.rating) - 1))]++ })
+    reviews.forEach(r => {
+      dist[Math.min(4, Math.max(0, Math.round(r.rating) - 1))]++
+    })
     return dist
   }, [reviews])
 
@@ -68,9 +85,16 @@ export default function ReviewsSection({
   const sorted = useMemo(() => {
     if (!reviews) return []
     const copy = [...reviews]
-    if (sort === 'recent') copy.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    if (sort === 'recent')
+      copy.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     if (sort === 'highest') copy.sort((a, b) => b.rating - a.rating)
-    if (sort === 'photos') copy.sort((a, b) => (b.photos?.length || 0) - (a.photos?.length || 0))
+    if (sort === 'photos')
+      copy.sort(
+        (a, b) =>
+          (b.photos?.length || 0) +
+          (b.videos?.length || 0) -
+          ((a.photos?.length || 0) + (a.videos?.length || 0)),
+      )
     return expanded ? copy : copy.slice(0, 3)
   }, [reviews, sort, expanded])
 
@@ -113,7 +137,9 @@ export default function ReviewsSection({
         <div className="flex flex-col items-center gap-1">
           <span className="text-4xl font-bold text-text">{avgRating.toFixed(1)}</span>
           <StarRating rating={avgRating} size={16} />
-          <span className="text-xs text-text-muted">{reviews.length} {t('product.reviews').toLowerCase()}</span>
+          <span className="text-xs text-text-muted">
+            {reviews.length} {t('product.reviews').toLowerCase()}
+          </span>
         </div>
 
         <div className="flex-1 space-y-1">
@@ -133,11 +159,15 @@ export default function ReviewsSection({
                   <motion.div
                     initial={{ width: 0 }}
                     animate={{ width: `${pct}%` }}
-                    transition={{ duration: reduced ? 0 : 0.5, delay: reduced ? 0 : i * 0.1, ease: 'easeOut' }}
+                    transition={{
+                      duration: reduced ? 0 : 0.5,
+                      delay: reduced ? 0 : i * 0.1,
+                      ease: 'easeOut',
+                    }}
                     className="h-full bg-gold rounded-full"
                   />
                 </div>
-                <span className="text-[11px] text-text-muted w-5 text-right">{count}</span>
+                <span className="text-xs text-text-muted w-5 text-right">{count}</span>
               </motion.div>
             )
           })}
@@ -156,11 +186,13 @@ export default function ReviewsSection({
 
       {/* Sort tabs */}
       <div className="flex gap-2 overflow-x-auto scrollbar-none">
-        {([
-          { key: 'recent', label: t('product.mostRecent') },
-          { key: 'highest', label: t('product.highestRated') },
-          { key: 'photos', label: t('product.withPhotos') },
-        ] as const).map(tab => (
+        {(
+          [
+            { key: 'recent', label: t('product.mostRecent') },
+            { key: 'highest', label: t('product.highestRated') },
+            { key: 'photos', label: t('product.withPhotos') },
+          ] as const
+        ).map(tab => (
           <button
             key={tab.key}
             onClick={() => setSort(tab.key)}
@@ -187,34 +219,77 @@ export default function ReviewsSection({
           >
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-primary-50 flex items-center justify-center shrink-0">
-                <span className="text-xs font-semibold text-primary">{getInitials(review.userName)}</span>
+                <span className="text-xs font-semibold text-primary">
+                  {getInitials(review.userName)}
+                </span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-text">{review.userName}</p>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <p className="text-sm font-semibold text-text">{review.userName}</p>
+                  {review.verifiedPurchase && (
+                    <span
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-success bg-success-light px-1.5 py-0.5 rounded-full"
+                      aria-label={t('reviewCard.verifiedPurchaseAria')}
+                    >
+                      ✓ {t('reviewCard.verifiedPurchase')}
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center gap-1">
                   <StarRating rating={review.rating} size={10} />
-                  <span className="text-[11px] text-text-muted">{formatDate(review.createdAt)}</span>
+                  <span className="text-xs text-text-muted">{formatDate(review.createdAt)}</span>
                 </div>
               </div>
             </div>
             {review.title && <p className="text-sm font-semibold text-text">{review.title}</p>}
             <p className="text-sm text-text-secondary leading-relaxed">{review.body}</p>
-            {review.photos && review.photos.length > 0 && (
+            {(review.photos?.length || 0) + (review.videos?.length || 0) > 0 && (
               <div className="flex gap-2 overflow-x-auto scrollbar-none">
-                {review.photos.map((photo, pi) => (
-                  <div key={pi} className="w-16 h-16 rounded-lg overflow-hidden bg-border shrink-0">
-                    <img src={photo} alt={`Review ${pi + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                {review.videos?.map((video, vi) => (
+                  <video
+                    key={`v-${vi}`}
+                    src={video}
+                    controls
+                    playsInline
+                    className="w-16 h-16 rounded-lg object-cover bg-black shrink-0"
+                    aria-label={t('product.reviewVideo')}
+                  >
+                    <track kind="captions" />
+                  </video>
+                ))}
+                {review.photos?.map((photo, pi) => (
+                  <div
+                    key={`p-${pi}`}
+                    className="w-16 h-16 rounded-lg overflow-hidden bg-border shrink-0"
+                  >
+                    <Image
+                      src={photo}
+                      alt={`Review ${pi + 1}`}
+                      width={64}
+                      height={64}
+                      className="w-full h-full object-cover"
+                    />
                   </div>
                 ))}
               </div>
             )}
-            <button className="text-xs text-text-muted hover:text-text transition-colors">
+            <button
+              onClick={() => handleVote(review.id)}
+              aria-pressed={votedSet.has(review.id)}
+              className={`inline-flex items-center gap-1 text-xs font-medium min-h-[32px] transition-colors ${
+                votedSet.has(review.id) ? 'text-primary' : 'text-text-muted hover:text-text'
+              }`}
+            >
               👍 {t('product.helpful')} ({review.helpful})
             </button>
             {review.sellerResponse && (
               <div className="mt-2 ml-2 rounded-lg border border-border-light border-l-[3px] border-l-primary-50 bg-background p-3">
-                <p className="text-xs font-semibold text-primary mb-0.5">{t('reviewCard.sellerResponse')}</p>
-                <p className="text-sm text-text-secondary leading-relaxed">{review.sellerResponse.text}</p>
+                <p className="text-xs font-semibold text-primary mb-0.5">
+                  {t('reviewCard.sellerResponse')}
+                </p>
+                <p className="text-sm text-text-secondary leading-relaxed">
+                  {review.sellerResponse.text}
+                </p>
               </div>
             )}
           </motion.div>

@@ -4,25 +4,55 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, SlidersHorizontal, ArrowUpDown, Plus, X, Package, ChevronDown } from 'lucide-react'
+import {
+  Search,
+  SlidersHorizontal,
+  ArrowUpDown,
+  Plus,
+  X,
+  Package,
+  ChevronDown,
+  Upload,
+} from 'lucide-react'
 import { Container, Screen, Button, EmptyState, SafeImage, useReducedMotion } from '@chinooz/ui-web'
-import { useSellerProducts, useSellerCategories, useDeleteProduct, useDuplicateProduct, useToggleProductStatus, useBulkUpdateProducts } from '@chinooz/hooks'
+import {
+  useSellerProducts,
+  useSellerCategories,
+  useDeleteProduct,
+  useDuplicateProduct,
+  useToggleProductStatus,
+  useBulkUpdateProducts,
+} from '@chinooz/hooks'
 import { analytics } from '@chinooz/analytics'
 import { useSellerSessionStore } from '@chinooz/state'
 import { formatNPR } from '@chinooz/utils'
+import { colors } from '@chinooz/theme'
 import type { SellerProduct, SellerProductStatus, StockStatus } from '@chinooz/types'
 import type { SellerProductFilter } from '@chinooz/mock-data'
 import { useA11y } from '@/components/A11yProvider'
 import { ProductRow, ProductRowSkeleton } from '@/components/ProductRow'
 import { BulkActionBar, type BulkAction, type BulkActionParams } from '@/components/BulkActionBar'
+import BulkListingModal from '@/components/BulkListingModal'
 
 type StatusTab = SellerProductStatus | 'all'
 type SortKey = NonNullable<SellerProductFilter['sort']>
 
 const STOCK_BADGE: Record<StockStatus, { label: string; cls: string; dot: string }> = {
-  in_stock: { label: 'seller.products.stockInStock', cls: 'bg-success/10 text-success', dot: 'bg-success' },
-  low_stock: { label: 'seller.products.stockLowStock', cls: 'bg-warning/15 text-[#92400E]', dot: 'bg-warning' },
-  out_of_stock: { label: 'seller.products.stockOutOfStock', cls: 'bg-error/10 text-error', dot: 'bg-error' },
+  in_stock: {
+    label: 'seller.products.stockInStock',
+    cls: 'bg-success/10 text-success',
+    dot: 'bg-success',
+  },
+  low_stock: {
+    label: 'seller.products.stockLowStock',
+    cls: 'bg-warning/15 text-warning-text',
+    dot: 'bg-warning',
+  },
+  out_of_stock: {
+    label: 'seller.products.stockOutOfStock',
+    cls: 'bg-error/10 text-error',
+    dot: 'bg-error',
+  },
 }
 
 function useDebounced<T>(value: T, delay = 250): T {
@@ -51,6 +81,7 @@ export default function ProductsScreen() {
   const [sort, setSort] = useState<SortKey>('newest')
   const [sortOpen, setSortOpen] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkListingOpen, setBulkListingOpen] = useState(false)
   const selectable = true
 
   const sortRef = useRef<HTMLDivElement>(null)
@@ -95,7 +126,11 @@ export default function ProductsScreen() {
     { key: 'all', label: t('seller.products.statusAll'), count: counts?.all ?? 0 },
     { key: 'active', label: t('seller.products.statusActive'), count: counts?.active ?? 0 },
     { key: 'draft', label: t('seller.products.statusDraft'), count: counts?.draft ?? 0 },
-    { key: 'out_of_stock', label: t('seller.products.statusOutOfStock'), count: counts?.out_of_stock ?? 0 },
+    {
+      key: 'out_of_stock',
+      label: t('seller.products.statusOutOfStock'),
+      count: counts?.out_of_stock ?? 0,
+    },
     { key: 'archived', label: t('seller.products.statusArchived'), count: counts?.archived ?? 0 },
   ]
 
@@ -118,10 +153,18 @@ export default function ProductsScreen() {
     })
   }
   if (priceMin) {
-    activeFilters.push({ key: 'pmin', label: `${t('seller.products.filterPriceMin')}: ${formatNPR(Number(priceMin))}`, onClear: () => setPriceMin('') })
+    activeFilters.push({
+      key: 'pmin',
+      label: `${t('seller.products.filterPriceMin')}: ${formatNPR(Number(priceMin))}`,
+      onClear: () => setPriceMin(''),
+    })
   }
   if (priceMax) {
-    activeFilters.push({ key: 'pmax', label: `${t('seller.products.filterPriceMax')}: ${formatNPR(Number(priceMax))}`, onClear: () => setPriceMax('') })
+    activeFilters.push({
+      key: 'pmax',
+      label: `${t('seller.products.filterPriceMax')}: ${formatNPR(Number(priceMax))}`,
+      onClear: () => setPriceMax(''),
+    })
   }
   if (stockLevel !== 'all') {
     const lbl = STOCK_BADGE[stockLevel as StockStatus].label
@@ -149,7 +192,11 @@ export default function ProductsScreen() {
   const bulkMutation = useBulkUpdateProducts()
 
   const handleEdit = (p: SellerProduct) => {
-    analytics.track({ event: 'seller_product_edit_tapped', screen: 'seller-products', properties: { productId: p.id } })
+    analytics.track({
+      event: 'seller_product_edit_tapped',
+      screen: 'seller-products',
+      properties: { productId: p.id },
+    })
     router.push(`/products/${p.id}/edit`)
   }
 
@@ -163,23 +210,44 @@ export default function ProductsScreen() {
   }
 
   const handleDuplicate = (p: SellerProduct) => {
-    analytics.track({ event: 'seller_product_duplicate_tapped', screen: 'seller-products', properties: { productId: p.id } })
+    analytics.track({
+      event: 'seller_product_duplicate_tapped',
+      screen: 'seller-products',
+      properties: { productId: p.id },
+    })
     duplicateMutation.mutate(p.id)
   }
   const handleToggleActive = (p: SellerProduct) => {
-    analytics.track({ event: 'seller_product_toggle_active', screen: 'seller-products', properties: { productId: p.id, from: p.status } })
+    analytics.track({
+      event: 'seller_product_toggle_active',
+      screen: 'seller-products',
+      properties: { productId: p.id, from: p.status },
+    })
     toggleMutation.mutate(p.id)
   }
   const handleDelete = (p: SellerProduct) => {
-    analytics.track({ event: 'seller_product_delete_tapped', screen: 'seller-products', properties: { productId: p.id } })
+    analytics.track({
+      event: 'seller_product_delete_tapped',
+      screen: 'seller-products',
+      properties: { productId: p.id },
+    })
     deleteMutation.mutate(p.id)
   }
   const handleStockChange = (p: SellerProduct, stock: number) => {
-    analytics.track({ event: 'seller_product_stock_edit', screen: 'seller-products', properties: { productId: p.id, stock } })
-    // Use updateProduct via the toggle mutation pattern — we'll use a direct mutate
-    import('@chinooz/mock-data').then(api => {
-      api.updateProduct(p.id, { stockCount: stock })
+    analytics.track({
+      event: 'seller_product_stock_edit',
+      screen: 'seller-products',
+      properties: { productId: p.id, stock },
     })
+    // Use updateProduct via the toggle mutation pattern — we'll use a direct mutate
+    import('@chinooz/mock-data')
+      .then(api => {
+        api.updateProduct(p.id, { stockCount: stock })
+      })
+      .catch(() => {
+        // Stock update is best-effort; the query cache invalidation will
+        // surface a fresh state on next refetch.
+      })
   }
 
   const allSelected = items.length > 0 && selectedIds.size === items.length
@@ -195,8 +263,15 @@ export default function ProductsScreen() {
 
   const handleClearSelection = () => setSelectedIds(new Set())
 
-  const handleBulkApply = async (action: BulkAction, params?: BulkActionParams): Promise<boolean> => {
-    analytics.track({ event: 'seller_bulk_apply', screen: 'seller-products', properties: { action, count: selectedIds.size, params } })
+  const handleBulkApply = async (
+    action: BulkAction,
+    params?: BulkActionParams,
+  ): Promise<boolean> => {
+    analytics.track({
+      event: 'seller_bulk_apply',
+      screen: 'seller-products',
+      properties: { action, count: selectedIds.size, params },
+    })
     try {
       const result = await bulkMutation.mutateAsync({
         ids: [...selectedIds],
@@ -286,7 +361,11 @@ export default function ProductsScreen() {
                           }`}
                         >
                           {opt.label}
-                          {sort === opt.key && <span className="text-primary" aria-hidden="true">•</span>}
+                          {sort === opt.key && (
+                            <span className="text-primary" aria-hidden="true">
+                              •
+                            </span>
+                          )}
                         </button>
                       </li>
                     ))}
@@ -305,6 +384,17 @@ export default function ProductsScreen() {
             >
               <span className="hidden sm:inline">{t('seller.products.addProduct')}</span>
             </Button>
+
+            {/* Bulk CSV listing */}
+            <Button
+              variant="secondary"
+              size="md"
+              onPress={() => setBulkListingOpen(true)}
+              leftIcon={<Upload size={16} aria-hidden="true" />}
+              className="h-10 shrink-0"
+            >
+              <span className="hidden sm:inline">{t('seller.products.bulkImport')}</span>
+            </Button>
           </div>
 
           {/* Inline filter bar (web) */}
@@ -321,7 +411,9 @@ export default function ProductsScreen() {
             >
               <option value="">{t('seller.products.filterCategory')}</option>
               {sellerCats?.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
               ))}
             </select>
 
@@ -404,7 +496,11 @@ export default function ProductsScreen() {
                     <motion.span
                       layoutId="status-pill"
                       className="absolute inset-0 -z-10 rounded-full bg-primary"
-                      transition={reduced ? { duration: 0 } : { type: 'spring', stiffness: 350, damping: 30, mass: 0.8 }}
+                      transition={
+                        reduced
+                          ? { duration: 0 }
+                          : { type: 'spring', stiffness: 350, damping: 30, mass: 0.8 }
+                      }
                     />
                   )}
                 </button>
@@ -421,7 +517,9 @@ export default function ProductsScreen() {
                   initial={reduced ? false : { opacity: 0, scale: 0.85 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.85 }}
-                  transition={reduced ? { duration: 0 } : { type: 'spring', stiffness: 400, damping: 25 }}
+                  transition={
+                    reduced ? { duration: 0 } : { type: 'spring', stiffness: 400, damping: 25 }
+                  }
                   className="inline-flex items-center gap-1.5 rounded-full bg-primary text-white pl-3 pr-1.5 py-1 text-[13px] font-medium"
                 >
                   {f.label}
@@ -453,12 +551,27 @@ export default function ProductsScreen() {
             ) : items.length === 0 ? (
               <EmptyState
                 icon={<Package size={40} className="text-text-tertiary" aria-hidden="true" />}
-                title={isFiltered ? t('seller.products.emptyFilteredTitle') : t('seller.products.emptyTitle')}
-                subtitle={isFiltered ? t('seller.products.emptyFilteredSubtitle') : t('seller.products.emptySubtitle')}
+                title={
+                  isFiltered
+                    ? t('seller.products.emptyFilteredTitle')
+                    : t('seller.products.emptyTitle')
+                }
+                subtitle={
+                  isFiltered
+                    ? t('seller.products.emptyFilteredSubtitle')
+                    : t('seller.products.emptySubtitle')
+                }
                 action={
                   !isFiltered
                     ? { label: t('seller.products.addProduct'), onPress: onAdd }
-                    : { label: t('seller.products.clearAll'), onPress: () => { clearAll(); setSearch(''); setStatus('all') } }
+                    : {
+                        label: t('seller.products.clearAll'),
+                        onPress: () => {
+                          clearAll()
+                          setSearch('')
+                          setStatus('all')
+                        },
+                      }
                 }
               />
             ) : (
@@ -503,6 +616,8 @@ export default function ProductsScreen() {
           </div>
         </div>
       </Container>
+
+      <BulkListingModal open={bulkListingOpen} onClose={() => setBulkListingOpen(false)} />
     </Screen>
   )
 }
@@ -580,13 +695,18 @@ function Th({ children, className = '' }: { children: React.ReactNode; className
 
 function ProductTableSkeleton({ selectable = false }: { selectable?: boolean }) {
   return (
-    <div className="bg-surface border border-border-light rounded-lg overflow-hidden" aria-busy="true">
+    <div
+      className="bg-surface border border-border-light rounded-lg overflow-hidden"
+      aria-busy="true"
+    >
       <div className="overflow-x-auto">
         <table className="w-full border-collapse">
           <thead>
             <tr className="border-b border-border bg-background">
               {selectable && <th className="w-10 px-4 py-2.5" />}
-              <th className="text-left min-w-[280px] px-4 py-2.5 text-[12px] font-semibold text-text-muted uppercase">{''}</th>
+              <th className="text-left min-w-[280px] px-4 py-2.5 text-[12px] font-semibold text-text-muted uppercase">
+                {''}
+              </th>
               <th className="px-4 py-2.5" />
               <th className="px-4 py-2.5" />
               <th className="px-4 py-2.5" />
@@ -633,13 +753,35 @@ function MobileCardWrapper({
   }, [menuOpen])
 
   const sLevel = product.stockCount <= 0 ? 'out' : product.stockCount <= 10 ? 'low' : 'in_stock'
-  const sColor = sLevel === 'out' ? '#DC2626' : sLevel === 'low' ? '#F59E0B' : '#16A34A'
-  const sLabel = sLevel === 'out' ? t('seller.products.stockOutOfStock') : sLevel === 'low' ? t('seller.products.stockLowStock') : t('seller.products.stockInStock')
+  const sColor =
+    sLevel === 'out' ? colors.error : sLevel === 'low' ? colors.warning : colors.success
+  const sLabel =
+    sLevel === 'out'
+      ? t('seller.products.stockOutOfStock')
+      : sLevel === 'low'
+        ? t('seller.products.stockLowStock')
+        : t('seller.products.stockInStock')
   const stCfg = {
-    active: { label: t('seller.products.statusActive'), color: '#16A34A', bg: 'rgba(22,163,74,0.10)' },
-    draft: { label: t('seller.products.statusDraft'), color: '#6B7280', bg: 'rgba(107,114,128,0.10)' },
-    out_of_stock: { label: t('seller.products.statusOutOfStock'), color: '#DC2626', bg: 'rgba(220,38,38,0.10)' },
-    archived: { label: t('seller.products.statusArchived'), color: '#F59E0B', bg: 'rgba(245,158,11,0.10)' },
+    active: {
+      label: t('seller.products.statusActive'),
+      color: colors.success,
+      bg: 'rgba(22,163,74,0.10)',
+    },
+    draft: {
+      label: t('seller.products.statusDraft'),
+      color: colors.textMuted,
+      bg: 'rgba(107,114,128,0.10)',
+    },
+    out_of_stock: {
+      label: t('seller.products.statusOutOfStock'),
+      color: colors.error,
+      bg: 'rgba(220,38,38,0.10)',
+    },
+    archived: {
+      label: t('seller.products.statusArchived'),
+      color: colors.warning,
+      bg: 'rgba(245,158,11,0.10)',
+    },
   }[product.status]
 
   return (
@@ -648,11 +790,23 @@ function MobileCardWrapper({
       animate={{ opacity: 1, y: 0 }}
       transition={reduced ? { duration: 0 } : { duration: 0.2, delay: Math.min(index * 0.03, 0.2) }}
       className={`bg-surface border rounded-lg shadow-sm p-3 flex gap-3 cursor-pointer transition-colors ${selected ? 'border-primary bg-primary-50/40' : 'border-border-light hover:bg-background/60'}`}
-      onClick={() => {/* edit in SP4 */}}
+      onClick={() => {
+        /* edit in SP4 */
+      }}
       role="button"
-      aria-label={t('seller.products.rowAria', { name: product.name, price: formatNPR(product.price), stockLabel: sLabel, count: product.stockCount, status: stCfg.label })}
+      aria-label={t('seller.products.rowAria', {
+        name: product.name,
+        price: formatNPR(product.price),
+        stockLabel: sLabel,
+        count: product.stockCount,
+        status: stCfg.label,
+      })}
     >
-      {selected && <div className="w-4 h-4 mt-1 rounded bg-primary flex items-center justify-center text-white text-[10px] font-bold">✓</div>}
+      {selected && (
+        <div className="w-4 h-4 mt-1 rounded bg-primary flex items-center justify-center text-white text-[10px] font-bold">
+          ✓
+        </div>
+      )}
       <SafeImage
         src={product.image}
         alt={product.name}
@@ -661,22 +815,40 @@ function MobileCardWrapper({
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
           <p className="text-[16px] font-semibold text-text truncate">{product.name}</p>
-          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[12px] font-semibold shrink-0" style={{ backgroundColor: stCfg.bg, color: stCfg.color }}>{stCfg.label}</span>
+          <span
+            className="inline-flex items-center rounded-full px-2 py-0.5 text-[12px] font-semibold shrink-0"
+            style={{ backgroundColor: stCfg.bg, color: stCfg.color }}
+          >
+            {stCfg.label}
+          </span>
         </div>
         <p className="text-[12px] text-text-muted truncate font-mono">{product.sku}</p>
         <p className="text-[12px] text-text-muted truncate">{product.categoryName}</p>
         <div className="mt-1.5 flex items-center justify-between gap-2">
-          <span className="text-[14px] font-semibold text-text tabular-nums">{formatNPR(product.price)}</span>
-          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-semibold" style={{ backgroundColor: `rgba(${sLevel === 'out' ? '220,38,38' : sLevel === 'low' ? '245,158,11' : '22,163,74'},0.10)`, color: sColor }}>
+          <span className="text-[14px] font-semibold text-text tabular-nums">
+            {formatNPR(product.price)}
+          </span>
+          <span
+            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-semibold"
+            style={{
+              backgroundColor: `rgba(${sLevel === 'out' ? '220,38,38' : sLevel === 'low' ? '245,158,11' : '22,163,74'},0.10)`,
+              color: sColor,
+            }}
+          >
             {sLabel} · <span className="tabular-nums">{product.stockCount}</span>
           </span>
         </div>
-        <p className="mt-1 text-[12px] text-text-muted">{t('seller.products.unitsSold', { count: product.salesCount })}</p>
+        <p className="mt-1 text-[12px] text-text-muted">
+          {t('seller.products.unitsSold', { count: product.salesCount })}
+        </p>
       </div>
       <div ref={menuRef} className="relative shrink-0">
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); setMenuOpen(o => !o) }}
+          onClick={e => {
+            e.stopPropagation()
+            setMenuOpen(o => !o)
+          }}
           aria-label={t('seller.products.actionSheetTitle')}
           className="text-text-muted hover:text-text p-1"
         >
@@ -692,12 +864,50 @@ function MobileCardWrapper({
               transition={reduced ? { duration: 0 } : { duration: 0.15 }}
               className="absolute right-0 mt-1 w-44 bg-surface border border-border rounded-md shadow-lg z-dropdown overflow-hidden"
             >
-              <MobileMenuItem label={t('seller.products.actionEdit')} ariaLabel={t('seller.products.actionEditAria')} onClick={() => { setMenuOpen(false) }} />
-              <MobileMenuItem label={t('seller.products.actionDuplicate')} ariaLabel={t('seller.products.actionDuplicateAria')} onClick={() => { setMenuOpen(false) }} />
-              <MobileMenuItem label={product.status === 'active' ? t('seller.products.actionDeactivate') : t('seller.products.actionActivate')} ariaLabel={t('seller.products.actionSheetTitle')} onClick={() => { setMenuOpen(false) }} />
-              <MobileMenuItem label={t('seller.products.actionQuickStock')} ariaLabel={t('seller.products.actionQuickStockAria')} onClick={() => { setMenuOpen(false); setStockValue(String(product.stockCount)); setStockOpen(true) }} />
+              <MobileMenuItem
+                label={t('seller.products.actionEdit')}
+                ariaLabel={t('seller.products.actionEditAria')}
+                onClick={() => {
+                  setMenuOpen(false)
+                }}
+              />
+              <MobileMenuItem
+                label={t('seller.products.actionDuplicate')}
+                ariaLabel={t('seller.products.actionDuplicateAria')}
+                onClick={() => {
+                  setMenuOpen(false)
+                }}
+              />
+              <MobileMenuItem
+                label={
+                  product.status === 'active'
+                    ? t('seller.products.actionDeactivate')
+                    : t('seller.products.actionActivate')
+                }
+                ariaLabel={t('seller.products.actionSheetTitle')}
+                onClick={() => {
+                  setMenuOpen(false)
+                }}
+              />
+              <MobileMenuItem
+                label={t('seller.products.actionQuickStock')}
+                ariaLabel={t('seller.products.actionQuickStockAria')}
+                onClick={() => {
+                  setMenuOpen(false)
+                  setStockValue(String(product.stockCount))
+                  setStockOpen(true)
+                }}
+              />
               <div className="border-t border-border-light my-1" />
-              <MobileMenuItem label={t('seller.products.actionDelete')} ariaLabel={t('seller.products.actionDeleteAria')} danger onClick={() => { setMenuOpen(false); setConfirmOpen(true) }} />
+              <MobileMenuItem
+                label={t('seller.products.actionDelete')}
+                ariaLabel={t('seller.products.actionDeleteAria')}
+                danger
+                onClick={() => {
+                  setMenuOpen(false)
+                  setConfirmOpen(true)
+                }}
+              />
             </motion.div>
           )}
         </AnimatePresence>
@@ -706,7 +916,17 @@ function MobileCardWrapper({
   )
 }
 
-function MobileMenuItem({ label, ariaLabel, onClick, danger }: { label: string; ariaLabel: string; onClick: () => void; danger?: boolean }) {
+function MobileMenuItem({
+  label,
+  ariaLabel,
+  onClick,
+  danger,
+}: {
+  label: string
+  ariaLabel: string
+  onClick: () => void
+  danger?: boolean
+}) {
   return (
     <button
       type="button"

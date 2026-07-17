@@ -6,26 +6,25 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Platform,
+  Alert,
 } from 'react-native'
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
   withSequence,
-  Easing,
-  FadeInDown,
 } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
 import * as Haptics from 'expo-haptics'
+import * as ImagePicker from 'expo-image-picker'
 import { Image as ImageIcon, Check, X, Loader, ChevronDown } from 'lucide-react-native'
-import { colors, spacing, radii, fontFamily } from '@chinooz/theme'
+import { colors, spacing, radii, fontFamily, sellerFont } from '../lib/theme'
 import { storeSetupSchema } from '@chinooz/validation'
 import { checkHandleAvailability, getCategories } from '@chinooz/mock-data'
-import { useSellerSessionStore } from '@chinooz/state'
+import { useSellerSessionStore, type StoreDraft } from '@chinooz/state'
 import { useReducedMotion } from '@chinooz/ui/hooks/useReducedMotion'
-import WizardStepper from './WizardStepper'
+import WizardStepper, { type WizardStep } from './WizardStepper'
 import StorefrontPreview from './StorefrontPreview'
 import LanguageToggle from './LanguageToggle'
 
@@ -44,7 +43,9 @@ export default function StoreStep({ onContinue, onBack }: Props) {
   const updateDraft = useSellerSessionStore(s => s.updateDraft)
 
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [handleStatus, setHandleStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle')
+  const [handleStatus, setHandleStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>(
+    'idle',
+  )
   const [categories, setCategories] = useState<Pick<Category, 'id' | 'name' | 'slug'>[]>([])
   const [categoryOpen, setCategoryOpen] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -52,9 +53,15 @@ export default function StoreStep({ onContinue, onBack }: Props) {
   const shakeX = useSharedValue(0)
 
   useEffect(() => {
-    getCategories().then(cats => {
-      setCategories(cats.filter(c => !c.parentId).map(c => ({ id: c.id, name: c.name, slug: c.slug })))
-    })
+    getCategories()
+      .then(cats => {
+        setCategories(
+          cats.filter(c => !c.parentId).map(c => ({ id: c.id, name: c.name, slug: c.slug })),
+        )
+      })
+      .catch(() => {
+        // Best-effort category list; leave empty on failure.
+      })
   }, [])
 
   const handleSlugCheck = useCallback((slug: string) => {
@@ -70,13 +77,39 @@ export default function StoreStep({ onContinue, onBack }: Props) {
     }, 400)
   }, [])
 
-  const updateField = useCallback((field: string, value: string) => {
-    updateDraft({ [field]: value } as any)
-    setErrors(prev => ({ ...prev, [field]: '' }))
-    if (field === 'handle') {
-      handleSlugCheck(value)
-    }
-  }, [updateDraft, handleSlugCheck])
+  const updateField = useCallback(
+    (field: string, value: string) => {
+      updateDraft({ [field]: value } as Partial<StoreDraft>)
+      setErrors(prev => ({ ...prev, [field]: '' }))
+      if (field === 'handle') {
+        handleSlugCheck(value)
+      }
+    },
+    [updateDraft, handleSlugCheck],
+  )
+
+  const pickImage = useCallback(
+    async (field: 'logoUrl' | 'bannerUrl', aspect: [number, number]) => {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+      if (!perm.granted) {
+        Alert.alert(t('seller.setup.photoPermissionTitle'), t('seller.setup.photoPermissionBody'))
+        return
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect,
+        quality: 0.8,
+      })
+      if (!result.canceled && result.assets.length > 0) {
+        updateField(field, result.assets[0].uri)
+        try {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+        } catch {}
+      }
+    },
+    [updateField, t],
+  )
 
   const handleContinue = useCallback(() => {
     const result = storeSetupSchema.safeParse({
@@ -106,7 +139,9 @@ export default function StoreStep({ onContinue, onBack }: Props) {
           withTiming(0, { duration: 50 }),
         )
       }
-      try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error) } catch {}
+      try {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+      } catch {}
       return
     }
 
@@ -116,15 +151,21 @@ export default function StoreStep({ onContinue, onBack }: Props) {
     }
 
     updateDraft({ setupStep: 1 })
-    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light) } catch {}
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    } catch {}
     onContinue()
-  }, [draft, handleStatus, updateDraft, onContinue, t, reduced])
+  }, [draft, handleStatus, updateDraft, onContinue, t, reduced, shakeX])
 
   const selectedCategory = categories.find(c => c.id === draft.categoryId)
 
   const steps: WizardStep[] = [
     { key: 'store', labelKey: 'seller.setup.stepStore', label: t('seller.setup.stepStore') },
-    { key: 'business', labelKey: 'seller.setup.stepBusiness', label: t('seller.setup.stepBusiness') },
+    {
+      key: 'business',
+      labelKey: 'seller.setup.stepBusiness',
+      label: t('seller.setup.stepBusiness'),
+    },
     { key: 'bank', labelKey: 'seller.setup.stepBank', label: t('seller.setup.stepBank') },
     { key: 'review', labelKey: 'seller.setup.stepReview', label: t('seller.setup.stepReview') },
   ]
@@ -143,7 +184,7 @@ export default function StoreStep({ onContinue, onBack }: Props) {
         <LanguageToggle />
       </View>
 
-      <Animated.View style={containerStyle}>
+      <Animated.View style={[styles.flex, containerStyle]}>
         <View style={styles.stepperWrap}>
           <WizardStepper steps={steps} current={0} />
         </View>
@@ -179,14 +220,20 @@ export default function StoreStep({ onContinue, onBack }: Props) {
                 <TextInput
                   style={[styles.input, styles.slugInput]}
                   value={draft.handle}
-                  onChangeText={v => updateField('handle', v.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                  onChangeText={v =>
+                    updateField('handle', v.toLowerCase().replace(/[^a-z0-9-]/g, ''))
+                  }
                   placeholder={t('seller.setup.handlePlaceholder')}
                   placeholderTextColor={colors.textTertiary}
                   autoCapitalize="none"
                   accessibilityLabel={t('seller.setup.handleLabel')}
                 />
-                {handleStatus === 'checking' && <Loader size={16} color={colors.textMuted} strokeWidth={2} />}
-                {handleStatus === 'available' && <Check size={16} color={colors.success} strokeWidth={2.5} />}
+                {handleStatus === 'checking' && (
+                  <Loader size={16} color={colors.textMuted} strokeWidth={2} />
+                )}
+                {handleStatus === 'available' && (
+                  <Check size={16} color={colors.success} strokeWidth={2.5} />
+                )}
                 {handleStatus === 'taken' && <X size={16} color={colors.error} strokeWidth={2.5} />}
               </View>
               <Text style={styles.helper}>{t('seller.setup.handleHelper')}</Text>
@@ -218,15 +265,21 @@ export default function StoreStep({ onContinue, onBack }: Props) {
                 label={t('seller.setup.logoLabel')}
                 helper={t('seller.setup.logoHelper')}
                 ariaLabel={t('seller.setup.logoUploadAria')}
+                removeAria={t('seller.setup.uploadRemove')}
                 imageUrl={draft.logoUrl}
                 size="logo"
+                onPick={() => pickImage('logoUrl', [1, 1])}
+                onRemove={() => updateField('logoUrl', '')}
               />
               <UploadField
                 label={t('seller.setup.bannerLabel')}
                 helper={t('seller.setup.bannerHelper')}
                 ariaLabel={t('seller.setup.bannerUploadAria')}
+                removeAria={t('seller.setup.uploadRemove')}
                 imageUrl={draft.bannerUrl}
                 size="banner"
+                onPick={() => pickImage('bannerUrl', [16, 9])}
+                onRemove={() => updateField('bannerUrl', '')}
               />
             </View>
 
@@ -270,7 +323,9 @@ export default function StoreStep({ onContinue, onBack }: Props) {
                       }}
                     >
                       <Text style={styles.selectOptionText}>{cat.name}</Text>
-                      {cat.id === draft.categoryId && <Check size={16} color={colors.primary} strokeWidth={2.5} />}
+                      {cat.id === draft.categoryId && (
+                        <Check size={16} color={colors.primary} strokeWidth={2.5} />
+                      )}
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -315,7 +370,9 @@ export default function StoreStep({ onContinue, onBack }: Props) {
                   <TextInput
                     style={styles.input}
                     value={draft.pickupPhone}
-                    onChangeText={v => updateField('pickupPhone', v.replace(/\D/g, '').slice(0, 10))}
+                    onChangeText={v =>
+                      updateField('pickupPhone', v.replace(/\D/g, '').slice(0, 10))
+                    }
                     placeholder="98XXXXXXXX"
                     placeholderTextColor={colors.textTertiary}
                     keyboardType="phone-pad"
@@ -382,7 +439,9 @@ function Field({
       <Text style={styles.fieldLabel}>{label}</Text>
       {children}
       {error ? (
-        <Text style={styles.fieldError} accessibilityRole="alert">{error}</Text>
+        <Text style={styles.fieldError} accessibilityRole="alert">
+          {error}
+        </Text>
       ) : helper ? (
         <Text style={styles.helper}>{helper}</Text>
       ) : null}
@@ -394,32 +453,52 @@ function UploadField({
   label,
   helper,
   ariaLabel,
+  removeAria,
   imageUrl,
   size,
+  onPick,
+  onRemove,
 }: {
   label: string
   helper: string
   ariaLabel: string
+  removeAria: string
   imageUrl: string
   size: 'logo' | 'banner'
+  onPick: () => void
+  onRemove: () => void
 }) {
   return (
     <View style={styles.uploadField}>
       <Text style={styles.fieldLabel}>{label}</Text>
-      <TouchableOpacity
-        style={size === 'logo' ? styles.logoUpload : styles.bannerUpload}
-        accessibilityRole="button"
-        accessibilityLabel={ariaLabel}
-        activeOpacity={0.8}
-      >
+      <View style={size === 'logo' ? styles.logoUploadWrap : styles.bannerUploadWrap}>
+        <TouchableOpacity
+          style={size === 'logo' ? styles.logoUpload : styles.bannerUpload}
+          accessibilityRole="button"
+          accessibilityLabel={ariaLabel}
+          activeOpacity={0.8}
+          onPress={onPick}
+        >
+          {imageUrl ? (
+            <Image source={{ uri: imageUrl }} style={styles.uploadPreview} resizeMode="cover" />
+          ) : (
+            <View style={styles.uploadPlaceholder}>
+              <ImageIcon size={20} color={colors.textTertiary} strokeWidth={2} />
+            </View>
+          )}
+        </TouchableOpacity>
         {imageUrl ? (
-          <Image source={{ uri: imageUrl }} style={styles.uploadPreview} resizeMode="cover" />
-        ) : (
-          <View style={styles.uploadPlaceholder}>
-            <ImageIcon size={20} color={colors.textTertiary} strokeWidth={2} />
-          </View>
-        )}
-      </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.uploadRemoveBtn}
+            onPress={onRemove}
+            accessibilityRole="button"
+            accessibilityLabel={removeAria}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <X size={14} color={colors.white} strokeWidth={2.5} />
+          </TouchableOpacity>
+        ) : null}
+      </View>
       <Text style={styles.helper}>{helper}</Text>
     </View>
   )
@@ -432,6 +511,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  flex: {
+    flex: 1,
   },
   topBar: {
     alignItems: 'flex-end',
@@ -454,7 +536,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.text,
     marginBottom: spacing[1],
-    fontFamily: fontFamily.sansBold[0],
+    fontFamily: sellerFont.display,
   },
   subtitle: {
     fontSize: 14,
@@ -544,6 +626,23 @@ const styles = StyleSheet.create({
   uploadField: {
     flex: 1,
     gap: spacing[1.5],
+  },
+  logoUploadWrap: {
+    width: 96,
+  },
+  bannerUploadWrap: {
+    width: '100%',
+  },
+  uploadRemoveBtn: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(18,36,30,0.72)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   logoUpload: {
     width: 96,

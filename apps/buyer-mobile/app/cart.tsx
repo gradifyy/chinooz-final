@@ -7,22 +7,13 @@ import { useTranslation } from 'react-i18next'
 import * as Haptics from 'expo-haptics'
 import { spacing, radii, fontSz, duration } from '@chinooz/theme'
 import { useAppTheme } from '../components/ThemeProvider'
-import { formatNPR, calcCartTotals } from '@chinooz/utils'
+import { formatNPR, calcCartTotals, getInitials } from '@chinooz/utils'
 import { useCartStore, useCheckoutStore } from '@chinooz/state'
 import { CartSummary, Button } from '@chinooz/ui'
 import EmptyCart from '../components/EmptyCart'
 import ScreenHeader from '../components/ScreenHeader'
 import Icon from '../components/Icon'
 import type { CartItem } from '@chinooz/types'
-
-function getInitials(name: string): string {
-  return name
-    .split(' ')
-    .map(s => s[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2)
-}
 
 function groupBySeller(items: CartItem[]): Map<string, CartItem[]> {
   const groups = new Map<string, CartItem[]>()

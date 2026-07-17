@@ -1,13 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-  RefreshControl,
-} from 'react-native'
-import { useRouter } from 'expo-router'
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, RefreshControl } from 'react-native'
+import { useRouter, type Href } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
 import * as Haptics from 'expo-haptics'
@@ -30,7 +23,16 @@ import {
   Award,
   AlertTriangle,
 } from 'lucide-react-native'
-import { colors, radii, spacing, fontFamily, fontSize, shadow, duration, easing } from '@chinooz/theme'
+import {
+  colors,
+  radii,
+  spacing,
+  fontFamily,
+  fontSize,
+  shadow,
+  duration,
+  easing,
+} from '@chinooz/theme'
 import { useReducedMotion } from '@chinooz/ui'
 import { analytics } from '@chinooz/analytics'
 import { useA11y } from './A11yProvider'
@@ -85,9 +87,19 @@ function periodLabelKey(key: RiderPerformancePeriodKey): string {
 /** Restrained status visual mapping. Color is never the only signal. */
 const STATUS_VISUAL: Record<
   RiderMetricStatus,
-  { tint: string; ring: string; text: string; Icon: React.ComponentType<{ size?: number; color?: string }> }
+  {
+    tint: string
+    ring: string
+    text: string
+    Icon: React.ComponentType<{ size?: number; color?: string }>
+  }
 > = {
-  good: { tint: colors.successLight, ring: colors.success, text: colors.success, Icon: CheckCircle2 },
+  good: {
+    tint: colors.successLight,
+    ring: colors.success,
+    text: colors.success,
+    Icon: CheckCircle2,
+  },
   watch: { tint: colors.warningLight, ring: colors.warning, text: '#92400E', Icon: AlertTriangle },
   low: { tint: colors.errorLight, ring: colors.error, text: colors.error, Icon: AlertTriangle },
 }
@@ -259,7 +271,7 @@ export default function PerformanceScreen() {
                   try {
                     if (!reduced) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                   } catch {}
-                  router.push({ pathname: '/profile/metrics', params: { metric: id } } as any)
+                  router.push({ pathname: '/profile/metrics', params: { metric: id } } as Href)
                 }}
               />
             </View>
@@ -299,7 +311,8 @@ export default function PerformanceScreen() {
             )}
 
             {/* New-rider empty — not enough data yet */}
-            {overview.ratingCount === 0 && overview.metrics.find(m => m.id === 'total_deliveries')?.rawValue === 0 ? (
+            {overview.ratingCount === 0 &&
+            overview.metrics.find(m => m.id === 'total_deliveries')?.rawValue === 0 ? (
               <NewRiderEmpty
                 title={t('rider.performance.newRiderTitle')}
                 body={t('rider.performance.newRiderBody')}
@@ -307,70 +320,70 @@ export default function PerformanceScreen() {
               />
             ) : (
               <>
-            {/* As-of caption — supportive framing, not a deadline */}
-            <Text style={styles.asOfCaption}>
-              {t('rider.performance.asOf', { date: overview.asOf })}
-            </Text>
+                {/* As-of caption — supportive framing, not a deadline */}
+                <Text style={styles.asOfCaption}>
+                  {t('rider.performance.asOf', { date: overview.asOf })}
+                </Text>
 
-            {/* Scorecard — headline metrics, glanceable tiles */}
-            <View
-              accessibilityRole="summary"
-              accessibilityLabel={t('rider.performance.scorecardAria', {
-                period: periodLabel,
-              })}
-            >
-              <Scorecard
-                overview={overview}
-                t={t}
-                reduced={reduced}
-                onMetricPress={id => {
-                  try {
-                    if (!reduced) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                  } catch {}
-                  router.push({ pathname: '/profile/metrics', params: { metric: id } } as any)
-                }}
-              />
-            </View>
+                {/* Scorecard — headline metrics, glanceable tiles */}
+                <View
+                  accessibilityRole="summary"
+                  accessibilityLabel={t('rider.performance.scorecardAria', {
+                    period: periodLabel,
+                  })}
+                >
+                  <Scorecard
+                    overview={overview}
+                    t={t}
+                    reduced={reduced}
+                    onMetricPress={id => {
+                      try {
+                        if (!reduced) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                      } catch {}
+                      router.push({ pathname: '/profile/metrics', params: { metric: id } } as Href)
+                    }}
+                  />
+                </View>
 
-            {/* Tier badge + standing line — supportive, not a leaderboard */}
-            <TierStanding overview={overview} t={t} />
+                {/* Tier badge + standing line — supportive, not a leaderboard */}
+                <TierStanding overview={overview} t={t} />
 
-            {/* Detail entry points — RP2 / RP3 / RP4 */}
-            <View style={styles.sectionHead}>
-              <Text style={styles.sectionTitle}>{t('rider.performance.sectionDetails')}</Text>
-            </View>
-            <View style={styles.entriesCard}>
-              <EntryRow
-                icon={<Gauge size={18} color={colors.primary} />}
-                iconBg={colors.primary50}
-                title={t('rider.performance.entryMetrics')}
-                sub={t('rider.performance.entryMetricsSub')}
-                ariaLabel={t('rider.performance.entryMetricsAria')}
-                onPress={() => router.push('/profile/metrics' as any)}
-                reduced={reduced}
-              />
-              <View style={styles.entryDivider} />
-              <EntryRow
-                icon={<MessageSquareQuote size={18} color={colors.primary} />}
-                iconBg={colors.primary50}
-                title={t('rider.performance.entryRatings')}
-                sub={t('rider.performance.entryRatingsSub')}
-                ariaLabel={t('rider.performance.entryRatingsAria')}
-                onPress={() => router.push('/profile/ratings' as any)}
-                reduced={reduced}
-              />
-              <View style={styles.entryDivider} />
-              <EntryRow
-                icon={<Award size={18} color={colors.gold} />}
-                iconBg={'rgba(224, 169, 59, 0.14)'}
-                title={t('rider.performance.entryTier')}
-                sub={t('rider.performance.entryTierSub')}
-                ariaLabel={t('rider.performance.entryTierAria')}
-                onPress={() => router.push('/profile/tier' as any)}
-                reduced={reduced}
-              />
-            </View>
-            </>
+                {/* Detail entry points — RP2 / RP3 / RP4 */}
+                <View style={styles.sectionHead}>
+                  <Text style={styles.sectionTitle}>{t('rider.performance.sectionDetails')}</Text>
+                </View>
+                <View style={styles.entriesCard}>
+                  <EntryRow
+                    icon={<Gauge size={18} color={colors.primary} />}
+                    iconBg={colors.primary50}
+                    title={t('rider.performance.entryMetrics')}
+                    sub={t('rider.performance.entryMetricsSub')}
+                    ariaLabel={t('rider.performance.entryMetricsAria')}
+                    onPress={() => router.push('/profile/metrics' as Href)}
+                    reduced={reduced}
+                  />
+                  <View style={styles.entryDivider} />
+                  <EntryRow
+                    icon={<MessageSquareQuote size={18} color={colors.primary} />}
+                    iconBg={colors.primary50}
+                    title={t('rider.performance.entryRatings')}
+                    sub={t('rider.performance.entryRatingsSub')}
+                    ariaLabel={t('rider.performance.entryRatingsAria')}
+                    onPress={() => router.push('/profile/ratings' as Href)}
+                    reduced={reduced}
+                  />
+                  <View style={styles.entryDivider} />
+                  <EntryRow
+                    icon={<Award size={18} color={colors.gold} />}
+                    iconBg={'rgba(224, 169, 59, 0.14)'}
+                    title={t('rider.performance.entryTier')}
+                    sub={t('rider.performance.entryTierSub')}
+                    ariaLabel={t('rider.performance.entryTierAria')}
+                    onPress={() => router.push('/profile/tier' as Href)}
+                    reduced={reduced}
+                  />
+                </View>
+              </>
             )}
           </View>
         ) : null}
@@ -424,7 +437,10 @@ function PeriodSwitch({
   ariaLabel: string
   reduced: boolean
 }) {
-  const activeIndex = Math.max(0, segments.findIndex(s => s.key === activeKey))
+  const activeIndex = Math.max(
+    0,
+    segments.findIndex(s => s.key === activeKey),
+  )
   const indicatorX = useSharedValue(activeIndex)
   const segmentWidth = useSharedValue(0)
 
@@ -436,7 +452,16 @@ function PeriodSwitch({
     const x = segmentWidth.value * indicatorX.value
     return {
       transform: [
-        { translateX: reduced ? x : withSpring(x, { damping: 25, stiffness: 350, mass: 0.8, reduceMotion: ReduceMotion.Never }) },
+        {
+          translateX: reduced
+            ? x
+            : withSpring(x, {
+                damping: 25,
+                stiffness: 350,
+                mass: 0.8,
+                reduceMotion: ReduceMotion.Never,
+              }),
+        },
       ],
     }
   })
@@ -465,7 +490,10 @@ function PeriodSwitch({
             accessibilityState={{ selected: isActive }}
             activeOpacity={0.7}
           >
-            <Text style={[styles.periodLabel, isActive && styles.periodLabelActive]} numberOfLines={1}>
+            <Text
+              style={[styles.periodLabel, isActive && styles.periodLabelActive]}
+              numberOfLines={1}
+            >
               {seg.label}
             </Text>
           </TouchableOpacity>
@@ -508,7 +536,14 @@ function Scorecard({
       )}
       <View style={styles.tileGrid}>
         {rateMetrics.map((m, idx) => (
-          <MetricTile key={m.id} metric={m} t={t} onPress={() => onMetricPress(m.id)} index={idx} reduced={reduced} />
+          <MetricTile
+            key={m.id}
+            metric={m}
+            t={t}
+            onPress={() => onMetricPress(m.id)}
+            index={idx}
+            reduced={reduced}
+          />
         ))}
       </View>
     </View>
@@ -549,7 +584,12 @@ function RatingHero({
       starScale.value = 1
       return
     }
-    starScale.value = withSpring(1, { damping: 18, stiffness: 220, mass: 0.8, reduceMotion: ReduceMotion.Never })
+    starScale.value = withSpring(1, {
+      damping: 18,
+      stiffness: 220,
+      mass: 0.8,
+      reduceMotion: ReduceMotion.Never,
+    })
   }, [reduced])
   const starStyle = useAnimatedStyle(() => ({ transform: [{ scale: starScale.value }] }))
 
@@ -621,7 +661,10 @@ const MetricTile = React.memo(function MetricTile({
   useEffect(() => {
     if (reduced) return
     const delay = index * 80
-    opacity.value = withDelay(delay, withTiming(1, { duration: duration.normal, reduceMotion: ReduceMotion.Never }))
+    opacity.value = withDelay(
+      delay,
+      withTiming(1, { duration: duration.normal, reduceMotion: ReduceMotion.Never }),
+    )
     translateY.value = withDelay(
       delay,
       withSpring(0, { damping: 20, stiffness: 300, mass: 0.8, reduceMotion: ReduceMotion.Never }),
@@ -658,7 +701,11 @@ const MetricTile = React.memo(function MetricTile({
           <CountUp
             value={metric.rawValue}
             format={v =>
-              isPct ? `${Math.round(v)}%` : isDeliveries ? Math.round(v).toLocaleString('en-IN') : v.toFixed(1)
+              isPct
+                ? `${Math.round(v)}%`
+                : isDeliveries
+                  ? Math.round(v).toLocaleString('en-IN')
+                  : v.toFixed(1)
             }
             reduced={reduced}
             delay={index * 80 + duration.normal}
@@ -672,7 +719,11 @@ const MetricTile = React.memo(function MetricTile({
             {t(statusWordKey(status))}
           </Text>
         </View>
-        {hint ? <Text style={styles.tileHint} numberOfLines={2}>{hint}</Text> : null}
+        {hint ? (
+          <Text style={styles.tileHint} numberOfLines={2}>
+            {hint}
+          </Text>
+        ) : null}
       </TouchableOpacity>
     </Animated.View>
   )
@@ -810,7 +861,12 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontFamily: fontFamily.sansBold[0],
   },
-  headerSub: { fontSize: 13, color: colors.primary50, marginTop: 2, fontFamily: fontFamily.sans[0] },
+  headerSub: {
+    fontSize: 13,
+    color: colors.primary50,
+    marginTop: 2,
+    fontFamily: fontFamily.sans[0],
+  },
 
   // Period switch — segmented control.
   periodWrap: { padding: spacing[4], paddingBottom: spacing[2] },

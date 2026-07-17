@@ -1,8 +1,4 @@
-import {
-  useQuery,
-  useMutation,
-  useQueryClient,
-} from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query'
 import * as api from '@chinooz/mock-data'
 import { orderService } from '@chinooz/mock-data'
 import type {
@@ -15,6 +11,7 @@ import type {
   StockEditMode,
   StockEditReason,
   SellerInventoryVariant,
+  SellerInventoryProduct,
   CsvStockRow,
   SellerSubOrder,
   SellerOrderStatusKey,
@@ -33,7 +30,38 @@ import type {
   RefundBreakdown,
 } from '@chinooz/types'
 import type { SellerProductFilter, SellerInventoryFilter } from '@chinooz/mock-data'
-import type { ShippingSettings, BusinessDetails, KycDocument, NotificationPreferences, ActiveSession } from '@chinooz/mock-data'
+import type {
+  ShippingSettings,
+  BusinessDetails,
+  KycDocument,
+  NotificationPreferences,
+  ActiveSession,
+} from '@chinooz/mock-data'
+import type { SellerInventoryResult } from '@chinooz/mock-data'
+
+/**
+ * Shared optimistic-update context shapes. Each mutation's `onMutate` returns
+ * one of these so `onError` can roll the cache back without resorting to `any`.
+ */
+type OrdersMutationCtx<T = SellerSubOrder> = {
+  prevOrders?: [QueryKey, T[] | undefined][]
+  prev?: [QueryKey, T[] | undefined][]
+}
+type InventoryMutationCtx = {
+  prevInventory?: SellerInventoryResult
+  prev?: [QueryKey, SellerInventoryResult | undefined][]
+}
+type CampaignsMutationCtx = {
+  prev?: Campaign[]
+}
+type Campaign = { id: string; participation?: { status: string } }
+type ProductsMutationCtx = {
+  prev?: { items: SellerProduct[]; total: number; counts: Record<string, number> }
+}
+type KeyedMutationCtx<T> = {
+  prev?: T
+  key: QueryKey
+}
 
 /**
  * staleTime convention for seller data:
@@ -129,6 +157,17 @@ export function useCreateProduct() {
   })
 }
 
+export function useBulkCreateProducts() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.bulkCreateProducts,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['seller-products'] })
+      qc.invalidateQueries({ queryKey: ['seller-inventory'] })
+    },
+  })
+}
+
 export function useUpdateProduct() {
   const qc = useQueryClient()
   return useMutation({
@@ -170,20 +209,28 @@ export function useToggleProductStatus() {
     mutationFn: api.toggleProductStatus,
     onMutate: async (productId: string) => {
       await qc.cancelQueries({ queryKey: ['seller-products'] })
-      const prev = qc.getQueryData<{ items: SellerProduct[]; total: number; counts: Record<string, number> }>(['seller-products', {}])
+      const prev = qc.getQueryData<{
+        items: SellerProduct[]
+        total: number
+        counts: Record<string, number>
+      }>(['seller-products', {}])
       if (prev) {
         qc.setQueryData(['seller-products', {}], {
           ...prev,
           items: prev.items.map(p =>
             p.id === productId
-              ? { ...p, status: (p.status === 'active' ? 'archived' : 'active') as SellerProductStatus, updatedAt: new Date().toISOString() }
-              : p
+              ? {
+                  ...p,
+                  status: (p.status === 'active' ? 'archived' : 'active') as SellerProductStatus,
+                  updatedAt: new Date().toISOString(),
+                }
+              : p,
           ),
         })
       }
       return { prev }
     },
-    onError: (_err, _productId, ctx) => {
+    onError: (_err, _productId, ctx: ProductsMutationCtx | undefined) => {
       if (ctx?.prev) qc.setQueryData(['seller-products', {}], ctx.prev)
     },
     onSuccess: () => {
@@ -198,7 +245,12 @@ export function useBulkUpdateProducts() {
     mutationFn: (vars: {
       ids: string[]
       action: 'activate' | 'deactivate' | 'delete' | 'setCategory' | 'adjustPrice' | 'updateStock'
-      params?: { categoryId?: string; priceMode?: 'percent' | 'amount'; priceValue?: number; stockValue?: number }
+      params?: {
+        categoryId?: string
+        priceMode?: 'percent' | 'amount'
+        priceValue?: number
+        stockValue?: number
+      }
     }) => api.bulkUpdateProducts(vars.ids, vars.action, vars.params),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['seller-products'] })
@@ -232,38 +284,42 @@ export function useUpdateStock() {
 
   const opts = {
     mutationFn: (vars: UpdateStockVars) =>
-      api.updateStock(vars.productId, vars.variantId, vars.newCount, vars.mode ?? 'set', vars.reason ?? 'restock', vars.note),
+      api.updateStock(
+        vars.productId,
+        vars.variantId,
+        vars.newCount,
+        vars.mode ?? 'set',
+        vars.reason ?? 'restock',
+        vars.note,
+      ),
     onMutate: async (vars: UpdateStockVars) => {
       await qc.cancelQueries({ queryKey: ['seller-inventory'] })
-      const prevInventory = qc.getQueryData(['seller-inventory'])
-      qc.setQueriesData(
-        { queryKey: ['seller-inventory'] },
-        (old: any) => {
-          if (!old) return old
-          return {
-            ...old,
-            products: (old.products ?? []).map((p: any) => {
-              if (p.id !== vars.productId) return p
-              const newStock: StockStatus =
-                vars.newCount <= 0 ? 'out_of_stock' : vars.newCount < 10 ? 'low_stock' : 'in_stock'
-              if (vars.variantId) {
-                return {
-                  ...p,
-                  variants: (p.variants ?? []).map((v: any) =>
-                    v.id === vars.variantId
-                      ? { ...v, stockCount: vars.newCount, stock: newStock }
-                      : v,
-                  ),
-                }
+      const prevInventory = qc.getQueryData<SellerInventoryResult>(['seller-inventory'])
+      qc.setQueriesData<SellerInventoryResult>({ queryKey: ['seller-inventory'] }, old => {
+        if (!old) return old
+        return {
+          ...old,
+          products: (old.products ?? []).map((p: SellerInventoryProduct) => {
+            if (p.id !== vars.productId) return p
+            const newStock: StockStatus =
+              vars.newCount <= 0 ? 'out_of_stock' : vars.newCount < 10 ? 'low_stock' : 'in_stock'
+            if (vars.variantId) {
+              return {
+                ...p,
+                variants: (p.variants ?? []).map((v: SellerInventoryVariant) =>
+                  v.id === vars.variantId
+                    ? { ...v, stockCount: vars.newCount, stock: newStock }
+                    : v,
+                ),
               }
-              return { ...p, aggregateStock: vars.newCount, stock: newStock }
-            }),
-          }
-        },
-      )
+            }
+            return { ...p, aggregateStock: vars.newCount, stock: newStock }
+          }),
+        }
+      })
       return { prevInventory }
     },
-    onError: (_err: Error, _vars: UpdateStockVars, ctx: any) => {
+    onError: (_err: Error, _vars: UpdateStockVars, ctx: InventoryMutationCtx | undefined) => {
       if (ctx?.prevInventory !== undefined) {
         qc.setQueryData(['seller-inventory'], ctx.prevInventory)
       }
@@ -298,12 +354,12 @@ export function useBulkUpdateStock() {
     mutationFn: (vars: BulkVars) => api.bulkUpdateStock(vars),
     onMutate: async (vars: BulkVars) => {
       await qc.cancelQueries({ queryKey: ['seller-inventory'] })
-      const prev = qc.getQueriesData({ queryKey: ['seller-inventory'] })
-      qc.setQueriesData({ queryKey: ['seller-inventory'] }, (old: any) => {
+      const prev = qc.getQueriesData<SellerInventoryResult>({ queryKey: ['seller-inventory'] })
+      qc.setQueriesData<SellerInventoryResult>({ queryKey: ['seller-inventory'] }, old => {
         if (!old) return old
         return {
           ...old,
-          products: (old.products ?? []).map((p: any) => ({
+          products: (old.products ?? []).map((p: SellerInventoryProduct) => ({
             ...p,
             variants: (p.variants ?? []).map((v: SellerInventoryVariant) => {
               if (!vars.variantIds.includes(v.id)) return v
@@ -312,10 +368,15 @@ export function useBulkUpdateStock() {
               }
               let newCount = v.stockCount
               if (vars.action === 'set') newCount = Math.max(0, vars.value ?? 0)
-              else if (vars.action === 'adjust') newCount = Math.max(0, v.stockCount + (vars.value ?? 0))
+              else if (vars.action === 'adjust')
+                newCount = Math.max(0, v.stockCount + (vars.value ?? 0))
               else if (vars.action === 'mark_out') newCount = 0
               const status: StockStatus =
-                newCount <= 0 ? 'out_of_stock' : newCount < (v.lowStockThreshold ?? 10) ? 'low_stock' : 'in_stock'
+                newCount <= 0
+                  ? 'out_of_stock'
+                  : newCount < (v.lowStockThreshold ?? 10)
+                    ? 'low_stock'
+                    : 'in_stock'
               return { ...v, stockCount: newCount, stock: status }
             }),
           })),
@@ -323,7 +384,7 @@ export function useBulkUpdateStock() {
       })
       return { prev }
     },
-    onError: (_err: Error, _vars: BulkVars, ctx: any) => {
+    onError: (_err: Error, _vars: BulkVars, ctx: InventoryMutationCtx | undefined) => {
       if (ctx?.prev) {
         for (const [key, data] of ctx.prev) {
           qc.setQueryData(key, data)
@@ -393,15 +454,15 @@ export function useUpdateOrderStatus() {
     onMutate: async (vars: Vars) => {
       await qc.cancelQueries({ queryKey: ['seller-orders'] })
       const prevOrders = qc.getQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] })
-      qc.setQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] }, (old) => {
+      qc.setQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] }, old => {
         if (!old) return old
-        return old.map((o) =>
+        return old.map(o =>
           o.subOrderId === vars.subOrderId ? { ...o, statusKey: vars.newStatusKey } : o,
         )
       })
       return { prevOrders }
     },
-    onError: (_err: Error, _vars: Vars, ctx: any) => {
+    onError: (_err: Error, _vars: Vars, ctx: OrdersMutationCtx | undefined) => {
       if (ctx?.prevOrders) {
         for (const [key, data] of ctx.prevOrders) {
           qc.setQueryData(key, data)
@@ -424,24 +485,28 @@ export function useFulfillOrder() {
   const qc = useQueryClient()
   type Vars = { subOrderId: string; trackingNumber?: string; carrier?: string }
   return useMutation({
-    mutationFn: (vars: Vars) => orderService.fulfill(vars.subOrderId, vars.trackingNumber, vars.carrier),
+    mutationFn: (vars: Vars) =>
+      orderService.fulfill(vars.subOrderId, vars.trackingNumber, vars.carrier),
     onMutate: async (vars: Vars) => {
       await qc.cancelQueries({ queryKey: ['seller-orders'] })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const prevOrders = qc.getQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] })
-      qc.setQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] }, (old) => {
+      qc.setQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] }, old => {
         if (!old) return old
         return old.map(o =>
           o.subOrderId === vars.subOrderId
-            ? { ...o, statusKey: 'shipped' as SellerOrderStatusKey, status: 'shipped', trackingNumber: vars.trackingNumber ?? o.trackingNumber, carrier: vars.carrier ?? o.carrier }
+            ? {
+                ...o,
+                statusKey: 'shipped' as SellerOrderStatusKey,
+                status: 'shipped',
+                trackingNumber: vars.trackingNumber ?? o.trackingNumber,
+                carrier: vars.carrier ?? o.carrier,
+              }
             : o,
         )
       })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return { prevOrders }
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onError: (_err: Error, _vars: Vars, ctx: any) => {
+    onError: (_err: Error, _vars: Vars, ctx: OrdersMutationCtx | undefined) => {
       if (ctx?.prevOrders) {
         for (const [key, data] of ctx.prevOrders) {
           qc.setQueryData(key, data)
@@ -462,25 +527,29 @@ export function useRejectOrder() {
   const qc = useQueryClient()
   type Vars = { subOrderId: string; reason: string; reasonDetail?: string }
   return useMutation({
-    mutationFn: (vars: Vars) => orderService.reject(vars.subOrderId, vars.reason, vars.reasonDetail),
+    mutationFn: (vars: Vars) =>
+      orderService.reject(vars.subOrderId, vars.reason, vars.reasonDetail),
     onMutate: async (vars: Vars) => {
       await qc.cancelQueries({ queryKey: ['seller-orders'] })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const prevOrders = qc.getQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] })
       const now = new Date().toISOString()
-      qc.setQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] }, (old) => {
+      qc.setQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] }, old => {
         if (!old) return old
         return old.map(o =>
           o.subOrderId === vars.subOrderId
-            ? { ...o, statusKey: 'cancelled_returned' as SellerOrderStatusKey, status: 'cancelled', cancelledAt: now, actionNeeded: false }
+            ? {
+                ...o,
+                statusKey: 'cancelled_returned' as SellerOrderStatusKey,
+                status: 'cancelled',
+                cancelledAt: now,
+                actionNeeded: false,
+              }
             : o,
         )
       })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return { prevOrders }
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onError: (_err: Error, _vars: Vars, ctx: any) => {
+    onError: (_err: Error, _vars: Vars, ctx: OrdersMutationCtx | undefined) => {
       if (ctx?.prevOrders) {
         for (const [key, data] of ctx.prevOrders) {
           qc.setQueryData(key, data)
@@ -498,14 +567,26 @@ export function useRejectOrder() {
 
 export function usePartialShipOrder() {
   const qc = useQueryClient()
-  type Vars = { subOrderId: string; itemIds: string[]; trackingNumber: string; carrier: string; shipDate?: string }
+  type Vars = {
+    subOrderId: string
+    itemIds: string[]
+    trackingNumber: string
+    carrier: string
+    shipDate?: string
+  }
   return useMutation({
-    mutationFn: (vars: Vars) => orderService.partialShip(vars.subOrderId, vars.itemIds, vars.trackingNumber, vars.carrier, vars.shipDate),
+    mutationFn: (vars: Vars) =>
+      orderService.partialShip(
+        vars.subOrderId,
+        vars.itemIds,
+        vars.trackingNumber,
+        vars.carrier,
+        vars.shipDate,
+      ),
     onMutate: async (vars: Vars) => {
       await qc.cancelQueries({ queryKey: ['seller-orders'] })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const prevOrders = qc.getQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] })
-      qc.setQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] }, (old) => {
+      qc.setQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] }, old => {
         if (!old) return old
         return old.map(o =>
           o.subOrderId === vars.subOrderId
@@ -513,11 +594,9 @@ export function usePartialShipOrder() {
             : o,
         )
       })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return { prevOrders }
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onError: (_err: Error, _vars: Vars, ctx: any) => {
+    onError: (_err: Error, _vars: Vars, ctx: OrdersMutationCtx | undefined) => {
       if (ctx?.prevOrders) {
         for (const [key, data] of ctx.prevOrders) {
           qc.setQueryData(key, data)
@@ -536,27 +615,26 @@ export function usePartialShipOrder() {
 export function useBulkUpdateStatus() {
   const qc = useQueryClient()
   type Vars = { subOrderIds: string[]; newStatusKey: SellerOrderStatusKey }
-  type Result = { results: { subOrderId: string; success: boolean; statusKey: SellerOrderStatusKey }[]; succeeded: number; failed: number }
+  type Result = {
+    results: { subOrderId: string; success: boolean; statusKey: SellerOrderStatusKey }[]
+    succeeded: number
+    failed: number
+  }
 
-  return useMutation<Result, Error, Vars>({
+  return useMutation<Result, Error, Vars, OrdersMutationCtx>({
     mutationFn: vars => orderService.bulkUpdateStatus(vars.subOrderIds, vars.newStatusKey),
     onMutate: async (vars: Vars) => {
       await qc.cancelQueries({ queryKey: ['seller-orders'] })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const prevOrders = qc.getQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] })
-      qc.setQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] }, (old) => {
+      qc.setQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] }, old => {
         if (!old) return old
         return old.map(o =>
-          vars.subOrderIds.includes(o.subOrderId)
-            ? { ...o, statusKey: vars.newStatusKey }
-            : o,
+          vars.subOrderIds.includes(o.subOrderId) ? { ...o, statusKey: vars.newStatusKey } : o,
         )
       })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return { prevOrders }
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onError: (_err: Error, _vars: Vars, ctx: any) => {
+    onError: (_err: Error, _vars: Vars, ctx: OrdersMutationCtx | undefined) => {
       if (ctx?.prevOrders) {
         for (const [key, data] of ctx.prevOrders) {
           qc.setQueryData(key, data)
@@ -572,26 +650,27 @@ export function useBulkUpdateStatus() {
 export function useBulkFulfillOrders() {
   const qc = useQueryClient()
   type Vars = { shipments: { subOrderId: string; trackingNumber: string; carrier: string }[] }
-  type Result = { results: { subOrderId: string; success: boolean; trackingNumber: string }[]; succeeded: number; failed: number }
+  type Result = {
+    results: { subOrderId: string; success: boolean; trackingNumber: string }[]
+    succeeded: number
+    failed: number
+  }
 
-  return useMutation<Result, Error, Vars>({
+  return useMutation<Result, Error, Vars, OrdersMutationCtx>({
     mutationFn: vars => orderService.bulkFulfill(vars.shipments),
     onMutate: async (vars: Vars) => {
       await qc.cancelQueries({ queryKey: ['seller-orders'] })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const prevOrders = qc.getQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] })
       const idSet = new Set(vars.shipments.map(s => s.subOrderId))
-      qc.setQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] }, (old) => {
+      qc.setQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] }, old => {
         if (!old) return old
         return old.map(o =>
           idSet.has(o.subOrderId) ? { ...o, statusKey: 'shipped' as SellerOrderStatusKey } : o,
         )
       })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return { prevOrders }
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onError: (_err: Error, _vars: Vars, ctx: any) => {
+    onError: (_err: Error, _vars: Vars, ctx: OrdersMutationCtx | undefined) => {
       if (ctx?.prevOrders) {
         for (const [key, data] of ctx.prevOrders) {
           qc.setQueryData(key, data)
@@ -613,7 +692,11 @@ export function useBulkFulfillOrders() {
  */
 export function useMarkLabelPrinted() {
   const qc = useQueryClient()
-  type Vars = { subOrderIds: string[]; trackingNumbers?: Record<string, string>; carriers?: Record<string, string> }
+  type Vars = {
+    subOrderIds: string[]
+    trackingNumbers?: Record<string, string>
+    carriers?: Record<string, string>
+  }
 
   return useMutation({
     mutationFn: async (vars: Vars) => {
@@ -622,13 +705,12 @@ export function useMarkLabelPrinted() {
     },
     onMutate: async (vars: Vars) => {
       await qc.cancelQueries({ queryKey: ['seller-orders'] })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const prevOrders = qc.getQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] })
       const now = new Date().toISOString()
       const idSet = new Set(vars.subOrderIds)
-      qc.setQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] }, (old) => {
+      qc.setQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] }, old => {
         if (!old) return old
-        return old.map((o) =>
+        return old.map(o =>
           idSet.has(o.subOrderId)
             ? {
                 ...o,
@@ -641,7 +723,7 @@ export function useMarkLabelPrinted() {
         )
       })
       // Also patch single-order detail caches (key: ['seller-order', sellerId, subOrderId]).
-      qc.setQueriesData<SellerSubOrder | null>({ queryKey: ['seller-order'] }, (old) => {
+      qc.setQueriesData<SellerSubOrder | null>({ queryKey: ['seller-order'] }, old => {
         if (!old || !idSet.has(old.subOrderId)) return old
         return {
           ...old,
@@ -651,11 +733,9 @@ export function useMarkLabelPrinted() {
           carrier: vars.carriers?.[old.subOrderId] ?? old.carrier,
         }
       })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return { prevOrders }
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onError: (_err: Error, _vars: Vars, ctx: any) => {
+    onError: (_err: Error, _vars: Vars, ctx: OrdersMutationCtx | undefined) => {
       if (ctx?.prevOrders) {
         for (const [key, data] of ctx.prevOrders) {
           qc.setQueryData(key, data)
@@ -685,14 +765,13 @@ export function useSellerCancelOrder() {
     refundStatus: RefundStatus
   }
 
-  return useMutation<Result, Error, Vars>({
+  return useMutation<Result, Error, Vars, OrdersMutationCtx>({
     mutationFn: vars => orderService.cancel(vars.subOrderId, vars.reason, vars.reasonDetail),
     onMutate: async (vars: Vars) => {
       await qc.cancelQueries({ queryKey: ['seller-orders'] })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const prevOrders = qc.getQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] })
       const now = new Date().toISOString()
-      qc.setQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] }, (old) => {
+      qc.setQueriesData<SellerSubOrder[]>({ queryKey: ['seller-orders'] }, old => {
         if (!old) return old
         return old.map(o =>
           o.subOrderId === vars.subOrderId
@@ -710,11 +789,9 @@ export function useSellerCancelOrder() {
             : o,
         )
       })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return { prevOrders }
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onError: (_err: Error, _vars: Vars, ctx: any) => {
+    onError: (_err: Error, _vars: Vars, ctx: OrdersMutationCtx | undefined) => {
       if (ctx?.prevOrders) {
         for (const [key, data] of ctx.prevOrders) {
           qc.setQueryData(key, data)
@@ -751,26 +828,35 @@ export function useApproveReturnRequest() {
     restocked: boolean
   }
 
-  return useMutation<Result, Error, Vars>({
+  return useMutation<Result, Error, Vars, OrdersMutationCtx<SellerReturnRequest>>({
     mutationFn: vars => orderService.approveReturn(vars.requestId, vars.resolutionNote),
     onMutate: async (vars: Vars) => {
       await qc.cancelQueries({ queryKey: ['seller-return-requests'] })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const prev = qc.getQueriesData<SellerReturnRequest[]>({ queryKey: ['seller-return-requests'] })
+      const prev = qc.getQueriesData<SellerReturnRequest[]>({
+        queryKey: ['seller-return-requests'],
+      })
       const now = new Date().toISOString()
-      qc.setQueriesData<SellerReturnRequest[]>({ queryKey: ['seller-return-requests'] }, (old) => {
+      qc.setQueriesData<SellerReturnRequest[]>({ queryKey: ['seller-return-requests'] }, old => {
         if (!old) return old
         return old.map(r =>
           r.id === vars.requestId
-            ? { ...r, status: 'approved' as const, refundStatus: 'refunded' as const, resolvedAt: now, resolutionNote: vars.resolutionNote }
+            ? {
+                ...r,
+                status: 'approved' as const,
+                refundStatus: 'refunded' as const,
+                resolvedAt: now,
+                resolutionNote: vars.resolutionNote,
+              }
             : r,
         )
       })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return { prev }
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onError: (_err: Error, _vars: Vars, ctx: any) => {
+    onError: (
+      _err: Error,
+      _vars: Vars,
+      ctx: OrdersMutationCtx<SellerReturnRequest> | undefined,
+    ) => {
       if (ctx?.prev) {
         for (const [key, data] of ctx.prev) {
           qc.setQueryData(key, data)
@@ -796,26 +882,35 @@ export function useRejectReturnRequest() {
     refundStatus: RefundStatus
   }
 
-  return useMutation<Result, Error, Vars>({
+  return useMutation<Result, Error, Vars, OrdersMutationCtx<SellerReturnRequest>>({
     mutationFn: vars => orderService.rejectReturn(vars.requestId, vars.resolutionNote),
     onMutate: async (vars: Vars) => {
       await qc.cancelQueries({ queryKey: ['seller-return-requests'] })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const prev = qc.getQueriesData<SellerReturnRequest[]>({ queryKey: ['seller-return-requests'] })
+      const prev = qc.getQueriesData<SellerReturnRequest[]>({
+        queryKey: ['seller-return-requests'],
+      })
       const now = new Date().toISOString()
-      qc.setQueriesData<SellerReturnRequest[]>({ queryKey: ['seller-return-requests'] }, (old) => {
+      qc.setQueriesData<SellerReturnRequest[]>({ queryKey: ['seller-return-requests'] }, old => {
         if (!old) return old
         return old.map(r =>
           r.id === vars.requestId
-            ? { ...r, status: 'rejected' as const, refundStatus: 'rejected' as const, resolvedAt: now, resolutionNote: vars.resolutionNote }
+            ? {
+                ...r,
+                status: 'rejected' as const,
+                refundStatus: 'rejected' as const,
+                resolvedAt: now,
+                resolutionNote: vars.resolutionNote,
+              }
             : r,
         )
       })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return { prev }
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onError: (_err: Error, _vars: Vars, ctx: any) => {
+    onError: (
+      _err: Error,
+      _vars: Vars,
+      ctx: OrdersMutationCtx<SellerReturnRequest> | undefined,
+    ) => {
       if (ctx?.prev) {
         for (const [key, data] of ctx.prev) {
           qc.setQueryData(key, data)
@@ -841,7 +936,7 @@ export function useProcessRefund() {
     breakdown: RefundBreakdown
   }
 
-  return useMutation<Result, Error, Vars>({
+  return useMutation<Result, Error, Vars, OrdersMutationCtx>({
     mutationFn: vars => orderService.processRefundOrder(vars.subOrderId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['seller-orders'] })
@@ -852,9 +947,7 @@ export function useProcessRefund() {
 
 // --- Promotions (CRUD) ---
 
-export function usePromotions(
-  params?: Parameters<typeof api.getPromotionsApi>[0],
-) {
+export function usePromotions(params?: Parameters<typeof api.getPromotionsApi>[0]) {
   return useQuery<Promotion[]>({
     queryKey: ['seller-promotions', params],
     queryFn: () => api.getPromotionsApi(params),
@@ -1049,16 +1142,21 @@ export function useNotificationPrefs(sellerId?: string) {
 export function useUpdateNotificationPrefs() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ sellerId, data }: { sellerId: string; data: Partial<NotificationPreferences> }) =>
-      api.updateNotificationPrefs(sellerId, data),
-    onMutate: async (variables) => {
+    mutationFn: ({
+      sellerId,
+      data,
+    }: {
+      sellerId: string
+      data: Partial<NotificationPreferences>
+    }) => api.updateNotificationPrefs(sellerId, data),
+    onMutate: async variables => {
       const key = ['seller-notif-prefs', variables.sellerId]
       await qc.cancelQueries({ queryKey: key })
       const prev = qc.getQueryData<NotificationPreferences>(key)
       if (prev) qc.setQueryData(key, { ...prev, ...variables.data })
       return { prev, key }
     },
-    onError: (_err, _vars, ctx) => {
+    onError: (_err, _vars, ctx: KeyedMutationCtx<NotificationPreferences> | undefined) => {
       if (ctx?.prev !== undefined) qc.setQueryData(ctx.key, ctx.prev)
     },
     onSettled: (_data, _err, variables) => {
@@ -1083,14 +1181,18 @@ export function useRemoveStaff() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (staffId: string) => api.removeStaffMember(staffId),
-    onMutate: async (staffId) => {
+    onMutate: async staffId => {
       const key = ['seller-staff', 'me']
       await qc.cancelQueries({ queryKey: key })
       const prev = qc.getQueryData<StaffMember[]>(key)
-      if (prev) qc.setQueryData(key, prev.filter(s => s.id !== staffId))
+      if (prev)
+        qc.setQueryData(
+          key,
+          prev.filter(s => s.id !== staffId),
+        )
       return { prev, key }
     },
-    onError: (_err, _staffId, ctx) => {
+    onError: (_err, _staffId, ctx: KeyedMutationCtx<StaffMember[]> | undefined) => {
       if (ctx?.prev) qc.setQueryData(ctx.key, ctx.prev)
     },
     onSettled: () => {
@@ -1113,14 +1215,18 @@ export function useSignOutSession() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (sessionId: string) => api.signOutSession(sessionId),
-    onMutate: async (sessionId) => {
+    onMutate: async sessionId => {
       const key = ['seller-sessions', 'me']
       await qc.cancelQueries({ queryKey: key })
       const prev = qc.getQueryData<ActiveSession[]>(key)
-      if (prev) qc.setQueryData(key, prev.filter(s => s.id !== sessionId))
+      if (prev)
+        qc.setQueryData(
+          key,
+          prev.filter(s => s.id !== sessionId),
+        )
       return { prev, key }
     },
-    onError: (_err, _sessionId, ctx) => {
+    onError: (_err, _sessionId, ctx: KeyedMutationCtx<ActiveSession[]> | undefined) => {
       if (ctx?.prev) qc.setQueryData(ctx.key, ctx.prev)
     },
     onSettled: () => {
@@ -1132,8 +1238,13 @@ export function useSignOutSession() {
 export function useUpdateAccountProfile() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ sellerId, data }: { sellerId: string; data: { name?: string; phone?: string; email?: string } }) =>
-      api.updateAccountProfile(sellerId, data),
+    mutationFn: ({
+      sellerId,
+      data,
+    }: {
+      sellerId: string
+      data: { name?: string; phone?: string; email?: string }
+    }) => api.updateAccountProfile(sellerId, data),
     onSuccess: (_, variables) => {
       qc.invalidateQueries({ queryKey: ['seller-store', variables.sellerId] })
     },
@@ -1150,8 +1261,12 @@ export function useChangePassword() {
 // --- Export Report ---
 
 export function useExportReport() {
-  return useMutation<ExportReportResult, Error, { range: SellerStatsRange; type: ExportReportType }>({
-    mutationFn: (vars) => api.exportReport(vars.range, vars.type),
+  return useMutation<
+    ExportReportResult,
+    Error,
+    { range: SellerStatsRange; type: ExportReportType }
+  >({
+    mutationFn: vars => api.exportReport(vars.range, vars.type),
   })
 }
 
@@ -1170,18 +1285,28 @@ export function useOptIntoCampaign() {
   return useMutation({
     mutationFn: (input: { campaignId: string; productIds: string[]; discountValue: number }) =>
       api.campaignService.optIn(input),
-    onMutate: async (input) => {
+    onMutate: async input => {
       await qc.cancelQueries({ queryKey: ['seller-campaigns'] })
-      const prev = qc.getQueryData<{ id: string; participation?: { status: string } }[]>(['seller-campaigns'])
-      qc.setQueryData(['seller-campaigns'], (old: any) => {
+      const prev = qc.getQueryData<Campaign[]>(['seller-campaigns'])
+      qc.setQueryData<Campaign[]>(['seller-campaigns'], old => {
         if (!old) return old
-        return old.map((c: any) => c.id === input.campaignId
-          ? { ...c, participation: { status: 'applied', productIds: input.productIds, discountValue: input.discountValue, appliedAt: new Date().toISOString() } }
-          : c)
+        return old.map(c =>
+          c.id === input.campaignId
+            ? {
+                ...c,
+                participation: {
+                  status: 'applied',
+                  productIds: input.productIds,
+                  discountValue: input.discountValue,
+                  appliedAt: new Date().toISOString(),
+                },
+              }
+            : c,
+        )
       })
       return { prev }
     },
-    onError: (_err, _input, ctx) => {
+    onError: (_err, _input, ctx: CampaignsMutationCtx | undefined) => {
       if (ctx?.prev) qc.setQueryData(['seller-campaigns'], ctx.prev)
     },
     onSettled: () => {
@@ -1194,18 +1319,28 @@ export function useWithdrawFromCampaign() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (campaignId: string) => api.campaignService.withdraw(campaignId),
-    onMutate: async (campaignId) => {
+    onMutate: async campaignId => {
       await qc.cancelQueries({ queryKey: ['seller-campaigns'] })
-      const prev = qc.getQueryData(['seller-campaigns'])
-      qc.setQueryData(['seller-campaigns'], (old: any) => {
+      const prev = qc.getQueryData<Campaign[]>(['seller-campaigns'])
+      qc.setQueryData<Campaign[]>(['seller-campaigns'], old => {
         if (!old) return old
-        return old.map((c: any) => c.id === campaignId
-          ? { ...c, participation: { status: 'upcoming', productIds: [], discountValue: 0, appliedAt: '' } }
-          : c)
+        return old.map(c =>
+          c.id === campaignId
+            ? {
+                ...c,
+                participation: {
+                  status: 'upcoming',
+                  productIds: [],
+                  discountValue: 0,
+                  appliedAt: '',
+                },
+              }
+            : c,
+        )
       })
       return { prev }
     },
-    onError: (_err, _campaignId, ctx) => {
+    onError: (_err, _campaignId, ctx: CampaignsMutationCtx | undefined) => {
       if (ctx?.prev) qc.setQueryData(['seller-campaigns'], ctx.prev)
     },
     onSettled: () => {
@@ -1224,7 +1359,13 @@ const DASHBOARD_STALE = {
 
 export function useSellerDashboardStats(range: import('@chinooz/mock-data').SellerDateRange) {
   return useQuery<import('@chinooz/mock-data').SellerDashboardMetrics>({
-    queryKey: ['seller-dashboard-stats', range.key, range.days, range.custom?.start, range.custom?.end],
+    queryKey: [
+      'seller-dashboard-stats',
+      range.key,
+      range.days,
+      range.custom?.start,
+      range.custom?.end,
+    ],
     queryFn: () => api.getSellerDashboardStats(range),
     staleTime: DASHBOARD_STALE.stats,
   })

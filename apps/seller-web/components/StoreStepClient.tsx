@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next'
 import { Check, X, Loader, ChevronDown, ImageIcon } from 'lucide-react'
 import { storeSetupSchema } from '@chinooz/validation'
 import { checkHandleAvailability, getCategories } from '@chinooz/mock-data'
-import { useSellerSessionStore } from '@chinooz/state'
+import { useSellerSessionStore, type StoreDraft } from '@chinooz/state'
 import { useReducedMotion } from '@chinooz/ui-web'
 import WizardStepper from './WizardStepper'
 import StorefrontPreview from './StorefrontPreview'
@@ -22,15 +22,23 @@ export default function StoreStepClient() {
   const updateDraft = useSellerSessionStore(s => s.updateDraft)
 
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [handleStatus, setHandleStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle')
+  const [handleStatus, setHandleStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>(
+    'idle',
+  )
   const [categories, setCategories] = useState<Pick<Category, 'id' | 'name' | 'slug'>[]>([])
   const [categoryOpen, setCategoryOpen] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    getCategories().then(cats => {
-      setCategories(cats.filter(c => !c.parentId).map(c => ({ id: c.id, name: c.name, slug: c.slug })))
-    })
+    getCategories()
+      .then(cats => {
+        setCategories(
+          cats.filter(c => !c.parentId).map(c => ({ id: c.id, name: c.name, slug: c.slug })),
+        )
+      })
+      .catch(() => {
+        // Best-effort category list; leave empty on failure.
+      })
   }, [])
 
   const handleSlugCheck = useCallback((slug: string) => {
@@ -46,13 +54,16 @@ export default function StoreStepClient() {
     }, 400)
   }, [])
 
-  const updateField = useCallback((field: string, value: string) => {
-    updateDraft({ [field]: value } as any)
-    setErrors(prev => ({ ...prev, [field]: '' }))
-    if (field === 'handle') {
-      handleSlugCheck(value)
-    }
-  }, [updateDraft, handleSlugCheck])
+  const updateField = useCallback(
+    (field: string, value: string) => {
+      updateDraft({ [field]: value } as Partial<StoreDraft>)
+      setErrors(prev => ({ ...prev, [field]: '' }))
+      if (field === 'handle') {
+        handleSlugCheck(value)
+      }
+    },
+    [updateDraft, handleSlugCheck],
+  )
 
   const handleContinue = useCallback(() => {
     const result = storeSetupSchema.safeParse({
@@ -130,15 +141,21 @@ export default function StoreStepClient() {
 
           <Field label={t('seller.setup.handleLabel')} error={errors.handle}>
             <div className="flex items-center h-12 px-3 rounded-md border-[1.5px] border-border bg-surface">
-              <span className="text-[13px] font-medium text-text-muted mr-2">chinooz.com/store/</span>
+              <span className="text-[13px] font-medium text-text-muted mr-2">
+                chinooz.com/store/
+              </span>
               <input
                 className="flex-1 h-full bg-transparent outline-none text-[15px] text-text placeholder:text-text-tertiary"
                 value={draft.handle}
-                onChange={e => updateField('handle', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                onChange={e =>
+                  updateField('handle', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))
+                }
                 placeholder={t('seller.setup.handlePlaceholder')}
                 aria-label={t('seller.setup.handleLabel')}
               />
-              {handleStatus === 'checking' && <Loader size={16} className="text-text-muted animate-spin" />}
+              {handleStatus === 'checking' && (
+                <Loader size={16} className="text-text-muted animate-spin" />
+              )}
               {handleStatus === 'available' && <Check size={16} className="text-success" />}
               {handleStatus === 'taken' && <X size={16} className="text-error" />}
             </div>
@@ -182,7 +199,9 @@ export default function StoreStepClient() {
 
           <div className="flex gap-4">
             <div className="flex-1 flex flex-col gap-1.5">
-              <label className="text-sm font-semibold text-text">{t('seller.setup.logoLabel')}</label>
+              <label className="text-sm font-semibold text-text">
+                {t('seller.setup.logoLabel')}
+              </label>
               <button
                 className="w-24 h-24 rounded-lg border-[1.5px] border-border bg-surface flex items-center justify-center overflow-hidden"
                 aria-label={t('seller.setup.logoUploadAria')}
@@ -196,7 +215,9 @@ export default function StoreStepClient() {
               <p className="text-xs text-text-muted">{t('seller.setup.logoHelper')}</p>
             </div>
             <div className="flex-1 flex flex-col gap-1.5">
-              <label className="text-sm font-semibold text-text">{t('seller.setup.bannerLabel')}</label>
+              <label className="text-sm font-semibold text-text">
+                {t('seller.setup.bannerLabel')}
+              </label>
               <button
                 className="w-full h-[72px] rounded-lg border-[1.5px] border-border bg-surface flex items-center justify-center overflow-hidden"
                 aria-label={t('seller.setup.bannerUploadAria')}
@@ -263,7 +284,9 @@ export default function StoreStepClient() {
           </Field>
 
           <div className="flex flex-col gap-4">
-            <span className="text-sm font-semibold text-text">{t('seller.setup.addressLabel')}</span>
+            <span className="text-sm font-semibold text-text">
+              {t('seller.setup.addressLabel')}
+            </span>
             <Field label={t('seller.setup.addressStreet')} error={errors.pickupStreet}>
               <input
                 className="w-full h-12 px-3 rounded-md border-[1.5px] border-border bg-surface text-[15px] text-text outline-none focus:border-primary transition-colors placeholder:text-text-tertiary"
@@ -296,7 +319,9 @@ export default function StoreStepClient() {
                 <input
                   className="w-full h-12 px-3 rounded-md border-[1.5px] border-border bg-surface text-[15px] text-text outline-none focus:border-primary transition-colors placeholder:text-text-tertiary"
                   value={draft.pickupPhone}
-                  onChange={e => updateField('pickupPhone', e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  onChange={e =>
+                    updateField('pickupPhone', e.target.value.replace(/\D/g, '').slice(0, 10))
+                  }
                   placeholder="98XXXXXXXX"
                   aria-label={t('seller.setup.addressPhone')}
                 />
@@ -354,7 +379,9 @@ function Field({
       <label className="text-sm font-semibold text-text">{label}</label>
       {children}
       {error && (
-        <p className="text-xs text-error" role="alert">{error}</p>
+        <p className="text-xs text-error" role="alert">
+          {error}
+        </p>
       )}
     </div>
   )
