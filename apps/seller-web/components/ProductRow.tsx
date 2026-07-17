@@ -17,8 +17,11 @@ import {
   Minus,
   Plus,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { SafeImage, useReducedMotion } from '@chinooz/ui-web'
+import { useLocale } from '@chinooz/hooks'
 import { formatNPR } from '@chinooz/utils'
+import { colors } from '@chinooz/theme'
 import type { SellerProduct, SellerProductStatus } from '@chinooz/types'
 
 export const LOW_STOCK_THRESHOLD = 10
@@ -39,10 +42,26 @@ export interface ProductRowProps {
 // ---- Status config (spec colors) ----
 
 const STATUS_CFG: Record<SellerProductStatus, { label: string; color: string; bg: string }> = {
-  active: { label: 'seller.products.statusActive', color: '#16A34A', bg: 'rgba(22,163,74,0.10)' },
-  draft: { label: 'seller.products.statusDraft', color: '#6B7280', bg: 'rgba(107,114,128,0.10)' },
-  out_of_stock: { label: 'seller.products.statusOutOfStock', color: '#DC2626', bg: 'rgba(220,38,38,0.10)' },
-  archived: { label: 'seller.products.statusArchived', color: '#F59E0B', bg: 'rgba(245,158,11,0.10)' },
+  active: {
+    label: 'seller.products.statusActive',
+    color: colors.success,
+    bg: 'rgba(22,163,74,0.10)',
+  },
+  draft: {
+    label: 'seller.products.statusDraft',
+    color: colors.textMuted,
+    bg: 'rgba(107,114,128,0.10)',
+  },
+  out_of_stock: {
+    label: 'seller.products.statusOutOfStock',
+    color: colors.error,
+    bg: 'rgba(220,38,38,0.10)',
+  },
+  archived: {
+    label: 'seller.products.statusArchived',
+    color: colors.warning,
+    bg: 'rgba(245,158,11,0.10)',
+  },
 }
 
 type StockLevel = 'in_stock' | 'low' | 'out'
@@ -53,10 +72,28 @@ function stockLevel(count: number, threshold: number): StockLevel {
   return 'in_stock'
 }
 
-const STOCK_CFG: Record<StockLevel, { label: string; color: string; bg: string; Icon: any }> = {
-  in_stock: { label: 'seller.products.stockInStock', color: '#16A34A', bg: 'rgba(22,163,74,0.10)', Icon: CheckCircle },
-  low: { label: 'seller.products.stockLowStock', color: '#F59E0B', bg: 'rgba(245,158,11,0.10)', Icon: AlertTriangle },
-  out: { label: 'seller.products.stockOutOfStock', color: '#DC2626', bg: 'rgba(220,38,38,0.10)', Icon: XCircle },
+const STOCK_CFG: Record<
+  StockLevel,
+  { label: string; color: string; bg: string; Icon: LucideIcon }
+> = {
+  in_stock: {
+    label: 'seller.products.stockInStock',
+    color: colors.success,
+    bg: 'rgba(22,163,74,0.10)',
+    Icon: CheckCircle,
+  },
+  low: {
+    label: 'seller.products.stockLowStock',
+    color: colors.warning,
+    bg: 'rgba(245,158,11,0.10)',
+    Icon: AlertTriangle,
+  },
+  out: {
+    label: 'seller.products.stockOutOfStock',
+    color: colors.error,
+    bg: 'rgba(220,38,38,0.10)',
+    Icon: XCircle,
+  },
 }
 
 // ---- Component ----
@@ -74,6 +111,7 @@ export function ProductRow({
   threshold = LOW_STOCK_THRESHOLD,
 }: ProductRowProps) {
   const { t } = useTranslation()
+  const locale = useLocale()
   const reduced = useReducedMotion()
   const [menuOpen, setMenuOpen] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -98,7 +136,7 @@ export function ProductRow({
 
   const rowAria = t('seller.products.rowAria', {
     name: product.name,
-    price: formatNPR(product.price),
+    price: formatNPR(product.price, locale),
     stockLabel: t(sCfg.label),
     count: product.stockCount,
     status: t(stCfg.label),
@@ -122,7 +160,9 @@ export function ProductRow({
   }
 
   const isActive = product.status === 'active'
-  const toggleLabel = isActive ? 'seller.products.actionDeactivate' : 'seller.products.actionActivate'
+  const toggleLabel = isActive
+    ? 'seller.products.actionDeactivate'
+    : 'seller.products.actionActivate'
   const ToggleIcon = isActive ? PowerOff : Power
 
   return (
@@ -155,7 +195,9 @@ export function ProductRow({
               className="w-12 h-12 rounded-md object-cover bg-border-light shrink-0"
             />
             <div className="min-w-0">
-              <p className="text-[16px] font-semibold text-text truncate max-w-[260px] leading-tight">{product.name}</p>
+              <p className="text-[16px] font-semibold text-text truncate max-w-[260px] leading-tight">
+                {product.name}
+              </p>
               <p className="text-[12px] font-normal text-text-muted truncate max-w-[260px] font-mono leading-tight mt-0.5">
                 {product.sku}
               </p>
@@ -170,9 +212,13 @@ export function ProductRow({
 
         {/* Price */}
         <td className="py-2 px-4 text-right">
-          <span className="text-[14px] font-semibold text-text tabular-nums">{formatNPR(product.price)}</span>
+          <span className="text-[14px] font-semibold text-text tabular-nums">
+            {formatNPR(product.price, locale)}
+          </span>
           {product.compareAtPrice && (
-            <span className="block text-[12px] text-text-tertiary line-through tabular-nums">{formatNPR(product.compareAtPrice)}</span>
+            <span className="block text-[12px] text-text-tertiary line-through tabular-nums">
+              {formatNPR(product.compareAtPrice, locale)}
+            </span>
           )}
         </td>
 
@@ -187,7 +233,7 @@ export function ProductRow({
           </span>
           <span
             className="ml-1.5 text-[14px] font-semibold tabular-nums"
-            style={{ color: sLevel === 'in_stock' ? '#1F2937' : sCfg.color }}
+            style={{ color: sLevel === 'in_stock' ? colors.text : sCfg.color }}
           >
             {product.stockCount}
           </span>
@@ -205,7 +251,9 @@ export function ProductRow({
 
         {/* Units sold */}
         <td className="py-2 px-4 text-right">
-          <span className="text-[12px] font-normal text-text-muted tabular-nums">{product.salesCount}</span>
+          <span className="text-[12px] font-normal text-text-muted tabular-nums">
+            {product.salesCount}
+          </span>
         </td>
 
         {/* Actions — kebab menu, hover-reveal on web */}
@@ -231,12 +279,58 @@ export function ProductRow({
                   transition={reduced ? { duration: 0 } : { duration: 0.15 }}
                   className="absolute right-0 mt-1 w-48 bg-surface border border-border rounded-md shadow-lg z-dropdown overflow-hidden"
                 >
-                  <MenuItem icon={<Pencil size={15} />} label={t('seller.products.actionEdit')} ariaLabel={t('seller.products.actionEditAria')} onClick={() => { setMenuOpen(false); onEdit?.(product) }} />
-                  <MenuItem icon={<Copy size={15} />} label={t('seller.products.actionDuplicate')} ariaLabel={t('seller.products.actionDuplicateAria')} onClick={() => { setMenuOpen(false); onDuplicate?.(product) }} />
-                  <MenuItem icon={<ToggleIcon size={15} />} label={t(toggleLabel)} ariaLabel={isActive ? t('seller.products.actionDeactivateAria') : t('seller.products.actionActivateAria')} onClick={() => { setMenuOpen(false); onToggleActive?.(product) }} />
-                  <MenuItem icon={<Package size={15} />} label={t('seller.products.actionQuickStock')} ariaLabel={t('seller.products.actionQuickStockAria')} onClick={() => { setMenuOpen(false); setStockValue(String(product.stockCount)); setStockEditOpen(true) }} />
+                  <MenuItem
+                    icon={<Pencil size={15} />}
+                    label={t('seller.products.actionEdit')}
+                    ariaLabel={t('seller.products.actionEditAria')}
+                    onClick={() => {
+                      setMenuOpen(false)
+                      onEdit?.(product)
+                    }}
+                  />
+                  <MenuItem
+                    icon={<Copy size={15} />}
+                    label={t('seller.products.actionDuplicate')}
+                    ariaLabel={t('seller.products.actionDuplicateAria')}
+                    onClick={() => {
+                      setMenuOpen(false)
+                      onDuplicate?.(product)
+                    }}
+                  />
+                  <MenuItem
+                    icon={<ToggleIcon size={15} />}
+                    label={t(toggleLabel)}
+                    ariaLabel={
+                      isActive
+                        ? t('seller.products.actionDeactivateAria')
+                        : t('seller.products.actionActivateAria')
+                    }
+                    onClick={() => {
+                      setMenuOpen(false)
+                      onToggleActive?.(product)
+                    }}
+                  />
+                  <MenuItem
+                    icon={<Package size={15} />}
+                    label={t('seller.products.actionQuickStock')}
+                    ariaLabel={t('seller.products.actionQuickStockAria')}
+                    onClick={() => {
+                      setMenuOpen(false)
+                      setStockValue(String(product.stockCount))
+                      setStockEditOpen(true)
+                    }}
+                  />
                   <div className="border-t border-border-light my-1" />
-                  <MenuItem icon={<Trash2 size={15} />} label={t('seller.products.actionDelete')} ariaLabel={t('seller.products.actionDeleteAria')} danger onClick={() => { setMenuOpen(false); setConfirmOpen(true) }} />
+                  <MenuItem
+                    icon={<Trash2 size={15} />}
+                    label={t('seller.products.actionDelete')}
+                    ariaLabel={t('seller.products.actionDeleteAria')}
+                    danger
+                    onClick={() => {
+                      setMenuOpen(false)
+                      setConfirmOpen(true)
+                    }}
+                  />
                 </motion.div>
               )}
             </AnimatePresence>
@@ -254,7 +348,10 @@ export function ProductRow({
             cancelLabel={t('seller.products.actionCancel')}
             danger
             reduced={reduced}
-            onConfirm={() => { setConfirmOpen(false); onDelete?.(product) }}
+            onConfirm={() => {
+              setConfirmOpen(false)
+              onDelete?.(product)
+            }}
             onCancel={() => setConfirmOpen(false)}
           />
         )}
@@ -286,7 +383,11 @@ export function ProductRow({
 export function ProductRowSkeleton({ selectable = false }: { selectable?: boolean }) {
   return (
     <tr aria-busy="true" className="h-16 border-b border-border last:border-b-0">
-      {selectable && <td className="py-2 px-4 w-10"><div className="w-4 h-4 rounded bg-shimmer animate-pulse" /></td>}
+      {selectable && (
+        <td className="py-2 px-4 w-10">
+          <div className="w-4 h-4 rounded bg-shimmer animate-pulse" />
+        </td>
+      )}
       <td className="py-2 px-4">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-md bg-shimmer animate-pulse shrink-0" />
@@ -296,12 +397,24 @@ export function ProductRowSkeleton({ selectable = false }: { selectable?: boolea
           </div>
         </div>
       </td>
-      <td className="py-2 px-4"><div className="h-3 w-20 rounded bg-shimmer animate-pulse" /></td>
-      <td className="py-2 px-4"><div className="h-3 w-16 rounded bg-shimmer animate-pulse ml-auto" /></td>
-      <td className="py-2 px-4"><div className="h-5 w-20 rounded-full bg-shimmer animate-pulse" /></td>
-      <td className="py-2 px-4"><div className="h-5 w-16 rounded-full bg-shimmer animate-pulse" /></td>
-      <td className="py-2 px-4"><div className="h-3 w-10 rounded bg-shimmer animate-pulse ml-auto" /></td>
-      <td className="py-2 px-4"><div className="w-8 h-8 rounded-md bg-shimmer animate-pulse ml-auto" /></td>
+      <td className="py-2 px-4">
+        <div className="h-3 w-20 rounded bg-shimmer animate-pulse" />
+      </td>
+      <td className="py-2 px-4">
+        <div className="h-3 w-16 rounded bg-shimmer animate-pulse ml-auto" />
+      </td>
+      <td className="py-2 px-4">
+        <div className="h-5 w-20 rounded-full bg-shimmer animate-pulse" />
+      </td>
+      <td className="py-2 px-4">
+        <div className="h-5 w-16 rounded-full bg-shimmer animate-pulse" />
+      </td>
+      <td className="py-2 px-4">
+        <div className="h-3 w-10 rounded bg-shimmer animate-pulse ml-auto" />
+      </td>
+      <td className="py-2 px-4">
+        <div className="w-8 h-8 rounded-md bg-shimmer animate-pulse ml-auto" />
+      </td>
     </tr>
   )
 }
@@ -331,7 +444,9 @@ function MenuItem({
         danger ? 'text-error hover:bg-error/5' : 'text-text'
       }`}
     >
-      <span className={danger ? 'text-error' : 'text-text-muted'} aria-hidden="true">{icon}</span>
+      <span className={danger ? 'text-error' : 'text-text-muted'} aria-hidden="true">
+        {icon}
+      </span>
       {label}
     </button>
   )
@@ -357,7 +472,12 @@ function ConfirmDialog({
   onCancel: () => void
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="alertdialog" aria-modal="true" aria-label={title}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      role="alertdialog"
+      aria-modal="true"
+      aria-label={title}
+    >
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -421,7 +541,12 @@ function StockEditDialog({
 }) {
   const n = Math.max(0, Math.floor(Number(value) || 0))
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={title}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+    >
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}

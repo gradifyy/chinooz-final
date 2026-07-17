@@ -18,22 +18,73 @@ import {
   CheckCircle,
   WifiOff,
 } from 'lucide-react'
-import { Container, Screen, SafeImage, Spinner, EmptyState, InventoryRow, BulkBar, BulkConfirmModal, CsvImportModal, StockHistorySheet, LowStockAlerts, InventorySkeleton, BulkResultModal } from '@chinooz/ui-web'
+import {
+  Container,
+  Screen,
+  SafeImage,
+  Spinner,
+  EmptyState,
+  InventoryRow,
+  BulkBar,
+  BulkConfirmModal,
+  CsvImportModal,
+  StockHistorySheet,
+  LowStockAlerts,
+  InventorySkeleton,
+  BulkResultModal,
+} from '@chinooz/ui-web'
 import { useReducedMotion } from '@chinooz/ui-web'
-import { useSellerInventory, useSellerCategories, useUpdateStock, useBulkUpdateStock, useExportStockCsv, useImportStockCsv, useStockHistory, useLowStockAlerts, useUpdateThreshold, useSetRestockReminder } from '@chinooz/hooks'
+import {
+  useSellerInventory,
+  useSellerCategories,
+  useUpdateStock,
+  useBulkUpdateStock,
+  useExportStockCsv,
+  useImportStockCsv,
+  useStockHistory,
+  useLowStockAlerts,
+  useUpdateThreshold,
+  useSetRestockReminder,
+  useLocale,
+} from '@chinooz/hooks'
 import { useSellerSessionStore } from '@chinooz/state'
 import { analytics } from '@chinooz/analytics'
 import { formatNPR } from '@chinooz/utils'
 import { easing } from '@chinooz/theme'
-import type { SellerInventoryProduct, SellerInventoryVariant, StockStatus, BulkStockAction, StockEditReason, CsvStockRow } from '@chinooz/types'
+import type {
+  SellerInventoryProduct,
+  SellerInventoryVariant,
+  StockStatus,
+  BulkStockAction,
+  StockEditReason,
+  CsvStockRow,
+} from '@chinooz/types'
 import { LOW_STOCK_THRESHOLD, type InventorySort } from '@chinooz/mock-data'
 
 type TabKey = 'all' | 'in_stock' | 'low_stock' | 'out_of_stock'
 
-const STATUS_STYLES: Record<StockStatus, { dot: string; text: string; bg: string; labelKey: string }> = {
-  in_stock: { dot: 'bg-success', text: 'text-success', bg: 'bg-success-light', labelKey: 'seller.inventory.inStock' },
-  low_stock: { dot: 'bg-warning', text: 'text-warning', bg: 'bg-warning-light', labelKey: 'seller.inventory.lowStock' },
-  out_of_stock: { dot: 'bg-error', text: 'text-error', bg: 'bg-error-light', labelKey: 'seller.inventory.outOfStock' },
+const STATUS_STYLES: Record<
+  StockStatus,
+  { dot: string; text: string; bg: string; labelKey: string }
+> = {
+  in_stock: {
+    dot: 'bg-success',
+    text: 'text-success',
+    bg: 'bg-success-light',
+    labelKey: 'seller.inventory.inStock',
+  },
+  low_stock: {
+    dot: 'bg-warning',
+    text: 'text-warning',
+    bg: 'bg-warning-light',
+    labelKey: 'seller.inventory.lowStock',
+  },
+  out_of_stock: {
+    dot: 'bg-error',
+    text: 'text-error',
+    bg: 'bg-error-light',
+    labelKey: 'seller.inventory.outOfStock',
+  },
 }
 
 const SORT_OPTIONS: { key: InventorySort; labelKey: string }[] = [
@@ -90,7 +141,11 @@ function SegmentControl({
   const { t } = useTranslation()
   const reduced = useReducedMotion()
   return (
-    <div className="flex overflow-x-auto scrollbar-none md:overflow-visible" role="tablist" aria-label="Stock status">
+    <div
+      className="flex overflow-x-auto scrollbar-none md:overflow-visible"
+      role="tablist"
+      aria-label="Stock status"
+    >
       <div className="relative flex bg-surface rounded-full h-10 p-1 min-w-max md:min-w-0">
         {TABS.map(tab => {
           const isActive = tab.key === active
@@ -110,7 +165,11 @@ function SegmentControl({
                 <motion.div
                   layoutId="inv-segment-indicator"
                   className="absolute inset-0 bg-primary rounded-full"
-                  transition={reduced ? { duration: 0 } : { type: 'spring', damping: 22, stiffness: 320, mass: 0.7 }}
+                  transition={
+                    reduced
+                      ? { duration: 0 }
+                      : { type: 'spring', damping: 22, stiffness: 320, mass: 0.7 }
+                  }
                 />
               )}
               <span className="relative z-10">{t(tab.labelKey)}</span>
@@ -173,7 +232,10 @@ function SortDropdown({
         <ArrowUpDown size={15} className="text-text-muted" />
         <span className="hidden sm:inline">{t(current.labelKey)}</span>
         <span className="sm:hidden">{t('seller.inventory.sort')}</span>
-        <ChevronDown size={15} className={`text-text-muted transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown
+          size={15}
+          className={`text-text-muted transition-transform ${open ? 'rotate-180' : ''}`}
+        />
       </button>
       <AnimatePresence>
         {open && (
@@ -195,7 +257,9 @@ function SortDropdown({
                   }}
                   className={[
                     'w-full text-left px-4 py-2.5 text-sm transition-colors',
-                    opt.key === value ? 'text-primary font-semibold bg-primary-50' : 'text-text hover:bg-background',
+                    opt.key === value
+                      ? 'text-primary font-semibold bg-primary-50'
+                      : 'text-text hover:bg-background',
                   ].join(' ')}
                 >
                   {t(opt.labelKey)}
@@ -249,13 +313,17 @@ function FilterBar({
         >
           <option value="">{t('seller.inventory.categoryAll')}</option>
           {categories.map(c => (
-            <option key={c.id} value={c.id}>{c.name}</option>
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
           ))}
         </select>
       </div>
 
       <div className="flex items-center gap-1.5">
-        <span className="text-xs font-medium text-text-muted">{t('seller.inventory.stockRange')}</span>
+        <span className="text-xs font-medium text-text-muted">
+          {t('seller.inventory.stockRange')}
+        </span>
         <input
           inputMode="numeric"
           aria-label={t('seller.inventory.stockMin')}
@@ -307,11 +375,20 @@ function ActiveChips({
 }) {
   const { t } = useTranslation()
   const chips: { key: string; label: string; onRemove: () => void }[] = []
-  if (category) chips.push({ key: 'cat', label: categoryName ?? category, onRemove: onClearCategory })
-  const stockLabel = [stockMin != null ? `${stockMin}` : null, stockMax != null ? `${stockMax}` : null]
+  if (category)
+    chips.push({ key: 'cat', label: categoryName ?? category, onRemove: onClearCategory })
+  const stockLabel = [
+    stockMin != null ? `${stockMin}` : null,
+    stockMax != null ? `${stockMax}` : null,
+  ]
     .filter(Boolean)
     .join('–')
-  if (stockLabel) chips.push({ key: 'stock', label: `${t('seller.inventory.stockRange')}: ${stockLabel}`, onRemove: onClearStock })
+  if (stockLabel)
+    chips.push({
+      key: 'stock',
+      label: `${t('seller.inventory.stockRange')}: ${stockLabel}`,
+      onRemove: onClearStock,
+    })
   if (chips.length === 0) return null
   return (
     <div className="flex flex-wrap gap-2">
@@ -321,7 +398,12 @@ function ActiveChips({
           className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-white"
         >
           {c.label}
-          <button type="button" onClick={c.onRemove} aria-label="Remove" className="inline-flex items-center">
+          <button
+            type="button"
+            onClick={c.onRemove}
+            aria-label="Remove"
+            className="inline-flex items-center"
+          >
             <X size={13} />
           </button>
         </span>
@@ -342,7 +424,10 @@ function ProductGroupRow({
   const { t } = useTranslation()
   const reduced = useReducedMotion()
   return (
-    <div role="row" className="bg-background hover:bg-surface transition-colors border-b border-border-light">
+    <div
+      role="row"
+      className="bg-background hover:bg-surface transition-colors border-b border-border-light"
+    >
       <button
         type="button"
         onClick={onToggle}
@@ -385,9 +470,20 @@ function ProductGroupRow({
 
 const VARIANT_GRID = 'grid grid-cols-[1.4fr_1fr_120px_110px_70px_130px] items-center'
 
-const VariantRow = memo(function VariantRow({ v, onStockChange, editState, selected, onToggleSelect, onShowHistory }: {
+const VariantRow = memo(function VariantRow({
+  v,
+  onStockChange,
+  editState,
+  selected,
+  onToggleSelect,
+  onShowHistory,
+}: {
   v: SellerInventoryVariant
-  onStockChange: (newStock: number, mode: 'set' | 'adjust', reason?: 'restock' | 'correction' | 'damage' | 'loss' | 'return' | 'other') => void
+  onStockChange: (
+    newStock: number,
+    mode: 'set' | 'adjust',
+    reason?: 'restock' | 'correction' | 'damage' | 'loss' | 'return' | 'other',
+  ) => void
   editState: 'idle' | 'saving' | 'saved' | 'error'
   selected?: boolean
   onToggleSelect?: (id: string) => void
@@ -435,6 +531,7 @@ function ProductGroupCard({
   onToggleSelect: (id: string) => void
 }) {
   const { t } = useTranslation()
+  const locale = useLocale()
   const reduced = useReducedMotion()
   return (
     <div className="rounded-xl border border-border-light bg-surface overflow-hidden">
@@ -461,7 +558,9 @@ function ProductGroupCard({
           </p>
         </div>
         <div className="flex flex-col items-end gap-0.5">
-          <span className="text-sm font-bold text-text tabular-nums" style={TABNUM}>{product.aggregateStock}</span>
+          <span className="text-sm font-bold text-text tabular-nums" style={TABNUM}>
+            {product.aggregateStock}
+          </span>
           <StatusPill status={product.stock} />
         </div>
         <motion.span
@@ -493,18 +592,28 @@ function ProductGroupCard({
                     onClick={() => onToggleSelect(v.id)}
                     className={[
                       'w-5 h-5 rounded-md border flex items-center justify-center transition-colors flex-shrink-0',
-                      selected.has(v.id) ? 'bg-primary border-primary' : 'bg-surface border-border hover:border-primary',
+                      selected.has(v.id)
+                        ? 'bg-primary border-primary'
+                        : 'bg-surface border-border hover:border-primary',
                     ].join(' ')}
                   >
-                    {selected.has(v.id) && <Check size={14} className="text-white" strokeWidth={3} />}
+                    {selected.has(v.id) && (
+                      <Check size={14} className="text-white" strokeWidth={3} />
+                    )}
                   </button>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-text truncate">{v.name}</p>
-                    <p className="text-xs text-text-muted tabular-nums" style={TABNUM}>{v.sku}</p>
+                    <p className="text-xs text-text-muted tabular-nums" style={TABNUM}>
+                      {v.sku}
+                    </p>
                   </div>
-                  <span className="text-sm font-semibold text-text tabular-nums" style={TABNUM}>{formatNPR(v.price)}</span>
+                  <span className="text-sm font-semibold text-text tabular-nums" style={TABNUM}>
+                    {formatNPR(v.price, locale)}
+                  </span>
                   <div className="flex flex-col items-end gap-1 w-20">
-                    <span className="text-sm font-bold text-text tabular-nums" style={TABNUM}>{v.stockCount}</span>
+                    <span className="text-sm font-bold text-text tabular-nums" style={TABNUM}>
+                      {v.stockCount}
+                    </span>
                     <StatusPill status={v.stock} />
                   </div>
                 </div>
@@ -533,13 +642,21 @@ export default function InventoryScreen() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkAction, setBulkAction] = useState<BulkStockAction | null>(null)
   const [csvOpen, setCsvOpen] = useState(false)
-  const [snackbar, setSnackbar] = useState<{ msg: string; variant: 'success' | 'error' } | null>(null)
+  const [snackbar, setSnackbar] = useState<{ msg: string; variant: 'success' | 'error' } | null>(
+    null,
+  )
   const snackbarTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const [historyVariant, setHistoryVariant] = useState<SellerInventoryVariant | null>(null)
   const [showAlerts, setShowAlerts] = useState(false)
-  const [bulkResult, setBulkResult] = useState<{ failedRows: { sku: string; productName: string; error?: string }[]; total: number; updated: number } | null>(null)
+  const [bulkResult, setBulkResult] = useState<{
+    failedRows: { sku: string; productName: string; error?: string }[]
+    total: number
+    updated: number
+  } | null>(null)
 
-  useEffect(() => { analytics.screen({ name: 'seller-inventory' }) }, [])
+  useEffect(() => {
+    analytics.screen({ name: 'seller-inventory' })
+  }, [])
 
   const catsQ = useSellerCategories()
   const inventoryFilter = {
@@ -560,8 +677,20 @@ export default function InventoryScreen() {
   const thresholdMutation = useUpdateThreshold()
   const reminderMutation = useSetRestockReminder()
 
-  const handleStockChange = (variantId: string, productId: string, newStock: number, mode: 'set' | 'adjust', reason?: 'restock' | 'correction' | 'damage' | 'loss' | 'return' | 'other') => {
-    stockMutation.mutate({ productId, variantId, newCount: newStock, mode, reason: reason ?? 'restock' })
+  const handleStockChange = (
+    variantId: string,
+    productId: string,
+    newStock: number,
+    mode: 'set' | 'adjust',
+    reason?: 'restock' | 'correction' | 'damage' | 'loss' | 'return' | 'other',
+  ) => {
+    stockMutation.mutate({
+      productId,
+      variantId,
+      newCount: newStock,
+      mode,
+      reason: reason ?? 'restock',
+    })
   }
 
   const variantEditState = (variantId: string): 'idle' | 'saving' | 'saved' | 'error' => {
@@ -578,18 +707,29 @@ export default function InventoryScreen() {
   }
 
   const allVisibleVariants = useMemo(() => {
-    return (invQ.data?.products ?? []).flatMap(p => p.variants.map(v => ({ id: v.id, productId: p.id })))
+    return (invQ.data?.products ?? []).flatMap(p =>
+      p.variants.map(v => ({ id: v.id, productId: p.id })),
+    )
   }, [invQ.data])
 
-  const allSelected = allVisibleVariants.length > 0 && allVisibleVariants.every(v => selected.has(v.id))
+  const allSelected =
+    allVisibleVariants.length > 0 && allVisibleVariants.every(v => selected.has(v.id))
   const someSelected = selected.size > 0 && !allSelected
 
   const toggleSelect = (id: string) => {
-    setSelected(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
+    setSelected(prev => {
+      const n = new Set(prev)
+      if (n.has(id)) n.delete(id)
+      else n.add(id)
+      return n
+    })
   }
   const toggleSelectAll = () => {
-    if (allSelected) { setSelected(new Set()) }
-    else { setSelected(new Set(allVisibleVariants.map(v => v.id))) }
+    if (allSelected) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set(allVisibleVariants.map(v => v.id)))
+    }
   }
   const clearSelection = () => setSelected(new Set())
 
@@ -599,14 +739,22 @@ export default function InventoryScreen() {
     bulkMutation.mutate(
       { variantIds: selectedIds, action: bulkAction, value, reason },
       {
-        onSuccess: (data) => {
+        onSuccess: data => {
           if (data.failed > 0) {
             const failedProducts = (invQ.data?.products ?? [])
               .flatMap(p => p.variants.map(v => ({ variant: v, productName: p.name })))
               .filter(({ variant }) => selectedIds.includes(variant.id))
               .slice(0, data.failed)
-              .map(({ variant, productName }) => ({ sku: variant.sku, productName, error: 'Update failed' }))
-            setBulkResult({ failedRows: failedProducts, total: data.updated + data.failed, updated: data.updated })
+              .map(({ variant, productName }) => ({
+                sku: variant.sku,
+                productName,
+                error: 'Update failed',
+              }))
+            setBulkResult({
+              failedRows: failedProducts,
+              total: data.updated + data.failed,
+              updated: data.updated,
+            })
           } else {
             showSnackbar(t('seller.inventory.bulkResult', { count: data.updated }), 'success')
           }
@@ -627,7 +775,7 @@ export default function InventoryScreen() {
 
   const handleImport = (rows: CsvStockRow[]) => {
     importMutation.mutate(rows, {
-      onSuccess: (data) => {
+      onSuccess: data => {
         showSnackbar(t('seller.inventory.bulkResult', { count: data.updated }), 'success')
         setCsvOpen(false)
       },
@@ -685,7 +833,10 @@ export default function InventoryScreen() {
           <div className="sticky top-0 z-20 -mx-4 px-4 md:-mx-6 md:px-6 py-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border-light">
             <div className="flex items-center gap-2 mb-3">
               <div className="relative flex-1">
-                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+                <Search
+                  size={18}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
+                />
                 <input
                   type="text"
                   inputMode="search"
@@ -721,7 +872,10 @@ export default function InventoryScreen() {
                 onCategory={setCategory}
                 stockMin={stockMin}
                 stockMax={stockMax}
-                onStock={(mn, mx) => { setStockMin(mn); setStockMax(mx) }}
+                onStock={(mn, mx) => {
+                  setStockMin(mn)
+                  setStockMax(mx)
+                }}
                 onReset={resetFilters}
               />
             </div>
@@ -734,7 +888,10 @@ export default function InventoryScreen() {
                 onCategory={setCategory}
                 stockMin={stockMin}
                 stockMax={stockMax}
-                onStock={(mn, mx) => { setStockMin(mn); setStockMax(mx) }}
+                onStock={(mn, mx) => {
+                  setStockMin(mn)
+                  setStockMax(mx)
+                }}
                 onReset={resetFilters}
               />
             </div>
@@ -747,7 +904,10 @@ export default function InventoryScreen() {
                   stockMin={stockMin}
                   stockMax={stockMax}
                   onClearCategory={() => setCategory(null)}
-                  onClearStock={() => { setStockMin(null); setStockMax(null) }}
+                  onClearStock={() => {
+                    setStockMin(null)
+                    setStockMax(null)
+                  }}
                 />
               </div>
             )}
@@ -760,9 +920,7 @@ export default function InventoryScreen() {
               <OfflineBannerWeb />
             </div>
 
-            {isLoading && (
-              <InventorySkeleton />
-            )}
+            {isLoading && <InventorySkeleton />}
 
             {isError && !isLoading && (
               <EmptyState
@@ -775,11 +933,15 @@ export default function InventoryScreen() {
 
             {!isLoading && !isError && products.length === 0 && (
               <EmptyState
-                icon={tab === 'out_of_stock'
-                  ? <CheckCircle size={32} className="text-success" />
-                  : tab === 'low_stock'
-                    ? <CheckCircle size={32} className="text-success" />
-                    : <PackageSearch size={32} className="text-text-muted" />}
+                icon={
+                  tab === 'out_of_stock' ? (
+                    <CheckCircle size={32} className="text-success" />
+                  ) : tab === 'low_stock' ? (
+                    <CheckCircle size={32} className="text-success" />
+                  ) : (
+                    <PackageSearch size={32} className="text-text-muted" />
+                  )
+                }
                 title={
                   query
                     ? t('seller.inventory.emptySearch', { query })
@@ -800,7 +962,11 @@ export default function InventoryScreen() {
                         ? t('seller.inventory.emptyNoProductsSub')
                         : undefined
                 }
-                action={tab === 'all' && !query ? { label: t('seller.inventory.addProduct'), onPress: () => {} } : undefined}
+                action={
+                  tab === 'all' && !query
+                    ? { label: t('seller.inventory.addProduct'), onPress: () => {} }
+                    : undefined
+                }
               />
             )}
 
@@ -820,20 +986,31 @@ export default function InventoryScreen() {
                         key={alertsQ.data.total}
                         initial={reduced ? false : { scale: 1 }}
                         animate={reduced ? {} : { scale: [1, 1.3, 1] }}
-                        transition={reduced ? { duration: 0 } : { duration: 0.3, type: 'spring', damping: 12, stiffness: 300 }}
+                        transition={
+                          reduced
+                            ? { duration: 0 }
+                            : { duration: 0.3, type: 'spring', damping: 12, stiffness: 300 }
+                        }
                         className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-error-light text-error text-xs font-semibold"
                         style={{ fontVariant: 'tabular-nums' }}
                       >
                         {alertsQ.data.total}
                       </motion.span>
-                      <ChevronDown size={14} className={'transition-transform ' + (showAlerts ? 'rotate-180' : '')} />
+                      <ChevronDown
+                        size={14}
+                        className={'transition-transform ' + (showAlerts ? 'rotate-180' : '')}
+                      />
                     </button>
                     {showAlerts && (
                       <div className="mt-2">
                         <LowStockAlerts
                           summary={alertsQ.data}
                           onJumpToVariant={(variantId, productId) => {
-                            setExpanded(prev => { const n = new Set(prev); n.add(productId); return n })
+                            setExpanded(prev => {
+                              const n = new Set(prev)
+                              n.add(productId)
+                              return n
+                            })
                             setShowAlerts(false)
                           }}
                         />
@@ -846,7 +1023,7 @@ export default function InventoryScreen() {
                 <div className="mb-3">
                   <BulkBar
                     selectedCount={selected.size}
-                    onAction={(a) => setBulkAction(a)}
+                    onAction={a => setBulkAction(a)}
                     onClear={clearSelection}
                     onExport={handleExport}
                     onImport={() => setCsvOpen(true)}
@@ -861,7 +1038,10 @@ export default function InventoryScreen() {
                   style={{ contain: 'content' }}
                 >
                   {/* Sticky header */}
-                  <div role="rowgroup" className="sticky top-[112px] z-10 bg-surface border-b border-border">
+                  <div
+                    role="rowgroup"
+                    className="sticky top-[112px] z-10 bg-surface border-b border-border"
+                  >
                     <div role="row" className={`${VARIANT_GRID} px-4 h-10`}>
                       <span role="columnheader" className="flex items-center gap-2">
                         <button
@@ -872,19 +1052,38 @@ export default function InventoryScreen() {
                           onClick={toggleSelectAll}
                           className={[
                             'w-5 h-5 rounded-md border flex items-center justify-center transition-colors flex-shrink-0',
-                            allSelected ? 'bg-primary border-primary' : someSelected ? 'bg-primary-50 border-primary' : 'bg-surface border-border hover:border-primary',
+                            allSelected
+                              ? 'bg-primary border-primary'
+                              : someSelected
+                                ? 'bg-primary-50 border-primary'
+                                : 'bg-surface border-border hover:border-primary',
                           ].join(' ')}
                         >
-                          {allSelected && <Check size={14} className="text-white" strokeWidth={3} />}
+                          {allSelected && (
+                            <Check size={14} className="text-white" strokeWidth={3} />
+                          )}
                           {someSelected && <Minus size={12} className="text-primary" />}
                         </button>
                         {t('seller.inventory.colProduct')}
                       </span>
-                      <span role="columnheader" className="text-xs font-semibold text-text-muted">{t('seller.inventory.colVariant')}</span>
-                      <span role="columnheader" className="text-xs font-semibold text-text-muted">{t('seller.inventory.colSku')}</span>
-                      <span role="columnheader" className="text-xs font-semibold text-text-muted">{t('seller.inventory.colPrice')}</span>
-                      <span role="columnheader" className="text-xs font-semibold text-text-muted">{t('seller.inventory.colStock')}</span>
-                      <span role="columnheader" className="text-xs font-semibold text-text-muted text-right">{t('seller.inventory.colStatus')}</span>
+                      <span role="columnheader" className="text-xs font-semibold text-text-muted">
+                        {t('seller.inventory.colVariant')}
+                      </span>
+                      <span role="columnheader" className="text-xs font-semibold text-text-muted">
+                        {t('seller.inventory.colSku')}
+                      </span>
+                      <span role="columnheader" className="text-xs font-semibold text-text-muted">
+                        {t('seller.inventory.colPrice')}
+                      </span>
+                      <span role="columnheader" className="text-xs font-semibold text-text-muted">
+                        {t('seller.inventory.colStock')}
+                      </span>
+                      <span
+                        role="columnheader"
+                        className="text-xs font-semibold text-text-muted text-right"
+                      >
+                        {t('seller.inventory.colStatus')}
+                      </span>
                     </div>
                   </div>
                   <div role="rowgroup">
@@ -892,7 +1091,11 @@ export default function InventoryScreen() {
                       const isExpanded = expanded.has(p.id)
                       return (
                         <div key={p.id} role="rowgroup">
-                          <ProductGroupRow product={p} expanded={isExpanded} onToggle={() => toggleGroup(p.id)} />
+                          <ProductGroupRow
+                            product={p}
+                            expanded={isExpanded}
+                            onToggle={() => toggleGroup(p.id)}
+                          />
                           <AnimatePresence initial={false}>
                             {isExpanded && (
                               <motion.div
@@ -900,15 +1103,23 @@ export default function InventoryScreen() {
                                 role="rowgroup"
                                 initial={reduced ? false : { height: 0, opacity: 0 }}
                                 animate={{ height: 'auto', opacity: 1 }}
-                                exit={reduced ? { height: 0, opacity: 0 } : { height: 0, opacity: 0 }}
-                                transition={reduced ? { duration: 0 } : { duration: 0.2, ease: easing.easeOut }}
+                                exit={
+                                  reduced ? { height: 0, opacity: 0 } : { height: 0, opacity: 0 }
+                                }
+                                transition={
+                                  reduced
+                                    ? { duration: 0 }
+                                    : { duration: 0.2, ease: easing.easeOut }
+                                }
                                 className="overflow-hidden"
                               >
                                 {p.variants.map(v => (
                                   <VariantRow
                                     key={v.id}
                                     v={v}
-                                    onStockChange={(ns, m, r) => handleStockChange(v.id, p.id, ns, m, r)}
+                                    onStockChange={(ns, m, r) =>
+                                      handleStockChange(v.id, p.id, ns, m, r)
+                                    }
                                     editState={variantEditState(v.id)}
                                     selected={selected.has(v.id)}
                                     onToggleSelect={toggleSelect}
@@ -984,10 +1195,10 @@ export default function InventoryScreen() {
           variant={historyVariant}
           history={historyQ.data ?? []}
           restockReminder={historyVariant?.restockReminder}
-          onToggleReminder={(enabled) => {
+          onToggleReminder={enabled => {
             if (historyVariant) {
               reminderMutation.mutate({ variantId: historyVariant.id, enabled })
-              setHistoryVariant(v => v ? { ...v, restockReminder: enabled } : v)
+              setHistoryVariant(v => (v ? { ...v, restockReminder: enabled } : v))
             }
           }}
           onClose={() => setHistoryVariant(null)}
@@ -1003,7 +1214,9 @@ export default function InventoryScreen() {
               initial={reduced ? { opacity: 1 } : { y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={reduced ? { opacity: 0 } : { y: 20, opacity: 0 }}
-              transition={reduced ? { duration: 0 } : { type: 'spring', damping: 25, stiffness: 300 }}
+              transition={
+                reduced ? { duration: 0 } : { type: 'spring', damping: 25, stiffness: 300 }
+              }
               className={[
                 'fixed bottom-4 left-4 right-4 md:left-1/2 md:right-auto md:-translate-x-1/2 z-50',
                 'rounded-xl px-4 py-3 shadow-lg max-w-sm',
@@ -1027,15 +1240,21 @@ function OfflineBannerWeb() {
     update()
     window.addEventListener('online', update)
     window.addEventListener('offline', update)
-    return () => { window.removeEventListener('online', update); window.removeEventListener('offline', update) }
+    return () => {
+      window.removeEventListener('online', update)
+      window.removeEventListener('offline', update)
+    }
   }, [])
   if (!isOffline) return null
   return (
-    <div role="status" className="flex items-center gap-2 rounded-lg bg-warning-light border border-warning px-3 py-2">
+    <div
+      role="status"
+      className="flex items-center gap-2 rounded-lg bg-warning-light border border-warning px-3 py-2"
+    >
       <WifiOff size={16} className="text-warning" />
       <div>
-        <p className="text-sm font-semibold text-[#92400E]">{t('seller.inventory.offline')}</p>
-        <p className="text-xs text-[#92400E]/70">{t('seller.inventory.offlineSub')}</p>
+        <p className="text-sm font-semibold text-warning-text">{t('seller.inventory.offline')}</p>
+        <p className="text-xs text-warning-text/70">{t('seller.inventory.offlineSub')}</p>
       </div>
     </div>
   )
@@ -1082,7 +1301,10 @@ function MobileFilterSheet({
         <SlidersHorizontal size={16} className="text-text-muted" />
         {t('seller.inventory.filter')}
         {activeCount > 0 && (
-          <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-white text-xs font-semibold tabular-nums" style={TABNUM}>
+          <span
+            className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-white text-xs font-semibold tabular-nums"
+            style={TABNUM}
+          >
             {activeCount}
           </span>
         )}
@@ -1102,7 +1324,9 @@ function MobileFilterSheet({
               aria-label="Close"
               tabIndex={0}
               onClick={() => setOpen(false)}
-              onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }}
+              onKeyDown={e => {
+                if (e.key === 'Escape') setOpen(false)
+              }}
             />
             <motion.div
               className="absolute bottom-0 inset-x-0 bg-surface rounded-t-2xl p-5 pb-8 max-h-[85vh] overflow-y-auto"
@@ -1116,10 +1340,18 @@ function MobileFilterSheet({
             >
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-bold text-text">{t('seller.inventory.filterTitle')}</h2>
-                <button onClick={() => setOpen(false)} aria-label="Close" className="text-text-muted"><X size={20} /></button>
+                <button
+                  onClick={() => setOpen(false)}
+                  aria-label="Close"
+                  className="text-text-muted"
+                >
+                  <X size={20} />
+                </button>
               </div>
 
-              <p className="text-xs font-semibold text-text-muted mb-2">{t('seller.inventory.category')}</p>
+              <p className="text-xs font-semibold text-text-muted mb-2">
+                {t('seller.inventory.category')}
+              </p>
               <select
                 aria-label={t('seller.inventory.category')}
                 value={category ?? ''}
@@ -1127,10 +1359,16 @@ function MobileFilterSheet({
                 className="w-full h-11 rounded-xl border border-border bg-background px-3 text-sm text-text focus:border-primary focus:outline-none mb-4"
               >
                 <option value="">{t('seller.inventory.categoryAll')}</option>
-                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {categories.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
               </select>
 
-              <p className="text-xs font-semibold text-text-muted mb-2">{t('seller.inventory.stockRange')}</p>
+              <p className="text-xs font-semibold text-text-muted mb-2">
+                {t('seller.inventory.stockRange')}
+              </p>
               <div className="flex items-center gap-2 mb-6">
                 <input
                   inputMode="numeric"
@@ -1163,7 +1401,10 @@ function MobileFilterSheet({
                 </button>
                 <button
                   type="button"
-                  onClick={() => { onStock(min ? Number(min) : null, max ? Number(max) : null); setOpen(false) }}
+                  onClick={() => {
+                    onStock(min ? Number(min) : null, max ? Number(max) : null)
+                    setOpen(false)
+                  }}
                   className="flex-1 h-11 rounded-xl bg-primary text-sm font-semibold text-white"
                 >
                   {t('seller.inventory.apply')}

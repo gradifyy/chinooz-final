@@ -22,6 +22,7 @@ import {
   useDuplicateProduct,
   useToggleProductStatus,
   useBulkUpdateProducts,
+  useLocale,
 } from '@chinooz/hooks'
 import { analytics } from '@chinooz/analytics'
 import { useSellerSessionStore } from '@chinooz/state'
@@ -66,6 +67,7 @@ function useDebounced<T>(value: T, delay = 250): T {
 
 export default function ProductsScreen() {
   const { t } = useTranslation()
+  const locale = useLocale()
   const router = useRouter()
   const reduced = useReducedMotion()
   const { minTouchTarget } = useA11y()
@@ -155,14 +157,14 @@ export default function ProductsScreen() {
   if (priceMin) {
     activeFilters.push({
       key: 'pmin',
-      label: `${t('seller.products.filterPriceMin')}: ${formatNPR(Number(priceMin))}`,
+      label: `${t('seller.products.filterPriceMin')}: ${formatNPR(Number(priceMin), locale)}`,
       onClear: () => setPriceMin(''),
     })
   }
   if (priceMax) {
     activeFilters.push({
       key: 'pmax',
-      label: `${t('seller.products.filterPriceMax')}: ${formatNPR(Number(priceMax))}`,
+      label: `${t('seller.products.filterPriceMax')}: ${formatNPR(Number(priceMax), locale)}`,
       onClear: () => setPriceMax(''),
     })
   }
@@ -736,6 +738,7 @@ function MobileCardWrapper({
   reduced: boolean
 }) {
   const { t } = useTranslation()
+  const locale = useLocale()
   const [menuOpen, setMenuOpen] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [stockOpen, setStockOpen] = useState(false)
@@ -796,7 +799,7 @@ function MobileCardWrapper({
       role="button"
       aria-label={t('seller.products.rowAria', {
         name: product.name,
-        price: formatNPR(product.price),
+        price: formatNPR(product.price, locale),
         stockLabel: sLabel,
         count: product.stockCount,
         status: stCfg.label,
@@ -826,7 +829,7 @@ function MobileCardWrapper({
         <p className="text-[12px] text-text-muted truncate">{product.categoryName}</p>
         <div className="mt-1.5 flex items-center justify-between gap-2">
           <span className="text-[14px] font-semibold text-text tabular-nums">
-            {formatNPR(product.price)}
+            {formatNPR(product.price, locale)}
           </span>
           <span
             className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-semibold"

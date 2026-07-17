@@ -3,17 +3,11 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
-import {
-  MoreHorizontal,
-  Pencil,
-  Copy,
-  Power,
-  PowerOff,
-  Square,
-  Trash2,
-  Tag,
-} from 'lucide-react'
+import { MoreHorizontal, Pencil, Copy, Power, PowerOff, Square, Trash2, Tag } from 'lucide-react'
 import { useReducedMotion } from '@chinooz/ui-web'
+import { colors } from '@chinooz/theme'
+import { useLocale } from '@chinooz/hooks'
+import { formatAmount as formatNPR } from '@chinooz/utils'
 import type { Promotion, PromotionStatus, PromotionType } from '@chinooz/mock-data'
 
 export interface PromotionRowProps {
@@ -30,10 +24,26 @@ export interface PromotionRowProps {
 }
 
 const STATUS_CFG: Record<PromotionStatus, { label: string; color: string; bg: string }> = {
-  active: { label: 'seller.promotions.statusActive', color: '#16A34A', bg: 'rgba(22,163,74,0.10)' },
-  scheduled: { label: 'seller.promotions.statusScheduled', color: '#2563EB', bg: 'rgba(37,99,235,0.10)' },
-  expired: { label: 'seller.promotions.statusExpired', color: '#6B7280', bg: 'rgba(107,114,128,0.10)' },
-  draft: { label: 'seller.promotions.statusDraft', color: '#F59E0B', bg: 'rgba(245,158,11,0.10)' },
+  active: {
+    label: 'seller.promotions.statusActive',
+    color: colors.success,
+    bg: 'rgba(22,163,74,0.10)',
+  },
+  scheduled: {
+    label: 'seller.promotions.statusScheduled',
+    color: colors.info,
+    bg: 'rgba(37,99,235,0.10)',
+  },
+  expired: {
+    label: 'seller.promotions.statusExpired',
+    color: colors.textMuted,
+    bg: 'rgba(107,114,128,0.10)',
+  },
+  draft: {
+    label: 'seller.promotions.statusDraft',
+    color: colors.warning,
+    bg: 'rgba(245,158,11,0.10)',
+  },
 }
 
 type TT = (key: string, opts?: Record<string, unknown>) => string
@@ -58,7 +68,8 @@ function discountText(p: Promotion): string {
 
 function scopeText(t: TT, p: Promotion): string {
   if (p.scope === 'all') return t('seller.promotions.scopeAll')
-  if (p.scope === 'category') return t('seller.promotions.scopeCategory', { label: p.scopeLabel ?? '' })
+  if (p.scope === 'category')
+    return t('seller.promotions.scopeCategory', { label: p.scopeLabel ?? '' })
   return t('seller.promotions.scopeProducts', { count: p.productsCount })
 }
 
@@ -66,15 +77,17 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
-function formatNPR(n: number): string {
-  return n.toLocaleString()
-}
-
 function pad(n: number): string {
   return n < 10 ? `0${n}` : String(n)
 }
 
-function getTimeRemaining(target: string): { total: number; days: number; hours: number; minutes: number; seconds: number } {
+function getTimeRemaining(target: string): {
+  total: number
+  days: number
+  hours: number
+  minutes: number
+  seconds: number
+} {
   const total = Math.max(0, new Date(target).getTime() - Date.now())
   const days = Math.floor(total / (1000 * 60 * 60 * 24))
   const hours = Math.floor((total % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
@@ -101,6 +114,7 @@ export function PromotionRow({
   onCopyCode,
 }: PromotionRowProps) {
   const { t } = useTranslation()
+  const locale = useLocale()
   const reduced = useReducedMotion()
   const [menuOpen, setMenuOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -171,7 +185,9 @@ export function PromotionRow({
       })
     : undefined
 
-  const toggleLabel = isActive ? 'seller.promotions.actionPause' : 'seller.promotions.actionActivate'
+  const toggleLabel = isActive
+    ? 'seller.promotions.actionPause'
+    : 'seller.promotions.actionActivate'
   const ToggleIcon = isActive ? PowerOff : Power
 
   return (
@@ -198,13 +214,15 @@ export function PromotionRow({
         <td className="py-2 px-4">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="shrink-0 w-9 h-9 rounded-full bg-primary-50 flex items-center justify-center">
-              <Tag size={16} color="#8A1B57" />
+              <Tag size={16} color={colors.primary} />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="text-[16px] font-semibold text-text truncate max-w-[200px] leading-tight">{promo.name}</span>
+                <span className="text-[16px] font-semibold text-text truncate max-w-[200px] leading-tight">
+                  {promo.name}
+                </span>
                 {isSale && isActive && (
-                  <span className="shrink-0 text-[10px] font-bold tracking-wide text-white bg-gold rounded-full px-1.5 py-px">
+                  <span className="shrink-0 text-[10px] font-bold tracking-wide text-text bg-gold rounded-full px-1.5 py-px">
                     {t('seller.promotions.saleBadge')}
                   </span>
                 )}
@@ -212,14 +230,21 @@ export function PromotionRow({
               {promo.isCoupon ? (
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); handleCopy() }}
+                  onClick={e => {
+                    e.stopPropagation()
+                    handleCopy()
+                  }}
                   data-stop-propagation
                   aria-label={t('seller.promotions.copyCodeAria', { code: promo.code })}
                   className="inline-flex items-center gap-1 text-[12px] text-text-muted font-mono hover:text-primary transition-colors mt-0.5"
                 >
                   {promo.code}
-                  <span className={`text-[11px] font-semibold ${copied ? 'text-success' : 'text-primary'}`}>
-                    {copied ? `✓ ${t('seller.promotions.codeCopied')}` : t('seller.promotions.copyCode')}
+                  <span
+                    className={`text-[11px] font-semibold ${copied ? 'text-success' : 'text-primary'}`}
+                  >
+                    {copied
+                      ? `✓ ${t('seller.promotions.codeCopied')}`
+                      : t('seller.promotions.copyCode')}
                   </span>
                 </button>
               ) : (
@@ -238,7 +263,9 @@ export function PromotionRow({
         </td>
 
         <td className="py-2 px-4">
-          <span className="text-[14px] font-semibold text-gold tabular-nums">{discountText(promo)}</span>
+          <span className="text-[14px] font-semibold text-gold tabular-nums">
+            {discountText(promo)}
+          </span>
         </td>
 
         <td className="py-2 px-4">
@@ -256,7 +283,9 @@ export function PromotionRow({
                 aria-label={countdownAria}
                 role="timer"
               >
-                {isScheduled ? t('seller.promotions.countdownStartsIn', { time: countdownStr(time) }) : t('seller.promotions.countdownEndsIn', { time: countdownStr(time) })}
+                {isScheduled
+                  ? t('seller.promotions.countdownStartsIn', { time: countdownStr(time) })
+                  : t('seller.promotions.countdownEndsIn', { time: countdownStr(time) })}
                 {isEndingSoon && <span className="ml-1 text-warning">⚠</span>}
               </span>
             )}
@@ -278,7 +307,7 @@ export function PromotionRow({
               {t('seller.promotions.uses', { count: promo.redemptions })}
             </span>
             <span className="text-[12px] font-semibold text-text tabular-nums">
-              {t('seller.promotions.revenue', { amount: formatNPR(promo.revenue) })}
+              {t('seller.promotions.revenue', { amount: formatNPR(promo.revenue, locale) })}
             </span>
           </div>
         </td>
@@ -305,14 +334,59 @@ export function PromotionRow({
                   transition={reduced ? { duration: 0 } : { duration: 0.15 }}
                   className="absolute right-0 mt-1 w-48 bg-surface border border-border rounded-md shadow-lg z-dropdown overflow-hidden"
                 >
-                  <MenuItem icon={<Pencil size={15} />} label={t('seller.promotions.actionEdit')} ariaLabel={t('seller.promotions.actionEditAria', { name: promo.name })} onClick={() => { setMenuOpen(false); onEdit?.(promo) }} />
-                  <MenuItem icon={<Copy size={15} />} label={t('seller.promotions.actionDuplicate')} ariaLabel={t('seller.promotions.actionDuplicateAria', { name: promo.name })} onClick={() => { setMenuOpen(false); onDuplicate?.(promo) }} />
-                  <MenuItem icon={<ToggleIcon size={15} />} label={t(toggleLabel)} ariaLabel={isActive ? t('seller.promotions.actionPauseAria', { name: promo.name }) : t('seller.promotions.actionActivateAria', { name: promo.name })} onClick={() => { setMenuOpen(false); onToggleActive?.(promo) }} />
+                  <MenuItem
+                    icon={<Pencil size={15} />}
+                    label={t('seller.promotions.actionEdit')}
+                    ariaLabel={t('seller.promotions.actionEditAria', { name: promo.name })}
+                    onClick={() => {
+                      setMenuOpen(false)
+                      onEdit?.(promo)
+                    }}
+                  />
+                  <MenuItem
+                    icon={<Copy size={15} />}
+                    label={t('seller.promotions.actionDuplicate')}
+                    ariaLabel={t('seller.promotions.actionDuplicateAria', { name: promo.name })}
+                    onClick={() => {
+                      setMenuOpen(false)
+                      onDuplicate?.(promo)
+                    }}
+                  />
+                  <MenuItem
+                    icon={<ToggleIcon size={15} />}
+                    label={t(toggleLabel)}
+                    ariaLabel={
+                      isActive
+                        ? t('seller.promotions.actionPauseAria', { name: promo.name })
+                        : t('seller.promotions.actionActivateAria', { name: promo.name })
+                    }
+                    onClick={() => {
+                      setMenuOpen(false)
+                      onToggleActive?.(promo)
+                    }}
+                  />
                   {isActive && (
-                    <MenuItem icon={<Square size={15} />} label={t('seller.promotions.actionEndNow')} ariaLabel={t('seller.promotions.actionEndNowAria', { name: promo.name })} onClick={() => { setMenuOpen(false); setConfirmEnd(true) }} />
+                    <MenuItem
+                      icon={<Square size={15} />}
+                      label={t('seller.promotions.actionEndNow')}
+                      ariaLabel={t('seller.promotions.actionEndNowAria', { name: promo.name })}
+                      onClick={() => {
+                        setMenuOpen(false)
+                        setConfirmEnd(true)
+                      }}
+                    />
                   )}
                   <div className="border-t border-border-light my-1" />
-                  <MenuItem icon={<Trash2 size={15} />} label={t('seller.promotions.actionDelete')} ariaLabel={t('seller.promotions.actionDeleteAria', { name: promo.name })} danger onClick={() => { setMenuOpen(false); setConfirmDelete(true) }} />
+                  <MenuItem
+                    icon={<Trash2 size={15} />}
+                    label={t('seller.promotions.actionDelete')}
+                    ariaLabel={t('seller.promotions.actionDeleteAria', { name: promo.name })}
+                    danger
+                    onClick={() => {
+                      setMenuOpen(false)
+                      setConfirmDelete(true)
+                    }}
+                  />
                 </motion.div>
               )}
             </AnimatePresence>
@@ -329,7 +403,10 @@ export function PromotionRow({
             cancelLabel={t('seller.promotions.actionCancel')}
             danger
             reduced={reduced}
-            onConfirm={() => { setConfirmDelete(false); onDelete?.(promo) }}
+            onConfirm={() => {
+              setConfirmDelete(false)
+              onDelete?.(promo)
+            }}
             onCancel={() => setConfirmDelete(false)}
           />
         )}
@@ -343,7 +420,10 @@ export function PromotionRow({
             confirmLabel={t('seller.promotions.actionEndConfirmBtn')}
             cancelLabel={t('seller.promotions.actionCancel')}
             reduced={reduced}
-            onConfirm={() => { setConfirmEnd(false); onEndNow?.(promo) }}
+            onConfirm={() => {
+              setConfirmEnd(false)
+              onEndNow?.(promo)
+            }}
             onCancel={() => setConfirmEnd(false)}
           />
         )}
@@ -355,7 +435,11 @@ export function PromotionRow({
 export function PromotionRowSkeleton({ selectable = false }: { selectable?: boolean }) {
   return (
     <tr aria-busy="true" className="h-16 border-b border-border-light last:border-b-0">
-      {selectable && <td className="py-2 px-4 w-10"><div className="w-4 h-4 rounded bg-shimmer animate-pulse" /></td>}
+      {selectable && (
+        <td className="py-2 px-4 w-10">
+          <div className="w-4 h-4 rounded bg-shimmer animate-pulse" />
+        </td>
+      )}
       <td className="py-2 px-4">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-full bg-shimmer animate-pulse shrink-0" />
@@ -365,13 +449,33 @@ export function PromotionRowSkeleton({ selectable = false }: { selectable?: bool
           </div>
         </div>
       </td>
-      <td className="py-2 px-4"><div className="h-5 w-20 rounded-full bg-shimmer animate-pulse" /></td>
-      <td className="py-2 px-4"><div className="h-4 w-10 rounded bg-shimmer animate-pulse" /></td>
-      <td className="py-2 px-4"><div className="h-3 w-24 rounded bg-shimmer animate-pulse" /></td>
-      <td className="py-2 px-4"><div className="space-y-1"><div className="h-3 w-24 rounded bg-shimmer animate-pulse" /><div className="h-3 w-16 rounded bg-shimmer animate-pulse" /></div></td>
-      <td className="py-2 px-4"><div className="h-5 w-16 rounded-full bg-shimmer animate-pulse" /></td>
-      <td className="py-2 px-4"><div className="space-y-1"><div className="h-3 w-12 rounded bg-shimmer animate-pulse ml-auto" /><div className="h-3 w-16 rounded bg-shimmer animate-pulse ml-auto" /></div></td>
-      <td className="py-2 px-4"><div className="w-8 h-8 rounded-md bg-shimmer animate-pulse ml-auto" /></td>
+      <td className="py-2 px-4">
+        <div className="h-5 w-20 rounded-full bg-shimmer animate-pulse" />
+      </td>
+      <td className="py-2 px-4">
+        <div className="h-4 w-10 rounded bg-shimmer animate-pulse" />
+      </td>
+      <td className="py-2 px-4">
+        <div className="h-3 w-24 rounded bg-shimmer animate-pulse" />
+      </td>
+      <td className="py-2 px-4">
+        <div className="space-y-1">
+          <div className="h-3 w-24 rounded bg-shimmer animate-pulse" />
+          <div className="h-3 w-16 rounded bg-shimmer animate-pulse" />
+        </div>
+      </td>
+      <td className="py-2 px-4">
+        <div className="h-5 w-16 rounded-full bg-shimmer animate-pulse" />
+      </td>
+      <td className="py-2 px-4">
+        <div className="space-y-1">
+          <div className="h-3 w-12 rounded bg-shimmer animate-pulse ml-auto" />
+          <div className="h-3 w-16 rounded bg-shimmer animate-pulse ml-auto" />
+        </div>
+      </td>
+      <td className="py-2 px-4">
+        <div className="w-8 h-8 rounded-md bg-shimmer animate-pulse ml-auto" />
+      </td>
     </tr>
   )
 }
@@ -430,7 +534,9 @@ function MenuItem({
         danger ? 'text-error hover:bg-error/5' : 'text-text'
       }`}
     >
-      <span className={danger ? 'text-error' : 'text-text-muted'} aria-hidden="true">{icon}</span>
+      <span className={danger ? 'text-error' : 'text-text-muted'} aria-hidden="true">
+        {icon}
+      </span>
       {label}
     </button>
   )
@@ -456,7 +562,12 @@ function ConfirmDialog({
   onCancel: () => void
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="alertdialog" aria-modal="true" aria-label={title}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      role="alertdialog"
+      aria-modal="true"
+      aria-label={title}
+    >
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}

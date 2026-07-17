@@ -14,7 +14,7 @@ import {
   Boxes,
 } from 'lucide-react'
 import { useReducedMotion } from '@chinooz/ui-web'
-import { useMarkLabelPrinted } from '@chinooz/hooks'
+import { useMarkLabelPrinted, useLocale } from '@chinooz/hooks'
 import { formatNPR } from '@chinooz/utils'
 import { duration, easing } from '@chinooz/theme'
 import type { SellerSubOrder } from '@chinooz/types'
@@ -22,8 +22,10 @@ import type { SellerSubOrder } from '@chinooz/types'
 const TABNUM: React.CSSProperties = { fontVariant: 'tabular-nums' }
 const MONO: React.CSSProperties = { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }
 
-type DocTab = 'slip' | 'label' | 'both'
+type DocTab = 'slip' | 'label' | 'invoice' | 'both'
 type Phase = 'idle' | 'preparing' | 'ready'
+
+const SELLER_PAN = '601234567'
 
 const SHIPPING_TO_CARRIER: Record<string, string> = {
   standard: 'Local Post',
@@ -40,7 +42,11 @@ const SERVICE_LABEL: Record<string, string> = {
 }
 
 function formatDateLong(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+  return new Date(iso).toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  })
 }
 
 function formatDateShort(iso: string): string {
@@ -86,12 +92,7 @@ function BarcodeBars({ value, ariaLabel }: { value: string; ariaLabel: string })
   }, [value])
 
   return (
-    <div
-      className="print-barcode"
-      role="img"
-      aria-label={ariaLabel}
-      aria-hidden={false}
-    >
+    <div className="print-barcode" role="img" aria-label={ariaLabel} aria-hidden={false}>
       <div className="print-barcode-bars" aria-hidden="true">
         {bars.map((b, i) => (
           <span
@@ -101,7 +102,9 @@ function BarcodeBars({ value, ariaLabel }: { value: string; ariaLabel: string })
           />
         ))}
       </div>
-      <div className="print-barcode-value" style={MONO}>{value}</div>
+      <div className="print-barcode-value" style={MONO}>
+        {value}
+      </div>
     </div>
   )
 }
@@ -140,11 +143,7 @@ function QrPlaceholder({ value, ariaLabel }: { value: string; ariaLabel: string 
   }, [value])
 
   return (
-    <div
-      className="print-qr"
-      role="img"
-      aria-label={ariaLabel}
-    >
+    <div className="print-qr" role="img" aria-label={ariaLabel}>
       <div
         className="print-qr-grid"
         aria-hidden="true"
@@ -161,7 +160,14 @@ function QrPlaceholder({ value, ariaLabel }: { value: string; ariaLabel: string 
   )
 }
 
-function PackingSlipPage({ order, t }: { order: SellerSubOrder; t: (k: string, o?: Record<string, unknown>) => string }) {
+function PackingSlipPage({
+  order,
+  t,
+}: {
+  order: SellerSubOrder
+  t: (k: string, o?: Record<string, unknown>) => string
+}) {
+  const locale = useLocale()
   const isCod = order.paymentType === 'cod'
   const subtotal = order.items.reduce((s, it) => s + it.price * it.quantity, 0)
   const deliveryFee = Math.max(0, order.total - subtotal)
@@ -176,8 +182,12 @@ function PackingSlipPage({ order, t }: { order: SellerSubOrder; t: (k: string, o
         </div>
         <div className="print-page-id">
           <p className="print-meta-label">{t('seller.orders.slipOrder')}</p>
-          <p className="print-order-id" style={MONO}>{order.orderId}</p>
-          <p className="print-meta">{t('seller.orders.slipDate')}: {formatDateLong(order.createdAt)}</p>
+          <p className="print-order-id" style={MONO}>
+            {order.orderId}
+          </p>
+          <p className="print-meta">
+            {t('seller.orders.slipDate')}: {formatDateLong(order.createdAt)}
+          </p>
         </div>
       </header>
 
@@ -190,25 +200,44 @@ function PackingSlipPage({ order, t }: { order: SellerSubOrder; t: (k: string, o
         <div className="print-party">
           <p className="print-meta-label">{t('seller.orders.slipBillTo')}</p>
           <p className="print-party-name">{order.buyerName}</p>
-          <p className="print-party-line">{order.city}, {order.district}</p>
-          <p className="print-party-line" style={MONO}>{order.buyerPhone}</p>
+          <p className="print-party-line">
+            {order.city}, {order.district}
+          </p>
+          <p className="print-party-line" style={MONO}>
+            {order.buyerPhone}
+          </p>
         </div>
         <div className="print-party">
           <p className="print-meta-label">{t('seller.orders.slipShipTo')}</p>
           <p className="print-party-name">{order.buyerName}</p>
-          <p className="print-party-line">{order.city}, {order.district}</p>
-          <p className="print-party-line">{t('seller.orders.labelService')}: {SERVICE_LABEL[order.shippingMethod] ?? order.shippingMethod}</p>
+          <p className="print-party-line">
+            {order.city}, {order.district}
+          </p>
+          <p className="print-party-line">
+            {t('seller.orders.labelService')}:{' '}
+            {SERVICE_LABEL[order.shippingMethod] ?? order.shippingMethod}
+          </p>
         </div>
       </div>
 
       <table className="print-table">
         <thead>
           <tr>
-            <th scope="col" className="print-col-item">{t('seller.orders.slipItem')}</th>
-            <th scope="col" className="print-col-sku">{t('seller.orders.slipSku')}</th>
-            <th scope="col" className="print-col-qty">{t('seller.orders.slipQty')}</th>
-            <th scope="col" className="print-col-price">{t('seller.orders.slipPrice')}</th>
-            <th scope="col" className="print-col-total">{t('seller.orders.slipLineTotal')}</th>
+            <th scope="col" className="print-col-item">
+              {t('seller.orders.slipItem')}
+            </th>
+            <th scope="col" className="print-col-sku">
+              {t('seller.orders.slipSku')}
+            </th>
+            <th scope="col" className="print-col-qty">
+              {t('seller.orders.slipQty')}
+            </th>
+            <th scope="col" className="print-col-price">
+              {t('seller.orders.slipPrice')}
+            </th>
+            <th scope="col" className="print-col-total">
+              {t('seller.orders.slipLineTotal')}
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -221,10 +250,18 @@ function PackingSlipPage({ order, t }: { order: SellerSubOrder; t: (k: string, o
                   <span className="print-item-name">{base}</span>
                   {variant && <span className="print-item-variant">{variant}</span>}
                 </td>
-                <td className="print-col-sku" style={MONO}>{item.sku ?? '—'}</td>
-                <td className="print-col-qty" style={TABNUM}>{item.quantity}</td>
-                <td className="print-col-price" style={TABNUM}>{formatNPR(item.price)}</td>
-                <td className="print-col-total" style={TABNUM}>{formatNPR(item.price * item.quantity)}</td>
+                <td className="print-col-sku" style={MONO}>
+                  {item.sku ?? '—'}
+                </td>
+                <td className="print-col-qty" style={TABNUM}>
+                  {item.quantity}
+                </td>
+                <td className="print-col-price" style={TABNUM}>
+                  {formatNPR(item.price, locale)}
+                </td>
+                <td className="print-col-total" style={TABNUM}>
+                  {formatNPR(item.price * item.quantity, locale)}
+                </td>
               </tr>
             )
           })}
@@ -234,15 +271,15 @@ function PackingSlipPage({ order, t }: { order: SellerSubOrder; t: (k: string, o
       <div className="print-totals">
         <div className="print-totals-line">
           <span>{t('seller.orders.slipSubtotal')}</span>
-          <span style={TABNUM}>{formatNPR(subtotal)}</span>
+          <span style={TABNUM}>{formatNPR(subtotal, locale)}</span>
         </div>
         <div className="print-totals-line">
           <span>{t('seller.orders.slipDelivery')}</span>
-          <span style={TABNUM}>{formatNPR(deliveryFee)}</span>
+          <span style={TABNUM}>{formatNPR(deliveryFee, locale)}</span>
         </div>
         <div className="print-totals-line print-totals-grand">
           <span>{t('seller.orders.slipTotal')}</span>
-          <span style={TABNUM}>{formatNPR(order.total)}</span>
+          <span style={TABNUM}>{formatNPR(order.total, locale)}</span>
         </div>
       </div>
 
@@ -250,10 +287,14 @@ function PackingSlipPage({ order, t }: { order: SellerSubOrder; t: (k: string, o
         <div
           className="print-cod-box print-cod-box-slip"
           role="group"
-          aria-label={t('seller.orders.slipCodAmountAria', { amount: formatNPR(order.total) })}
+          aria-label={t('seller.orders.slipCodAmountAria', {
+            amount: formatNPR(order.total, locale),
+          })}
         >
           <p className="print-cod-box-label">{t('seller.orders.slipCodCollect')}</p>
-          <p className="print-cod-box-amount" style={TABNUM}>{formatNPR(order.total)}</p>
+          <p className="print-cod-box-amount" style={TABNUM}>
+            {formatNPR(order.total, locale)}
+          </p>
           <p className="print-cod-box-sub">{t('seller.orders.slipCodAmount')}</p>
         </div>
       ) : (
@@ -264,13 +305,22 @@ function PackingSlipPage({ order, t }: { order: SellerSubOrder; t: (k: string, o
         <p className="print-meta-label">{t('seller.orders.slipPackedBy')}</p>
         <div className="print-sign-line" aria-hidden="true" />
         <p className="print-meta">{t('seller.orders.slipNotes')}: __________________</p>
-        <p className="print-meta print-tracking-line" style={MONO}>{t('seller.orders.labelTracking')}: {tracking}</p>
+        <p className="print-meta print-tracking-line" style={MONO}>
+          {t('seller.orders.labelTracking')}: {tracking}
+        </p>
       </footer>
     </section>
   )
 }
 
-function ShippingLabelPage({ order, t }: { order: SellerSubOrder; t: (k: string, o?: Record<string, unknown>) => string }) {
+function ShippingLabelPage({
+  order,
+  t,
+}: {
+  order: SellerSubOrder
+  t: (k: string, o?: Record<string, unknown>) => string
+}) {
+  const locale = useLocale()
   const isCod = order.paymentType === 'cod'
   const tracking = genTracking(order)
   const carrier = carrierFor(order)
@@ -290,7 +340,9 @@ function ShippingLabelPage({ order, t }: { order: SellerSubOrder; t: (k: string,
           </div>
           <div>
             <p className="print-meta-label">{t('seller.orders.labelService')}</p>
-            <p className="print-meta-value">{SERVICE_LABEL[order.shippingMethod] ?? order.shippingMethod}</p>
+            <p className="print-meta-value">
+              {SERVICE_LABEL[order.shippingMethod] ?? order.shippingMethod}
+            </p>
           </div>
           <div>
             <p className="print-meta-label">{t('seller.orders.labelShipDate')}</p>
@@ -298,7 +350,9 @@ function ShippingLabelPage({ order, t }: { order: SellerSubOrder; t: (k: string,
           </div>
           <div>
             <p className="print-meta-label">{t('seller.orders.labelWeight')}</p>
-            <p className="print-meta-value" style={TABNUM}>{weight} g</p>
+            <p className="print-meta-value" style={TABNUM}>
+              {weight} g
+            </p>
           </div>
         </div>
       </header>
@@ -308,14 +362,22 @@ function ShippingLabelPage({ order, t }: { order: SellerSubOrder; t: (k: string,
           <p className="print-meta-label">{t('seller.orders.labelFrom')}</p>
           <p className="print-party-name">Chinooz Store</p>
           <p className="print-party-line">Kathmandu, Nepal</p>
-          <p className="print-party-line" style={MONO}>+977-1-4000000</p>
+          <p className="print-party-line" style={MONO}>
+            +977-1-4000000
+          </p>
         </div>
-        <div className="print-label-arrow" aria-hidden="true">→</div>
+        <div className="print-label-arrow" aria-hidden="true">
+          →
+        </div>
         <div className="print-label-to">
           <p className="print-meta-label">{t('seller.orders.labelTo')}</p>
           <p className="print-party-name print-label-to-name">{order.buyerName}</p>
-          <p className="print-party-line print-label-to-line">{order.city}, {order.district}</p>
-          <p className="print-party-line print-label-to-line" style={MONO}>{order.buyerPhone}</p>
+          <p className="print-party-line print-label-to-line">
+            {order.city}, {order.district}
+          </p>
+          <p className="print-party-line print-label-to-line" style={MONO}>
+            {order.buyerPhone}
+          </p>
         </div>
       </div>
 
@@ -330,10 +392,14 @@ function ShippingLabelPage({ order, t }: { order: SellerSubOrder; t: (k: string,
         <div
           className="print-cod-box print-cod-box-label"
           role="group"
-          aria-label={t('seller.orders.labelCodAmountAria', { amount: formatNPR(order.total) })}
+          aria-label={t('seller.orders.labelCodAmountAria', {
+            amount: formatNPR(order.total, locale),
+          })}
         >
           <p className="print-cod-box-banner">{t('seller.orders.labelCodBox')}</p>
-          <p className="print-cod-box-amount" style={TABNUM}>{formatNPR(order.total)}</p>
+          <p className="print-cod-box-amount" style={TABNUM}>
+            {formatNPR(order.total, locale)}
+          </p>
           <p className="print-cod-box-sub">{t('seller.orders.labelCodCollect')}</p>
         </div>
       ) : (
@@ -344,8 +410,144 @@ function ShippingLabelPage({ order, t }: { order: SellerSubOrder; t: (k: string,
       )}
 
       <footer className="print-page-foot print-label-foot">
-        <p className="print-meta" style={MONO}>{order.orderId} · {order.subOrderId}</p>
+        <p className="print-meta" style={MONO}>
+          {order.orderId} · {order.subOrderId}
+        </p>
         <p className="print-meta">{t('seller.orders.labelDimensions')}: 15 × 10 × 5 cm</p>
+      </footer>
+    </section>
+  )
+}
+
+function TaxInvoicePage({
+  order,
+  t,
+}: {
+  order: SellerSubOrder
+  t: (k: string, o?: Record<string, unknown>) => string
+}) {
+  const locale = useLocale()
+  const subtotal = order.items.reduce((s, it) => s + it.price * it.quantity, 0)
+  const deliveryFee = Math.max(0, order.total - subtotal)
+  // Prices are VAT-inclusive (13%); back out the tax component for the invoice.
+  const taxable = order.total / 1.13
+  const vat = order.total - taxable
+  const invoiceNo = `INV-${order.orderId.toUpperCase().replace('ORD-', '')}`
+
+  return (
+    <section className="print-page print-page-slip" aria-label={t('seller.orders.invoiceTitle')}>
+      <header className="print-page-head">
+        <div>
+          <h2 className="print-page-title">{t('seller.orders.invoiceTaxInvoice')}</h2>
+          <p className="print-store">Chinooz Store</p>
+          <p className="print-meta">
+            {t('seller.orders.invoicePan')}: {SELLER_PAN}
+          </p>
+        </div>
+        <div className="print-page-id">
+          <p className="print-meta-label">{t('seller.orders.invoiceNo')}</p>
+          <p className="print-order-id" style={MONO}>
+            {invoiceNo}
+          </p>
+          <p className="print-meta">
+            {t('seller.orders.slipDate')}: {formatDateLong(order.createdAt)}
+          </p>
+          <p className="print-meta" style={MONO}>
+            {order.orderId}
+          </p>
+        </div>
+      </header>
+
+      <div className="print-parties">
+        <div className="print-party">
+          <p className="print-meta-label">{t('seller.orders.invoiceBillTo')}</p>
+          <p className="print-party-name">{order.buyerName}</p>
+          <p className="print-party-line">
+            {order.city}, {order.district}
+          </p>
+          <p className="print-party-line" style={MONO}>
+            {order.buyerPhone}
+          </p>
+        </div>
+        <div className="print-party">
+          <p className="print-meta-label">{t('seller.orders.labelPayment')}</p>
+          <p className="print-party-name">
+            {order.paymentType === 'cod'
+              ? t('seller.orders.slipCodCollect')
+              : t('seller.orders.slipPrepaid')}
+          </p>
+        </div>
+      </div>
+
+      <table className="print-table">
+        <thead>
+          <tr>
+            <th scope="col" className="print-col-item">
+              {t('seller.orders.slipItem')}
+            </th>
+            <th scope="col" className="print-col-sku">
+              {t('seller.orders.slipSku')}
+            </th>
+            <th scope="col" className="print-col-qty">
+              {t('seller.orders.slipQty')}
+            </th>
+            <th scope="col" className="print-col-price">
+              {t('seller.orders.slipPrice')}
+            </th>
+            <th scope="col" className="print-col-total">
+              {t('seller.orders.slipLineTotal')}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {order.items.map(item => {
+            const base = item.name.split('—')[0]?.trim() || item.name
+            const variant = item.name.split('—')[1]?.trim()
+            return (
+              <tr key={item.id}>
+                <td className="print-col-item">
+                  <span className="print-item-name">{base}</span>
+                  {variant && <span className="print-item-variant">{variant}</span>}
+                </td>
+                <td className="print-col-sku" style={MONO}>
+                  {item.sku ?? '—'}
+                </td>
+                <td className="print-col-qty" style={TABNUM}>
+                  {item.quantity}
+                </td>
+                <td className="print-col-price" style={TABNUM}>
+                  {formatNPR(item.price, locale)}
+                </td>
+                <td className="print-col-total" style={TABNUM}>
+                  {formatNPR(item.price * item.quantity, locale)}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+
+      <div className="print-totals">
+        <div className="print-totals-line">
+          <span>{t('seller.orders.invoiceTaxable')}</span>
+          <span style={TABNUM}>{formatNPR(Math.round(taxable), locale)}</span>
+        </div>
+        <div className="print-totals-line">
+          <span>{t('seller.orders.invoiceVat')}</span>
+          <span style={TABNUM}>{formatNPR(Math.round(vat), locale)}</span>
+        </div>
+        <div className="print-totals-line">
+          <span>{t('seller.orders.slipDelivery')}</span>
+          <span style={TABNUM}>{formatNPR(deliveryFee, locale)}</span>
+        </div>
+        <div className="print-totals-line print-totals-grand">
+          <span>{t('seller.orders.slipTotal')}</span>
+          <span style={TABNUM}>{formatNPR(order.total, locale)}</span>
+        </div>
+      </div>
+
+      <footer className="print-page-foot">
+        <p className="print-meta">{t('seller.orders.invoiceFooter')}</p>
       </footer>
     </section>
   )
@@ -409,7 +611,11 @@ export function PrintDocsSheet({ orders, onClose, onPrinted, t }: PrintDocsSheet
       }
       markPrinted.mutate({ subOrderIds: ids })
       setPhase('ready')
-      announce(orders.length > 1 ? t('seller.orders.printDocsBulkResult', { count: orders.length }) : t('seller.orders.printDocsPrintedBanner'))
+      announce(
+        orders.length > 1
+          ? t('seller.orders.printDocsBulkResult', { count: orders.length })
+          : t('seller.orders.printDocsPrintedBanner'),
+      )
       onPrinted?.(ids)
     }, 50)
   }, [phase, ids, markPrinted, announce, orders.length, t, onPrinted])
@@ -439,18 +645,27 @@ export function PrintDocsSheet({ orders, onClose, onPrinted, t }: PrintDocsSheet
   const tabs: { key: DocTab; label: string; Icon: typeof FileText }[] = [
     { key: 'slip', label: t('seller.orders.printDocsTabSlip'), Icon: FileText },
     { key: 'label', label: t('seller.orders.printDocsTabLabel'), Icon: Package },
+    { key: 'invoice', label: t('seller.orders.printDocsTabInvoice'), Icon: FileText },
     { key: 'both', label: t('seller.orders.printDocsTabBoth'), Icon: Boxes },
   ]
 
   const busy = phase !== 'ready'
 
   return (
-    <div className="print-docs-overlay" role="dialog" aria-modal="true" aria-labelledby="print-docs-title">
+    <div
+      className="print-docs-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="print-docs-title"
+    >
       <div className="print-docs-backdrop" onClick={onClose} />
 
       {/* Live region: announce bulk/single print result + phase */}
       <span className="sr-only" role="status" aria-live="assertive">
-        {banner ?? (phase === 'preparing' ? t('seller.orders.printDocsPreparing') : t('seller.orders.printDocsReady'))}
+        {banner ??
+          (phase === 'preparing'
+            ? t('seller.orders.printDocsPreparing')
+            : t('seller.orders.printDocsReady'))}
       </span>
 
       <div className="print-docs-shell">
@@ -458,12 +673,19 @@ export function PrintDocsSheet({ orders, onClose, onPrinted, t }: PrintDocsSheet
         <div className="print-docs-toolbar">
           <div className="print-docs-toolbar-left">
             <div className="print-docs-titles">
-              <h2 id="print-docs-title" className="print-docs-title">{t('seller.orders.printDocsTitle')}</h2>
+              <h2 id="print-docs-title" className="print-docs-title">
+                {t('seller.orders.printDocsTitle')}
+              </h2>
               <p className="print-docs-subtitle">
-                {t('seller.orders.printDocsSubtitle')} · {t('seller.orders.printDocsCount', { count: orders.length })}
+                {t('seller.orders.printDocsSubtitle')} ·{' '}
+                {t('seller.orders.printDocsCount', { count: orders.length })}
               </p>
             </div>
-            <div className="print-docs-tabs" role="tablist" aria-label={t('seller.orders.printDocsTitle')}>
+            <div
+              className="print-docs-tabs"
+              role="tablist"
+              aria-label={t('seller.orders.printDocsTitle')}
+            >
               {tabs.map(tb => {
                 const active = tab === tb.key
                 const Icon = tb.Icon
@@ -546,7 +768,11 @@ export function PrintDocsSheet({ orders, onClose, onPrinted, t }: PrintDocsSheet
               initial={reduced ? false : { opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={reduced ? undefined : { opacity: 0, y: -8 }}
-              transition={reduced ? { duration: 0 } : { duration: duration.normal / 1000, ease: easing.easeOut as any }}
+              transition={
+                reduced
+                  ? { duration: 0 }
+                  : { duration: duration.normal / 1000, ease: easing.easeOut }
+              }
               className="print-docs-banner"
               role="status"
             >
@@ -563,6 +789,7 @@ export function PrintDocsSheet({ orders, onClose, onPrinted, t }: PrintDocsSheet
               <div key={order.subOrderId} className="print-doc-group">
                 {(tab === 'slip' || tab === 'both') && <PackingSlipPage order={order} t={t} />}
                 {(tab === 'label' || tab === 'both') && <ShippingLabelPage order={order} t={t} />}
+                {tab === 'invoice' && <TaxInvoicePage order={order} t={t} />}
               </div>
             ))}
           </div>

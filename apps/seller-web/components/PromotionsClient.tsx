@@ -5,9 +5,30 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence, type Transition } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { useRouter } from 'next/navigation'
-import { Search, SlidersHorizontal, Plus, X, ChevronDown, Tag, ArrowUpDown, CheckSquare, Zap, AlertTriangle, WifiOff } from 'lucide-react'
-import { duration, easing } from '@chinooz/theme'
-import { useReducedMotion, SegmentedControl, EmptyState, Screen, Container, Toast } from '@chinooz/ui-web'
+import {
+  Search,
+  SlidersHorizontal,
+  Plus,
+  X,
+  ChevronDown,
+  Tag,
+  ArrowUpDown,
+  CheckSquare,
+  Zap,
+  AlertTriangle,
+  WifiOff,
+} from 'lucide-react'
+import { duration, easing, colors } from '@chinooz/theme'
+import { useLocale } from '@chinooz/hooks'
+import { formatAmount as formatNPR } from '@chinooz/utils'
+import {
+  useReducedMotion,
+  SegmentedControl,
+  EmptyState,
+  Screen,
+  Container,
+  Toast,
+} from '@chinooz/ui-web'
 import {
   getPromotions,
   getPromotionCounts,
@@ -40,11 +61,10 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
-function formatNPR(n: number): string {
-  return n.toLocaleString()
-}
-
-function typeLabel(t: (k: string, opts?: Record<string, unknown>) => string, type: PromotionType): string {
+function typeLabel(
+  t: (k: string, opts?: Record<string, unknown>) => string,
+  type: PromotionType,
+): string {
   const map: Record<PromotionType, string> = {
     percentage: t('seller.promotions.typePercentage'),
     fixed: t('seller.promotions.typeFixed'),
@@ -64,7 +84,8 @@ function discountText(p: Promotion): string {
 
 function scopeText(t: (k: string, opts?: Record<string, unknown>) => string, p: Promotion): string {
   if (p.scope === 'all') return t('seller.promotions.scopeAll')
-  if (p.scope === 'category') return t('seller.promotions.scopeCategory', { label: p.scopeLabel ?? '' })
+  if (p.scope === 'category')
+    return t('seller.promotions.scopeCategory', { label: p.scopeLabel ?? '' })
   return t('seller.promotions.scopeProducts', { count: p.productsCount })
 }
 
@@ -72,11 +93,12 @@ const statusBadge: Record<PromotionStatus, { cls: string; key: string }> = {
   active: { cls: 'bg-success-light text-success', key: 'seller.promotions.statusActive' },
   scheduled: { cls: 'bg-info-light text-info', key: 'seller.promotions.statusScheduled' },
   expired: { cls: 'bg-border text-text-secondary', key: 'seller.promotions.statusExpired' },
-  draft: { cls: 'bg-warning-light text-[#92400E]', key: 'seller.promotions.statusDraft' },
+  draft: { cls: 'bg-warning-light text-warning-text', key: 'seller.promotions.statusDraft' },
 }
 
 export default function PromotionsClient() {
   const { t } = useTranslation()
+  const locale = useLocale()
   const router = useRouter()
   const reduced = useReducedMotion()
 
@@ -89,7 +111,10 @@ export default function PromotionsClient() {
   const [sort, setSort] = useState<PromotionSort>('newest')
   const [selectable, setSelectable] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [toast, setToast] = useState<{ visible: boolean; message: string }>({ visible: false, message: '' })
+  const [toast, setToast] = useState<{ visible: boolean; message: string }>({
+    visible: false,
+    message: '',
+  })
 
   const counts = useMemo(() => getPromotionCounts(), [])
   const queryClient = useQueryClient()
@@ -108,36 +133,54 @@ export default function PromotionsClient() {
     })
   }, [])
 
-  const handleCopyCode = useCallback((code: string) => {
-    showToast(t('seller.promotions.codeCopiedAnnounce', { code }))
-  }, [showToast, t])
+  const handleCopyCode = useCallback(
+    (code: string) => {
+      showToast(t('seller.promotions.codeCopiedAnnounce', { code }))
+    },
+    [showToast, t],
+  )
 
-  const handleEdit = useCallback((promo: Promotion) => {
-    analytics.track({ name: 'promotion_edit_tapped', properties: { id: promo.id } })
-    router.push(`/promotions/${promo.id}/edit`)
-  }, [router])
+  const handleEdit = useCallback(
+    (promo: Promotion) => {
+      analytics.track({ name: 'promotion_edit_tapped', properties: { id: promo.id } })
+      router.push(`/promotions/${promo.id}/edit`)
+    },
+    [router],
+  )
 
-  const handleDuplicate = useCallback(async (promo: Promotion) => {
-    await duplicatePromotionById(promo.id)
-    queryClient.invalidateQueries({ queryKey: ['promotions'] })
-    showToast(t('seller.promotions.actionDuplicate'))
-  }, [queryClient, showToast, t])
+  const handleDuplicate = useCallback(
+    async (promo: Promotion) => {
+      await duplicatePromotionById(promo.id)
+      queryClient.invalidateQueries({ queryKey: ['promotions'] })
+      showToast(t('seller.promotions.actionDuplicate'))
+    },
+    [queryClient, showToast, t],
+  )
 
-  const handleToggleActive = useCallback(async (promo: Promotion) => {
-    await togglePromotionActiveById(promo.id)
-    queryClient.invalidateQueries({ queryKey: ['promotions'] })
-  }, [queryClient])
+  const handleToggleActive = useCallback(
+    async (promo: Promotion) => {
+      await togglePromotionActiveById(promo.id)
+      queryClient.invalidateQueries({ queryKey: ['promotions'] })
+    },
+    [queryClient],
+  )
 
-  const handleEndNow = useCallback(async (promo: Promotion) => {
-    await endPromotionNowById(promo.id)
-    queryClient.invalidateQueries({ queryKey: ['promotions'] })
-  }, [queryClient])
+  const handleEndNow = useCallback(
+    async (promo: Promotion) => {
+      await endPromotionNowById(promo.id)
+      queryClient.invalidateQueries({ queryKey: ['promotions'] })
+    },
+    [queryClient],
+  )
 
-  const handleDelete = useCallback(async (promo: Promotion) => {
-    await deletePromotionById(promo.id)
-    queryClient.invalidateQueries({ queryKey: ['promotions'] })
-    showToast(t('seller.promotions.actionDelete'))
-  }, [queryClient, showToast, t])
+  const handleDelete = useCallback(
+    async (promo: Promotion) => {
+      await deletePromotionById(promo.id)
+      queryClient.invalidateQueries({ queryKey: ['promotions'] })
+      showToast(t('seller.promotions.actionDelete'))
+    },
+    [queryClient, showToast, t],
+  )
 
   useEffect(() => {
     analytics.screen({ name: 'seller-promotions' })
@@ -196,7 +239,10 @@ export default function PromotionsClient() {
     update()
     window.addEventListener('online', update)
     window.addEventListener('offline', update)
-    return () => { window.removeEventListener('online', update); window.removeEventListener('offline', update) }
+    return () => {
+      window.removeEventListener('online', update)
+      window.removeEventListener('offline', update)
+    }
   }, [])
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -218,7 +264,7 @@ export default function PromotionsClient() {
 
   const chipEnter: Transition = reduced
     ? { duration: 0 }
-    : { duration: duration.normal / 1000, ease: easing.spring as any }
+    : { duration: duration.normal / 1000, ease: easing.spring }
 
   return (
     <Screen>
@@ -233,14 +279,21 @@ export default function PromotionsClient() {
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => { setSelectable(s => !s); setSelectedIds(new Set()) }}
+                onClick={() => {
+                  setSelectable(s => !s)
+                  setSelectedIds(new Set())
+                }}
                 aria-label={t('seller.promotions.selectPromotionAria', { name: '' })}
                 className={`shrink-0 inline-flex items-center gap-1.5 h-10 px-3 rounded-md border text-sm font-semibold transition-colors min-touch ${
-                  selectable ? 'bg-primary text-white border-primary' : 'bg-surface text-text border-border hover:bg-background'
+                  selectable
+                    ? 'bg-primary text-white border-primary'
+                    : 'bg-surface text-text border-border hover:bg-background'
                 }`}
               >
                 <CheckSquare size={16} />
-                <span className="hidden sm:inline">{selectable ? `${selectedIds.size}` : 'Select'}</span>
+                <span className="hidden sm:inline">
+                  {selectable ? `${selectedIds.size}` : 'Select'}
+                </span>
               </button>
               <button
                 onClick={() => router.push('/promotions/campaigns')}
@@ -352,7 +405,9 @@ export default function PromotionsClient() {
                     >
                       {SORT_KEYS.map(k => (
                         <option key={k} value={k}>
-                          {t(`seller.promotions.sort${k === 'newest' ? 'Newest' : k === 'ending_soon' ? 'EndingSoon' : 'Performance'}`)}
+                          {t(
+                            `seller.promotions.sort${k === 'newest' ? 'Newest' : k === 'ending_soon' ? 'EndingSoon' : 'Performance'}`,
+                          )}
                         </option>
                       ))}
                     </select>
@@ -366,10 +421,7 @@ export default function PromotionsClient() {
 
               <AnimatePresence initial={!reduced}>
                 {activeFilterChips.length > 0 && (
-                  <motion.div
-                    layout={!reduced}
-                    className="flex items-center gap-2 flex-wrap"
-                  >
+                  <motion.div layout={!reduced} className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-medium text-text-muted">
                       {t('seller.promotions.activeFilters')}:
                     </span>
@@ -414,7 +466,9 @@ export default function PromotionsClient() {
                 aria-live="polite"
               >
                 <WifiOff size={16} className="text-warning shrink-0" aria-hidden="true" />
-                <span className="text-[13px] font-semibold text-[#92400E]">{t('seller.promotions.offlineBanner')}</span>
+                <span className="text-[13px] font-semibold text-warning-text">
+                  {t('seller.promotions.offlineBanner')}
+                </span>
               </motion.div>
             )}
           </AnimatePresence>
@@ -426,8 +480,20 @@ export default function PromotionsClient() {
                   <table className="w-full">
                     <thead className="sticky top-0 z-base bg-surface">
                       <tr className="border-b border-border">
-                        {['colPromotion','colType','colDiscount','colStatus','colSchedule','colRedemptions','colRevenue'].map(col => (
-                          <th key={col} scope="col" className="text-left text-xs font-semibold text-text-muted px-4 py-2.5 whitespace-nowrap bg-surface">
+                        {[
+                          'colPromotion',
+                          'colType',
+                          'colDiscount',
+                          'colStatus',
+                          'colSchedule',
+                          'colRedemptions',
+                          'colRevenue',
+                        ].map(col => (
+                          <th
+                            key={col}
+                            scope="col"
+                            className="text-left text-xs font-semibold text-text-muted px-4 py-2.5 whitespace-nowrap bg-surface"
+                          >
                             {t(`seller.promotions.${col}`)}
                           </th>
                         ))}
@@ -440,16 +506,26 @@ export default function PromotionsClient() {
                     </tbody>
                   </table>
                 </div>
-                <div className="md:hidden flex flex-col gap-3" aria-busy="true" aria-label={t('seller.promotions.skeletonAria')}>
+                <div
+                  className="md:hidden flex flex-col gap-3"
+                  aria-busy="true"
+                  aria-label={t('seller.promotions.skeletonAria')}
+                >
                   {Array.from({ length: 4 }).map((_, i) => (
                     <PromotionCardSkeleton key={i} />
                   ))}
                 </div>
               </>
             ) : isError ? (
-              <div role="alert" aria-live="assertive" className="mt-4 p-4 rounded-lg border border-error/30 bg-error/5 flex flex-col items-center gap-3 text-center">
+              <div
+                role="alert"
+                aria-live="assertive"
+                className="mt-4 p-4 rounded-lg border border-error/30 bg-error/5 flex flex-col items-center gap-3 text-center"
+              >
                 <AlertTriangle size={28} className="text-error" aria-hidden="true" />
-                <p className="text-[15px] font-semibold text-error">{t('seller.promotions.error')}</p>
+                <p className="text-[15px] font-semibold text-error">
+                  {t('seller.promotions.error')}
+                </p>
                 <button
                   type="button"
                   onClick={() => refetch()}
@@ -465,16 +541,39 @@ export default function PromotionsClient() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={reduced ? { duration: 0 } : { duration: 0.3, ease: 'easeOut' }}
                 className="flex flex-col items-center justify-center py-12 px-6 text-center"
-                aria-label={hasFilters ? t('seller.promotions.emptyFilteredTitle') : t('seller.promotions.emptyTabTitle', { status: t(`seller.promotions.status${status.charAt(0).toUpperCase()}${status.slice(1)}`) })}
+                aria-label={
+                  hasFilters
+                    ? t('seller.promotions.emptyFilteredTitle')
+                    : t('seller.promotions.emptyTabTitle', {
+                        status: t(
+                          `seller.promotions.status${status.charAt(0).toUpperCase()}${status.slice(1)}`,
+                        ),
+                      })
+                }
               >
-                <div className="w-20 h-20 rounded-full bg-primary-50 flex items-center justify-center mb-4" aria-hidden="true">
+                <div
+                  className="w-20 h-20 rounded-full bg-primary-50 flex items-center justify-center mb-4"
+                  aria-hidden="true"
+                >
                   <Tag size={32} className="text-primary" />
                 </div>
                 <h3 className="text-lg font-semibold text-text mb-1">
-                  {hasFilters ? t('seller.promotions.emptyFilteredTitle') : t('seller.promotions.emptyTabTitle', { status: t(`seller.promotions.status${status.charAt(0).toUpperCase()}${status.slice(1)}`) })}
+                  {hasFilters
+                    ? t('seller.promotions.emptyFilteredTitle')
+                    : t('seller.promotions.emptyTabTitle', {
+                        status: t(
+                          `seller.promotions.status${status.charAt(0).toUpperCase()}${status.slice(1)}`,
+                        ),
+                      })}
                 </h3>
                 <p className="text-sm text-text-muted max-w-sm mb-4">
-                  {hasFilters ? t('seller.promotions.emptyFilteredSubtitle') : t('seller.promotions.emptyTabSubtitle', { status: t(`seller.promotions.status${status.charAt(0).toUpperCase()}${status.slice(1)}`) })}
+                  {hasFilters
+                    ? t('seller.promotions.emptyFilteredSubtitle')
+                    : t('seller.promotions.emptyTabSubtitle', {
+                        status: t(
+                          `seller.promotions.status${status.charAt(0).toUpperCase()}${status.slice(1)}`,
+                        ),
+                      })}
                 </p>
                 {!hasFilters && (
                   <button
@@ -496,8 +595,20 @@ export default function PromotionsClient() {
                   <table className="w-full" role="table">
                     <thead className="sticky top-0 z-base bg-surface">
                       <tr className="border-b border-border">
-                        {['colPromotion','colType','colDiscount','colStatus','colSchedule','colRedemptions','colRevenue'].map(col => (
-                          <th key={col} scope="col" className="text-left text-xs font-semibold text-text-muted px-4 py-2.5 whitespace-nowrap bg-surface">
+                        {[
+                          'colPromotion',
+                          'colType',
+                          'colDiscount',
+                          'colStatus',
+                          'colSchedule',
+                          'colRedemptions',
+                          'colRevenue',
+                        ].map(col => (
+                          <th
+                            key={col}
+                            scope="col"
+                            className="text-left text-xs font-semibold text-text-muted px-4 py-2.5 whitespace-nowrap bg-surface"
+                          >
                             {t(`seller.promotions.${col}`)}
                           </th>
                         ))}
@@ -525,7 +636,13 @@ export default function PromotionsClient() {
 
                 <div className="md:hidden flex flex-col gap-3">
                   {items.map(p => (
-                    <CompactCard key={p.id} promo={p} t={t} onCopyCode={handleCopyCode} onEdit={handleEdit} />
+                    <CompactCard
+                      key={p.id}
+                      promo={p}
+                      t={t}
+                      onCopyCode={handleCopyCode}
+                      onEdit={handleEdit}
+                    />
                   ))}
                 </div>
               </>
@@ -533,24 +650,33 @@ export default function PromotionsClient() {
           </div>
         </div>
       </Container>
-      <Toast
-        message={toast.message}
-        variant="success"
-        visible={toast.visible}
-      />
+      <Toast message={toast.message} variant="success" visible={toast.visible} />
     </Screen>
   )
 }
 
 type T = (key: string, opts?: Record<string, unknown>) => string
 
-function CompactCard({ promo, t, onCopyCode, onEdit }: { promo: Promotion; t: T; onCopyCode: (code: string) => void; onEdit: (p: Promotion) => void }) {
+function CompactCard({
+  promo,
+  t,
+  onCopyCode,
+  onEdit,
+}: {
+  promo: Promotion
+  t: T
+  onCopyCode: (code: string) => void
+  onEdit: (p: Promotion) => void
+}) {
+  const locale = useLocale()
   const [copied, setCopied] = useState(false)
   const sb = statusBadge[promo.status]
   const isSale = promo.type === 'flash_sale' || promo.type === 'percentage'
 
   const handleCopy = async () => {
-    try { await navigator.clipboard.writeText(promo.code) } catch {}
+    try {
+      await navigator.clipboard.writeText(promo.code)
+    } catch {}
     setCopied(true)
     onCopyCode(promo.code)
     setTimeout(() => setCopied(false), 2000)
@@ -560,27 +686,36 @@ function CompactCard({ promo, t, onCopyCode, onEdit }: { promo: Promotion; t: T;
     <div
       onClick={() => onEdit(promo)}
       role="button"
-      aria-label={t('seller.promotions.rowAria', { name: promo.name, type: typeLabel(t, promo.type), value: discountText(promo), status: t(sb.key) })}
+      aria-label={t('seller.promotions.rowAria', {
+        name: promo.name,
+        type: typeLabel(t, promo.type),
+        value: discountText(promo),
+        status: t(sb.key),
+      })}
       className="rounded-lg border border-border-light bg-surface shadow-sm p-4 cursor-pointer hover:bg-primary-50/30 transition-colors"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="shrink-0 w-10 h-10 rounded-full bg-primary-50 flex items-center justify-center">
-            <Tag size={18} color="#8A1B57" />
+            <Tag size={18} color={colors.primary} />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
               <span className="text-[16px] font-semibold text-text truncate">{promo.name}</span>
               {isSale && promo.status === 'active' && (
-                <span className="shrink-0 text-[10px] font-bold tracking-wide text-white bg-gold rounded-full px-1.5 py-px">
+                <span className="shrink-0 text-[10px] font-bold tracking-wide text-text bg-gold rounded-full px-1.5 py-px">
                   {t('seller.promotions.saleBadge')}
                 </span>
               )}
             </div>
-            <span className="text-[12px] font-medium text-text-muted">{typeLabel(t, promo.type)}</span>
+            <span className="text-[12px] font-medium text-text-muted">
+              {typeLabel(t, promo.type)}
+            </span>
           </div>
         </div>
-        <span className={`inline-flex items-center text-[12px] font-semibold rounded-full px-2.5 py-1 shrink-0 ${sb.cls}`}>
+        <span
+          className={`inline-flex items-center text-[12px] font-semibold rounded-full px-2.5 py-1 shrink-0 ${sb.cls}`}
+        >
           {t(sb.key)}
         </span>
       </div>
@@ -588,7 +723,10 @@ function CompactCard({ promo, t, onCopyCode, onEdit }: { promo: Promotion; t: T;
       {promo.isCoupon && (
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); handleCopy() }}
+          onClick={e => {
+            e.stopPropagation()
+            handleCopy()
+          }}
           className="mt-2 inline-flex items-center gap-1.5 text-[12px] font-mono text-text-muted hover:text-primary transition-colors"
           aria-label={t('seller.promotions.copyCodeAria', { code: promo.code })}
         >
@@ -602,13 +740,15 @@ function CompactCard({ promo, t, onCopyCode, onEdit }: { promo: Promotion; t: T;
       <div className="mt-3 flex items-end justify-between gap-3">
         <div>
           <p className="text-[12px] text-text-muted">{t('seller.promotions.colDiscount')}</p>
-          <p className="text-xl font-bold text-gold tabular-nums leading-tight">{discountText(promo)}</p>
+          <p className="text-xl font-bold text-gold tabular-nums leading-tight">
+            {discountText(promo)}
+          </p>
           <p className="text-[12px] text-text-muted mt-0.5">{scopeText(t, promo)}</p>
         </div>
         <div className="text-right">
           <p className="text-[12px] text-text-muted">{t('seller.promotions.revenueInfluenced')}</p>
           <p className="text-sm font-semibold text-text tabular-nums">
-            {t('seller.promotions.revenue', { amount: formatNPR(promo.revenue) })}
+            {t('seller.promotions.revenue', { amount: formatNPR(promo.revenue, locale) })}
           </p>
           <p className="text-[12px] text-text-muted tabular-nums">
             {t('seller.promotions.uses', { count: promo.redemptions })}
