@@ -165,4 +165,6 @@ export type {
   SubmitKycResult,
   SavePayoutResult,
   SubmitSellerResult,
+  KycStatus,
+  GoLiveStatus,
 } from './seller-services'

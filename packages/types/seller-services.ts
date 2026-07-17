@@ -1,5 +1,10 @@
 import type { StoreSetupInput, BusinessKycInput, PayoutInput } from '@chinooz/validation'
-import type { KycStatus, GoLiveStatus } from '@chinooz/state'
+
+// KYC / go-live status enums live in the leaf types package so that downstream
+// packages (state, mock-data) can reference them without creating an upward
+// dependency from types → state.
+export type KycStatus = 'none' | 'pending' | 'verified' | 'rejected'
+export type GoLiveStatus = 'offline' | 'review' | 'live'
 
 export interface SendOtpResult {
   success: boolean

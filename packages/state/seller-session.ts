@@ -1,8 +1,11 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
+import type { StaffRole } from '@chinooz/mock-data'
+import type { KycStatus, GoLiveStatus } from '@chinooz/types'
 
-export type KycStatus = 'none' | 'pending' | 'verified' | 'rejected'
-export type GoLiveStatus = 'offline' | 'review' | 'live'
+// Re-export the status enums for back-compat with callers that import them
+// from @chinooz/state; the canonical definitions live in @chinooz/types.
+export type { KycStatus, GoLiveStatus } from '@chinooz/types'
 
 export interface SellerStore {
   id: string
@@ -91,6 +94,9 @@ interface SellerSessionState {
   isLoggedIn: boolean
   sellerId: string | null
   seller: SellerProfile
+  /** RBAC role for the current seller — drives `useSellerPermission`. The mock
+   *  seller is the store owner; in production this comes from the auth token. */
+  role: StaffRole
   store: SellerStore | null
   kycStatus: KycStatus
   goLiveStatus: GoLiveStatus
@@ -108,6 +114,7 @@ interface SellerSessionState {
   updateSeller: (data: Partial<SellerProfile>) => void
   updateDraft: (data: Partial<StoreDraft>) => void
   clearDraft: () => void
+  setRole: (role: StaffRole) => void
 }
 
 function getStorage() {
@@ -119,6 +126,34 @@ function getStorage() {
     setItem: () => {},
     removeItem: () => {},
   }))
+}
+
+/**
+ * Sensitive KYC / banking fields that must NEVER be persisted to client
+ * storage (localStorage / AsyncStorage) in plaintext. They are kept in memory
+ * for the current onboarding session so the seller doesn't lose progress
+ * mid-flow, but are dropped on persist — a refresh requires re-entering them.
+ * In production these belong server-side (encrypted) and never on the client.
+ */
+const SENSITIVE_DRAFT_KEYS: readonly (keyof StoreDraft)[] = [
+  'panNumber',
+  'regNumber',
+  'docId',
+  'docReg',
+  'docPan',
+  'bankName',
+  'accountName',
+  'accountNumber',
+  'accountConfirm',
+  'branch',
+  'walletNumber',
+]
+
+function sanitizeDraftForPersist(draft: StoreDraft): StoreDraft {
+  const next = { ...draft }
+  const wiped = next as unknown as Record<string, string>
+  for (const key of SENSITIVE_DRAFT_KEYS) wiped[key] = ''
+  return next
 }
 
 const defaultSeller: SellerProfile = {
@@ -135,6 +170,7 @@ export const useSellerSessionStore = create<SellerSessionState>()(
       isLoggedIn: false,
       sellerId: null,
       seller: { ...defaultSeller },
+      role: 'owner',
       store: null,
       kycStatus: 'none',
       goLiveStatus: 'offline',
@@ -148,6 +184,7 @@ export const useSellerSessionStore = create<SellerSessionState>()(
           isLoggedIn: true,
           sellerId,
           seller: { ...get().seller, name: name || get().seller.name },
+          role: get().role,
         }),
 
       logout: () =>
@@ -155,6 +192,7 @@ export const useSellerSessionStore = create<SellerSessionState>()(
           isLoggedIn: false,
           sellerId: null,
           seller: { ...defaultSeller },
+          role: 'owner',
           store: null,
           kycStatus: 'none',
           goLiveStatus: 'offline',
@@ -163,13 +201,32 @@ export const useSellerSessionStore = create<SellerSessionState>()(
       toggleLogin: () => {
         const { isLoggedIn } = get()
         if (isLoggedIn) {
-          set({ isLoggedIn: false, sellerId: null, store: null, kycStatus: 'none', goLiveStatus: 'offline' })
+          set({
+            isLoggedIn: false,
+            sellerId: null,
+            store: null,
+            kycStatus: 'none',
+            goLiveStatus: 'offline',
+          })
         } else {
           set({
             isLoggedIn: true,
             sellerId: 'seller-1',
             seller: { ...defaultSeller, name: 'Chinooz Seller' },
-            store: { id: 'store-1', name: 'Chinooz Store', slug: 'chinooz-store', tagline: 'Authentic Nepali crafts & electronics', description: 'We bring you the best of Nepal — from handmade crafts to the latest electronics, delivered with care.', category: 'Lifestyle', rating: 4.8, reviewCount: 128, contactPhone: '9801234567', contactEmail: 'hello@chinoozstore.com' },
+            role: 'owner',
+            store: {
+              id: 'store-1',
+              name: 'Chinooz Store',
+              slug: 'chinooz-store',
+              tagline: 'Authentic Nepali crafts & electronics',
+              description:
+                'We bring you the best of Nepal — from handmade crafts to the latest electronics, delivered with care.',
+              category: 'Lifestyle',
+              rating: 4.8,
+              reviewCount: 128,
+              contactPhone: '9801234567',
+              contactEmail: 'hello@chinoozstore.com',
+            },
             kycStatus: 'verified',
             goLiveStatus: 'live',
           })
@@ -201,6 +258,8 @@ export const useSellerSessionStore = create<SellerSessionState>()(
         })),
 
       clearDraft: () => set({ storeDraft: { ...defaultDraft } }),
+
+      setRole: role => set({ role }),
     }),
     {
       name: 'chinooz-seller-session',
@@ -210,11 +269,14 @@ export const useSellerSessionStore = create<SellerSessionState>()(
         isLoggedIn: state.isLoggedIn,
         sellerId: state.sellerId,
         seller: state.seller,
+        role: state.role,
         store: state.store,
         kycStatus: state.kycStatus,
         goLiveStatus: state.goLiveStatus,
         devMock: state.devMock,
-        storeDraft: state.storeDraft,
+        // Strip PAN / bank account / KYC doc fields — never persist financial
+        // PII to client storage. See `sanitizeDraftForPersist`.
+        storeDraft: sanitizeDraftForPersist(state.storeDraft),
       }),
     },
   ),

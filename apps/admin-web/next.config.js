@@ -1,21 +1,4 @@
 /** @type {import('next').NextConfig} */
-
-const isProd = process.env.NODE_ENV === 'production'
-
-const csp = [
-  "default-src 'self'",
-  isProd
-    ? "script-src 'self' 'unsafe-inline'"
-    : "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https://picsum.photos https://ui-avatars.com",
-  "font-src 'self' data:",
-  "connect-src 'self'",
-  "frame-ancestors 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-].join('; ')
-
 const nextConfig = {
   reactStrictMode: true,
   compress: true,
@@ -24,10 +7,7 @@ const nextConfig = {
     '@chinooz/i18n',
     '@chinooz/utils',
     '@chinooz/types',
-    '@chinooz/hooks',
-    '@chinooz/state',
     '@chinooz/ui-web',
-    '@chinooz/validation',
   ],
   images: {
     remotePatterns: [
@@ -47,7 +27,6 @@ const nextConfig = {
         { key: 'X-Content-Type-Options', value: 'nosniff' },
         { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
         { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
-        { key: 'Content-Security-Policy', value: csp },
       ],
     },
     {
@@ -59,7 +38,7 @@ const nextConfig = {
     },
   ],
   experimental: {
-    optimizePackageImports: ['@chinooz/ui-web', 'framer-motion', 'embla-carousel-react'],
+    optimizePackageImports: ['@chinooz/ui-web', 'lucide-react'],
   },
 }
 

@@ -11,10 +11,12 @@ import type {
   SubmitKycResult,
   SavePayoutResult,
   SubmitSellerResult,
+  KycStatus,
+  GoLiveStatus,
 } from '@chinooz/types/seller-services'
 import type { StoreSetupInput, BusinessKycInput, PayoutInput } from '@chinooz/validation'
-import type { KycStatus, GoLiveStatus } from '@chinooz/state'
-import { requestOtp, verifyOtp, checkHandleAvailability } from './api'
+import { requestOtp, verifyOtp } from './api'
+import { checkHandleAvailability } from './sellerApi'
 
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
