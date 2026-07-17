@@ -59,17 +59,24 @@ export default function RiderOtpVerify() {
   const inputRefs = useRef<(TextInput | null)[]>([])
 
   const shakeX = useSharedValue(0)
-  const boxScales = useRef(
-    Array.from({ length: OTP_LENGTH }, () => useSharedValue(1)),
-  ).current
+  // OTP_LENGTH is a fixed constant (6), so the per-box animated values and
+  // styles are unrolled at the top level to satisfy the Rules of Hooks
+  // (hooks cannot be called inside Array.from callbacks).
+  const boxScale0 = useSharedValue(1)
+  const boxScale1 = useSharedValue(1)
+  const boxScale2 = useSharedValue(1)
+  const boxScale3 = useSharedValue(1)
+  const boxScale4 = useSharedValue(1)
+  const boxScale5 = useSharedValue(1)
+  const boxScales = [boxScale0, boxScale1, boxScale2, boxScale3, boxScale4, boxScale5]
   // Precompute per-box animated styles at the top level (hooks rules).
-  const boxStyles = useRef(
-    Array.from({ length: OTP_LENGTH }, (_, i) =>
-      useAnimatedStyle(() => ({
-        transform: [{ scale: boxScales[i].value }],
-      })),
-    ),
-  ).current
+  const boxStyle0 = useAnimatedStyle(() => ({ transform: [{ scale: boxScale0.value }] }))
+  const boxStyle1 = useAnimatedStyle(() => ({ transform: [{ scale: boxScale1.value }] }))
+  const boxStyle2 = useAnimatedStyle(() => ({ transform: [{ scale: boxScale2.value }] }))
+  const boxStyle3 = useAnimatedStyle(() => ({ transform: [{ scale: boxScale3.value }] }))
+  const boxStyle4 = useAnimatedStyle(() => ({ transform: [{ scale: boxScale4.value }] }))
+  const boxStyle5 = useAnimatedStyle(() => ({ transform: [{ scale: boxScale5.value }] }))
+  const boxStyles = [boxStyle0, boxStyle1, boxStyle2, boxStyle3, boxStyle4, boxStyle5]
 
   useEffect(() => {
     if (resendIn <= 0) return
@@ -266,17 +273,14 @@ export default function RiderOtpVerify() {
   const allFilled = digits.every(d => d.length === 1)
   const subtitleKey =
     mode === 'login' ? 'rider.auth.otpLoginSubtitle' : 'rider.auth.otpSignupSubtitle'
-  const successKey =
-    mode === 'login' ? 'rider.auth.successLogin' : 'rider.auth.successSignup'
+  const successKey = mode === 'login' ? 'rider.auth.successLogin' : 'rider.auth.successSignup'
 
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <Animated.View
-        style={[styles.container, { paddingTop: insets.top }, containerStyle]}
-      >
+      <Animated.View style={[styles.container, { paddingTop: insets.top }, containerStyle]}>
         <View style={styles.topBar}>
           <LanguageToggle />
         </View>
@@ -303,8 +307,7 @@ export default function RiderOtpVerify() {
             </Text>
             <TouchableOpacity onPress={handleChangeNumber}>
               <Text style={styles.subtitle}>
-                {t(subtitleKey)}{' '}
-                <Text style={styles.phoneText}>+977 {phone}</Text>
+                {t(subtitleKey)} <Text style={styles.phoneText}>+977 {phone}</Text>
               </Text>
             </TouchableOpacity>
           </SlideUp>
@@ -339,13 +342,13 @@ export default function RiderOtpVerify() {
                 )
               })}
             </View>
-            {!error && !success && (
-              <Text style={styles.helper}>{t('rider.auth.otpHelper')}</Text>
-            )}
+            {!error && !success && <Text style={styles.helper}>{t('rider.auth.otpHelper')}</Text>}
 
             {error ? (
               <View>
-                <Text style={styles.error} accessibilityRole="alert">{error}</Text>
+                <Text style={styles.error} accessibilityRole="alert">
+                  {error}
+                </Text>
               </View>
             ) : null}
 

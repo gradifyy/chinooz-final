@@ -1,5 +1,7 @@
 'use client'
 
+import { MAX_QTY } from '@chinooz/utils'
+
 import React, { useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
@@ -33,25 +35,34 @@ export default function ProductRail({
   const addItem = useCartStore(s => s.addItem)
   const prefetchProduct = usePrefetchProduct()
 
-  const handlePress = useCallback((product: Product) => {
-    router.push(`/product/${product.id}`)
-  }, [router])
+  const handlePress = useCallback(
+    (product: Product) => {
+      router.push(`/product/${product.id}`)
+    },
+    [router],
+  )
 
-  const handleAddToCart = useCallback((product: Product) => {
-    addItem({
-      id: `ci-${product.id}`,
-      productId: product.id,
-      name: product.name,
-      image: product.images?.[0]?.uri ?? '',
-      price: product.price,
-      quantity: 1,
-      maxQuantity: 10,
-    })
-  }, [addItem])
+  const handleAddToCart = useCallback(
+    (product: Product) => {
+      addItem({
+        id: `ci-${product.id}`,
+        productId: product.id,
+        name: product.name,
+        image: product.images?.[0]?.uri ?? '',
+        price: product.price,
+        quantity: 1,
+        maxQuantity: MAX_QTY,
+      })
+    },
+    [addItem],
+  )
 
-  const handleHover = useCallback((product: Product) => {
-    prefetchProduct(product.id)
-  }, [prefetchProduct])
+  const handleHover = useCallback(
+    (product: Product) => {
+      prefetchProduct(product.id)
+    },
+    [prefetchProduct],
+  )
 
   if (isLoading) {
     return (

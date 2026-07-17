@@ -61,11 +61,14 @@ export function AnimatedProgressFill({
     if (isReduced) {
       width.value = pct * 100
     } else {
-      width.value = withDelay(delay, withTiming(pct * 100, {
-        duration: dur.slow,
-        easing: Easing.bezier(...ez.easeOut),
-        reduceMotion: ReduceMotion.Never,
-      }))
+      width.value = withDelay(
+        delay,
+        withTiming(pct * 100, {
+          duration: dur.slow,
+          easing: Easing.bezier(...ez.easeOut),
+          reduceMotion: ReduceMotion.Never,
+        }),
+      )
     }
   }, [pct, isReduced, delay, width])
 
@@ -112,11 +115,14 @@ export function AnimatedMissionRing({
     if (isReduced) {
       dashOffset.value = circ * (1 - pct)
     } else {
-      dashOffset.value = withDelay(delay, withTiming(circ * (1 - pct), {
-        duration: dur.slower,
-        easing: Easing.bezier(...ez.easeOut),
-        reduceMotion: ReduceMotion.Never,
-      }))
+      dashOffset.value = withDelay(
+        delay,
+        withTiming(circ * (1 - pct), {
+          duration: dur.slower,
+          easing: Easing.bezier(...ez.easeOut),
+          reduceMotion: ReduceMotion.Never,
+        }),
+      )
     }
   }, [pct, circ, isReduced, delay, dashOffset])
 
@@ -166,8 +172,6 @@ export function ConfettiLite({
   const reduced = useReducedMotion()
   const isReduced = reducedOverride ?? reduced
 
-  if (isReduced || !visible) return null
-
   const particles = useMemo(
     () =>
       Array.from({ length: CONFETTI_PARTICLES }, (_, i) => ({
@@ -179,6 +183,8 @@ export function ConfettiLite({
     [],
   )
 
+  if (isReduced || !visible) return null
+
   return (
     <View style={styles.confettiContainer} pointerEvents="none">
       {particles.map(p => (
@@ -188,7 +194,15 @@ export function ConfettiLite({
   )
 }
 
-function ConfettiParticle({ color, angle, delay }: { color: string; angle: number; delay: number }) {
+function ConfettiParticle({
+  color,
+  angle,
+  delay,
+}: {
+  color: string
+  angle: number
+  delay: number
+}) {
   const opacity = useSharedValue(0)
   const translateY = useSharedValue(0)
   const translateX = useSharedValue(0)
@@ -196,22 +210,34 @@ function ConfettiParticle({ color, angle, delay }: { color: string; angle: numbe
 
   useEffect(() => {
     const dist = 50
-    opacity.value = withDelay(delay, withTiming(1, { duration: 80, reduceMotion: ReduceMotion.Never }))
+    opacity.value = withDelay(
+      delay,
+      withTiming(1, { duration: 80, reduceMotion: ReduceMotion.Never }),
+    )
     scale.value = withDelay(delay, withSpring(1, { damping: 8, stiffness: 200 }))
-    translateX.value = withDelay(delay, withTiming(Math.cos(angle) * dist, {
-      duration: dur.slower,
-      easing: Easing.bezier(...ez.easeOut),
-      reduceMotion: ReduceMotion.Never,
-    }))
-    translateY.value = withDelay(delay, withTiming(Math.sin(angle) * dist - 20, {
-      duration: dur.slower,
-      easing: Easing.bezier(...ez.easeOut),
-      reduceMotion: ReduceMotion.Never,
-    }))
-    opacity.value = withDelay(delay + 600, withTiming(0, {
-      duration: dur.normal,
-      reduceMotion: ReduceMotion.Never,
-    }))
+    translateX.value = withDelay(
+      delay,
+      withTiming(Math.cos(angle) * dist, {
+        duration: dur.slower,
+        easing: Easing.bezier(...ez.easeOut),
+        reduceMotion: ReduceMotion.Never,
+      }),
+    )
+    translateY.value = withDelay(
+      delay,
+      withTiming(Math.sin(angle) * dist - 20, {
+        duration: dur.slower,
+        easing: Easing.bezier(...ez.easeOut),
+        reduceMotion: ReduceMotion.Never,
+      }),
+    )
+    opacity.value = withDelay(
+      delay + 600,
+      withTiming(0, {
+        duration: dur.normal,
+        reduceMotion: ReduceMotion.Never,
+      }),
+    )
   }, [angle, delay, opacity, scale, translateX, translateY])
 
   const style = useAnimatedStyle(() => ({
@@ -223,11 +249,7 @@ function ConfettiParticle({ color, angle, delay }: { color: string; angle: numbe
     ],
   }))
 
-  return (
-    <Animated.View
-      style={[styles.confettiParticle, { backgroundColor: color }, style]}
-    />
-  )
+  return <Animated.View style={[styles.confettiParticle, { backgroundColor: color }, style]} />
 }
 
 /* ---------- StreakFlame ---------- */
@@ -249,8 +271,16 @@ export function StreakFlame({
     if (isReduced) return
     scale.value = withRepeat(
       withSequence(
-        withTiming(1.08, { duration: 1000, easing: Easing.bezier(...ez.easeInOut), reduceMotion: ReduceMotion.Never }),
-        withTiming(1, { duration: 1000, easing: Easing.bezier(...ez.easeInOut), reduceMotion: ReduceMotion.Never }),
+        withTiming(1.08, {
+          duration: 1000,
+          easing: Easing.bezier(...ez.easeInOut),
+          reduceMotion: ReduceMotion.Never,
+        }),
+        withTiming(1, {
+          duration: 1000,
+          easing: Easing.bezier(...ez.easeInOut),
+          reduceMotion: ReduceMotion.Never,
+        }),
       ),
       -1,
       false,
@@ -281,8 +311,16 @@ export function SurgePulse({
     if (isReduced) return
     opacity.value = withRepeat(
       withSequence(
-        withTiming(0.7, { duration: 900, easing: Easing.bezier(...ez.easeInOut), reduceMotion: ReduceMotion.Never }),
-        withTiming(1, { duration: 900, easing: Easing.bezier(...ez.easeInOut), reduceMotion: ReduceMotion.Never }),
+        withTiming(0.7, {
+          duration: 900,
+          easing: Easing.bezier(...ez.easeInOut),
+          reduceMotion: ReduceMotion.Never,
+        }),
+        withTiming(1, {
+          duration: 900,
+          easing: Easing.bezier(...ez.easeInOut),
+          reduceMotion: ReduceMotion.Never,
+        }),
       ),
       -1,
       false,
@@ -318,16 +356,22 @@ export function ListEnter({
       translateY.value = 0
     } else {
       const stagger = Math.min(index * 50, 200)
-      opacity.value = withDelay(stagger, withTiming(1, {
-        duration: dur.normal,
-        easing: Easing.bezier(...ez.easeOut),
-        reduceMotion: ReduceMotion.Never,
-      }))
-      translateY.value = withDelay(stagger, withTiming(0, {
-        duration: dur.normal,
-        easing: Easing.bezier(...ez.easeOut),
-        reduceMotion: ReduceMotion.Never,
-      }))
+      opacity.value = withDelay(
+        stagger,
+        withTiming(1, {
+          duration: dur.normal,
+          easing: Easing.bezier(...ez.easeOut),
+          reduceMotion: ReduceMotion.Never,
+        }),
+      )
+      translateY.value = withDelay(
+        stagger,
+        withTiming(0, {
+          duration: dur.normal,
+          easing: Easing.bezier(...ez.easeOut),
+          reduceMotion: ReduceMotion.Never,
+        }),
+      )
     }
   }, [index, isReduced, opacity, translateY])
 
@@ -357,22 +401,24 @@ export function ClaimCelebration({
   const opacity = useSharedValue(isReduced ? 1 : 0)
 
   useEffect(() => {
-    if (visible) {
-      if (isReduced) {
-        scale.value = 1
-        opacity.value = 1
-      } else {
-        opacity.value = withTiming(1, { duration: dur.fast, reduceMotion: ReduceMotion.Never })
-        scale.value = withSpring(1, { damping: 10, stiffness: 150 })
-      }
-      const timer = setTimeout(() => {
+    if (!visible) return
+    if (isReduced) {
+      scale.value = 1
+      opacity.value = 1
+    } else {
+      opacity.value = withTiming(1, { duration: dur.fast, reduceMotion: ReduceMotion.Never })
+      scale.value = withSpring(1, { damping: 10, stiffness: 150 })
+    }
+    const timer = setTimeout(
+      () => {
         if (!isReduced) {
           opacity.value = withTiming(0, { duration: dur.normal, reduceMotion: ReduceMotion.Never })
         }
         setTimeout(() => onDone?.(), isReduced ? 0 : dur.normal + 50)
-      }, isReduced ? 300 : 1200)
-      return () => clearTimeout(timer)
-    }
+      },
+      isReduced ? 300 : 1200,
+    )
+    return () => clearTimeout(timer)
   }, [visible, isReduced, scale, opacity, onDone])
 
   const style = useAnimatedStyle(() => ({

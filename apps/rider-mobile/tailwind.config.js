@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-var-requires */
 const { tailwindPreset } = require('@chinooz/theme/tailwind-preset')
 
 /** @type {import('tailwindcss').Config} */

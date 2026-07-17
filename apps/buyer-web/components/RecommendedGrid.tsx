@@ -1,5 +1,7 @@
 'use client'
 
+import { MAX_QTY } from '@chinooz/utils'
+
 import React, { useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRouter } from 'next/navigation'
@@ -17,40 +19,42 @@ export default function RecommendedGrid() {
   const addItem = useCartStore(s => s.addItem)
   const prefetchProduct = usePrefetchProduct()
 
-  const {
-    data,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    isLoading,
-    isError,
-    refetch,
-  } = useInfiniteProducts({ limit: 10 })
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isError, refetch } =
+    useInfiniteProducts({ limit: 10 })
 
   const allProducts = useMemo(() => {
     if (!data) return []
     return data.pages.flatMap((page: { items: Product[] }) => page.items)
   }, [data])
 
-  const handlePress = useCallback((product: Product) => {
-    router.push(`/product/${product.id}`)
-  }, [router])
+  const handlePress = useCallback(
+    (product: Product) => {
+      router.push(`/product/${product.id}`)
+    },
+    [router],
+  )
 
-  const handleAddToCart = useCallback((product: Product) => {
-    addItem({
-      id: `ci-${product.id}`,
-      productId: product.id,
-      name: product.name,
-      image: product.images?.[0]?.uri ?? '',
-      price: product.price,
-      quantity: 1,
-      maxQuantity: 10,
-    })
-  }, [addItem])
+  const handleAddToCart = useCallback(
+    (product: Product) => {
+      addItem({
+        id: `ci-${product.id}`,
+        productId: product.id,
+        name: product.name,
+        image: product.images?.[0]?.uri ?? '',
+        price: product.price,
+        quantity: 1,
+        maxQuantity: MAX_QTY,
+      })
+    },
+    [addItem],
+  )
 
-  const handleHover = useCallback((product: Product) => {
-    prefetchProduct(product.id)
-  }, [prefetchProduct])
+  const handleHover = useCallback(
+    (product: Product) => {
+      prefetchProduct(product.id)
+    },
+    [prefetchProduct],
+  )
 
   const handleEndReached = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) {
@@ -61,7 +65,7 @@ export default function RecommendedGrid() {
   if (isLoading) {
     return (
       <div>
-        <h2 className="text-[22px] font-semibold text-text mb-3">{t('home.recommended')}</h2>
+        <h2 className="text-xl font-semibold text-text mb-3">{t('home.recommended')}</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
           {Array.from({ length: 10 }).map((_, i) => (
             <ProductCardSkeleton key={i} />
@@ -99,7 +103,7 @@ export default function RecommendedGrid() {
         initial={reduced ? false : { opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: reduced ? 0 : 0.3 }}
-        className="text-[22px] font-semibold text-text mb-3"
+        className="text-xl font-semibold text-text mb-3"
       >
         {t('home.recommended')}
       </motion.h2>

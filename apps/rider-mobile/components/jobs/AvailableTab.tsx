@@ -9,9 +9,7 @@ import {
   AccessibilityInfo,
   RefreshControl,
 } from 'react-native'
-import Animated, {
-  FadeIn,
-} from 'react-native-reanimated'
+import Animated, { FadeIn } from 'react-native-reanimated'
 import { useTranslation } from 'react-i18next'
 import * as Haptics from 'expo-haptics'
 import { WifiOff, Lock, Landmark } from 'lucide-react-native'
@@ -139,7 +137,11 @@ export default function AvailableTab({
         const expired = prev.filter(j => j.expiresAtMs && j.expiresAtMs <= now)
         for (const e of expired) {
           AccessibilityInfo.announceForAccessibility(
-            tt('rider.jobs.available.liveExpired', { ref: e.orderRef }, `Job expired: ${e.orderRef}`),
+            tt(
+              'rider.jobs.available.liveExpired',
+              { ref: e.orderRef },
+              `Job expired: ${e.orderRef}`,
+            ),
           )
         }
         return prev.filter(j => !j.expiresAtMs || j.expiresAtMs > now)
@@ -179,15 +181,44 @@ export default function AvailableTab({
       }
     }
     return [...list].sort((a, b) =>
-      sort === 'nearest'
-        ? a.pickupDistanceKm - b.pickupDistanceKm
-        : b.payout - a.payout,
+      sort === 'nearest' ? a.pickupDistanceKm - b.pickupDistanceKm : b.payout - a.payout,
     )
   }, [liveJobs, debouncedFilters, sort, zones])
 
   const tick = () => {
-    try { if (!reduced) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light) } catch {}
+    try {
+      if (!reduced) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    } catch {}
   }
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true)
+    AccessibilityInfo.announceForAccessibility(
+      tt('rider.jobs.refreshing', undefined, 'Refreshing jobs…'),
+    )
+    refetch().finally(() => {
+      setRefreshing(false)
+      AccessibilityInfo.announceForAccessibility(
+        tt('rider.jobs.refreshed', undefined, 'Jobs refreshed'),
+      )
+    })
+  }, [refetch, tt])
+
+  const handleJobPress = useCallback(
+    (job: JobRequest) => {
+      tick()
+      onView?.(job)
+    },
+    [onView],
+  )
+
+  const handleJobAction = useCallback(
+    (job: JobRequest) => {
+      tick()
+      onAccept?.(job)
+    },
+    [onAccept],
+  )
 
   // -- Offline state --
   if (!isOnline) {
@@ -195,9 +226,20 @@ export default function AvailableTab({
       <EmptyState
         testID="jobs-available-offline"
         icon={<WifiOff size={40} color={colors.textTertiary} />}
-        title={tt('rider.jobs.availableEmptyOfflineTitle', undefined, 'Go online to see deliveries')}
-        subtitle={tt('rider.jobs.availableEmptyOfflineSubtitle', undefined, "When you're online, nearby job requests show up here in real time.")}
-        action={{ label: tt('rider.jobs.offlineAction', undefined, 'Go online'), onPress: onGoOnline }}
+        title={tt(
+          'rider.jobs.availableEmptyOfflineTitle',
+          undefined,
+          'Go online to see deliveries',
+        )}
+        subtitle={tt(
+          'rider.jobs.availableEmptyOfflineSubtitle',
+          undefined,
+          "When you're online, nearby job requests show up here in real time.",
+        )}
+        action={{
+          label: tt('rider.jobs.offlineAction', undefined, 'Go online'),
+          onPress: onGoOnline,
+        }}
       />
     )
   }
@@ -209,7 +251,11 @@ export default function AvailableTab({
         testID="jobs-available-error"
         onRetry={() => refetch()}
         title={tt('rider.jobs.states.errorTitle', undefined, 'Could not load deliveries')}
-        subtitle={tt('rider.jobs.states.errorSubtitle', undefined, 'Something went wrong. Please try again.')}
+        subtitle={tt(
+          'rider.jobs.states.errorSubtitle',
+          undefined,
+          'Something went wrong. Please try again.',
+        )}
       />
     )
   }
@@ -228,25 +274,6 @@ export default function AvailableTab({
   }
 
   const hasBlockedCod = codAtLimit && filtered.some(isCodJob)
-
-  const onRefresh = useCallback(() => {
-    setRefreshing(true)
-    AccessibilityInfo.announceForAccessibility(tt('rider.jobs.refreshing', undefined, 'Refreshing jobs…'))
-    refetch().finally(() => {
-      setRefreshing(false)
-      AccessibilityInfo.announceForAccessibility(tt('rider.jobs.refreshed', undefined, 'Jobs refreshed'))
-    })
-  }, [refetch, tt])
-
-  const handleJobPress = useCallback((job: JobRequest) => {
-    tick()
-    onView?.(job)
-  }, [onView])
-
-  const handleJobAction = useCallback((job: JobRequest) => {
-    tick()
-    onAccept?.(job)
-  }, [onAccept])
 
   const renderItem = ({ item }: { item: JobRequest }) => {
     const blocked = codAtLimit && isCodJob(item)
@@ -269,13 +296,21 @@ export default function AvailableTab({
       ? tt('rider.jobs.available.resultsCountNone', undefined, 'No jobs match your filters')
       : filtered.length === 1
         ? tt('rider.jobs.available.resultsCountOne', undefined, '1 job nearby')
-        : tt('rider.jobs.available.resultsCount', { count: filtered.length }, `${filtered.length} jobs nearby`)
+        : tt(
+            'rider.jobs.available.resultsCount',
+            { count: filtered.length },
+            `${filtered.length} jobs nearby`,
+          )
 
   return (
     <View style={styles.list} accessibilityLabel={resultsLabel}>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>{tt('rider.jobs.availableTitle', undefined, 'Available deliveries')}</Text>
-        <Text style={styles.sectionSubtitle}>{tt('rider.jobs.availableSubtitle', undefined, 'Nearby jobs waiting for a rider')}</Text>
+        <Text style={styles.sectionTitle}>
+          {tt('rider.jobs.availableTitle', undefined, 'Available deliveries')}
+        </Text>
+        <Text style={styles.sectionSubtitle}>
+          {tt('rider.jobs.availableSubtitle', undefined, 'Nearby jobs waiting for a rider')}
+        </Text>
       </View>
 
       {/* Sort + view toggle */}
@@ -302,25 +337,46 @@ export default function AvailableTab({
       {hasBlockedCod && (
         <View
           accessibilityRole="summary"
-          accessibilityLabel={tt('rider.wallet.jobsCodBlockedAria', { limit: codLimitStatus.maxCodFloat }, 'COD jobs are blocked. You are at the COD cash limit. Deposit cash to unlock COD orders.')}
+          accessibilityLabel={tt(
+            'rider.wallet.jobsCodBlockedAria',
+            { limit: codLimitStatus.maxCodFloat },
+            'COD jobs are blocked. You are at the COD cash limit. Deposit cash to unlock COD orders.',
+          )}
           accessibilityLiveRegion="polite"
           style={styles.blockedBanner}
         >
           <View style={styles.blockedHeader}>
             <Lock size={16} color={colors.error} />
-            <Text style={styles.blockedTitle}>{tt('rider.wallet.jobsCodBlockedTitle', undefined, 'COD jobs paused')}</Text>
+            <Text style={styles.blockedTitle}>
+              {tt('rider.wallet.jobsCodBlockedTitle', undefined, 'COD jobs paused')}
+            </Text>
           </View>
-          <Text style={styles.blockedSub}>{tt('rider.wallet.jobsCodBlockedSub', undefined, "You're at the COD cash limit. Deposit to unlock COD orders.")}</Text>
+          <Text style={styles.blockedSub}>
+            {tt(
+              'rider.wallet.jobsCodBlockedSub',
+              undefined,
+              "You're at the COD cash limit. Deposit to unlock COD orders.",
+            )}
+          </Text>
           {onDepositToUnlock && (
             <TouchableOpacity
               accessibilityRole="button"
-              accessibilityLabel={tt('rider.wallet.jobsCodBlockedAction', undefined, 'Deposit to unlock')}
-              onPress={() => { tick(); onDepositToUnlock() }}
+              accessibilityLabel={tt(
+                'rider.wallet.jobsCodBlockedAction',
+                undefined,
+                'Deposit to unlock',
+              )}
+              onPress={() => {
+                tick()
+                onDepositToUnlock()
+              }}
               style={styles.blockedCta}
               activeOpacity={0.9}
             >
               <Landmark size={15} color={colors.white} />
-              <Text style={styles.blockedCtaText}>{tt('rider.wallet.jobsCodBlockedAction', undefined, 'Deposit to unlock')}</Text>
+              <Text style={styles.blockedCtaText}>
+                {tt('rider.wallet.jobsCodBlockedAction', undefined, 'Deposit to unlock')}
+              </Text>
             </TouchableOpacity>
           )}
         </View>
@@ -328,7 +384,10 @@ export default function AvailableTab({
 
       {/* Map view — fade in */}
       {view === 'map' && (
-        <Animated.View entering={reduced ? undefined : FadeIn.duration(duration.normal)} style={{ flex: 1 }}>
+        <Animated.View
+          entering={reduced ? undefined : FadeIn.duration(duration.normal)}
+          style={{ flex: 1 }}
+        >
           <JobMiniMap
             jobs={filtered}
             jobPoints={jobPoints}
@@ -336,7 +395,11 @@ export default function AvailableTab({
             width={Dimensions.get('window').width - spacing[4] * 2}
             height={260}
             onJobPress={handleJobPress}
-            accessibilityLabel={tt('rider.jobs.available.mapAria', { count: filtered.length }, `Map showing ${filtered.length} available job pins`)}
+            accessibilityLabel={tt(
+              'rider.jobs.available.mapAria',
+              { count: filtered.length },
+              `Map showing ${filtered.length} available job pins`,
+            )}
             testID="jobs-available-map"
           />
         </Animated.View>
@@ -344,35 +407,35 @@ export default function AvailableTab({
 
       {/* List view — fade in */}
       {view === 'list' && (
-        <Animated.View entering={reduced ? undefined : FadeIn.duration(duration.normal)} style={{ flex: 1 }}>
-        <FlatList
-          data={filtered}
-          keyExtractor={item => item.id}
-          renderItem={renderItem}
-          ItemSeparatorComponent={() => <View style={{ height: spacing[3] }} />}
-          ListEmptyComponent={
-            <QuietStateView
-              testID="jobs-available-quiet"
-              onAction={onOpenHotspots}
-            />
-          }
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing || isFetching}
-              onRefresh={onRefresh}
-              tintColor={colors.primary}
-              colors={[colors.primary]}
-            />
-          }
-          contentContainerStyle={styles.flatListContent}
-          showsVerticalScrollIndicator={false}
-          scrollEnabled={false}
-          initialNumToRender={6}
-          maxToRenderPerBatch={6}
-          windowSize={10}
-          removeClippedSubviews={true}
-          testID="jobs-available-flatlist"
-        />
+        <Animated.View
+          entering={reduced ? undefined : FadeIn.duration(duration.normal)}
+          style={{ flex: 1 }}
+        >
+          <FlatList
+            data={filtered}
+            keyExtractor={item => item.id}
+            renderItem={renderItem}
+            ItemSeparatorComponent={() => <View style={{ height: spacing[3] }} />}
+            ListEmptyComponent={
+              <QuietStateView testID="jobs-available-quiet" onAction={onOpenHotspots} />
+            }
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing || isFetching}
+                onRefresh={onRefresh}
+                tintColor={colors.primary}
+                colors={[colors.primary]}
+              />
+            }
+            contentContainerStyle={styles.flatListContent}
+            showsVerticalScrollIndicator={false}
+            scrollEnabled={false}
+            initialNumToRender={6}
+            maxToRenderPerBatch={6}
+            windowSize={10}
+            removeClippedSubviews={true}
+            testID="jobs-available-flatlist"
+          />
         </Animated.View>
       )}
 
@@ -380,12 +443,18 @@ export default function AvailableTab({
       {view === 'map' && (
         <TouchableOpacity
           accessibilityRole="button"
-          accessibilityLabel={tt('rider.jobs.pullToRefresh', undefined, 'Pull down to refresh jobs')}
+          accessibilityLabel={tt(
+            'rider.jobs.pullToRefresh',
+            undefined,
+            'Pull down to refresh jobs',
+          )}
           onPress={onRefresh}
           style={styles.mapRefreshBtn}
           activeOpacity={0.7}
         >
-          <Text style={styles.mapRefreshText}>{tt('rider.jobs.refreshed', undefined, 'Refresh jobs')}</Text>
+          <Text style={styles.mapRefreshText}>
+            {tt('rider.jobs.refreshed', undefined, 'Refresh jobs')}
+          </Text>
         </TouchableOpacity>
       )}
     </View>
@@ -403,13 +472,21 @@ function BlockedJobCard({ job, orderRef }: { job: JobRequest; orderRef: string }
       style={styles.cardBlocked}
       testID={`jobs-available-item-${job.id}`}
       accessibilityRole="summary"
-      accessibilityLabel={t('rider.wallet.jobsCodBlockedTitle', { defaultValue: 'COD jobs paused' })}
+      accessibilityLabel={t('rider.wallet.jobsCodBlockedTitle', {
+        defaultValue: 'COD jobs paused',
+      })}
     >
       <View style={styles.blockedHeader}>
         <Lock size={16} color={colors.error} />
-        <Text style={styles.orderRef}>{t('rider.jobs.activeOrderRef', { ref: orderRef, defaultValue: `Order ${orderRef}` })}</Text>
+        <Text style={styles.orderRef}>
+          {t('rider.jobs.activeOrderRef', { ref: orderRef, defaultValue: `Order ${orderRef}` })}
+        </Text>
       </View>
-      <Text style={styles.blockedSub}>{t('rider.wallet.jobsCodBlockedSub', { defaultValue: "You're at the COD cash limit. Deposit to unlock COD orders." })}</Text>
+      <Text style={styles.blockedSub}>
+        {t('rider.wallet.jobsCodBlockedSub', {
+          defaultValue: "You're at the COD cash limit. Deposit to unlock COD orders.",
+        })}
+      </Text>
     </View>
   )
 }
@@ -419,11 +496,27 @@ function BlockedJobCard({ job, orderRef }: { job: JobRequest; orderRef: string }
 const styles = StyleSheet.create({
   list: { paddingHorizontal: spacing[4], paddingTop: spacing[3], gap: spacing[3] },
   sectionHeader: { gap: spacing[1], marginBottom: spacing[1] },
-  sectionTitle: { fontSize: fontSize.md[0], fontFamily: fontFamily.sansSemiBold[0], fontWeight: '600', color: colors.text },
+  sectionTitle: {
+    fontSize: fontSize.md[0],
+    fontFamily: fontFamily.sansSemiBold[0],
+    fontWeight: '600',
+    color: colors.text,
+  },
   sectionSubtitle: { fontSize: fontSize.sm[0], color: colors.textMuted },
   resultsCount: { fontSize: fontSize.sm[0], color: colors.textMuted, fontWeight: '500' },
-  skeletonControls: { height: 40, backgroundColor: colors.border, borderRadius: radii.full, opacity: 0.3 },
-  skeletonFilters: { height: 40, width: '70%', backgroundColor: colors.border, borderRadius: radii.full, opacity: 0.3 },
+  skeletonControls: {
+    height: 40,
+    backgroundColor: colors.border,
+    borderRadius: radii.full,
+    opacity: 0.3,
+  },
+  skeletonFilters: {
+    height: 40,
+    width: '70%',
+    backgroundColor: colors.border,
+    borderRadius: radii.full,
+    opacity: 0.3,
+  },
   flatListContent: { gap: spacing[3], paddingBottom: spacing[4] },
   blockedBanner: {
     backgroundColor: colors.errorLight,
@@ -434,8 +527,17 @@ const styles = StyleSheet.create({
     gap: spacing[2],
   },
   blockedHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
-  blockedTitle: { fontSize: fontSize.base[0], fontWeight: '700', color: colors.error, fontFamily: fontFamily.sansBold[0] },
-  blockedSub: { fontSize: fontSize.sm[0], color: colors.textSecondary, fontFamily: fontFamily.sans[0] },
+  blockedTitle: {
+    fontSize: fontSize.base[0],
+    fontWeight: '700',
+    color: colors.error,
+    fontFamily: fontFamily.sansBold[0],
+  },
+  blockedSub: {
+    fontSize: fontSize.sm[0],
+    color: colors.textSecondary,
+    fontFamily: fontFamily.sans[0],
+  },
   blockedCta: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -448,7 +550,12 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     minHeight: 44,
   },
-  blockedCtaText: { fontSize: fontSize.sm[0], fontWeight: '700', color: colors.white, fontFamily: fontFamily.sansBold[0] },
+  blockedCtaText: {
+    fontSize: fontSize.sm[0],
+    fontWeight: '700',
+    color: colors.white,
+    fontFamily: fontFamily.sansBold[0],
+  },
   cardBlocked: {
     backgroundColor: colors.surface,
     borderRadius: radii.md,
@@ -458,7 +565,13 @@ const styles = StyleSheet.create({
     gap: spacing[2],
     opacity: 0.6,
   },
-  orderRef: { fontSize: fontSize.base[0], fontFamily: fontFamily.sansSemiBold[0], fontWeight: '600', color: colors.text, flex: 1 },
+  orderRef: {
+    fontSize: fontSize.base[0],
+    fontFamily: fontFamily.sansSemiBold[0],
+    fontWeight: '600',
+    color: colors.text,
+    flex: 1,
+  },
   mapRefreshBtn: {
     flexDirection: 'row',
     alignItems: 'center',

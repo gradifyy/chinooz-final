@@ -1,5 +1,7 @@
 'use client'
 
+import { MAX_QTY } from '@chinooz/utils'
+
 import React, { useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
@@ -26,22 +28,28 @@ function RailSection({
   const addItem = useCartStore(s => s.addItem)
   const prefetchProduct = usePrefetchProduct()
 
-  const handlePress = useCallback((product: Product) => {
-    prefetchProduct(product.id)
-    router.push(`/product/${product.id}`)
-  }, [router, prefetchProduct])
+  const handlePress = useCallback(
+    (product: Product) => {
+      prefetchProduct(product.id)
+      router.push(`/product/${product.id}`)
+    },
+    [router, prefetchProduct],
+  )
 
-  const handleAddToCart = useCallback((product: Product) => {
-    addItem({
-      id: `ci-${product.id}`,
-      productId: product.id,
-      name: product.name,
-      image: product.images?.[0]?.uri ?? '',
-      price: product.price,
-      quantity: 1,
-      maxQuantity: 10,
-    })
-  }, [addItem])
+  const handleAddToCart = useCallback(
+    (product: Product) => {
+      addItem({
+        id: `ci-${product.id}`,
+        productId: product.id,
+        name: product.name,
+        image: product.images?.[0]?.uri ?? '',
+        price: product.price,
+        quantity: 1,
+        maxQuantity: MAX_QTY,
+      })
+    },
+    [addItem],
+  )
 
   if (isLoading) {
     return (
@@ -105,7 +113,7 @@ function RailSection({
               variant="compact"
               onPress={handlePress}
               onAddToCart={handleAddToCart}
-              onLongPress={(p) => prefetchProduct(p.id)}
+              onLongPress={p => prefetchProduct(p.id)}
             />
           </motion.div>
         ))}

@@ -19,25 +19,86 @@ const STATUS_META: Record<
   { bg: string; text: string; dot: string; labelKey: string }
 > = {
   new: { bg: 'bg-info/10', text: 'text-info', dot: 'bg-info', labelKey: 'seller.orders.tabNew' },
-  to_pack: { bg: 'bg-warning/10', text: 'text-warning', dot: 'bg-warning', labelKey: 'seller.orders.tabToPack' },
-  to_ship: { bg: 'bg-warning/10', text: 'text-warning', dot: 'bg-warning', labelKey: 'seller.orders.tabToShip' },
-  shipped: { bg: 'bg-info/10', text: 'text-info', dot: 'bg-info', labelKey: 'seller.orders.tabShipped' },
-  completed: { bg: 'bg-success/10', text: 'text-success', dot: 'bg-success', labelKey: 'seller.orders.tabCompleted' },
-  cancelled_returned: { bg: 'bg-error/10', text: 'text-error', dot: 'bg-error', labelKey: 'seller.orders.tabCancelledReturned' },
-  action_needed: { bg: 'bg-error/10', text: 'text-error', dot: 'bg-error', labelKey: 'seller.orders.tabActionNeeded' },
+  to_pack: {
+    bg: 'bg-warning/10',
+    text: 'text-warning',
+    dot: 'bg-warning',
+    labelKey: 'seller.orders.tabToPack',
+  },
+  to_ship: {
+    bg: 'bg-warning/10',
+    text: 'text-warning',
+    dot: 'bg-warning',
+    labelKey: 'seller.orders.tabToShip',
+  },
+  shipped: {
+    bg: 'bg-info/10',
+    text: 'text-info',
+    dot: 'bg-info',
+    labelKey: 'seller.orders.tabShipped',
+  },
+  completed: {
+    bg: 'bg-success/10',
+    text: 'text-success',
+    dot: 'bg-success',
+    labelKey: 'seller.orders.tabCompleted',
+  },
+  cancelled_returned: {
+    bg: 'bg-error/10',
+    text: 'text-error',
+    dot: 'bg-error',
+    labelKey: 'seller.orders.tabCancelledReturned',
+  },
+  action_needed: {
+    bg: 'bg-error/10',
+    text: 'text-error',
+    dot: 'bg-error',
+    labelKey: 'seller.orders.tabActionNeeded',
+  },
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type IconType = any
 
-const ACTION_MAP: Record<SellerOrderStatusKey, { labelKey: string; ariaKey: string; Icon: IconType } | null> = {
-  new: { labelKey: 'seller.orders.actionAccept', ariaKey: 'seller.orders.actionAcceptAria', Icon: Check },
-  to_pack: { labelKey: 'seller.orders.actionPack', ariaKey: 'seller.orders.actionPackAria', Icon: Package },
-  to_ship: { labelKey: 'seller.orders.actionShip', ariaKey: 'seller.orders.actionShipAria', Icon: Truck },
-  shipped: { labelKey: 'seller.orders.actionPrintLabel', ariaKey: 'seller.orders.actionPrintLabelAria', Icon: Printer },
-  completed: { labelKey: 'seller.orders.actionView', ariaKey: 'seller.orders.actionViewAria', Icon: Eye },
-  cancelled_returned: { labelKey: 'seller.orders.actionView', ariaKey: 'seller.orders.actionViewAria', Icon: Eye },
-  action_needed: { labelKey: 'seller.orders.actionView', ariaKey: 'seller.orders.actionViewAria', Icon: Eye },
+const ACTION_MAP: Record<
+  SellerOrderStatusKey,
+  { labelKey: string; ariaKey: string; Icon: IconType } | null
+> = {
+  new: {
+    labelKey: 'seller.orders.actionAccept',
+    ariaKey: 'seller.orders.actionAcceptAria',
+    Icon: Check,
+  },
+  to_pack: {
+    labelKey: 'seller.orders.actionPack',
+    ariaKey: 'seller.orders.actionPackAria',
+    Icon: Package,
+  },
+  to_ship: {
+    labelKey: 'seller.orders.actionShip',
+    ariaKey: 'seller.orders.actionShipAria',
+    Icon: Truck,
+  },
+  shipped: {
+    labelKey: 'seller.orders.actionPrintLabel',
+    ariaKey: 'seller.orders.actionPrintLabelAria',
+    Icon: Printer,
+  },
+  completed: {
+    labelKey: 'seller.orders.actionView',
+    ariaKey: 'seller.orders.actionViewAria',
+    Icon: Eye,
+  },
+  cancelled_returned: {
+    labelKey: 'seller.orders.actionView',
+    ariaKey: 'seller.orders.actionViewAria',
+    Icon: Eye,
+  },
+  action_needed: {
+    labelKey: 'seller.orders.actionView',
+    ariaKey: 'seller.orders.actionViewAria',
+    Icon: Eye,
+  },
 }
 
 const THUMB_SIZE = 32
@@ -54,10 +115,18 @@ function formatTime(iso: string): string {
   return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 }
 
-function computeShipBy(order: SellerSubOrder): { date: Date; isOverdue: boolean; isDueToday: boolean } | null {
-  if (order.statusKey === 'shipped' || order.statusKey === 'completed' || order.statusKey === 'cancelled_returned') return null
+function computeShipBy(
+  order: SellerSubOrder,
+): { date: Date; isOverdue: boolean; isDueToday: boolean } | null {
+  if (
+    order.statusKey === 'shipped' ||
+    order.statusKey === 'completed' ||
+    order.statusKey === 'cancelled_returned'
+  )
+    return null
   const created = new Date(order.createdAt).getTime()
-  const slaDays = order.shippingMethod === 'sameday' ? 0 : order.shippingMethod === 'express' ? 1 : 2
+  const slaDays =
+    order.shippingMethod === 'sameday' ? 0 : order.shippingMethod === 'express' ? 1 : 2
   const shipBy = new Date(created + slaDays * 86400000)
   shipBy.setHours(23, 59, 59, 999)
   const now = Date.now()
@@ -70,7 +139,13 @@ function computeShipBy(order: SellerSubOrder): { date: Date; isOverdue: boolean;
   return { date: shipBy, isOverdue, isDueToday }
 }
 
-function StatusPill({ statusKey, t }: { statusKey: SellerOrderStatusKey; t: (k: string, opts?: Record<string, unknown>) => string }) {
+function StatusPill({
+  statusKey,
+  t,
+}: {
+  statusKey: SellerOrderStatusKey
+  t: (k: string, opts?: Record<string, unknown>) => string
+}) {
   const reduced = useReducedMotion()
   const m = STATUS_META[statusKey]
   return (
@@ -85,7 +160,9 @@ function StatusPill({ statusKey, t }: { statusKey: SellerOrderStatusKey; t: (k: 
         className={`h-1.5 w-1.5 rounded-full ${m.dot}`}
         initial={reduced ? false : { scale: 0 }}
         animate={{ scale: 1 }}
-        transition={reduced ? { duration: 0 } : { type: 'spring', damping: 18, stiffness: 300, duration: 0.6 }}
+        transition={
+          reduced ? { duration: 0 } : { type: 'spring', damping: 18, stiffness: 300, duration: 0.6 }
+        }
         aria-hidden="true"
       />
       {t(m.labelKey)}
@@ -93,7 +170,13 @@ function StatusPill({ statusKey, t }: { statusKey: SellerOrderStatusKey; t: (k: 
   )
 }
 
-function PaymentChip({ order, t }: { order: SellerSubOrder; t: (k: string, opts?: Record<string, unknown>) => string }) {
+function PaymentChip({
+  order,
+  t,
+}: {
+  order: SellerSubOrder
+  t: (k: string, opts?: Record<string, unknown>) => string
+}) {
   const isCod = order.paymentType === 'cod'
   const isPaid = !isCod
   return (
@@ -141,14 +224,24 @@ function ThumbStack({ items }: { items: SellerSubOrder['items'] }) {
             zIndex: 0,
           }}
         >
-          <span className="text-[11px] font-semibold" style={TABNUM}>+{overflow}</span>
+          <span className="text-[11px] font-semibold" style={TABNUM}>
+            +{overflow}
+          </span>
         </div>
       )}
     </div>
   )
 }
 
-function Checkbox({ checked, onChange, ariaLabel }: { checked: boolean; onChange: () => void; ariaLabel: string }) {
+function Checkbox({
+  checked,
+  onChange,
+  ariaLabel,
+}: {
+  checked: boolean
+  onChange: () => void
+  ariaLabel: string
+}) {
   return (
     <button
       type="button"
@@ -166,7 +259,15 @@ function Checkbox({ checked, onChange, ariaLabel }: { checked: boolean; onChange
   )
 }
 
-function SlaIndicator({ order, t, lang }: { order: SellerSubOrder; t: (k: string, opts?: Record<string, unknown>) => string; lang?: string }) {
+function SlaIndicator({
+  order,
+  t,
+  lang,
+}: {
+  order: SellerSubOrder
+  t: (k: string, opts?: Record<string, unknown>) => string
+  lang?: string
+}) {
   const sla = computeShipBy(order)
   if (!sla) return null
   const dateStr = sla.date.toLocaleDateString(getLocale(lang), { month: 'short', day: 'numeric' })
@@ -197,11 +298,6 @@ function ActionButton({
   t: (k: string, opts?: Record<string, unknown>) => string
 }) {
   const reduced = useReducedMotion()
-  const config = ACTION_MAP[order.statusKey]
-  if (!config) return null
-  const Icon = config.Icon
-  const label = t(config.labelKey)
-  const aria = t(config.ariaKey, { id: order.orderId })
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -209,7 +305,13 @@ function ActionButton({
     },
     [order, onAction],
   )
-  const isPrimary = order.statusKey === 'new' || order.statusKey === 'to_pack' || order.statusKey === 'to_ship'
+  const config = ACTION_MAP[order.statusKey]
+  if (!config) return null
+  const Icon = config.Icon
+  const label = t(config.labelKey)
+  const aria = t(config.ariaKey, { id: order.orderId })
+  const isPrimary =
+    order.statusKey === 'new' || order.statusKey === 'to_pack' || order.statusKey === 'to_ship'
   if (isPrimary) {
     return (
       <motion.button
@@ -242,11 +344,17 @@ function ActionButton({
 
 export function SellerOrderRowSkeleton() {
   return (
-    <div className="flex items-center gap-3 px-4 h-[72px] border-b border-border-light" aria-busy="true" role="row">
+    <div
+      className="flex items-center gap-3 px-4 h-[72px] border-b border-border-light"
+      aria-busy="true"
+      role="row"
+    >
       <Skeleton width={20} height={20} borderRadius={6} />
       <div className="min-w-0 w-24">
         <Skeleton width="80%" height={14} />
-        <div className="mt-1.5"><Skeleton width="50%" height={10} /></div>
+        <div className="mt-1.5">
+          <Skeleton width="50%" height={10} />
+        </div>
       </div>
       <Skeleton width={72} height={32} borderRadius={8} />
       <div className="flex-1 min-w-0 max-w-[200px]">
@@ -273,6 +381,14 @@ const SellerOrderRow = memo(function SellerOrderRow({
   const reduced = useReducedMotion()
   const lang = i18n.language
 
+  const handleRowClick = useCallback(() => {
+    onPress?.(order)
+  }, [order, onPress])
+
+  const handleCheckboxClick = useCallback(() => {
+    onToggleSelect?.(order.subOrderId)
+  }, [order.subOrderId, onToggleSelect])
+
   if (loading) return <SellerOrderRowSkeleton />
 
   const isNew = order.statusKey === 'new'
@@ -285,25 +401,25 @@ const SellerOrderRow = memo(function SellerOrderRow({
     status: statusLabel,
   })
 
-  const handleRowClick = useCallback(() => {
-    onPress?.(order)
-  }, [order, onPress])
-
-  const handleCheckboxClick = useCallback(
-    () => {
-      onToggleSelect?.(order.subOrderId)
-    },
-    [order.subOrderId, onToggleSelect],
-  )
-
   return (
     <motion.tr
       data-testid={testID}
       role="row"
       aria-label={ariaLabel}
       initial={reduced ? false : { opacity: 0 }}
-      animate={{ opacity: 1, backgroundColor: isNew ? 'rgba(124, 58, 237, 0.06)' : 'rgba(255, 255, 255, 1)' }}
-      transition={reduced ? { duration: 0 } : { duration: duration.normal / 1000, delay: Math.min(index * 0.03, 0.2), backgroundColor: { duration: 0.6, ease: 'easeOut' } }}
+      animate={{
+        opacity: 1,
+        backgroundColor: isNew ? 'rgba(124, 58, 237, 0.06)' : 'rgba(255, 255, 255, 1)',
+      }}
+      transition={
+        reduced
+          ? { duration: 0 }
+          : {
+              duration: duration.normal / 1000,
+              delay: Math.min(index * 0.03, 0.2),
+              backgroundColor: { duration: 0.6, ease: 'easeOut' },
+            }
+      }
       onClick={handleRowClick}
       className={`group h-[72px] cursor-pointer border-b border-[#E5E5E5] transition-colors duration-200 hover:bg-primary/[0.03] ${
         isNew ? 'bg-primary/[0.06]' : 'bg-surface'
@@ -323,7 +439,10 @@ const SellerOrderRow = memo(function SellerOrderRow({
         <div className="flex items-center gap-2">
           {isNew && <span className="h-9 w-1 rounded-full bg-primary" aria-hidden="true" />}
           <div className="min-w-0">
-            <p className="text-[16px] font-semibold text-text tabular-nums truncate" style={{ fontFamily: 'ui-monospace, monospace' }}>
+            <p
+              className="text-[16px] font-semibold text-text tabular-nums truncate"
+              style={{ fontFamily: 'ui-monospace, monospace' }}
+            >
               {order.orderId}
             </p>
             <p className="text-[12px] font-normal text-text-muted truncate">
@@ -335,14 +454,17 @@ const SellerOrderRow = memo(function SellerOrderRow({
 
       <td className="px-4 py-3 hidden lg:table-cell">
         <p className="text-sm font-normal text-text truncate">{order.buyerName}</p>
-        <p className="text-sm font-normal text-text-muted truncate">{order.city}, {order.district}</p>
+        <p className="text-sm font-normal text-text-muted truncate">
+          {order.city}, {order.district}
+        </p>
       </td>
 
       <td className="px-4 py-3 max-w-[240px]">
         <div className="flex items-center gap-2.5">
           <ThumbStack items={order.items} />
           <span className="text-sm font-normal text-text-muted shrink-0" style={TABNUM}>
-            {order.itemCount} {order.itemCount === 1 ? t('seller.orders.item') : t('seller.orders.items')}
+            {order.itemCount}{' '}
+            {order.itemCount === 1 ? t('seller.orders.item') : t('seller.orders.items')}
           </span>
         </div>
       </td>
@@ -376,7 +498,10 @@ const SellerOrderRow = memo(function SellerOrderRow({
             </span>
           )}
           {order.actionNeeded && (
-            <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-error" title={order.actionReason ?? undefined}>
+            <span
+              className="inline-flex items-center gap-1 text-[12px] font-semibold text-error"
+              title={order.actionReason ?? undefined}
+            >
               <AlertTriangle size={12} />
               {t('seller.orders.actionNeededLabel')}
             </span>

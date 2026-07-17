@@ -1,15 +1,8 @@
 import React, { useCallback, useEffect, useRef, memo } from 'react'
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Image,
-  Animated,
-} from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, Image, Animated } from 'react-native'
 import { useTranslation } from 'react-i18next'
 import { Check, AlertTriangle, Clock, Printer, Eye, Package, Truck } from 'lucide-react-native'
-import { colors, radii, spacing, fontFamily } from '@chinooz/theme'
+import { colors, radii, spacing, fontFamily, fontSz } from '@chinooz/theme'
 import { formatNPR } from '@chinooz/utils'
 import Skeleton from './Skeleton'
 import { useReducedMotion } from './hooks/useReducedMotion'
@@ -22,13 +15,48 @@ const STATUS_META: Record<
   SellerOrderStatusKey,
   { bg: string; text: string; dot: string; labelKey: string }
 > = {
-  new: { bg: colors.infoLight, text: colors.info, dot: colors.info, labelKey: 'seller.orders.tabNew' },
-  to_pack: { bg: colors.warningLight, text: colors.warning, dot: colors.warning, labelKey: 'seller.orders.tabToPack' },
-  to_ship: { bg: colors.warningLight, text: colors.warning, dot: colors.warning, labelKey: 'seller.orders.tabToShip' },
-  shipped: { bg: colors.infoLight, text: colors.info, dot: colors.info, labelKey: 'seller.orders.tabShipped' },
-  completed: { bg: colors.successLight, text: colors.success, dot: colors.success, labelKey: 'seller.orders.tabCompleted' },
-  cancelled_returned: { bg: colors.errorLight, text: colors.error, dot: colors.error, labelKey: 'seller.orders.tabCancelledReturned' },
-  action_needed: { bg: colors.errorLight, text: colors.error, dot: colors.error, labelKey: 'seller.orders.tabActionNeeded' },
+  new: {
+    bg: colors.infoLight,
+    text: colors.info,
+    dot: colors.info,
+    labelKey: 'seller.orders.tabNew',
+  },
+  to_pack: {
+    bg: colors.warningLight,
+    text: colors.warning,
+    dot: colors.warning,
+    labelKey: 'seller.orders.tabToPack',
+  },
+  to_ship: {
+    bg: colors.warningLight,
+    text: colors.warning,
+    dot: colors.warning,
+    labelKey: 'seller.orders.tabToShip',
+  },
+  shipped: {
+    bg: colors.infoLight,
+    text: colors.info,
+    dot: colors.info,
+    labelKey: 'seller.orders.tabShipped',
+  },
+  completed: {
+    bg: colors.successLight,
+    text: colors.success,
+    dot: colors.success,
+    labelKey: 'seller.orders.tabCompleted',
+  },
+  cancelled_returned: {
+    bg: colors.errorLight,
+    text: colors.error,
+    dot: colors.error,
+    labelKey: 'seller.orders.tabCancelledReturned',
+  },
+  action_needed: {
+    bg: colors.errorLight,
+    text: colors.error,
+    dot: colors.error,
+    labelKey: 'seller.orders.tabActionNeeded',
+  },
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -38,13 +66,41 @@ const ACTION_MAP: Record<
   SellerOrderStatusKey,
   { labelKey: string; ariaKey: string; Icon: IconType } | null
 > = {
-  new: { labelKey: 'seller.orders.actionAccept', ariaKey: 'seller.orders.actionAcceptAria', Icon: Check },
-  to_pack: { labelKey: 'seller.orders.actionPack', ariaKey: 'seller.orders.actionPackAria', Icon: Package },
-  to_ship: { labelKey: 'seller.orders.actionShip', ariaKey: 'seller.orders.actionShipAria', Icon: Truck },
-  shipped: { labelKey: 'seller.orders.actionPrintLabel', ariaKey: 'seller.orders.actionPrintLabelAria', Icon: Printer },
-  completed: { labelKey: 'seller.orders.actionView', ariaKey: 'seller.orders.actionViewAria', Icon: Eye },
-  cancelled_returned: { labelKey: 'seller.orders.actionView', ariaKey: 'seller.orders.actionViewAria', Icon: Eye },
-  action_needed: { labelKey: 'seller.orders.actionView', ariaKey: 'seller.orders.actionViewAria', Icon: Eye },
+  new: {
+    labelKey: 'seller.orders.actionAccept',
+    ariaKey: 'seller.orders.actionAcceptAria',
+    Icon: Check,
+  },
+  to_pack: {
+    labelKey: 'seller.orders.actionPack',
+    ariaKey: 'seller.orders.actionPackAria',
+    Icon: Package,
+  },
+  to_ship: {
+    labelKey: 'seller.orders.actionShip',
+    ariaKey: 'seller.orders.actionShipAria',
+    Icon: Truck,
+  },
+  shipped: {
+    labelKey: 'seller.orders.actionPrintLabel',
+    ariaKey: 'seller.orders.actionPrintLabelAria',
+    Icon: Printer,
+  },
+  completed: {
+    labelKey: 'seller.orders.actionView',
+    ariaKey: 'seller.orders.actionViewAria',
+    Icon: Eye,
+  },
+  cancelled_returned: {
+    labelKey: 'seller.orders.actionView',
+    ariaKey: 'seller.orders.actionViewAria',
+    Icon: Eye,
+  },
+  action_needed: {
+    labelKey: 'seller.orders.actionView',
+    ariaKey: 'seller.orders.actionViewAria',
+    Icon: Eye,
+  },
 }
 
 const THUMB_SIZE = 32
@@ -59,10 +115,18 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 }
 
-function computeShipBy(order: SellerSubOrder): { date: Date; isOverdue: boolean; isDueToday: boolean } | null {
-  if (order.statusKey === 'shipped' || order.statusKey === 'completed' || order.statusKey === 'cancelled_returned') return null
+function computeShipBy(
+  order: SellerSubOrder,
+): { date: Date; isOverdue: boolean; isDueToday: boolean } | null {
+  if (
+    order.statusKey === 'shipped' ||
+    order.statusKey === 'completed' ||
+    order.statusKey === 'cancelled_returned'
+  )
+    return null
   const created = new Date(order.createdAt).getTime()
-  const slaDays = order.shippingMethod === 'sameday' ? 0 : order.shippingMethod === 'express' ? 1 : 2
+  const slaDays =
+    order.shippingMethod === 'sameday' ? 0 : order.shippingMethod === 'express' ? 1 : 2
   const shipBy = new Date(created + slaDays * 86400000)
   shipBy.setHours(23, 59, 59, 999)
   const now = Date.now()
@@ -75,7 +139,13 @@ function computeShipBy(order: SellerSubOrder): { date: Date; isOverdue: boolean;
   return { date: shipBy, isOverdue, isDueToday }
 }
 
-function StatusPill({ statusKey, t }: { statusKey: SellerOrderStatusKey; t: (k: string) => string }) {
+function StatusPill({
+  statusKey,
+  t,
+}: {
+  statusKey: SellerOrderStatusKey
+  t: (k: string) => string
+}) {
   const m = STATUS_META[statusKey]
   return (
     <View style={[styles.statusPill, { backgroundColor: m.bg }]}>
@@ -93,10 +163,7 @@ function ThumbStack({ items }: { items: SellerSubOrder['items'] }) {
       {visible.map((item, i) => (
         <View
           key={item.id}
-          style={[
-            styles.thumb,
-            { marginLeft: i > 0 ? -THUMB_OVERLAP : 0, zIndex: MAX_THUMBS - i },
-          ]}
+          style={[styles.thumb, { marginLeft: i > 0 ? -THUMB_OVERLAP : 0, zIndex: MAX_THUMBS - i }]}
         >
           <Image source={{ uri: item.image }} style={styles.thumbImg} />
         </View>
@@ -133,7 +200,13 @@ function Checkbox({
   )
 }
 
-function SlaIndicator({ order, t }: { order: SellerSubOrder; t: (k: string, opts?: Record<string, unknown>) => string }) {
+function SlaIndicator({
+  order,
+  t,
+}: {
+  order: SellerSubOrder
+  t: (k: string, opts?: Record<string, unknown>) => string
+}) {
   const sla = computeShipBy(order)
   if (!sla) return null
   const dateStr = sla.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -160,15 +233,17 @@ function ActionButton({
   onAction?: (order: SellerSubOrder) => void
   t: (k: string, opts?: Record<string, unknown>) => string
 }) {
+  const handlePress = useCallback(() => {
+    onAction?.(order)
+  }, [order, onAction])
+
   const config = ACTION_MAP[order.statusKey]
   if (!config) return null
   const Icon = config.Icon
   const label = t(config.labelKey)
   const aria = t(config.ariaKey, { id: order.orderId })
-  const isPrimary = order.statusKey === 'new' || order.statusKey === 'to_pack' || order.statusKey === 'to_ship'
-  const handlePress = useCallback(() => {
-    onAction?.(order)
-  }, [order, onAction])
+  const isPrimary =
+    order.statusKey === 'new' || order.statusKey === 'to_pack' || order.statusKey === 'to_ship'
   if (isPrimary) {
     return (
       <TouchableOpacity
@@ -201,7 +276,11 @@ function ActionButton({
 
 export function SellerOrderCardSkeleton() {
   return (
-    <View style={styles.skeletonCard} accessibilityLiveRegion="polite" accessibilityRole="progressbar">
+    <View
+      style={styles.skeletonCard}
+      accessibilityLiveRegion="polite"
+      accessibilityRole="progressbar"
+    >
       <View style={styles.skeletonHeader}>
         <Skeleton width={120} height={16} />
         <Skeleton width={72} height={20} borderRadius={radii.full} />
@@ -248,13 +327,27 @@ const SellerOrderCard = memo(function SellerOrderCard({
 
   const pressIn = useCallback(() => {
     if (reduced) return
-    Animated.spring(scale, { toValue: 0.98, damping: 15, stiffness: 400, useNativeDriver: true }).start()
+    Animated.spring(scale, {
+      toValue: 0.98,
+      damping: 15,
+      stiffness: 400,
+      useNativeDriver: true,
+    }).start()
   }, [reduced, scale])
 
   const pressOut = useCallback(() => {
     if (reduced) return
-    Animated.spring(scale, { toValue: 1, damping: 15, stiffness: 300, useNativeDriver: true }).start()
+    Animated.spring(scale, {
+      toValue: 1,
+      damping: 15,
+      stiffness: 300,
+      useNativeDriver: true,
+    }).start()
   }, [reduced, scale])
+
+  const handleCheckboxPress = useCallback(() => {
+    onToggleSelect?.(order.subOrderId)
+  }, [order.subOrderId, onToggleSelect])
 
   if (loading) return <SellerOrderCardSkeleton />
 
@@ -269,13 +362,6 @@ const SellerOrderCard = memo(function SellerOrderCard({
   })
   const isCod = order.paymentType === 'cod'
   const isPaid = !isCod
-
-  const handleCheckboxPress = useCallback(
-    () => {
-      onToggleSelect?.(order.subOrderId)
-    },
-    [order.subOrderId, onToggleSelect],
-  )
 
   return (
     <Animated.View style={{ opacity: fade, transform: [{ scale }] }}>
@@ -324,7 +410,8 @@ const SellerOrderCard = memo(function SellerOrderCard({
         <View style={styles.cardItemsRow}>
           <ThumbStack items={order.items} />
           <Text style={styles.cardItemCount}>
-            {order.itemCount} {order.itemCount === 1 ? t('seller.orders.item') : t('seller.orders.items')}
+            {order.itemCount}{' '}
+            {order.itemCount === 1 ? t('seller.orders.item') : t('seller.orders.items')}
           </Text>
         </View>
 
@@ -338,12 +425,21 @@ const SellerOrderCard = memo(function SellerOrderCard({
 
         <View style={styles.cardFooter}>
           <View style={styles.cardFooterLeft}>
-            <View style={[styles.cardPayPill, { backgroundColor: isCod ? colors.warningLight : colors.successLight }]}>
-              <Text style={[styles.cardPayText, { color: isCod ? colors.warning : colors.success }]}>
+            <View
+              style={[
+                styles.cardPayPill,
+                { backgroundColor: isCod ? colors.warningLight : colors.successLight },
+              ]}
+            >
+              <Text
+                style={[styles.cardPayText, { color: isCod ? colors.warning : colors.success }]}
+              >
                 {isCod ? t('seller.orders.paymentCod') : t('seller.orders.paymentPrepaid')}
               </Text>
             </View>
-            <Text style={[styles.cardPaidText, { color: isPaid ? colors.success : colors.textMuted }]}>
+            <Text
+              style={[styles.cardPaidText, { color: isPaid ? colors.success : colors.textMuted }]}
+            >
               {isPaid ? t('seller.orders.paid') : t('seller.orders.unpaid')}
             </Text>
           </View>
@@ -370,7 +466,7 @@ const styles = StyleSheet.create({
     gap: spacing[2.5],
     overflow: 'hidden',
     elevation: 2,
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
     shadowRadius: 3,
@@ -404,14 +500,14 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   cardOrderId: {
-    fontSize: 16,
+    fontSize: fontSz('md')[0],
     fontWeight: '600',
     color: colors.text,
     fontFamily: 'monospace',
     fontVariant: ['tabular-nums'],
   },
   cardDateTime: {
-    fontSize: 12,
+    fontSize: fontSz('sm')[0],
     fontWeight: '400',
     color: colors.textMuted,
     marginTop: 2,
@@ -426,7 +522,11 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   statusDot: { width: 6, height: 6, borderRadius: radii.full },
-  statusText: { fontSize: 12, fontWeight: '600', fontFamily: fontFamily.sansSemiBold[0] },
+  statusText: {
+    fontSize: fontSz('sm')[0],
+    fontWeight: '600',
+    fontFamily: fontFamily.sansSemiBold[0],
+  },
   cardActionBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -436,7 +536,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[2.5],
     paddingVertical: spacing[1.5],
   },
-  cardActionText: { fontSize: 12, fontWeight: '600', color: colors.error, flex: 1 },
+  cardActionText: { fontSize: fontSz('sm')[0], fontWeight: '600', color: colors.error, flex: 1 },
   cardItemsRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -468,19 +568,19 @@ const styles = StyleSheet.create({
     zIndex: 0,
   },
   thumbOverflowText: {
-    fontSize: 11,
+    fontSize: fontSz('xs')[0],
     fontWeight: '600',
     color: colors.textMuted,
     fontVariant: ['tabular-nums'],
   },
   cardItemCount: {
-    fontSize: 14,
+    fontSize: fontSz('base')[0],
     fontWeight: '400',
     color: colors.textMuted,
     fontVariant: ['tabular-nums'],
   },
   cardBuyer: {
-    fontSize: 14,
+    fontSize: fontSz('base')[0],
     fontWeight: '400',
     color: colors.text,
   },
@@ -490,7 +590,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing[1],
   },
-  slaText: { fontSize: 12, fontWeight: '600' },
+  slaText: { fontSize: fontSz('sm')[0], fontWeight: '600' },
   cardFooter: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -506,10 +606,10 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: radii.full,
   },
-  cardPayText: { fontSize: 12, fontWeight: '600' },
-  cardPaidText: { fontSize: 12, fontWeight: '500' },
+  cardPayText: { fontSize: fontSz('sm')[0], fontWeight: '600' },
+  cardPaidText: { fontSize: fontSz('sm')[0], fontWeight: '500' },
   cardTotal: {
-    fontSize: 16,
+    fontSize: fontSz('md')[0],
     fontWeight: '700',
     color: colors.primary,
     fontVariant: ['tabular-nums'],
@@ -532,7 +632,7 @@ const styles = StyleSheet.create({
   actionBtnPrimaryText: {
     color: colors.white,
     fontWeight: '700',
-    fontSize: 14,
+    fontSize: fontSz('base')[0],
     fontFamily: fontFamily.sansSemiBold[0],
   },
   actionBtnSecondary: {
@@ -550,7 +650,7 @@ const styles = StyleSheet.create({
   actionBtnSecondaryText: {
     color: colors.text,
     fontWeight: '600',
-    fontSize: 14,
+    fontSize: fontSz('base')[0],
     fontFamily: fontFamily.sansSemiBold[0],
   },
   checkbox: {

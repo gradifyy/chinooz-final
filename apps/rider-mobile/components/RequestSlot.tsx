@@ -23,7 +23,16 @@ import Animated, {
   ReduceMotion,
 } from 'react-native-reanimated'
 import Svg, { Circle } from 'react-native-svg'
-import { colors, spacing, radii, fontFamily, fontSize, shadow, duration, easing } from '@chinooz/theme'
+import {
+  colors,
+  spacing,
+  radii,
+  fontFamily,
+  fontSize,
+  shadow,
+  duration,
+  easing,
+} from '@chinooz/theme'
 import { useA11y } from './A11yProvider'
 import { useAppActiveCallback } from './AppStateProvider'
 import { useActiveDeliveryStore, hasActiveDelivery } from '@chinooz/state'
@@ -43,7 +52,14 @@ interface RequestSlotProps {
   placeholder: string
 }
 
-type Phase = 'listening' | 'offered' | 'accepting' | 'declining' | 'expired' | 'taken' | 'accept_error'
+type Phase =
+  | 'listening'
+  | 'offered'
+  | 'accepting'
+  | 'declining'
+  | 'expired'
+  | 'taken'
+  | 'accept_error'
 
 /**
  * RH4 — Incoming job-request overlay.
@@ -107,7 +123,10 @@ export default function RequestSlot({ status, title }: RequestSlotProps) {
         }
       } catch {}
 
-      analytics.track('rider_job_offer_arrived', { jobId: offeredJob.id, payout: offeredJob.payout })
+      analytics.track('rider_job_offer_arrived', {
+        jobId: offeredJob.id,
+        payout: offeredJob.payout,
+      })
 
       const itemCount = getJobItemCount(offeredJob)
       const codStr = offeredJob.isCod
@@ -247,6 +266,64 @@ export default function RequestSlot({ status, title }: RequestSlotProps) {
     offeredJobIdRef.current = null
   }, [])
 
+  // Arrival attention animation: slide-up + scale-in when a new offer appears.
+  const cardEnter = useSharedValue(reducedMotion ? 0 : 1)
+  const cardScale = useSharedValue(reducedMotion ? 1 : 0.92)
+
+  useEffect(() => {
+    if (reducedMotion) {
+      cardEnter.value = 0
+      cardScale.value = 1
+    } else {
+      cardEnter.value = withSequence(
+        withTiming(0, { duration: duration.fast, easing: Easing.bezier(...easing.easeOut) }),
+      )
+      cardScale.value = withSpring(1, {
+        damping: 16,
+        stiffness: 200,
+        mass: 0.8,
+        reduceMotion: ReduceMotion.System,
+      })
+    }
+  }, [offeredJob?.id, reducedMotion])
+
+  const cardEnterStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: cardEnter.value * 24 }, { scale: cardScale.value }],
+    opacity: reducedMotion ? 1 : 1 - cardEnter.value * 0.3,
+  }))
+
+  // Accept/decline press-scale feedback.
+  const acceptScale = useSharedValue(1)
+  const declineScale = useSharedValue(1)
+
+  const handleAcceptPressIn = useCallback(() => {
+    if (reducedMotion) return
+    acceptScale.value = withSpring(0.96, { damping: 20, stiffness: 400 })
+  }, [reducedMotion])
+
+  const handleAcceptPressOut = useCallback(() => {
+    if (reducedMotion) return
+    acceptScale.value = withSpring(1, { damping: 20, stiffness: 400 })
+  }, [reducedMotion])
+
+  const handleDeclinePressIn = useCallback(() => {
+    if (reducedMotion) return
+    declineScale.value = withSpring(0.96, { damping: 20, stiffness: 400 })
+  }, [reducedMotion])
+
+  const handleDeclinePressOut = useCallback(() => {
+    if (reducedMotion) return
+    declineScale.value = withSpring(1, { damping: 20, stiffness: 400 })
+  }, [reducedMotion])
+
+  const acceptBtnStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: acceptScale.value }],
+  }))
+
+  const declineBtnStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: declineScale.value }],
+  }))
+
   // Offline: no request surface at all.
   if (!isOnline) return null
 
@@ -332,67 +409,6 @@ export default function RequestSlot({ status, title }: RequestSlotProps) {
   const isDeclining = phase === 'declining'
   const isBusy = isAccepting || isDeclining
 
-  // Arrival attention animation: slide-up + scale-in when a new offer appears.
-  const cardEnter = useSharedValue(reducedMotion ? 0 : 1)
-  const cardScale = useSharedValue(reducedMotion ? 1 : 0.92)
-
-  useEffect(() => {
-    if (reducedMotion) {
-      cardEnter.value = 0
-      cardScale.value = 1
-    } else {
-      cardEnter.value = withSequence(
-        withTiming(0, { duration: duration.fast, easing: Easing.bezier(...easing.easeOut) }),
-      )
-      cardScale.value = withSpring(1, {
-        damping: 16,
-        stiffness: 200,
-        mass: 0.8,
-        reduceMotion: ReduceMotion.System,
-      })
-    }
-  }, [offeredJob?.id, reducedMotion])
-
-  const cardEnterStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: cardEnter.value * 24 },
-      { scale: cardScale.value },
-    ],
-    opacity: reducedMotion ? 1 : 1 - cardEnter.value * 0.3,
-  }))
-
-  // Accept/decline press-scale feedback.
-  const acceptScale = useSharedValue(1)
-  const declineScale = useSharedValue(1)
-
-  const handleAcceptPressIn = useCallback(() => {
-    if (reducedMotion) return
-    acceptScale.value = withSpring(0.96, { damping: 20, stiffness: 400 })
-  }, [reducedMotion])
-
-  const handleAcceptPressOut = useCallback(() => {
-    if (reducedMotion) return
-    acceptScale.value = withSpring(1, { damping: 20, stiffness: 400 })
-  }, [reducedMotion])
-
-  const handleDeclinePressIn = useCallback(() => {
-    if (reducedMotion) return
-    declineScale.value = withSpring(0.96, { damping: 20, stiffness: 400 })
-  }, [reducedMotion])
-
-  const handleDeclinePressOut = useCallback(() => {
-    if (reducedMotion) return
-    declineScale.value = withSpring(1, { damping: 20, stiffness: 400 })
-  }, [reducedMotion])
-
-  const acceptBtnStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: acceptScale.value }],
-  }))
-
-  const declineBtnStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: declineScale.value }],
-  }))
-
   return (
     <Animated.View
       style={[styles.card, cardEnterStyle]}
@@ -411,10 +427,7 @@ export default function RequestSlot({ status, title }: RequestSlotProps) {
       {/* Header: title + countdown ring */}
       <View style={styles.cardHeader}>
         <Text style={styles.cardTitle}>{title}</Text>
-        <CountdownRing
-          secondsLeft={secondsLeft}
-          total={COUNTDOWN_SECONDS}
-        />
+        <CountdownRing secondsLeft={secondsLeft} total={COUNTDOWN_SECONDS} />
       </View>
 
       {/* Route hero: pickup → drop-off */}
@@ -454,14 +467,20 @@ export default function RequestSlot({ status, title }: RequestSlotProps) {
 
       {/* Stats row: distance + payout + COD + items */}
       <View style={styles.statsRow}>
-        <Stat icon={<Navigation size={14} color={colors.textMuted} />} value={t('rider.home.requestDistance', { km: tripKm })} />
+        <Stat
+          icon={<Navigation size={14} color={colors.textMuted} />}
+          value={t('rider.home.requestDistance', { km: tripKm })}
+        />
         <Stat
           icon={<Banknote size={14} color={colors.success} />}
           value={formatNPR(offeredJob.payout)}
           label={t('rider.home.requestPayout')}
           bold
         />
-        <Stat icon={<Package size={14} color={colors.textMuted} />} value={t('rider.home.requestItems', { count: itemCount })} />
+        <Stat
+          icon={<Package size={14} color={colors.textMuted} />}
+          value={t('rider.home.requestItems', { count: itemCount })}
+        />
       </View>
 
       {/* COD pill (if applicable) */}
@@ -531,13 +550,7 @@ export default function RequestSlot({ status, title }: RequestSlotProps) {
 // Countdown ring — SVG circle that depletes, color shifts as time runs low
 // ---------------------------------------------------------------------------
 
-function CountdownRing({
-  secondsLeft,
-  total,
-}: {
-  secondsLeft: number
-  total: number
-}) {
+function CountdownRing({ secondsLeft, total }: { secondsLeft: number; total: number }) {
   const { t } = useTranslation()
   const size = 44
   const stroke = 4
@@ -547,7 +560,8 @@ function CountdownRing({
   const dashOffset = circumference * (1 - progress)
 
   // Color shifts: green → gold → red as time runs low (never alarmist).
-  const ringColor = secondsLeft <= 5 ? colors.error : secondsLeft <= 10 ? colors.gold : colors.success
+  const ringColor =
+    secondsLeft <= 5 ? colors.error : secondsLeft <= 10 ? colors.gold : colors.success
   const textColor = secondsLeft <= 5 ? colors.error : secondsLeft <= 10 ? colors.gold : colors.text
 
   return (
@@ -722,7 +736,11 @@ function Stat({
       <Text style={[styles.statValue, bold && styles.statValueBold]} numberOfLines={1}>
         {value}
       </Text>
-      {label && <Text style={styles.statLabel} numberOfLines={1}>{label}</Text>}
+      {label && (
+        <Text style={styles.statLabel} numberOfLines={1}>
+          {label}
+        </Text>
+      )}
     </View>
   )
 }
