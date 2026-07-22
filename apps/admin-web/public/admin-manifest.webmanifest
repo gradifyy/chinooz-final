@@ -1,0 +1,17 @@
+{
+  "name": "Chinooz Admin",
+  "short_name": "Admin",
+  "description": "Operate and govern the Chinooz marketplace.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAFAFA",
+  "theme_color": "#8A1B57",
+  "icons": [
+    {
+      "src": "/admin-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

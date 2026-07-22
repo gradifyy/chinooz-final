@@ -1,0 +1,12 @@
+{
+  "name": "@chinooz/seller-theme",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "types": "index.ts",
+  "dependencies": {
+    "@chinooz/theme": "workspace:*"
+  },
+  "scripts": {
+    "type-check": "tsc --noEmit"
+  }
+}

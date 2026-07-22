@@ -1,0 +1,18 @@
+{
+  "name": "@chinooz/api",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "types": "index.ts",
+  "private": true,
+  "scripts": {
+    "lint": "eslint . --ext .ts,.tsx,.js",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@chinooz/mock-data": "workspace:*",
+    "@chinooz/types": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0"
+  }
+}
