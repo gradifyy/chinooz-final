@@ -1,5 +1,5 @@
 import { colors as _colors } from './colors'
-export { colors, brandColors, neutralColors, semanticColors } from './colors'
+export { colors, darkColors, brandColors, neutralColors, semanticColors } from './colors'
 export type { ColorToken, BrandColorToken, NeutralColorToken, SemanticColorToken } from './colors'
 
 import { spacing as _spacing } from './spacing'
@@ -22,8 +22,8 @@ export { zIndex } from './z-index'
 export type { ZIndexToken } from './z-index'
 
 import { duration as _duration } from './motion'
-export { duration, easing } from './motion'
-export type { DurationToken, EasingToken } from './motion'
+export { duration, easing, springs } from './motion'
+export type { DurationToken, EasingToken, SpringToken } from './motion'
 
 export { breakpoints, containerMaxWidth } from './breakpoints'
 export type { BreakpointToken } from './breakpoints'
